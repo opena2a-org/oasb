@@ -2,6 +2,8 @@
 
 # OASB — Open Agent Security Benchmark
 
+[![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
+
 > **Note:** OASB controls are also available in [HackMyAgent](https://github.com/opena2a-org/hackmyagent) v0.8.0+ via `opena2a benchmark`. This repository is the canonical source for the full 222-test evaluation suite and is actively maintained. ARP (the reference adapter) is now part of HackMyAgent — install via `npm install arp-guard`.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
