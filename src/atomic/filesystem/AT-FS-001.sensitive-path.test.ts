@@ -1,6 +1,6 @@
 // AT-FS-001: Sensitive Path Access Detection
-// ATLAS: AML.T0057 (Data Leakage)
-// OWASP: A07 (System Prompt Leakage)
+// ATLAS: AML.T0055 (Unsecured Credentials)
+// OWASP: LLM02 (Sensitive Information Disclosure)
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArpWrapper } from '../../harness/arp-wrapper';

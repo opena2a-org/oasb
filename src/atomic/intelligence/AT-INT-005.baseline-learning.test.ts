@@ -1,6 +1,6 @@
 // AT-INT-005: Baseline Learning
-// ATLAS: AML.T0015 (Evasion)
-// OWASP: A04 (Excessive Agency)
+// Detection-capability test: behavioral baseline learning and reset.
+// OWASP: LLM06 (Excessive Agency)
 //
 // Verifies that the AnomalyDetector learns a statistical baseline from
 // observed events and can distinguish normal frequency patterns from

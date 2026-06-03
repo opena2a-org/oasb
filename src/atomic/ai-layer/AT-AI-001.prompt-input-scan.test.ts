@@ -1,16 +1,17 @@
 // AT-AI-001: Prompt Input Scanning
 // ATLAS: AML.T0051 (LLM Prompt Injection), AML.T0054 (LLM Jailbreak)
-// OWASP: A01 (Prompt Injection)
+// OWASP: LLM01 (Prompt Injection)
 //
 // Verifies that PromptInterceptor.scanInput() detects prompt injection,
 // jailbreak, data exfiltration, and context manipulation patterns in
 // user messages before they reach the LLM.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { PromptScanner } from '../../harness/adapter';
 
-describe('AT-AI-001: Prompt Input Scanning', () => {
+describeWithCapability('prompt-input-scanning', 'AT-AI-001: Prompt Input Scanning', () => {
   let scanner: PromptScanner;
 
   beforeAll(async () => {

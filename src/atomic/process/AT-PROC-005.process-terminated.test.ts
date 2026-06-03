@@ -1,5 +1,5 @@
 // AT-PROC-005: Process Terminated Detection
-// ATLAS: AML.TA0006 (ML Attack Lifecycle)
+// Defensive response test: validates the product's reaction (counters Impact / AML.TA0011). Not an adversary technique.
 //
 // Verifies that ARP captures process termination events and can detect
 // rapid respawn patterns (terminated followed by immediate new child),

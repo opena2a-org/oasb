@@ -2,8 +2,8 @@
 // Proves ARP's ProcessMonitor detects real child processes via `ps` polling.
 // No event injection — the monitor polls the OS process table directly.
 //
-// ATLAS: AML.T0046
-// OWASP: A04
+// ATLAS: AML.T0050 (Command and Scripting Interpreter)
+// OWASP: LLM06
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';

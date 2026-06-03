@@ -2,8 +2,8 @@
 // Proves ARP's FilesystemInterceptor catches fs.readFile/writeFile BEFORE I/O.
 // Unlike fs.watch, this catches reads, works on ALL paths, and has zero latency.
 //
-// ATLAS: AML.T0057, AML.T0018
-// OWASP: A07
+// ATLAS: AML.T0055 (Unsecured Credentials), AML.T0081 (Modify AI Agent Configuration)
+// OWASP: LLM02
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';

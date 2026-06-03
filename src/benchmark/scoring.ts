@@ -43,11 +43,18 @@ export const TIER_THRESHOLDS: Record<BenchmarkTier, TierThresholds> = {
 
 /**
  * Score a scanner submission against a labeled benchmark dataset.
+ *
+ * @param isHMABaseline  Marks this submission as the HMA reference baseline.
+ *   The baseline's Cohen's Kappa is computed against itself (1.0) and the
+ *   kappa gate is treated as satisfied; pass the frozen baseline submission
+ *   as `hmaBaseline` for every other scanner so all are compared to the same
+ *   reference regardless of scoring order.
  */
 export function scoreSubmission(
   submission: ScannerSubmission,
   dataset: BenchmarkSample[],
   hmaBaseline?: ScannerSubmission,
+  isHMABaseline = false,
 ): LeaderboardEntry {
   // Build lookup maps
   const sampleMap = new Map<string, BenchmarkSample>();
@@ -60,15 +67,14 @@ export function scoreSubmission(
     resultMap.set(result.sampleId, result);
   }
 
-  // Compute per-category metrics
+  // Per-category breakdown (for the scorecard) and pooled aggregate (authoritative).
   const categoryMetrics = computeCategoryMetrics(sampleMap, resultMap);
+  const aggregate = computeAggregateMetrics(sampleMap, resultMap, categoryMetrics);
 
-  // Compute aggregate metrics
-  const aggregate = computeAggregateMetrics(categoryMetrics);
-
-  // Compute Cohen's Kappa vs HMA if baseline provided
-  let kappa = 0;
-  if (hmaBaseline) {
+  // Cohen's Kappa vs the HMA baseline. The baseline trivially agrees with
+  // itself, so its self-kappa is 1.0; only cross-scanner kappa is meaningful.
+  let kappa = isHMABaseline ? 1 : 0;
+  if (hmaBaseline && !isHMABaseline) {
     const hmaResultMap = new Map<string, ScannerResult>();
     for (const result of hmaBaseline.results) {
       hmaResultMap.set(result.sampleId, result);
@@ -89,12 +95,18 @@ export function scoreSubmission(
     metrics: aggregate,
     submittedAt: submission.submittedAt,
     datasetVersion: submission.datasetVersion,
-    isHMABaseline: false,
+    isHMABaseline,
   };
 }
 
 /**
  * Compute metrics per attack category.
+ *
+ * Detection (recall) is credited on the VERDICT alone: a scanner that calls a
+ * malicious sample `malicious` gets recall credit even if it omits or mislabels
+ * the category — category is a secondary attribution, not a detection gate.
+ * False positives are attributed to a category only when the scanner names one;
+ * the authoritative FPR is the pooled aggregate (see computeAggregateMetrics).
  */
 function computeCategoryMetrics(
   samples: Map<string, BenchmarkSample>,
@@ -105,23 +117,21 @@ function computeCategoryMetrics(
 
     for (const [sampleId, sample] of samples) {
       const result = results.get(sampleId);
-      if (!result) {
-        // Not scanned = treated as benign verdict
-        if (sample.label === 'malicious' && sample.category === category) {
-          fn++;
-        } else if (sample.label === 'benign') {
-          tn++;
-        }
-        continue;
+      // Unscanned / 'unknown' / 'benign' all count as "not flagged malicious".
+      const saysMalicious = result?.verdict === 'malicious';
+      const trueInCategory = sample.label === 'malicious' && sample.category === category;
+
+      if (trueInCategory) {
+        if (saysMalicious) tp++;   // detected this category's attack (verdict-based)
+        else fn++;
+      } else if (sample.label === 'benign') {
+        // A benign sample is an FP for THIS category only if the scanner
+        // explicitly attributed its malicious verdict to this category.
+        if (saysMalicious && result?.category === category) fp++;
+        else tn++;
       }
-
-      const isMalicious = sample.label === 'malicious' && sample.category === category;
-      const scannerSaysMalicious = result.verdict === 'malicious' && result.category === category;
-
-      if (isMalicious && scannerSaysMalicious) tp++;
-      else if (!isMalicious && scannerSaysMalicious) fp++;
-      else if (isMalicious && !scannerSaysMalicious) fn++;
-      else if (!isMalicious && !scannerSaysMalicious) tn++;
+      // edge_case and other-category malicious samples are excluded from this
+      // category's confusion matrix (they belong to their own category's row).
     }
 
     const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
@@ -134,35 +144,48 @@ function computeCategoryMetrics(
 }
 
 /**
- * Compute aggregate metrics from per-category metrics.
+ * Compute aggregate metrics from a single POOLED confusion matrix over every
+ * sample, keyed on the scanner's verdict. This is the standard binary-detection
+ * computation (the same one scripts/run-benchmark-v2.ts uses for published
+ * numbers). Macro-averaging per-category FPR is wrong here: a benign sample
+ * wrongly flagged appears as an FP in one category and a TN in the other eight,
+ * which dilutes FPR ~9x and lets a scanner that flags every benign artifact
+ * report a single-digit FPR.
+ *
+ * `categoryCoverage` counts attack categories PRESENT in the dataset that the
+ * scanner detected at least once. Tier thresholds (9/7/5) assume the canonical
+ * full 9-category dataset; a partial dataset caps coverage to the categories it
+ * contains.
  */
-function computeAggregateMetrics(categories: CategoryMetrics[]): AggregateMetrics {
-  // Macro-average across categories
-  const nonEmpty = categories.filter(c => c.truePositives + c.falseNegatives > 0);
-  const categoryCoverage = nonEmpty.filter(c => c.recall > 0).length;
+function computeAggregateMetrics(
+  samples: Map<string, BenchmarkSample>,
+  results: Map<string, ScannerResult>,
+  categories: CategoryMetrics[],
+): AggregateMetrics {
+  const categoriesPresent = categories.filter(c => c.truePositives + c.falseNegatives > 0);
+  const categoryCoverage = categoriesPresent.filter(c => c.recall > 0).length;
 
-  if (nonEmpty.length === 0) {
-    return {
-      precision: 0,
-      recall: 0,
-      f1: 0,
-      fpr: 0,
-      categoryCoverage: 0,
-      kappaVsHMA: 0,
-      categoryMetrics: categories,
-    };
+  let tp = 0, fp = 0, tn = 0, fn = 0;
+  for (const [sampleId, sample] of samples) {
+    const saysMalicious = results.get(sampleId)?.verdict === 'malicious';
+    if (sample.label === 'malicious') {
+      if (saysMalicious) tp++; else fn++;
+    } else if (sample.label === 'benign') {
+      if (saysMalicious) fp++; else tn++;
+    }
+    // edge_case samples are excluded from precision/recall/FPR.
   }
 
-  const avgPrecision = nonEmpty.reduce((sum, c) => sum + c.precision, 0) / nonEmpty.length;
-  const avgRecall = nonEmpty.reduce((sum, c) => sum + c.recall, 0) / nonEmpty.length;
-  const avgF1 = nonEmpty.reduce((sum, c) => sum + c.f1, 0) / nonEmpty.length;
-  const avgFPR = categories.reduce((sum, c) => sum + c.fpr, 0) / categories.length;
+  const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
+  const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
+  const f1 = precision + recall > 0 ? 2 * (precision * recall) / (precision + recall) : 0;
+  const fpr = fp + tn > 0 ? fp / (fp + tn) : 0;
 
   return {
-    precision: round(avgPrecision, 4),
-    recall: round(avgRecall, 4),
-    f1: round(avgF1, 4),
-    fpr: round(avgFPR, 4),
+    precision: round(precision, 4),
+    recall: round(recall, 4),
+    f1: round(f1, 4),
+    fpr: round(fpr, 4),
     categoryCoverage,
     kappaVsHMA: 0,
     categoryMetrics: categories,

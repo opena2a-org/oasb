@@ -1,6 +1,6 @@
 // AT-NET-002: Suspicious Host Detection
-// ATLAS: AML.T0057 (Data Leakage)
-// OWASP: A07 (System Prompt Leakage)
+// ATLAS: AML.T0025 (Exfiltration via Cyber Means)
+// OWASP: LLM02 (Sensitive Information Disclosure)
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArpWrapper } from '../../harness/arp-wrapper';

@@ -115,6 +115,79 @@ describe('Benchmark Scoring Engine', () => {
     expect(entry.metrics.fpr).toBeGreaterThan(0); // but lots of false positives
   });
 
+  it('reports pooled FPR, not a per-category macro-average (regression)', () => {
+    // A scanner that flags ALL benign samples as malicious has a true FPR of
+    // 1.0. The old macro-averaged FPR diluted this across 9 categories to ~0.06,
+    // which would have let an all-flagging scanner qualify for gold (maxFPR 0.10).
+    const submission: ScannerSubmission = {
+      scannerId: 'all-flagging-scanner',
+      scannerName: 'All-Flagging Scanner',
+      scannerVersion: '1.0',
+      submittedAt: new Date().toISOString(),
+      datasetVersion: 'v1.0',
+      results: [
+        { sampleId: 'm1', verdict: 'malicious', category: 'supply_chain' },
+        { sampleId: 'm2', verdict: 'malicious', category: 'supply_chain' },
+        { sampleId: 'm3', verdict: 'malicious', category: 'prompt_injection' },
+        { sampleId: 'm4', verdict: 'malicious', category: 'credential_exfiltration' },
+        { sampleId: 'b1', verdict: 'malicious', category: 'supply_chain' },
+        { sampleId: 'b2', verdict: 'malicious', category: 'prompt_injection' },
+        { sampleId: 'b3', verdict: 'malicious', category: 'credential_exfiltration' },
+      ],
+    };
+
+    const entry = scoreSubmission(submission, dataset);
+    expect(entry.metrics.fpr).toBe(1); // 3 of 3 benign flagged
+    expect(entry.tier).not.toBe('gold');
+    expect(entry.tier).not.toBe('platinum');
+  });
+
+  it('credits recall to a category-agnostic detector (regression)', () => {
+    // A scanner that correctly says "malicious" but omits the optional category
+    // must still get full recall credit. The old code required verdict AND
+    // category to match, scoring a correct verdict with no category as a miss.
+    const submission: ScannerSubmission = {
+      scannerId: 'verdict-only-scanner',
+      scannerName: 'Verdict-Only Scanner',
+      scannerVersion: '1.0',
+      submittedAt: new Date().toISOString(),
+      datasetVersion: 'v1.0',
+      results: [
+        { sampleId: 'm1', verdict: 'malicious' },
+        { sampleId: 'm2', verdict: 'malicious' },
+        { sampleId: 'm3', verdict: 'malicious' },
+        { sampleId: 'm4', verdict: 'malicious' },
+        { sampleId: 'b1', verdict: 'benign' },
+        { sampleId: 'b2', verdict: 'benign' },
+        { sampleId: 'b3', verdict: 'benign' },
+      ],
+    };
+
+    const entry = scoreSubmission(submission, dataset);
+    expect(entry.metrics.recall).toBe(1);
+    expect(entry.metrics.precision).toBe(1);
+    expect(entry.metrics.fpr).toBe(0);
+  });
+
+  it('marks the HMA baseline and gives it self-kappa 1.0', () => {
+    const submission: ScannerSubmission = {
+      scannerId: 'hma-baseline',
+      scannerName: 'HMA Baseline',
+      scannerVersion: '1.0',
+      submittedAt: new Date().toISOString(),
+      datasetVersion: 'v1.0',
+      results: dataset.map(s => ({
+        sampleId: s.id,
+        verdict: s.label === 'malicious' ? ('malicious' as const) : ('benign' as const),
+        category: s.category,
+      })),
+    };
+
+    const entry = scoreSubmission(submission, dataset, submission, true);
+    expect(entry.isHMABaseline).toBe(true);
+    expect(entry.metrics.kappaVsHMA).toBe(1);
+  });
+
   it('handles missing scanner results gracefully', () => {
     const submission: ScannerSubmission = {
       scannerId: 'partial-scanner',

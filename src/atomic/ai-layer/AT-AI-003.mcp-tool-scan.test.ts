@@ -1,15 +1,16 @@
 // AT-AI-003: MCP Tool Call Scanning
-// ATLAS: AML.T0056 (MCP Compromise)
-// OWASP: A02 (Insecure Tool Use)
+// ATLAS: AML.T0053 (AI Agent Tool Invocation)
+// OWASP: LLM06 (Excessive Agency)
 //
 // Verifies that MCPProtocolInterceptor.scanToolCall() detects path traversal,
 // command injection, and SSRF in MCP tool call parameters.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { MCPScanner } from '../../harness/adapter';
 
-describe('AT-AI-003: MCP Tool Call Scanning', () => {
+describeWithCapability('mcp-scanning', 'AT-AI-003: MCP Tool Call Scanning', () => {
   let scanner: MCPScanner;
   const adapter = createAdapter();
 

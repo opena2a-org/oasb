@@ -1,4 +1,5 @@
 // AT-ENF-002: Alert Callback Execution
+// Defensive response test: validates the product's reaction (counters Impact / AML.TA0011). Not an adversary technique.
 // Tests the alert callback mechanism in EnforcementEngine.
 // Verifies that registered callbacks fire on alert actions and
 // that alerts succeed even without a callback registered.

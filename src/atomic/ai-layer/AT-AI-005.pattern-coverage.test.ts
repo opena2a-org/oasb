@@ -1,15 +1,16 @@
 // AT-AI-005: AI-Layer Pattern Coverage
-// ATLAS: Multiple
+// ATLAS: AML.T0051/T0054/T0057/T0053/T0073 (pattern coverage across AI-layer techniques)
 //
 // Verifies that all AI-layer threat patterns in ARP have at least
 // one known attack payload that triggers them. This is a coverage
 // validation test ensuring no detection gaps exist.
 
 import { describe, it, expect } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { PatternScanner, ThreatPattern } from '../../harness/adapter';
 
-describe('AT-AI-005: AI-Layer Pattern Coverage', () => {
+describeWithCapability('pattern-scanning', 'AT-AI-005: AI-Layer Pattern Coverage', () => {
   const adapter = createAdapter();
   const patternScanner: PatternScanner = adapter.createPatternScanner();
   const ALL_PATTERNS = patternScanner.getAllPatterns();

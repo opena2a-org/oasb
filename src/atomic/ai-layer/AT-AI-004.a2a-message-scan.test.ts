@@ -1,16 +1,17 @@
 // AT-AI-004: A2A Message Scanning
-// ATLAS: AML.T0024 (A2A Trust Exploitation)
-// OWASP: A05 (Excessive Agency)
+// ATLAS: AML.T0073 (Impersonation)
+// OWASP: LLM06 (Excessive Agency)
 //
 // Verifies that A2AProtocolInterceptor.scanMessage() detects identity
 // spoofing, delegation abuse, and embedded prompt injection in
 // agent-to-agent messages.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { A2AScanner } from '../../harness/adapter';
 
-describe('AT-AI-004: A2A Message Scanning', () => {
+describeWithCapability('a2a-scanning', 'AT-AI-004: A2A Message Scanning', () => {
   let scanner: A2AScanner;
   const adapter = createAdapter();
 

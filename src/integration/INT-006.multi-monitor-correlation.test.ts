@@ -1,6 +1,6 @@
 // INT-006: Multi-Monitor Event Correlation
-// ATLAS: AML.T0046 (Unsafe ML Inference)
-// OWASP: A04 (Excessive Agency)
+// Detection-capability test: multi-monitor correlation over a multi-surface attack chain.
+// OWASP: LLM06 (Excessive Agency)
 // Scenario: Single attack triggers events across process, network, and filesystem monitors
 //
 // This test injects events from all 3 monitor types within a tight window

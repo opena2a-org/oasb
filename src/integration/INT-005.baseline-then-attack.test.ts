@@ -1,6 +1,6 @@
 // INT-005: Baseline Learning Then Attack Burst
-// ATLAS: AML.T0015 (Evasion via Slow Poisoning)
-// OWASP: A04 (Excessive Agency)
+// ATLAS: AML.T0015 (Evade AI Model)
+// OWASP: LLM06 (Excessive Agency)
 // Scenario: 5 minutes of normal traffic, then sudden attack burst
 //
 // This test simulates an attack pattern where the adversary establishes

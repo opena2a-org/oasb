@@ -1,4 +1,5 @@
 // AT-ENF-004: Process Kill via SIGTERM
+// Defensive response test: validates the product's reaction (counters Impact / AML.TA0011). Not an adversary technique.
 // Tests enforcement engine's ability to terminate a running process.
 // Spawns a real child process, sends SIGTERM via the enforcement engine,
 // then verifies the process is no longer alive.

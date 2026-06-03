@@ -1,6 +1,6 @@
 // INT-002: MCP Tool Abuse Detection
-// ATLAS: AML.T0056 (LLM Plugin Compromise)
-// OWASP: A04 (Excessive Agency)
+// ATLAS: AML.T0053 (AI Agent Tool Invocation)
+// OWASP: LLM06 (Excessive Agency)
 // Scenario: Agent uses ToolBot for path traversal + command injection
 //
 // This test simulates an attacker exploiting MCP tools to:

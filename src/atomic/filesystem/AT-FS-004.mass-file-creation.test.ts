@@ -1,6 +1,6 @@
 // AT-FS-004: Mass File Creation Detection
-// ATLAS: AML.T0029 (Denial of Service)
-// OWASP: A06 (Excessive Consumption)
+// ATLAS: AML.T0034.002 (Agentic Resource Consumption)
+// OWASP: LLM10 (Unbounded Consumption)
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArpWrapper } from '../../harness/arp-wrapper';

@@ -2,8 +2,8 @@
 // Proves ARP's FilesystemMonitor detects real file operations on disk.
 // No event injection — the monitor itself detects real OS activity.
 //
-// ATLAS: AML.T0057, AML.T0018
-// OWASP: A07, A04
+// ATLAS: AML.T0055 (Unsecured Credentials), AML.T0081 (Modify AI Agent Configuration)
+// OWASP: LLM02, LLM06
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';

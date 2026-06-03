@@ -1,6 +1,6 @@
 // AT-PROC-001: Spawn Child Process Detection
-// ATLAS: AML.T0046 (Unsafe ML Inference)
-// OWASP: A04 (Excessive Agency)
+// ATLAS: AML.T0050 (Command and Scripting Interpreter)
+// OWASP: LLM06 (Excessive Agency)
 //
 // Verifies that ARP's process monitor detects real child processes
 // spawned by the agent. Uses a live process monitor with OS-level polling.

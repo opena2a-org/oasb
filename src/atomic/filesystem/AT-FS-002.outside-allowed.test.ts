@@ -1,6 +1,6 @@
 // AT-FS-002: Access Outside Allowed Paths
-// ATLAS: AML.T0046 (Unsafe ML Inference)
-// OWASP: A04 (Excessive Agency)
+// ATLAS: AML.T0037 (Data from Local System)
+// OWASP: LLM06 (Excessive Agency)
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArpWrapper } from '../../harness/arp-wrapper';

@@ -1,6 +1,6 @@
 // INT-003: Prompt Injection with Anomaly Detection
 // ATLAS: AML.T0051 (LLM Prompt Injection)
-// OWASP: A01 (Prompt Injection)
+// OWASP: LLM01 (Prompt Injection)
 // Scenario: Normal baseline traffic, then prompt injection attack
 //
 // This test establishes a baseline of normal agent activity (10 events),

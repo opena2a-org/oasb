@@ -1,6 +1,6 @@
 // AT-NET-004: Allowed Host Bypass (subdomain attack)
-// ATLAS: AML.T0024
-// OWASP: A04 (Excessive Agency)
+// ATLAS: AML.T0025 (Exfiltration via Cyber Means)
+// OWASP: LLM06 (Excessive Agency)
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArpWrapper } from '../../harness/arp-wrapper';
