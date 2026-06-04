@@ -1,6 +1,6 @@
 // AT-PROC-003: High CPU Detection
-// ATLAS: AML.T0029 (Denial of Service)
-// OWASP: A06 (Excessive Consumption)
+// ATLAS: AML.T0034.002 (Agentic Resource Consumption)
+// OWASP: LLM10 (Unbounded Consumption)
 //
 // Verifies that ARP flags processes exceeding CPU thresholds as anomalies.
 // The process monitor treats CPU > 90% as an anomaly condition.

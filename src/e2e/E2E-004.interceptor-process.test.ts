@@ -2,8 +2,8 @@
 // Proves ARP's ProcessInterceptor catches child_process.spawn/exec BEFORE execution.
 // Unlike the polling ProcessMonitor, this has zero detection latency and 100% accuracy.
 //
-// ATLAS: AML.T0046
-// OWASP: A04
+// ATLAS: AML.T0050 (Command and Scripting Interpreter)
+// OWASP: LLM06
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { ChildProcess } from 'child_process';

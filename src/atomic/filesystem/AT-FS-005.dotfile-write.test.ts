@@ -1,6 +1,6 @@
 // AT-FS-005: Shell Config Dotfile Write Detection
-// ATLAS: AML.T0018 (Persistence)
-// OWASP: A04 (Excessive Agency)
+// ATLAS: AML.T0081 (Modify AI Agent Configuration)
+// OWASP: LLM06 (Excessive Agency)
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArpWrapper } from '../../harness/arp-wrapper';

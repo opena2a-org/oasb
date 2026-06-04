@@ -5,3 +5,8 @@ coverage/
 *.tsbuildinfo
 .env
 .env.*
+secrets.json
+*.pem
+*.key
+*.p12
+*.pfx

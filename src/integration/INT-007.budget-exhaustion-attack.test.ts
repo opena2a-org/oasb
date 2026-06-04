@@ -1,6 +1,6 @@
 // INT-007: Budget Exhaustion Attack
-// ATLAS: AML.T0029 (Denial of Service)
-// OWASP: A06 (Excessive Consumption)
+// ATLAS: AML.T0046 (Spamming AI System with Chaff Data)
+// OWASP: LLM10 (Unbounded Consumption)
 // Scenario: Flood ARP with noise to exhaust L2 budget, then send real attack
 //
 // This test verifies that when the LLM budget is exhausted, L0 rules

@@ -1,15 +1,16 @@
 // AT-AI-002: Prompt Output Scanning
-// ATLAS: AML.T0057 (Data Leakage)
-// OWASP: A04 (Output Handling)
+// ATLAS: AML.T0057 (LLM Data Leakage)
+// OWASP: LLM02 (Sensitive Information Disclosure)
 //
 // Verifies that PromptInterceptor.scanOutput() detects leaked secrets,
 // PII, and system prompts in LLM responses before they reach the user.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { PromptScanner } from '../../harness/adapter';
 
-describe('AT-AI-002: Prompt Output Scanning', () => {
+describeWithCapability('prompt-output-scanning', 'AT-AI-002: Prompt Output Scanning', () => {
   let scanner: PromptScanner;
 
   beforeAll(async () => {

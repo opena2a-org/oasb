@@ -1,6 +1,6 @@
 // AT-INT-003: L2 LLM Escalation
-// ATLAS: AML.T0054 (LLM Jailbreak)
-// OWASP: A01 (Prompt Injection)
+// Detection-capability test: LLM-assisted escalation for ambiguous events.
+// OWASP: LLM01 (Prompt Injection)
 //
 // Verifies SEC-021 fail-closed semantics: rules with requireLlmConfirmation=true
 // still execute enforcement immediately. The LLM review flag is telemetry-only —

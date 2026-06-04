@@ -5,8 +5,8 @@
 // NOTE: Requires lsof (macOS) or ss (Linux) to be available.
 // Test skips gracefully if neither tool is present.
 //
-// ATLAS: AML.T0024
-// OWASP: A04
+// ATLAS: AML.T0025 (Exfiltration via Cyber Means)
+// OWASP: LLM06
 
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { execSync } from 'child_process';

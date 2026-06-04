@@ -213,9 +213,11 @@ export async function runBenchmark(
   const scannerResults = new Map<string, LeaderboardEntry>();
   const comparisonTable: ComparisonRow[] = [];
 
-  // Use first adapter as HMA baseline for Cohen's Kappa
-  let hmaBaseline: ScannerSubmission | undefined;
-
+  // Pass 1: run every adapter and collect submissions. We must freeze the HMA
+  // baseline BEFORE scoring any adapter, otherwise scoring order decides the
+  // Cohen's Kappa reference: a non-HMA adapter scored first would be compared
+  // to no baseline (kappa 0, failing the platinum gate for an unrelated reason).
+  const submissions: ScannerSubmission[] = [];
   for (const adapter of adapters) {
     const results: ScannerResult[] = [];
 
@@ -224,27 +226,31 @@ export async function runBenchmark(
       results.push(result);
     }
 
-    const submission: ScannerSubmission = {
+    submissions.push({
       scannerId: adapter.id,
       scannerName: adapter.name,
       scannerVersion: adapter.version,
       submittedAt: new Date().toISOString(),
       datasetVersion: 'v1.0',
       results,
-    };
-
-    if (!hmaBaseline && adapter.id.includes('hma')) {
-      hmaBaseline = submission;
-    }
-
-    const entry = scoreSubmission(submission, dataset, hmaBaseline);
-    scannerResults.set(adapter.id, entry);
+    });
 
     // Report telemetry (fire-and-forget, never blocks benchmark).
     reportBenchmarkTelemetry(results, adapter.id, adapter.version).catch(() => {});
+  }
+
+  // First HMA-family adapter in submission order becomes the shared kappa
+  // reference (several adapter ids may contain 'hma'; they are distinct scanners).
+  const hmaBaseline = submissions.find(s => s.scannerId.includes('hma'));
+
+  // Pass 2: score every submission against the same frozen baseline.
+  for (const submission of submissions) {
+    const isHMABaseline = submission === hmaBaseline;
+    const entry = scoreSubmission(submission, dataset, hmaBaseline, isHMABaseline);
+    scannerResults.set(submission.scannerId, entry);
 
     comparisonTable.push({
-      scanner: adapter.name,
+      scanner: submission.scannerName,
       tier: entry.tier,
       f1: entry.metrics.f1,
       precision: entry.metrics.precision,

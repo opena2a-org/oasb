@@ -1,0 +1,15 @@
+# OASB is a security benchmark. The paths below are malicious-by-design test
+# data and detection tooling, not application code. Scanning them produces
+# expected findings (attack payloads, fake placeholder credentials, secret-
+# detection regexes) that are the benchmark's purpose, not vulnerabilities.
+
+# Benchmark corpus: labeled malicious + benign attack samples.
+corpus/
+
+# Secret-detection ruleset (contains regexes that match credential shapes).
+.gitleaks.toml
+
+# DVAA harness: connects to the intentionally-vulnerable DVAA agent endpoints.
+src/harness/dvaa-manager.ts
+src/harness/dvaa-client.ts
+scripts/run-dvaa-benchmark.ts

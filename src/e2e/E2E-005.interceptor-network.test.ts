@@ -2,8 +2,8 @@
 // Proves ARP's NetworkInterceptor catches net.Socket.connect BEFORE connection.
 // Unlike lsof/ss polling, this works everywhere and has zero detection latency.
 //
-// ATLAS: AML.T0024, AML.T0057
-// OWASP: A04
+// ATLAS: AML.T0025 (Exfiltration via Cyber Means)
+// OWASP: LLM06
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as net from 'net';
