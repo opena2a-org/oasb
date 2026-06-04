@@ -104,7 +104,7 @@ export function scoreSubmission(
  *
  * Detection (recall) is credited on the VERDICT alone: a scanner that calls a
  * malicious sample `malicious` gets recall credit even if it omits or mislabels
- * the category — category is a secondary attribution, not a detection gate.
+ * the category - category is a secondary attribution, not a detection gate.
  * False positives are attributed to a category only when the scanner names one;
  * the authoritative FPR is the pooled aggregate (see computeAggregateMetrics).
  */
