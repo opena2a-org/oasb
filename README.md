@@ -1,10 +1,10 @@
 > **[OpenA2A](https://github.com/opena2a-org/opena2a)**: [CLI](https://github.com/opena2a-org/opena2a) · [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard) · [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)
 
-# OASB — Open Agent Security Benchmark
+# OASB - Open Agent Security Benchmark
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 
-> **Note:** OASB controls are also available in [HackMyAgent](https://github.com/opena2a-org/hackmyagent) v0.8.0+ via `opena2a benchmark`. This repository is the canonical source for the full evaluation suite and is actively maintained. ARP (the reference adapter) is now part of HackMyAgent — install via `npm install arp-guard`.
+> **Note:** OASB controls are also available in [HackMyAgent](https://github.com/opena2a-org/hackmyagent) v0.8.0+ via `opena2a benchmark`. This repository is the canonical source for the full evaluation suite and is actively maintained. ARP (the reference adapter) is now part of HackMyAgent - install via `npm install arp-guard`.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Tests](https://img.shields.io/badge/tests-244%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
@@ -14,7 +14,7 @@
 
 222 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. Each scenario is mapped to MITRE ATLAS (15 techniques, including the AI-agent technique family) and the OWASP LLM/Agentic Top 10. Plug in your product, run the suite, get a detection coverage scorecard.
 
-> **Counts.** `npm test` runs **245 tests** (244 passing, 1 skipped when `lsof`/`ss` is unavailable): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests**. "222" is the scenario count; "244 passing" is the full `npm test` total. Both are reproducible from a clean checkout — see [What Gets Tested](#what-gets-tested).
+> **Counts.** `npm test` runs **245 tests** (244 passing, 1 skipped when `lsof`/`ss` is unavailable): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests**. "222" is the scenario count; "244 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested).
 
 [OASB Website](https://oasb.ai) | [MITRE ATLAS Coverage](#mitre-atlas-coverage)
 
@@ -26,7 +26,7 @@
 |------|--------|
 | 2026-06-03 | Remapped all scenarios to current MITRE ATLAS (15 techniques, incl. the 2025 AI-agent technique family); corrected four legacy mappings. Capability gating now produces N/A (not FAIL) for surfaces a product does not declare. Pooled scoring-engine metrics (FPR no longer macro-averaged; category-agnostic detectors credited on recall). Counts reconciled to `npm test`. |
 | 2026-04-02 | Scanner Benchmark v2: 4,245-sample corpus, 3 HMA adapter tiers (static/TME/pipeline), DVAA ground-truth comparison. TME v0.5.0 achieves 89.2% F1. Comparison with Holzbauer et al. (arXiv:2603.16572). |
-| 2026-03-23 | `arp-guard` v0.3.0 — ARP now re-exports from HackMyAgent. Updated OASB to v0.3.0. All 222 tests pass. Updated Quick Start (no standalone ARP clone). |
+| 2026-03-23 | `arp-guard` v0.3.0 - ARP now re-exports from HackMyAgent. Updated OASB to v0.3.0. All 222 tests pass. Updated Quick Start (no standalone ARP clone). |
 | 2026-02-19 | Added 40 AI-layer test scenarios (AT-AI-001 through AT-AI-005) for prompt, MCP, and A2A scanning via ARP v0.2.0. Total tests: 222. |
 | 2026-02-18 | Added integration tests for DVAA v0.4.0 MCP JSON-RPC and A2A endpoints. |
 | 2026-02-09 | Initial release -- 182 attack scenarios across 10 MITRE ATLAS techniques. |
@@ -43,7 +43,7 @@ OASB evaluates **security products**, not agents. It answers: "does your runtime
 | **Tests** | "Does your EDR catch this exfiltration?" | "Is your agent leaking credentials?" |
 | **Audience** | Security product vendors, evaluators | Agent developers, red teams |
 | **Analogous to** | [MITRE ATT&CK Evaluations](https://attackevals.mitre-engenuity.org/) | [OWASP ZAP](https://www.zaproxy.org/) / Burp Suite |
-| **Method** | Controlled lab — inject attacks, measure detection | Active scanning + adversarial payloads against live targets |
+| **Method** | Controlled lab - inject attacks, measure detection | Active scanning + adversarial payloads against live targets |
 | **Output** | Detection coverage scorecard | Vulnerability report + auto-fix |
 
 Use both together: **HackMyAgent** finds vulnerabilities in your agent, **OASB** proves your security product catches real attacks.
@@ -56,10 +56,10 @@ Use both together: **HackMyAgent** finds vulnerabilities in your agent, **OASB**
 - [Usage via OpenA2A CLI](#usage-via-opena2a-cli)
 - [What Gets Tested](#what-gets-tested)
 - [Test Categories](#test-categories)
-  - [Atomic Tests](#atomic-tests-srcatomic) — 144 discrete detection tests across 30 files (OS-level + AI-layer)
-  - [Integration Tests](#integration-tests-srcintegration) — 43 tests across 8 multi-step attack chains
-  - [Baseline Tests](#baseline-tests-srcbaseline) — 12 false-positive validations across 3 files
-  - [E2E Tests](#e2e-tests-srce2e) — 23 real OS-level detection tests across 6 files
+  - [Atomic Tests](#atomic-tests-srcatomic) - 144 discrete detection tests across 30 files (OS-level + AI-layer)
+  - [Integration Tests](#integration-tests-srcintegration) - 43 tests across 8 multi-step attack chains
+  - [Baseline Tests](#baseline-tests-srcbaseline) - 12 false-positive validations across 3 files
+  - [E2E Tests](#e2e-tests-srce2e) - 23 real OS-level detection tests across 6 files
 - [MITRE ATLAS Coverage](#mitre-atlas-coverage)
 - [Test Harness](#test-harness)
 - [Evaluating Other Products](#evaluating-other-products)
@@ -163,20 +163,20 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 Discrete tests that exercise individual detection capabilities. Each test injects a single attack event and verifies the product detects it with the correct classification and severity.
 
 <details>
-<summary><strong>AI-Layer Scanning</strong> — 5 files (40 tests)</summary>
+<summary><strong>AI-Layer Scanning</strong> - 5 files (40 tests)</summary>
 
 | Test | What the Product Should Detect |
 |------|-------------------------------|
-| AT-AI-001 | Prompt input scanning — PI, JB, DE, CM pattern detection (11 tests) |
-| AT-AI-002 | Prompt output scanning — OL pattern detection, data leak prevention (6 tests) |
-| AT-AI-003 | MCP tool call scanning — path traversal, command injection, SSRF, allowlist (11 tests) |
-| AT-AI-004 | A2A message scanning — identity spoofing, delegation abuse, trust validation (7 tests) |
-| AT-AI-005 | Pattern coverage — all 19 patterns detect known payloads, no false positives (5 tests) |
+| AT-AI-001 | Prompt input scanning - PI, JB, DE, CM pattern detection (11 tests) |
+| AT-AI-002 | Prompt output scanning - OL pattern detection, data leak prevention (6 tests) |
+| AT-AI-003 | MCP tool call scanning - path traversal, command injection, SSRF, allowlist (11 tests) |
+| AT-AI-004 | A2A message scanning - identity spoofing, delegation abuse, trust validation (7 tests) |
+| AT-AI-005 | Pattern coverage - all 19 patterns detect known payloads, no false positives (5 tests) |
 
 </details>
 
 <details>
-<summary><strong>Process Detection</strong> — 5 files</summary>
+<summary><strong>Process Detection</strong> - 5 files</summary>
 
 | Test | ATLAS | What the Product Should Detect |
 |------|-------|-------------------------------|
@@ -189,7 +189,7 @@ Discrete tests that exercise individual detection capabilities. Each test inject
 </details>
 
 <details>
-<summary><strong>Network Detection</strong> — 5 files</summary>
+<summary><strong>Network Detection</strong> - 5 files</summary>
 
 | Test | ATLAS | What the Product Should Detect |
 |------|-------|-------------------------------|
@@ -202,7 +202,7 @@ Discrete tests that exercise individual detection capabilities. Each test inject
 </details>
 
 <details>
-<summary><strong>Filesystem Detection</strong> — 5 files</summary>
+<summary><strong>Filesystem Detection</strong> - 5 files</summary>
 
 | Test | ATLAS | What the Product Should Detect |
 |------|-------|-------------------------------|
@@ -215,14 +215,14 @@ Discrete tests that exercise individual detection capabilities. Each test inject
 </details>
 
 <details>
-<summary><strong>Intelligence</strong> — 5 files</summary>
+<summary><strong>Intelligence</strong> - 5 files</summary>
 
 These validate the product's own detection machinery (capability tests), not adversary techniques.
 
 | Test | Capability | What the Product Should Do |
 |------|-----------|---------------------------|
 | AT-INT-001 | Rule engine | Match rules and trigger enforcement |
-| AT-INT-002 | Anomaly scoring | Score statistical anomalies (z-score) — surfaces AML.T0015 |
+| AT-INT-002 | Anomaly scoring | Score statistical anomalies (z-score) - surfaces AML.T0015 |
 | AT-INT-003 | LLM escalation | Escalate to LLM-assisted assessment |
 | AT-INT-004 | Budget control | Handle budget exhaustion (AML.T0034.002) gracefully |
 | AT-INT-005 | Baseline learning | Learn and reset behavioral baselines |
@@ -230,7 +230,7 @@ These validate the product's own detection machinery (capability tests), not adv
 </details>
 
 <details>
-<summary><strong>Enforcement</strong> — 5 files</summary>
+<summary><strong>Enforcement</strong> - 5 files</summary>
 
 These validate the product's defensive response (countering the Impact tactic, AML.TA0011), not adversary techniques.
 
@@ -277,10 +277,10 @@ Every security product must avoid false positives. These tests verify the produc
 
 ### E2E Tests (`src/e2e/`)
 
-Real OS-level detection — no mocks, no event injection. These tests spawn real processes, open real connections, and write real files, then verify the product detects them.
+Real OS-level detection - no mocks, no event injection. These tests spawn real processes, open real connections, and write real files, then verify the product detects them.
 
 <details>
-<summary><strong>Live Monitors</strong> — OS-level polling</summary>
+<summary><strong>Live Monitors</strong> - OS-level polling</summary>
 
 | Test | Latency | What the Product Should Detect |
 |------|---------|-------------------------------|
@@ -291,7 +291,7 @@ Real OS-level detection — no mocks, no event injection. These tests spawn real
 </details>
 
 <details>
-<summary><strong>Interceptors</strong> — application-level hooks</summary>
+<summary><strong>Interceptors</strong> - application-level hooks</summary>
 
 | Test | Latency | What the Product Should Intercept |
 |------|---------|----------------------------------|
@@ -325,7 +325,7 @@ Real OS-level detection — no mocks, no event injection. These tests spawn real
 | Spamming AI System with Chaff Data | AML.T0046 | INT-007 |
 | Evade AI Model | AML.T0015 | INT-005, AT-INT-002 |
 
-**Defensive and capability tests are not mapped to adversary techniques.** Enforcement tests (AT-ENF-001–005, AT-PROC-005, INT-008) validate the product's *response* to the Impact tactic (AML.TA0011). Intelligence-layer tests (AT-INT-001/003/005), correlation (INT-006), and baseline tests (BL-001–003) validate the product's own detection machinery. Mapping a defensive test to an attack technique (the prior table mapped enforcement to "AML.TA0006") conflates the adversary matrix with the defender — ATLAS is an adversary framework, so those tests are tracked separately.
+**Defensive and capability tests are not mapped to adversary techniques.** Enforcement tests (AT-ENF-001–005, AT-PROC-005, INT-008) validate the product's *response* to the Impact tactic (AML.TA0011). Intelligence-layer tests (AT-INT-001/003/005), correlation (INT-006), and baseline tests (BL-001–003) validate the product's own detection machinery. Mapping a defensive test to an attack technique (the prior table mapped enforcement to "AML.TA0006") conflates the adversary matrix with the defender - ATLAS is an adversary framework, so those tests are tracked separately.
 
 ---
 
@@ -335,10 +335,10 @@ The harness wraps a security product via an adapter interface and provides event
 
 | File | Purpose |
 |------|---------|
-| `adapter.ts` | **Product-agnostic adapter interface** — implement `SecurityProductAdapter` for your product |
-| `create-adapter.ts` | Adapter factory — selects the product under test from the `OASB_ADAPTER` env var |
-| `capabilities.ts` | Capability matrix + `describeWithCapability()` — unsupported surfaces report N/A, not FAIL |
-| `arp-wrapper.ts` | Reference adapter — wraps ARP (`arp-guard`) with event collection, injection helpers |
+| `adapter.ts` | **Product-agnostic adapter interface** - implement `SecurityProductAdapter` for your product |
+| `create-adapter.ts` | Adapter factory - selects the product under test from the `OASB_ADAPTER` env var |
+| `capabilities.ts` | Capability matrix + `describeWithCapability()` - unsupported surfaces report N/A, not FAIL |
+| `arp-wrapper.ts` | Reference adapter - wraps ARP (`arp-guard`) with event collection, injection helpers |
 | `llm-guard-wrapper.ts` | Worked example: adapter for `llm-guard` (declares prompt-input + pattern scanning) |
 | `rebuff-wrapper.ts` | Worked example: adapter for `rebuff` (declares prompt-input + pattern scanning) |
 | `event-collector.ts` | Captures events with async `waitForEvent(predicate, timeout)` |
@@ -360,7 +360,7 @@ OASB_ADAPTER=rebuff npm test          # the rebuff npm package
 OASB_ADAPTER=./my-adapter.js npm test # your own adapter module
 ```
 
-Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL — a prompt-only scanner is not penalized for lacking filesystem monitoring. This keeps scorecards honest and comparable.
+Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL - a prompt-only scanner is not penalized for lacking filesystem monitoring. This keeps scorecards honest and comparable.
 
 | Surface | ARP (reference) | llm-guard | rebuff |
 |---------|:---:|:---:|:---:|
@@ -372,9 +372,9 @@ Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a 
 | Process / network / filesystem monitoring | ✓ | N/A | N/A |
 | Anomaly detection, budget control, enforcement | ✓ | N/A | N/A |
 
-> **Where cross-product detection numbers come from.** The atomic AI-layer tests assert the reference adapter's own pattern taxonomy (e.g. pattern id `PI-001`), so they verify *conformance to the OASB harness*, not neutral detection quality. For an apples-to-apples detection comparison across products, use the **verdict-based [Scanner Benchmark](#skills-security-benchmark)** below — it scores any adapter on the same labeled corpus using `malicious`/`benign` verdicts, independent of internal pattern names.
+> **Where cross-product detection numbers come from.** The atomic AI-layer tests assert the reference adapter's own pattern taxonomy (e.g. pattern id `PI-001`), so they verify *conformance to the OASB harness*, not neutral detection quality. For an apples-to-apples detection comparison across products, use the **verdict-based [Scanner Benchmark](#skills-security-benchmark)** below - it scores any adapter on the same labeled corpus using `malicious`/`benign` verdicts, independent of internal pattern names.
 
-To evaluate your own product: implement `SecurityProductAdapter` from `src/harness/adapter.ts`, declare its capabilities, point `OASB_ADAPTER` at your module, and run the full suite. The interface defines event types, scanner interfaces, and enforcement contracts — no dependency on any specific product.
+To evaluate your own product: implement `SecurityProductAdapter` from `src/harness/adapter.ts`, declare its capabilities, point `OASB_ADAPTER` at your module, and run the full suite. The interface defines event types, scanner interfaces, and enforcement contracts - no dependency on any specific product.
 
 ---
 
@@ -467,7 +467,7 @@ See [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) for full per-category breakdown
 
 ## Known Detection Gaps
 
-OASB documents what the reference product (ARP) does and doesn't catch. Other products may have different gap profiles — that's the point of running the benchmark. For the methodology audit (counts, ATLAS mapping, scoring), see [docs/AUDIT-2026-06-03.md](docs/AUDIT-2026-06-03.md).
+OASB documents what the reference product (ARP) does and doesn't catch. Other products may have different gap profiles - that's the point of running the benchmark. For the methodology audit (counts, ATLAS mapping, scoring), see [docs/AUDIT-2026-06-03.md](docs/AUDIT-2026-06-03.md).
 
 | Gap | Severity | Test | Notes |
 |-----|----------|------|-------|

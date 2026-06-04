@@ -4,7 +4,7 @@ OASB maps tests to the [OWASP Top 10 for LLM Applications (2025)](https://genai.
 
 ## Coverage by Category
 
-### LLM01 — Prompt Injection
+### LLM01 - Prompt Injection
 Manipulation of agent behavior through crafted inputs that override or bypass system instructions.
 
 | Test ID | Scenario | Monitor |
@@ -16,7 +16,7 @@ Manipulation of agent behavior through crafted inputs that override or bypass sy
 
 **ARP Detection:** Prompt scanner matches injection/jailbreak patterns. L0 rules classify severity, L1 detects behavioral deviation, L2 can confirm via LLM analysis.
 
-### LLM02 — Sensitive Information Disclosure
+### LLM02 - Sensitive Information Disclosure
 Unauthorized disclosure of credentials, secrets, or sensitive data through the agent (in output or via exfiltration).
 
 | Test ID | Scenario | Monitor |
@@ -31,7 +31,7 @@ Unauthorized disclosure of credentials, secrets, or sensitive data through the a
 
 **ARP Detection:** Output scanner flags leaked secrets. Network monitor maintains a suspicious-host list. Filesystem monitor protects sensitive paths. Combined detection provides defense-in-depth.
 
-### LLM06 — Excessive Agency
+### LLM06 - Excessive Agency
 Agent performs actions beyond its declared capabilities or authorized scope.
 
 | Test ID | Scenario | Monitor |
@@ -54,7 +54,7 @@ Agent performs actions beyond its declared capabilities or authorized scope.
 
 **ARP Detection:** Process monitor tracks all child processes and suspicious binaries. Filesystem monitor enforces path boundaries. Network monitor validates allowed hosts. MCP/A2A scanners validate tool calls and inter-agent messages.
 
-### LLM10 — Unbounded Consumption
+### LLM10 - Unbounded Consumption
 Agent consumes resources beyond reasonable bounds, causing denial of service or runaway cost.
 
 | Test ID | Scenario | Monitor |
@@ -71,10 +71,10 @@ Agent consumes resources beyond reasonable bounds, causing denial of service or 
 
 | OWASP ID | Category | Tests | Coverage Level |
 |----------|----------|-------|---------------|
-| LLM01 | Prompt Injection | 4 | Moderate — L0/L1/L2 detection |
-| LLM02 | Sensitive Information Disclosure | 7 | Strong — output + network + filesystem guards |
-| LLM06 | Excessive Agency | 15 | Strong — multi-monitor + AI-layer coverage |
-| LLM10 | Unbounded Consumption | 5 | Good — resource + budget tracking |
+| LLM01 | Prompt Injection | 4 | Moderate - L0/L1/L2 detection |
+| LLM02 | Sensitive Information Disclosure | 7 | Strong - output + network + filesystem guards |
+| LLM06 | Excessive Agency | 15 | Strong - multi-monitor + AI-layer coverage |
+| LLM10 | Unbounded Consumption | 5 | Good - resource + budget tracking |
 
 ## Gaps and Future Coverage
 
