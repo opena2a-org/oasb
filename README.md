@@ -467,7 +467,7 @@ See [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) for full per-category breakdown
 
 ## Known Detection Gaps
 
-OASB documents what the reference product (ARP) does and doesn't catch. Other products may have different gap profiles — that's the point of running the benchmark.
+OASB documents what the reference product (ARP) does and doesn't catch. Other products may have different gap profiles — that's the point of running the benchmark. For the methodology audit (counts, ATLAS mapping, scoring), see [docs/AUDIT-2026-06-03.md](docs/AUDIT-2026-06-03.md).
 
 | Gap | Severity | Test | Notes |
 |-----|----------|------|-------|
