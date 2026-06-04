@@ -239,6 +239,8 @@ export async function runBenchmark(
     reportBenchmarkTelemetry(results, adapter.id, adapter.version).catch(() => {});
   }
 
+  // First HMA-family adapter in submission order becomes the shared kappa
+  // reference (several adapter ids may contain 'hma'; they are distinct scanners).
   const hmaBaseline = submissions.find(s => s.scannerId.includes('hma'));
 
   // Pass 2: score every submission against the same frozen baseline.
