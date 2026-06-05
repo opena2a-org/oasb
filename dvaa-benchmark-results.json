@@ -1,40 +1,44 @@
 {
-  "date": "2026-04-02T02:12:00.623Z",
-  "totalScenarios": 70,
-  "detected": 61,
-  "detectionRate": 0.8714285714285714,
+  "date": "2026-06-05T18:38:45.764Z",
+  "totalScenarios": 86,
+  "detected": 22,
+  "detectionRate": 0.2558139534883721,
   "perCategory": {
     "privilege_escalation": {
       "total": 20,
-      "detected": 17
+      "detected": 1
+    },
+    "unknown": {
+      "total": 16,
+      "detected": 5
     },
     "persistence": {
       "total": 4,
-      "detected": 4
+      "detected": 1
     },
     "credential_exfiltration": {
       "total": 9,
-      "detected": 7
+      "detected": 0
     },
     "social_engineering": {
       "total": 4,
-      "detected": 4
+      "detected": 1
     },
     "data_exfiltration": {
       "total": 7,
-      "detected": 6
+      "detected": 2
     },
     "supply_chain": {
       "total": 15,
-      "detected": 14
+      "detected": 8
     },
     "prompt_injection": {
       "total": 7,
-      "detected": 5
+      "detected": 2
     },
     "heartbeat_rce": {
       "total": 3,
-      "detected": 3
+      "detected": 1
     },
     "unicode_stego": {
       "total": 1,
@@ -49,31 +53,71 @@
         "A2A-001",
         "A2A-002"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "social_engineering",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.8861750355492306,
-      "scanTimeMs": 142,
+      "intentConfidence": 0.9999777010405688,
+      "scanTimeMs": 129,
+      "attackFindings": []
+    },
+    {
+      "scenario": "a2a-capability-overstating",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "findings": 0,
+      "intentClass": "benign",
+      "intentConfidence": 0.9999921734564452,
+      "scanTimeMs": 90,
+      "attackFindings": []
+    },
+    {
+      "scenario": "a2a-identity-replay",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "findings": 0,
+      "intentClass": "benign",
+      "intentConfidence": 0.9999921734564452,
+      "scanTimeMs": 89,
+      "attackFindings": []
+    },
+    {
+      "scenario": "a2a-task-hijacking",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "findings": 0,
+      "intentClass": "benign",
+      "intentConfidence": 0.9999921734564452,
+      "scanTimeMs": 96,
+      "attackFindings": []
+    },
+    {
+      "scenario": "a2a-trust-chain-poisoning",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "findings": 0,
+      "intentClass": "benign",
+      "intentConfidence": 0.9999921734564452,
+      "scanTimeMs": 91,
       "attackFindings": []
     },
     {
       "scenario": "a2a-worm-propagation",
       "category": "persistence",
-      "expectedChecks": [
-        "A2A-006",
-        "A2A-003"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "social_engineering",
-      "findings": 3,
+      "findings": 2,
       "intentClass": "malicious",
-      "intentConfidence": 0.9993187785148621,
-      "scanTimeMs": 101,
+      "intentConfidence": 0.7672524452209473,
+      "scanTimeMs": 89,
       "attackFindings": [
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-EXFIL-001:SKILL-EXFIL",
+        "AST-CRED-002:CRED-EXFIL"
       ]
     },
     {
@@ -82,40 +126,39 @@
       "expectedChecks": [
         "AGENT-CRED-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 4,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9049519896507263,
-      "scanTimeMs": 107,
-      "attackFindings": [
-        "AST-GOV-004:PROMPT-INJECT",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
-      ]
+      "scanTimeMs": 88,
+      "attackFindings": []
     },
     {
       "scenario": "agent-impersonation-a2a",
       "category": "social_engineering",
-      "expectedChecks": [
-        "AUTH-001"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 7,
+      "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.999995231628418,
-      "scanTimeMs": 103,
+      "scanTimeMs": 93,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-002:SOUL-BYPASS",
-        "AST-GOV-004:PROMPT-INJECT",
-        "AST-SCOPE-003:SEMANTIC-MISMATCH",
-        "AST-PROMPT-003:PROMPT-INJECT"
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
+    },
+    {
+      "scenario": "agent-thresh-01",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "findings": 0,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9999997019767761,
+      "scanTimeMs": 93,
+      "attackFindings": []
     },
     {
       "scenario": "aitool-gradio-share",
@@ -123,12 +166,12 @@
       "expectedChecks": [
         "AITOOL-002"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9808254511882034,
-      "scanTimeMs": 96,
+      "intentConfidence": 0.9999988306717109,
+      "scanTimeMs": 92,
       "attackFindings": []
     },
     {
@@ -137,12 +180,12 @@
       "expectedChecks": [
         "AITOOL-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.8490826634424671,
-      "scanTimeMs": 93,
+      "intentConfidence": 0.9998699582165976,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -151,12 +194,12 @@
       "expectedChecks": [
         "AITOOL-004"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.7512606382369995,
-      "scanTimeMs": 92,
+      "scanTimeMs": 91,
       "attackFindings": []
     },
     {
@@ -166,11 +209,10 @@
         "AITOOL-003"
       ],
       "detected": false,
-      "detectedCategory": "policy_violation",
       "findings": 0,
-      "intentClass": "suspicious",
-      "intentConfidence": 0.4606874046708882,
-      "scanTimeMs": 116,
+      "intentClass": "benign",
+      "intentConfidence": 0.9999884960023888,
+      "scanTimeMs": 87,
       "attackFindings": []
     },
     {
@@ -179,12 +221,12 @@
       "expectedChecks": [
         "AITOOL-002"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9801671115334062,
-      "scanTimeMs": 106,
+      "intentConfidence": 0.9999958790425036,
+      "scanTimeMs": 84,
       "attackFindings": []
     },
     {
@@ -194,17 +236,13 @@
         "AIM-002",
         "GIT-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 3,
+      "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9999988079071045,
-      "scanTimeMs": 97,
-      "attackFindings": [
-        "AST-CRED-001:CRED-HARVEST",
-        "AST-CRED-001:CRED-EXPOSURE",
-        "AST-CRED-003:CRED-HARDCODED"
-      ]
+      "intentConfidence": 0.98697829246521,
+      "scanTimeMs": 92,
+      "attackFindings": []
     },
     {
       "scenario": "behavioral-drift-to-exfil",
@@ -219,38 +257,23 @@
         "SUPPLY-002",
         "SUPPLY-004"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 11,
-      "intentClass": "malicious",
-      "intentConfidence": 0.9999995827674866,
-      "scanTimeMs": 96,
-      "attackFindings": [
-        "AST-INJECT-001:PROMPT-INJECT",
-        "AST-INJECT-001:PROMPT-INJECT",
-        "AST-GOVERN-002:SOUL-BYPASS",
-        "AST-CRED-001:CRED-EXPOSURE",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-003:SOUL-MISSING",
-        "AST-GOV-004:PROMPT-INJECT",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
-      ]
+      "findings": 0,
+      "intentClass": "benign",
+      "intentConfidence": 0.7,
+      "scanTimeMs": 89,
+      "attackFindings": []
     },
     {
       "scenario": "cicd-ai-review-bypass",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-010"
-      ],
+      "expectedChecks": [],
       "detected": true,
-      "detectedCategory": "privilege_escalation",
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999275207519531,
-      "scanTimeMs": 96,
+      "scanTimeMs": 91,
       "attackFindings": [
         "AST-CRED-001:CRED-HARVEST",
         "AST-CRED-003:CRED-HARDCODED"
@@ -262,31 +285,26 @@
       "expectedChecks": [
         "CLIPASS-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 1,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9977267384529114,
-      "scanTimeMs": 104,
-      "attackFindings": [
-        "AST-CRED-001:CRED-EXPOSURE"
-      ]
+      "scanTimeMs": 88,
+      "attackFindings": []
     },
     {
       "scenario": "clipboard-prompt-injection",
       "category": "prompt_injection",
-      "expectedChecks": [
-        "INJ-006"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 2,
-      "intentClass": "suspicious",
-      "intentConfidence": 0.6074443459510803,
-      "scanTimeMs": 99,
+      "findings": 1,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9910723567008972,
+      "scanTimeMs": 87,
       "attackFindings": [
-        "AST-GOVERN-001:SOUL-BYPASS",
-        "AST-GOV-002:SOUL-BYPASS"
+        "AST-INJECT-001:PROMPT-INJECT"
       ]
     },
     {
@@ -295,113 +313,121 @@
       "expectedChecks": [
         "NEMO-005"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9861320853233337,
-      "scanTimeMs": 99,
+      "scanTimeMs": 86,
       "attackFindings": []
     },
     {
       "scenario": "consensus-manipulation",
       "category": "social_engineering",
-      "expectedChecks": [
-        "RATE-001"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 2,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999992847442627,
-      "scanTimeMs": 98,
-      "attackFindings": [
-        "AST-GOVERN-001:SOUL-BYPASS",
-        "AST-GOV-002:SOUL-BYPASS"
-      ]
+      "scanTimeMs": 87,
+      "attackFindings": []
     },
     {
       "scenario": "context-cache-poisoning",
       "category": "persistence",
-      "expectedChecks": [
-        "MEM-008"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.7782512903213501,
-      "scanTimeMs": 104,
+      "scanTimeMs": 89,
+      "attackFindings": []
+    },
+    {
+      "scenario": "context-lifecycle-displacement",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "detectedCategory": "injection",
+      "findings": 0,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9994881317554063,
+      "scanTimeMs": 96,
+      "attackFindings": []
+    },
+    {
+      "scenario": "context-lifecycle-priority-hijack",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "detectedCategory": "injection",
+      "findings": 0,
+      "intentClass": "malicious",
+      "intentConfidence": 0.999999975091965,
+      "scanTimeMs": 86,
+      "attackFindings": []
+    },
+    {
+      "scenario": "context-lifecycle-split-injection",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "detectedCategory": "injection",
+      "findings": 0,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9999910608092082,
+      "scanTimeMs": 88,
       "attackFindings": []
     },
     {
       "scenario": "cross-session-persistence",
       "category": "persistence",
-      "expectedChecks": [
-        "MEM-006"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "persistence",
-      "findings": 5,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999988079071045,
-      "scanTimeMs": 101,
-      "attackFindings": [
-        "AST-CRED-001:CRED-HARVEST",
-        "AST-CRED-001:CRED-EXPOSURE",
-        "AST-CRED-002:CRED-EXFIL",
-        "AST-CRED-003:CRED-HARDCODED",
-        "AST-GOV-002:SOUL-BYPASS"
-      ]
+      "scanTimeMs": 87,
+      "attackFindings": []
     },
     {
       "scenario": "delegation-privilege-escalation",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "PERM-001"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 6,
+      "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.999994158744812,
-      "scanTimeMs": 98,
+      "scanTimeMs": 99,
       "attackFindings": [
-        "AST-CRED-001:CRED-HARVEST",
-        "AST-GOVERN-001:SOUL-BYPASS",
-        "AST-GOVERN-001:SOUL-BYPASS",
-        "AST-CRED-003:CRED-HARDCODED",
-        "AST-GOV-002:SOUL-BYPASS",
-        "AST-GOV-002:SOUL-BYPASS"
+        "AST-GOVERN-001:SOUL-BYPASS"
       ]
     },
     {
       "scenario": "dependency-confusion-attack",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-002",
-        "DEP-002"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "lateral_movement",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9462442398071289,
-      "scanTimeMs": 115,
+      "scanTimeMs": 87,
       "attackFindings": []
     },
     {
       "scenario": "dns-exfil-via-tools",
       "category": "data_exfiltration",
-      "expectedChecks": [
-        "NET-008"
-      ],
-      "detected": true,
-      "detectedCategory": "persistence",
+      "expectedChecks": [],
+      "detected": false,
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999985694885254,
-      "scanTimeMs": 94,
+      "scanTimeMs": 85,
       "attackFindings": []
     },
     {
@@ -410,20 +436,18 @@
       "expectedChecks": [
         "DOCKERINJ-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9531161189079285,
-      "scanTimeMs": 111,
+      "scanTimeMs": 97,
       "attackFindings": []
     },
     {
       "scenario": "docker-provenance-disabled",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-006"
-      ],
+      "expectedChecks": [],
       "detected": false,
       "findings": 0,
       "intentClass": "unknown",
@@ -434,10 +458,8 @@
     {
       "scenario": "embedding-adversarial-rag",
       "category": "prompt_injection",
-      "expectedChecks": [
-        "RAG-004"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
@@ -448,18 +470,14 @@
     {
       "scenario": "encoding-bypass-base64",
       "category": "prompt_injection",
-      "expectedChecks": [
-        "CODEINJ-001"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 1,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999974370002747,
-      "scanTimeMs": 94,
-      "attackFindings": [
-        "AST-HEARTBEAT-001:HEARTBEAT-RCE"
-      ]
+      "scanTimeMs": 92,
+      "attackFindings": []
     },
     {
       "scenario": "envleak-process-env",
@@ -467,50 +485,48 @@
       "expectedChecks": [
         "NEMO-007"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 9,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999692440032959,
-      "scanTimeMs": 101,
-      "attackFindings": [
-        "AST-GOVERN-002:SOUL-BYPASS",
-        "AST-CRED-001:CRED-EXPOSURE",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-003:SOUL-MISSING",
-        "AST-GOV-004:PROMPT-INJECT",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
-      ]
+      "scanTimeMs": 91,
+      "attackFindings": []
+    },
+    {
+      "scenario": "fake-tool-squatting",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "detectedCategory": "injection",
+      "findings": 0,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9999944836122697,
+      "scanTimeMs": 98,
+      "attackFindings": []
     },
     {
       "scenario": "federated-learning-poisoning",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-013"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "lateral_movement",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.8199037313461304,
-      "scanTimeMs": 99,
+      "scanTimeMs": 86,
       "attackFindings": []
     },
     {
       "scenario": "finetune-backdoor",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-012"
-      ],
+      "expectedChecks": [],
       "detected": true,
-      "detectedCategory": "policy_violation",
+      "detectedCategory": "steganography",
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.998124361038208,
-      "scanTimeMs": 97,
+      "scanTimeMs": 90,
       "attackFindings": [
         "AST-HEARTBEAT-001:HEARTBEAT-RCE"
       ]
@@ -518,25 +534,19 @@
     {
       "scenario": "gateway-exposed-openclaw",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "GATEWAY-002",
-        "LLM-001"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9596540860053161,
-      "scanTimeMs": 99,
+      "intentConfidence": 1,
+      "scanTimeMs": 102,
       "attackFindings": []
     },
     {
       "scenario": "indirect-prompt-injection-doc",
       "category": "prompt_injection",
-      "expectedChecks": [
-        "RAG-003",
-        "INJ-004"
-      ],
+      "expectedChecks": [],
       "detected": false,
       "findings": 0,
       "intentClass": "unknown",
@@ -551,13 +561,14 @@
         "INSTALL-001"
       ],
       "detected": true,
-      "detectedCategory": "injection",
-      "findings": 1,
-      "intentClass": "malicious",
-      "intentConfidence": 0.9492003627683681,
-      "scanTimeMs": 100,
+      "detectedCategory": "steganography",
+      "findings": 2,
+      "intentClass": "suspicious",
+      "intentConfidence": 0.4108634255580028,
+      "scanTimeMs": 91,
       "attackFindings": [
-        "AST-HEARTBEAT-001:HEARTBEAT-RCE"
+        "AST-HEARTBEAT-001:HEARTBEAT-RCE",
+        "AST-MANIP-001:SCAN-EVASION"
       ]
     },
     {
@@ -566,12 +577,12 @@
       "expectedChecks": [
         "INTEGRITY-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999575018882751,
-      "scanTimeMs": 94,
+      "scanTimeMs": 85,
       "attackFindings": []
     },
     {
@@ -580,12 +591,12 @@
       "expectedChecks": [
         "LLM-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9996914826412466,
-      "scanTimeMs": 94,
+      "intentConfidence": 0.9999999572107809,
+      "scanTimeMs": 97,
       "attackFindings": []
     },
     {
@@ -594,12 +605,11 @@
       "expectedChecks": [
         "LLM-004"
       ],
-      "detected": true,
-      "detectedCategory": "injection",
+      "detected": false,
       "findings": 0,
-      "intentClass": "malicious",
-      "intentConfidence": 0.9908111099223713,
-      "scanTimeMs": 95,
+      "intentClass": "benign",
+      "intentConfidence": 0.9998635659814178,
+      "scanTimeMs": 87,
       "attackFindings": []
     },
     {
@@ -608,12 +618,12 @@
       "expectedChecks": [
         "LLM-003"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9991564643020525,
-      "scanTimeMs": 96,
+      "intentConfidence": 0.9999983161106147,
+      "scanTimeMs": 86,
       "attackFindings": []
     },
     {
@@ -622,20 +632,49 @@
       "expectedChecks": [
         "LLM-002"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9996409781895291,
-      "scanTimeMs": 93,
+      "intentConfidence": 0.9999991059753967,
+      "scanTimeMs": 85,
       "attackFindings": []
+    },
+    {
+      "scenario": "mcp-capability-escalation",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": true,
+      "findings": 3,
+      "intentClass": "benign",
+      "intentConfidence": 0.8609868527205772,
+      "scanTimeMs": 87,
+      "attackFindings": [
+        "AST-CAP-002:CAPABILITY-ABUSE",
+        "AST-SCOPE-001:SCOPE-WILDCARD",
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
+      ]
+    },
+    {
+      "scenario": "mcp-context-injection",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": true,
+      "detectedCategory": "injection",
+      "findings": 3,
+      "intentClass": "suspicious",
+      "intentConfidence": 0.6724354288103934,
+      "scanTimeMs": 86,
+      "attackFindings": [
+        "AST-CAP-002:CAPABILITY-ABUSE",
+        "AST-SCOPE-001:SCOPE-WILDCARD",
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
+      ]
     },
     {
       "scenario": "mcp-discovery-exposed",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "MCP-011"
-      ],
+      "expectedChecks": [],
       "detected": false,
       "findings": 0,
       "intentClass": "unknown",
@@ -646,29 +685,66 @@
     {
       "scenario": "mcp-rug-pull",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-003",
-        "DEP-003"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "lateral_movement",
-      "findings": 12,
+      "findings": 4,
       "intentClass": "malicious",
-      "intentConfidence": 0.9954495937261937,
-      "scanTimeMs": 106,
+      "intentConfidence": 0.9999787670360668,
+      "scanTimeMs": 88,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-GOVERN-002:SOUL-BYPASS",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-003:SOUL-MISSING",
-        "AST-GOV-004:PROMPT-INJECT",
         "AST-SCOPE-001:SCOPE-WILDCARD",
+        "AST-SCOPE-001:SCOPE-WILDCARD"
+      ]
+    },
+    {
+      "scenario": "mcp-server-impersonation",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": true,
+      "detectedCategory": "social_engineering",
+      "findings": 3,
+      "intentClass": "suspicious",
+      "intentConfidence": 0.6365670693095197,
+      "scanTimeMs": 90,
+      "attackFindings": [
+        "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
+      ]
+    },
+    {
+      "scenario": "mcp-state-injection",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": true,
+      "detectedCategory": "lateral_movement",
+      "findings": 3,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9875154675625276,
+      "scanTimeMs": 86,
+      "attackFindings": [
+        "AST-CAP-002:CAPABILITY-ABUSE",
+        "AST-SCOPE-001:SCOPE-WILDCARD",
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
+      ]
+    },
+    {
+      "scenario": "mcp-tool-poisoning",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": true,
+      "detectedCategory": "lateral_movement",
+      "findings": 3,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9999741399223873,
+      "scanTimeMs": 88,
+      "attackFindings": [
+        "AST-CAP-002:CAPABILITY-ABUSE",
+        "AST-SCOPE-001:SCOPE-WILDCARD",
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
     {
@@ -677,107 +753,109 @@
       "expectedChecks": [
         "MEM-006"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 5,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9997792840003967,
-      "scanTimeMs": 98,
-      "attackFindings": [
-        "AST-EXFIL-001:SKILL-EXFIL",
-        "AST-INJECT-001:PROMPT-INJECT",
-        "AST-INJECT-001:PROMPT-INJECT",
-        "AST-CRED-001:CRED-EXPOSURE",
-        "AST-CRED-002:CRED-EXFIL"
-      ]
+      "scanTimeMs": 88,
+      "attackFindings": []
     },
     {
       "scenario": "model-weight-extraction",
       "category": "data_exfiltration",
-      "expectedChecks": [
-        "EXFIL-002"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9687293767929077,
-      "scanTimeMs": 97,
+      "scanTimeMs": 88,
       "attackFindings": []
     },
     {
       "scenario": "multimodal-injection-image",
       "category": "prompt_injection",
-      "expectedChecks": [
-        "INJ-005"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 1,
+      "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.8375450968742371,
-      "scanTimeMs": 97,
-      "attackFindings": [
-        "AST-CRED-001:CRED-EXPOSURE"
-      ]
+      "intentConfidence": 0.9911804795265198,
+      "scanTimeMs": 87,
+      "attackFindings": []
     },
     {
       "scenario": "oauth-token-relay",
       "category": "credential_exfiltration",
-      "expectedChecks": [
-        "AUTH-005"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.7680687308311462,
+      "scanTimeMs": 90,
+      "attackFindings": []
+    },
+    {
+      "scenario": "parser-differential-json",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "detectedCategory": "injection",
+      "findings": 0,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9992740614594776,
+      "scanTimeMs": 92,
+      "attackFindings": []
+    },
+    {
+      "scenario": "persistent-agent-memory-poison",
+      "category": "unknown",
+      "expectedChecks": [],
+      "detected": false,
+      "detectedCategory": "injection",
+      "findings": 0,
+      "intentClass": "malicious",
+      "intentConfidence": 0.9329890566057296,
       "scanTimeMs": 93,
       "attackFindings": []
     },
     {
       "scenario": "pickle-deserialization",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-009"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "lateral_movement",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9885116815567017,
-      "scanTimeMs": 100,
+      "scanTimeMs": 90,
       "attackFindings": []
     },
     {
       "scenario": "plugin-extension-confusion",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-011"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "lateral_movement",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9988113641738892,
-      "scanTimeMs": 97,
+      "scanTimeMs": 91,
       "attackFindings": []
     },
     {
       "scenario": "prompt-leak-finetune-api",
       "category": "credential_exfiltration",
-      "expectedChecks": [
-        "CRED-006"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "credential_abuse",
-      "findings": 1,
+      "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9138903617858887,
-      "scanTimeMs": 120,
-      "attackFindings": [
-        "AST-GOV-002:SOUL-BYPASS"
-      ]
+      "scanTimeMs": 88,
+      "attackFindings": []
     },
     {
       "scenario": "prompt-to-lateral-movement",
@@ -788,20 +866,15 @@
       ],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 20,
+      "findings": 12,
       "intentClass": "malicious",
       "intentConfidence": 0.9894055724143982,
-      "scanTimeMs": 95,
+      "scanTimeMs": 90,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-GOVERN-002:SOUL-BYPASS",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-003:SOUL-MISSING",
-        "AST-GOV-004:PROMPT-INJECT",
         "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-001:SCOPE-WILDCARD",
@@ -809,25 +882,19 @@
         "AST-SCOPE-003:SEMANTIC-MISMATCH",
         "AST-SCOPE-003:SEMANTIC-MISMATCH",
         "AST-SCOPE-003:SEMANTIC-MISMATCH",
-        "AST-SCOPE-003:SEMANTIC-MISMATCH",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
     {
       "scenario": "query-param-token",
       "category": "credential_exfiltration",
-      "expectedChecks": [
-        "AUTH-004",
-        "CRED-004"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9968527663083808,
-      "scanTimeMs": 94,
+      "intentConfidence": 0.99999999999999,
+      "scanTimeMs": 89,
       "attackFindings": []
     },
     {
@@ -837,51 +904,42 @@
         "AIM-002",
         "GIT-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9746850421825496,
-      "scanTimeMs": 94,
+      "intentConfidence": 0.9999999475394653,
+      "scanTimeMs": 87,
       "attackFindings": []
     },
     {
       "scenario": "rate-limit-absent",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "GATEWAY-001",
-        "RATE-001"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
-      "findings": 1,
+      "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9999987483024597,
-      "scanTimeMs": 97,
-      "attackFindings": [
-        "AST-CRED-001:CRED-EXPOSURE"
-      ]
+      "intentConfidence": 1,
+      "scanTimeMs": 85,
+      "attackFindings": []
     },
     {
       "scenario": "reward-model-hacking",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "PROMPT-006"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
-      "intentClass": "malicious",
-      "intentConfidence": 0.9999094605445862,
-      "scanTimeMs": 96,
+      "intentClass": "suspicious",
+      "intentConfidence": 0.45,
+      "scanTimeMs": 86,
       "attackFindings": []
     },
     {
       "scenario": "sandbox-telegram-allowed",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "SANDBOX-005"
-      ],
+      "expectedChecks": [],
       "detected": false,
       "findings": 0,
       "intentClass": "unknown",
@@ -892,37 +950,29 @@
     {
       "scenario": "security-headers-missing",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "GATEWAY-003",
-        "NET-004"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.996269872156032,
-      "scanTimeMs": 104,
+      "intentConfidence": 0.9999999999999993,
+      "scanTimeMs": 85,
       "attackFindings": []
     },
     {
       "scenario": "skill-backdoor-install",
       "category": "supply_chain",
       "expectedChecks": [
-        "SKILL-002",
-        "INSTALL-001"
+        "SKILL-002"
       ],
       "detected": true,
       "detectedCategory": "lateral_movement",
-      "findings": 5,
+      "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.9999960660934448,
-      "scanTimeMs": 103,
+      "scanTimeMs": 92,
       "attackFindings": [
-        "AST-HEARTBEAT-001:HEARTBEAT-RCE",
-        "AST-CRED-001:CRED-EXPOSURE",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-HEARTBEAT-001:HEARTBEAT-RCE"
       ]
     },
     {
@@ -933,30 +983,25 @@
       ],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 5,
+      "findings": 2,
       "intentClass": "malicious",
-      "intentConfidence": 0.9998603678020881,
-      "scanTimeMs": 104,
+      "intentConfidence": 0.9999999735450764,
+      "scanTimeMs": 94,
       "attackFindings": [
         "AST-INJECT-001:PROMPT-INJECT",
-        "AST-CRED-001:CRED-HARVEST",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-CRED-001:CRED-HARVEST"
       ]
     },
     {
       "scenario": "stego-binary-asset",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-008"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "lateral_movement",
       "findings": 1,
       "intentClass": "malicious",
-      "intentConfidence": 0.9782123156428231,
-      "scanTimeMs": 97,
+      "intentConfidence": 0.9999473223733949,
+      "scanTimeMs": 87,
       "attackFindings": [
         "AST-HEARTBEAT-001:HEARTBEAT-RCE"
       ]
@@ -975,52 +1020,38 @@
       ],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 10,
+      "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999998211860657,
-      "scanTimeMs": 95,
+      "scanTimeMs": 87,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-GOVERN-002:SOUL-BYPASS",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-003:SOUL-MISSING",
-        "AST-GOV-004:PROMPT-INJECT",
-        "AST-SCOPE-003:SEMANTIC-MISMATCH",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
     {
       "scenario": "timing-side-channel-inference",
       "category": "data_exfiltration",
-      "expectedChecks": [
-        "PROC-006"
-      ],
+      "expectedChecks": [],
       "detected": true,
-      "detectedCategory": "injection",
-      "findings": 2,
+      "findings": 1,
       "intentClass": "malicious",
-      "intentConfidence": 1,
-      "scanTimeMs": 93,
+      "intentConfidence": 0.9999956488609314,
+      "scanTimeMs": 101,
       "attackFindings": [
-        "AST-GOVERN-001:SOUL-BYPASS",
-        "AST-GOV-002:SOUL-BYPASS"
+        "AST-CRED-002:CRED-EXFIL"
       ]
     },
     {
       "scenario": "timing-unsafe-auth",
       "category": "credential_exfiltration",
-      "expectedChecks": [
-        "AUTH-003"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.7405466444435116,
-      "scanTimeMs": 96,
+      "intentConfidence": 0.9999999999999183,
+      "scanTimeMs": 88,
       "attackFindings": []
     },
     {
@@ -1029,12 +1060,12 @@
       "expectedChecks": [
         "NEMO-006"
       ],
-      "detected": true,
-      "detectedCategory": "injection",
+      "detected": false,
+      "detectedCategory": "persistence",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.993160605430603,
-      "scanTimeMs": 92,
+      "scanTimeMs": 84,
       "attackFindings": []
     },
     {
@@ -1043,123 +1074,85 @@
       "expectedChecks": [
         "TOCTOU-001"
       ],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999997615814209,
-      "scanTimeMs": 97,
+      "scanTimeMs": 86,
       "attackFindings": []
     },
     {
       "scenario": "token-smuggling-unicode",
       "category": "prompt_injection",
-      "expectedChecks": [
-        "PROMPT-002"
-      ],
+      "expectedChecks": [],
       "detected": true,
-      "detectedCategory": "injection",
-      "findings": 7,
+      "detectedCategory": "steganography",
+      "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.9992544054985046,
-      "scanTimeMs": 99,
+      "scanTimeMs": 91,
       "attackFindings": [
-        "AST-GOVERN-001:SOUL-BYPASS",
-        "AST-GOV-002:SOUL-BYPASS",
-        "AST-GOV-002:SOUL-BYPASS",
-        "AST-GOV-004:PROMPT-INJECT",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-INJECT-001:PROMPT-INJECT"
       ]
     },
     {
       "scenario": "tool-chain-exfiltration",
       "category": "data_exfiltration",
-      "expectedChecks": [
-        "MCP-008",
-        "NET-004"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 10,
+      "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.999998927116394,
-      "scanTimeMs": 97,
+      "scanTimeMs": 90,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-GOVERN-002:SOUL-BYPASS",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-003:SOUL-MISSING",
-        "AST-GOV-004:PROMPT-INJECT",
-        "AST-SCOPE-003:SEMANTIC-MISMATCH",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
     {
       "scenario": "training-data-extraction",
       "category": "data_exfiltration",
-      "expectedChecks": [
-        "EXFIL-001"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9240163564682007,
-      "scanTimeMs": 95,
+      "scanTimeMs": 85,
       "attackFindings": []
     },
     {
       "scenario": "typosquatting-mcp",
       "category": "supply_chain",
-      "expectedChecks": [
-        "SUPPLY-001",
-        "MCP-002"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "lateral_movement",
-      "findings": 12,
-      "intentClass": "suspicious",
-      "intentConfidence": 0.6672015879195264,
-      "scanTimeMs": 101,
+      "findings": 4,
+      "intentClass": "malicious",
+      "intentConfidence": 1,
+      "scanTimeMs": 88,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-GOVERN-002:SOUL-BYPASS",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-001:SOUL-GAP",
-        "AST-GOV-003:SOUL-MISSING",
-        "AST-GOV-004:PROMPT-INJECT",
         "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-SCOPE-001:SCOPE-WILDCARD"
       ]
     },
     {
       "scenario": "unicode-stego-package",
       "category": "unicode_stego",
-      "expectedChecks": [
-        "SUPPLY-007",
-        "INJ-003"
-      ],
+      "expectedChecks": [],
       "detected": true,
       "detectedCategory": "lateral_movement",
-      "findings": 5,
+      "findings": 2,
       "intentClass": "malicious",
-      "intentConfidence": 0.9960340204740424,
-      "scanTimeMs": 107,
+      "intentConfidence": 0.9999917202096767,
+      "scanTimeMs": 87,
       "attackFindings": [
         "AST-INJECT-001:PROMPT-INJECT",
-        "AST-CRED-001:CRED-HARVEST",
-        "AST-PROMPT-001:JAILBREAK",
-        "AST-PROMPT-003:PROMPT-INJECT",
-        "AST-PROMPT-004:AUTHORITY-CONFUSION"
+        "AST-CRED-001:CRED-HARVEST"
       ]
     },
     {
@@ -1204,24 +1197,19 @@
     {
       "scenario": "websocket-preauth-flood",
       "category": "privilege_escalation",
-      "expectedChecks": [
-        "GATEWAY-005",
-        "RATE-002"
-      ],
-      "detected": true,
+      "expectedChecks": [],
+      "detected": false,
       "detectedCategory": "injection",
       "findings": 0,
       "intentClass": "malicious",
-      "intentConfidence": 0.9913619833251355,
-      "scanTimeMs": 93,
+      "intentConfidence": 0.999999984538607,
+      "scanTimeMs": 94,
       "attackFindings": []
     },
     {
       "scenario": "xml-injection-tool-response",
       "category": "prompt_injection",
-      "expectedChecks": [
-        "INJ-001"
-      ],
+      "expectedChecks": [],
       "detected": false,
       "findings": 0,
       "intentClass": "unknown",

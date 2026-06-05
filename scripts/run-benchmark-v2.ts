@@ -25,6 +25,7 @@ const CATEGORIES: AttackCategory[] = [
 interface DetailedResult {
   adapterId: string;
   adapterName: string;
+  adapterVersion: string;
   totalSamples: number;
   totalMalicious: number;
   totalBenign: number;
@@ -39,16 +40,19 @@ interface DetailedResult {
   f1: number;
   fpr: number;
   avgScanTimeMs: number;
+  // Per-category metrics are detection-only: recall = detected / total. We do
+  // NOT publish per-category precision/F1 — benign samples carry no attack
+  // category, so per-category false positives (and thus precision) are
+  // ill-defined. The prior schema's per-category tp/fp counted a detected-but-
+  // miscategorized malicious sample as a category false negative, which is
+  // wrong (it WAS detected) and corrupted per-category precision. Aggregate
+  // precision/recall/F1/FPR below are sound (computed from the global confusion
+  // matrix, where any flagged malicious is a true positive regardless of
+  // predicted category).
   perCategory: Record<string, {
     total: number;
     detected: number;
-    flagRate: number;
-    tp: number;
-    fp: number;
-    fn: number;
-    precision: number;
     recall: number;
-    f1: number;
   }>;
 }
 
@@ -65,7 +69,7 @@ async function runAdapter(
   for (let i = 0; i < samples.length; i += batchSize) {
     const batch = samples.slice(i, i + batchSize);
     const batchResults = await Promise.all(
-      batch.map(s => adapter.scan(s.content, s.id)),
+      batch.map(s => adapter.scan(s.content, s.id, s.artifactType)),
     );
     results.push(...batchResults);
     totalTimeMs += batchResults.reduce((sum, r) => sum + (r.scanTimeMs ?? 0), 0);
@@ -93,10 +97,13 @@ function computeDetailedMetrics(
   let tp = 0, fp = 0, tn = 0, fn = 0;
   let flagged = 0;
 
-  // Per-category tracking
-  const catStats: Record<string, { total: number; detected: number; tp: number; fp: number; fn: number }> = {};
+  // Per-category tracking — detection only (total + detected). A malicious
+  // sample is "detected" when the scanner returns a malicious verdict, whether
+  // or not the predicted attack category matches; the verdict, not the category
+  // label, is what the corpus measures.
+  const catStats: Record<string, { total: number; detected: number }> = {};
   for (const cat of CATEGORIES) {
-    catStats[cat] = { total: 0, detected: 0, tp: 0, fp: 0, fn: 0 };
+    catStats[cat] = { total: 0, detected: 0 };
   }
 
   for (const sample of samples) {
@@ -106,35 +113,16 @@ function computeDetailedMetrics(
     if (scannerSaysMalicious) flagged++;
 
     if (sample.label === 'malicious') {
-      if (sample.category) {
-        catStats[sample.category].total++;
-      }
+      if (sample.category) catStats[sample.category].total++;
       if (scannerSaysMalicious) {
         tp++;
         if (sample.category) catStats[sample.category].detected++;
-        // Check if category matches
-        if (sample.category && result?.category === sample.category) {
-          catStats[sample.category].tp++;
-        } else if (sample.category) {
-          // Detected as malicious but wrong category
-          catStats[sample.category].fn++;
-          if (result?.category && catStats[result.category]) {
-            catStats[result.category].fp++;
-          }
-        }
       } else {
         fn++;
-        if (sample.category) catStats[sample.category].fn++;
       }
     } else if (sample.label === 'benign') {
-      if (scannerSaysMalicious) {
-        fp++;
-        if (result?.category && catStats[result.category]) {
-          catStats[result.category].fp++;
-        }
-      } else {
-        tn++;
-      }
+      if (scannerSaysMalicious) fp++;
+      else tn++;
     }
     // edge_case samples are excluded from scoring
   }
@@ -150,25 +138,17 @@ function computeDetailedMetrics(
   const perCategory: DetailedResult['perCategory'] = {};
   for (const cat of CATEGORIES) {
     const s = catStats[cat];
-    const catPrecision = s.tp + s.fp > 0 ? s.tp / (s.tp + s.fp) : 0;
-    const catRecall = s.total > 0 ? s.detected / s.total : 0;
-    const catF1 = catPrecision + catRecall > 0 ? 2 * (catPrecision * catRecall) / (catPrecision + catRecall) : 0;
     perCategory[cat] = {
       total: s.total,
       detected: s.detected,
-      flagRate: s.total > 0 ? s.detected / s.total : 0,
-      tp: s.tp,
-      fp: s.fp,
-      fn: s.fn,
-      precision: catPrecision,
-      recall: catRecall,
-      f1: catF1,
+      recall: s.total > 0 ? round(s.detected / s.total) : 0,
     };
   }
 
   return {
     adapterId: adapter.id,
     adapterName: adapter.name,
+    adapterVersion: adapter.version,
     totalSamples: samples.length,
     totalMalicious,
     totalBenign,
@@ -191,6 +171,67 @@ function round(n: number, d = 4): number {
   return Math.round(n * Math.pow(10, d)) / Math.pow(10, d);
 }
 
+/**
+ * DVAA sub-benchmark: detection rate over the DVAA-sourced scenarios in the
+ * run, using the full-pipeline adapter's verdicts. Computed from the same run
+ * results — no separate scan — so the number always traces to this run.
+ */
+function computeDvaa(samples: BenchmarkSample[], results: ScannerResult[]) {
+  const map = new Map(results.map(r => [r.sampleId, r]));
+  const scenarios = samples.filter(s => s.source === 'dvaa' && s.label === 'malicious' && s.category);
+  const detected = scenarios.filter(s => map.get(s.id)?.verdict === 'malicious').length;
+  return {
+    note:
+      'Detection over the DVAA-sourced scenarios in this run, gated on the same high/critical ' +
+      'attack-finding rule as the corpus full-pipeline verdict. DVAA scenarios skew behavioral ' +
+      '(prompt-injection, social engineering) whose signal is natural-language instruction rather ' +
+      'than a structural finding, so detection here is lower than the structural-config categories.',
+    totalScenarios: scenarios.length,
+    detected,
+    detectionRate: scenarios.length > 0 ? round(detected / scenarios.length) : 0,
+    missed: scenarios.length - detected,
+  };
+}
+
+/**
+ * External reference data — third-party scanner flag rates from a published
+ * paper. This is NOT measured by this harness; it is a fixed citation kept here
+ * so the published comparison block is regenerable alongside our own numbers.
+ * Do not edit the values without updating the citation.
+ */
+const EXTERNAL_PAPER_COMPARISON = {
+  paper: 'Holzbauer et al., arXiv:2603.16572, March 2026',
+  table2FlagRates: {
+    'Socket': 0.0379,
+    'Snyk': 0.0769,
+    'agent-trust-hub': 0.1376,
+    'Cisco Skill Scanner (Skills.sh)': 0.1404,
+    'Cisco Skill Scanner (ClawHub)': 0.1674,
+    'GPT 5.3-based (Skills.sh)': 0.2728,
+    'VirusTotal': 0.362,
+    'GPT 5.3-based (ClawHub)': 0.388,
+    'OpenClaw Scanner': 0.4193,
+  },
+  keyFinding: 'Only 0.12% consensus across 5 scanners on 27K skills',
+} as const;
+
+const METHODOLOGY_NOTE =
+  'Full-pipeline verdict is the artifact producing at least one high/critical attack finding — the ' +
+  'finding set the shipped hackmyagent secure surfaces in red. Hardening findings (missing defenses, ' +
+  'not present attacks: AST-PROMPT-001/003/004 and AST-GOV-001..005) are excluded, as they fire on ' +
+  'benign and malicious artifacts alike and carry no detection signal. Each sample is routed through ' +
+  'the analyzer path for its artifact type (agent_config / mcp_config / skill / soul / system_prompt), ' +
+  'mirroring the shipped scanner. The TME-only row is a model-only ablation, not a scanner verdict ' +
+  '(the classifier under-performs on this corpus, whitespace-vocab OOV). Supersedes benchmark-results-v5.json. ' +
+  'AGGREGATE PRECISION / FPR / F1 ARE NOT A PUBLISHED SCANNER-QUALITY METRIC for this corpus: the benign ' +
+  'set includes ~2954 registry MCP configs that declare allowedTools:["*"], which the scanner flags as ' +
+  'wildcard tool access (a real least-privilege finding) but the corpus labels benign (the server package ' +
+  'is legitimate). This is a definitional disagreement between "has a security finding" and "is malicious", ' +
+  'not a detection error, and it drives the aggregate FPR. The sound, reportable signals are per-category ' +
+  'RECALL (detected / total) and the DVAA detection rate. The prior run\'s low FPR was an artifact of ' +
+  'compiling every sample as a skill, which hid the MCP analyzers entirely. Resolving the wildcard-MCP ' +
+  'labeling (scanner-precision change vs. corpus relabel) is a prerequisite to publishing any aggregate number.';
+
 function printDetailedResults(detailed: DetailedResult): void {
   console.log(`\n${'='.repeat(80)}`);
   console.log(`Scanner: ${detailed.adapterName} (${detailed.adapterId})`);
@@ -203,15 +244,15 @@ function printDetailedResults(detailed: DetailedResult): void {
     console.log(`Avg scan time: ${detailed.avgScanTimeMs.toFixed(1)}ms`);
   }
 
-  console.log(`\nPer-Category Breakdown:`);
-  console.log(`${'Category'.padEnd(28)} | Total | Detected | Flag Rate | Precision | Recall | F1`);
-  console.log('-'.repeat(95));
+  console.log(`\nPer-Category Detection (recall = detected / total):`);
+  console.log(`${'Category'.padEnd(28)} | Total | Detected | Recall`);
+  console.log('-'.repeat(60));
 
   for (const cat of CATEGORIES) {
     const c = detailed.perCategory[cat];
-    if (c.total === 0 && c.fp === 0) continue;
+    if (c.total === 0) continue;
     console.log(
-      `${cat.padEnd(28)} | ${String(c.total).padEnd(5)} | ${String(c.detected).padEnd(8)} | ${(c.flagRate * 100).toFixed(1).padStart(5)}% | ${(c.precision * 100).toFixed(1).padStart(5)}% | ${(c.recall * 100).toFixed(1).padStart(5)}% | ${(c.f1 * 100).toFixed(1).padStart(5)}%`
+      `${cat.padEnd(28)} | ${String(c.total).padEnd(5)} | ${String(c.detected).padEnd(8)} | ${(c.recall * 100).toFixed(1).padStart(5)}%`
     );
   }
 }
@@ -313,25 +354,48 @@ async function main() {
   console.log(`Running ${adapters.length} adapter(s)...\n`);
 
   const allDetailed: DetailedResult[] = [];
+  const resultsByAdapter: Record<string, ScannerResult[]> = {};
 
   for (const adapter of adapters) {
     const startTime = Date.now();
-    const { detailed } = await runAdapter(adapter, samples);
+    const { results, detailed } = await runAdapter(adapter, samples);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`  [${adapter.id}] completed in ${elapsed}s`);
     allDetailed.push(detailed);
+    resultsByAdapter[adapter.id] = results;
     printDetailedResults(detailed);
   }
 
+  // Build provenance: the loaded HMA build + classifier versions the adapters
+  // honestly report (not hardcoded). Falls back gracefully if a tier was filtered.
+  const pipeline = adapters.find(a => a.id === 'hma-pipeline');
+  const tme = adapters.find(a => a.id === 'hma-tme-only');
+  const buildUnderTest = {
+    hackmyagent: pipeline?.version ?? 'unknown',
+    nanomindClassifier: tme?.version ?? 'unknown',
+  };
+
+  // DVAA sub-benchmark is meaningful only when the full pipeline ran.
+  const dvaa = resultsByAdapter['hma-pipeline']
+    ? computeDvaa(samples, resultsByAdapter['hma-pipeline'])
+    : undefined;
+
   // Save results (use different filename for partial runs)
   const suffix = limit ? `-partial-${samples.length}` : '';
-  const outputPath = join(__dirname, '..', `benchmark-results-v5${suffix}.json`);
+  const outputPath = join(__dirname, '..', `benchmark-results-v6${suffix}.json`);
   const output = {
     version: '2.0',
     date: new Date().toISOString(),
+    buildUnderTest,
     datasetVersion: dataset.version,
     sampleCount: samples.length,
+    maliciousSamples: samples.filter(s => s.label === 'malicious').length,
+    benignSamples: samples.filter(s => s.label === 'benign').length,
+    edgeCaseSamples: samples.filter(s => s.label === 'edge_case').length,
+    note: METHODOLOGY_NOTE,
     adapters: Object.fromEntries(allDetailed.map(d => [d.adapterId, d])),
+    ...(dvaa ? { dvaa } : {}),
+    paperComparison: EXTERNAL_PAPER_COMPARISON,
   };
   writeFileSync(outputPath, JSON.stringify(output, null, 2));
   console.log(`\nResults saved to ${outputPath}`);

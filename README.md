@@ -24,8 +24,9 @@
 
 | Date | Change |
 |------|--------|
+| 2026-06-05 | Re-ran the scanner benchmark faithfully (each sample routed through its real artifact-type analyzer path; verdict gated on high/critical attack findings; non-discriminative governance/hardening checks excluded). Recall recovered (overall 84.1%; privilege_escalation 30.0% -> 66.7% after routing + the new `AST-SCOPE-004` config-directive check; DVAA 82.4%). **Aggregate F1/precision/FPR withheld under revision** — the faithful run exposes that the prior 1.26% FPR was an artifact of compiling every sample as a skill, which bypassed the MCP analyzers; the true aggregate FPR is governed by registry wildcard-MCP configs the scanner flags but the corpus labels benign (a labeling disagreement, not a detection error). The 82.1% F1 and the older 89.2% figure are withdrawn. |
 | 2026-06-03 | Remapped all scenarios to current MITRE ATLAS (15 techniques, incl. the 2025 AI-agent technique family); corrected four legacy mappings. Capability gating now produces N/A (not FAIL) for surfaces a product does not declare. Pooled scoring-engine metrics (FPR no longer macro-averaged; category-agnostic detectors credited on recall). Counts reconciled to `npm test`. |
-| 2026-04-02 | Scanner Benchmark v2: 4,245-sample corpus, 3 HMA adapter tiers (static/TME/pipeline), DVAA ground-truth comparison. TME v0.5.0 achieves 89.2% F1. Comparison with Holzbauer et al. (arXiv:2603.16572). |
+| 2026-04-02 | Scanner Benchmark v2: 4,245-sample corpus, 3 HMA adapter tiers (static/TME/pipeline), DVAA ground-truth comparison. Comparison with Holzbauer et al. (arXiv:2603.16572). Numbers superseded by the 2026-06-05 re-run. |
 | 2026-03-23 | `arp-guard` v0.3.0 - ARP now re-exports from HackMyAgent. Updated OASB to v0.3.0. All 222 tests pass. Updated Quick Start (no standalone ARP clone). |
 | 2026-02-19 | Added 40 AI-layer test scenarios (AT-AI-001 through AT-AI-005) for prompt, MCP, and A2A scanning via ARP v0.2.0. Total tests: 222. |
 | 2026-02-18 | Added integration tests for DVAA v0.4.0 MCP JSON-RPC and A2A endpoints. |
@@ -449,19 +450,32 @@ npx tsx scripts/run-benchmark-v2.ts --categorized-only --limit=100  # Quick test
 npx tsx scripts/run-dvaa-benchmark.ts                              # DVAA ground-truth comparison (70 scenarios)
 ```
 
-### Latest Results (2026-04-02)
+### Latest Results (2026-06-05)
 
-Comparison of HMA scanner tiers on 4,245 labeled samples:
+Measured on hackmyagent 0.23.8 (NanoMind classifier v0.5.0), full pipeline, 4,245 labeled samples.
 
-| Scanner | F1 | Precision | Recall | FPR | Flag Rate |
-|---------|-----|-----------|--------|-----|-----------|
-| HMA Static (regex only) | 67.5% | 99.3% | 51.1% | 0.03% | 3.6% |
-| NanoMind TME v0.5.0 (model only) | 89.2% | 88.4% | 90.0% | 0.82% | 6.9% |
-| HMA Full Pipeline (AST + NanoMind) | 81.3% | 68.5% | 100.0% | 3.20% | 10.3% |
+**Aggregate F1 / precision / FPR are under revision and are not published.** A faithful re-run (each
+sample routed through the analyzer path for its artifact type) shows the aggregate false-positive rate
+is dominated by registry MCP configs that declare `"allowedTools": ["*"]` — the scanner flags this as
+wildcard tool access (a real least-privilege finding) but the corpus labels them benign. That is a
+labeling disagreement, not a detection error, so the aggregate is not a meaningful scanner-quality
+metric for this corpus as labeled. The previously circulated 82.1% F1 / 1.26% FPR and the older 89.2%
+figure are **withdrawn**. The sound, reportable signals:
 
-DVAA controlled comparison: 61/70 scenarios detected (87.1%).
+| Signal | Value |
+|--------|-------|
+| Corpus recall, full pipeline (config-structural attacks) | 84.1% (227/270) |
+| privilege_escalation recall | 66.7% (was 30.0%) |
+| DVAA full-repo detection (incl. behavioral) | 25.6% (22/86) |
+| DVAA corpus config-subset | 82.4% (75/91) |
+| HMA Static recall | 51.1% (precision 99.3%) |
 
-See [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) for full per-category breakdown and comparison with Holzbauer et al. (arXiv:2603.16572).
+The corpus recall and the DVAA full-repo number together are the honest characterization: the
+structural pipeline catches config-encoded attacks well but misses most behavioral / natural-language
+attacks (which need the semantic layer).
+
+See [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) for the full per-category breakdown, the wildcard-MCP
+labeling caveat, and comparison with Holzbauer et al. (arXiv:2603.16572).
 
 ---
 

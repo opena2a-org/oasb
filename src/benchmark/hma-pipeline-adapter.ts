@@ -2,9 +2,25 @@
  * HMA Pipeline Adapter for OASB Benchmark v2
  *
  * Uses the REAL HackMyAgent NanoMind pipeline:
- *   1. SemanticCompiler (AST compilation + TME inference)
- *   2. All 6 analyzers (capability, credential, governance, scope, prompt, code)
- *   3. Verdict logic based on intent + findings + risk surfaces
+ *   1. SemanticCompiler (AST compilation + TME inference), compiling each sample under a
+ *      filename that triggers the SAME artifact-type classification the shipped scanner would
+ *      assign — an agent_config compiled as a `.skill.md` hides the structural scope/capability
+ *      findings, which is the routing bug that produced the rejected 82.1% run.
+ *   2. All 6 analyzers, invoked the way the shipped `runNanoMindScan` invokes them: each analyzer
+ *      receives the raw artifact content so the content-based scope/credential/governance checks
+ *      (e.g. AST-SCOPE-004 adversarial-config directives) actually fire.
+ *   3. Verdict = the artifact produced at least one high/critical ATTACK finding. This mirrors the
+ *      finding set the shipped `hackmyagent secure` surfaces in red. "Hardening" findings — missing
+ *      defenses rather than present attacks — are excluded, because they fire equally on benign and
+ *      malicious artifacts and so carry no detection signal: AST-PROMPT-001/003/004 (jailbreak /
+ *      injection-resistance / trust-hierarchy gaps) and AST-GOV-001..005 (missing governance,
+ *      oversight, scope limits, override resistance, governance/capability ratio). The raw TME intent
+ *      label informs category only, not the malicious/benign decision (it over-flags benign artifacts).
+ *
+ * Re-run all three adapters together (static / tme-only / pipeline) so the leaderboard is
+ * internally consistent and stamped with the real loaded build. The tme-only tier is a model-only
+ * ablation, not a scanner verdict; the current classifier under-performs on this corpus (whitespace
+ * vocab OOV), pending a code/text-aware classifier. The pipeline gates that signal behind severity.
  *
  * Three adapter tiers:
  *   - HMATMEOnlyAdapter: Just the ONNX TME classifier (raw model accuracy)
@@ -27,6 +43,40 @@ let getTMEClassifier: any;
 
 let hmaLoaded = false;
 
+// Version hygiene: read the REAL loaded build and model versions so the leaderboard is honestly
+// tagged. These were previously hardcoded ("0.12.9" / "0.5.0") and drifted from the actual build.
+// The HMA build version comes from the sibling hackmyagent package.json (the dist we load from);
+// the classifier version comes from the cached model manifest every user installs.
+let _hmaBuildVersion: string | null = null;
+let _tmeModelVersion: string | null = null;
+
+function hmaBuildVersion(): string {
+  if (_hmaBuildVersion) return _hmaBuildVersion;
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    const pkgPath = path.resolve(__dirname, '..', '..', '..', 'hackmyagent', 'package.json');
+    _hmaBuildVersion = String(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version || 'unknown');
+  } catch {
+    _hmaBuildVersion = 'unknown';
+  }
+  return _hmaBuildVersion;
+}
+
+function tmeModelVersion(): string {
+  if (_tmeModelVersion) return _tmeModelVersion;
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    const os = require('os');
+    const verPath = path.join(os.homedir(), '.nanomind', 'models', 'nanomind-version.json');
+    _tmeModelVersion = String(JSON.parse(fs.readFileSync(verPath, 'utf-8')).version || 'unknown');
+  } catch {
+    _tmeModelVersion = 'unknown';
+  }
+  return _tmeModelVersion;
+}
+
 async function loadHMACore(): Promise<boolean> {
   if (hmaLoaded) return true;
   try {
@@ -48,6 +98,49 @@ async function loadHMACore(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Map a corpus artifactType to a filename whose basename/extension triggers the
+ * matching signature in the shipped artifact-type classifier (artifact-parser
+ * `TYPE_SIGNATURES`). This is how the benchmark dispatches "by artifact type":
+ * the classifier keys on the path, so we hand it the path a real artifact of
+ * that kind would have. Content-based fallbacks (mcpServers object, capabilities
+ * frontmatter) still apply exactly as they do in production, so a soul file that
+ * happens to carry capabilities frontmatter classifies as the scanner would
+ * classify it in the wild.
+ */
+function routeFilename(sampleId: string, artifactType?: string): string {
+  switch (artifactType) {
+    case 'mcp_tool':
+      return `${sampleId}/mcp.json`;        // basename mcp.json -> mcp_config
+    case 'soul':
+      return `${sampleId}/SOUL.md`;         // path contains SOUL.MD -> soul
+    case 'system_prompt':
+      return `${sampleId}.system-prompt.md`; // path contains system-prompt -> system_prompt
+    case 'agent_config':
+      return `${sampleId}.agent-config.json`; // path contains agent-config -> agent_config
+    case 'skill':
+    default:
+      return `${sampleId}.skill.md`;        // .skill.md suffix -> skill
+  }
+}
+
+// Hardening checks: findings that flag a MISSING defense rather than a present
+// attack. They fire on benign and malicious artifacts alike (every governance-
+// light system_prompt trips AST-GOV-004), so they carry no detection signal and
+// must not drive the malicious/benign verdict. AST-GOV-004/005 were omitted from
+// the prior run's filter, which both inflated benign FPR and produced spurious
+// "detections" of malicious system_prompts via a non-discriminative signal.
+const HARDENING_CHECK_IDS = new Set([
+  'AST-PROMPT-001', // Jailbreak susceptibility (missing defense)
+  'AST-PROMPT-003', // Missing injection resistance
+  'AST-PROMPT-004', // No trust hierarchy
+  'AST-GOV-001',    // Missing governance constraints
+  'AST-GOV-002',    // No human oversight
+  'AST-GOV-003',    // Missing scope limitation
+  'AST-GOV-004',    // No override resistance
+  'AST-GOV-005',    // Governance-capability imbalance
+]);
 
 // Attack class mapping: HMA taxonomy -> OASB benchmark categories
 const ATTACK_CLASS_MAP: Record<string, AttackCategory> = {
@@ -111,8 +204,8 @@ function disambiguateExfil(content: string, defaultCat: AttackCategory): AttackC
 // ============================================================================
 
 export class HMATMEOnlyAdapter implements ScannerAdapter {
-  name = 'NanoMind TME v0.5.0 (model only)';
-  version = '0.5.0';
+  name = `NanoMind TME v${tmeModelVersion()} (model only)`;
+  version = tmeModelVersion();
   id = 'hma-tme-only';
 
   private tme: any = null;
@@ -165,13 +258,13 @@ export class HMATMEOnlyAdapter implements ScannerAdapter {
 // ============================================================================
 
 export class HMAPipelineAdapter implements ScannerAdapter {
-  name = 'HMA Full Pipeline (AST + NanoMind v0.5.0)';
-  version = '0.12.9';
+  name = `HMA Full Pipeline (AST + NanoMind v${tmeModelVersion()})`;
+  version = hmaBuildVersion();
   id = 'hma-pipeline';
 
   private compiler: any = null;
 
-  async scan(content: string, sampleId: string): Promise<ScannerResult> {
+  async scan(content: string, sampleId: string, artifactType?: string): Promise<ScannerResult> {
     if (!await loadHMACore()) return { sampleId, verdict: 'unknown' };
 
     if (!this.compiler) {
@@ -180,7 +273,9 @@ export class HMAPipelineAdapter implements ScannerAdapter {
 
     try {
       const startMs = Date.now();
-      const { ast } = await this.compiler.compile(content, `${sampleId}.skill.md`);
+      // Route by artifact type so the compiler classifies the sample the way the
+      // shipped scanner would, instead of forcing every sample to `skill`.
+      const { ast } = await this.compiler.compile(content, routeFilename(sampleId, artifactType));
       const compileMs = Date.now() - startMs;
 
       // Check unicode steganography first (zero-width chars)
@@ -194,46 +289,39 @@ export class HMAPipelineAdapter implements ScannerAdapter {
         };
       }
 
-      // Run all 6 analyzers
+      // Run all 6 analyzers, passing the raw content exactly as the shipped
+      // `runNanoMindScan` does \u2014 the content-based scope/credential/governance
+      // checks (incl. AST-SCOPE-004) return early without it.
       const verifier = (a: any) => this.compiler.verifyAST(a);
       const allFindings = [
         ...analyzeCapabilities(ast),
-        ...(analyzeCredentials ? analyzeCredentials(ast, verifier) : []),
-        ...(analyzeGovernance ? analyzeGovernance(ast, verifier) : []),
-        ...(analyzeScope ? analyzeScope(ast, verifier) : []),
-        ...(analyzePrompt ? analyzePrompt(ast, verifier) : []),
+        ...(analyzeCredentials ? analyzeCredentials(ast, verifier, undefined, content) : []),
+        ...(analyzeGovernance ? analyzeGovernance(ast, verifier, undefined, undefined, content) : []),
+        ...(analyzeScope ? analyzeScope(ast, verifier, undefined, content) : []),
+        ...(analyzePrompt ? analyzePrompt(ast, verifier, undefined, content) : []),
         ...(analyzeCode ? analyzeCode(ast, verifier) : []),
       ];
 
-      // Filter to actual attack findings (not governance/hardening gaps)
-      // Key distinction: attack detection vs hardening recommendations
+      // Filter to actual attack findings (present attacks, not missing-defense
+      // hardening gaps \u2014 see HARDENING_CHECK_IDS).
       const attackFindings = allFindings.filter((f: any) => {
         if (f.passed) return false;
-        // These are hardening recommendations, not attack detections
-        const hardeningChecks = [
-          'AST-PROMPT-001', // Jailbreak susceptibility (missing defense)
-          'AST-PROMPT-003', // Missing injection resistance
-          'AST-PROMPT-004', // No trust hierarchy
-          'AST-GOV-001',   // Missing governance constraints
-          'AST-GOV-002',   // No human oversight
-          'AST-GOV-003',   // Missing scope limitation
-        ];
-        if (hardeningChecks.includes(f.checkId)) return false;
+        if (HARDENING_CHECK_IDS.has(f.checkId)) return false;
         return true;
       });
 
-      // Determine verdict from intent + findings + risk surfaces
-      const isMaliciousByIntent = ast.intentClassification === 'malicious' && ast.intentConfidence > 0.6;
-      const hasAttackFindings = attackFindings.length > 0;
-      const hasRiskSurfaces = (ast.inferredRiskSurface?.length ?? 0) > 0;
+      // Verdict: the artifact is flagged malicious when it produced at least one
+      // high/critical attack finding \u2014 the finding set the shipped scanner shows
+      // in red. We do NOT OR-in inferred risk surfaces: those are soft, informational
+      // signals (the scanner's Observations block), not a high/critical finding, so
+      // counting them as detection would overstate what the product flags. The TME
+      // intent label likewise does not decide the verdict (it over-flags benign
+      // artifacts); it only informs the attack CATEGORY below.
+      const hasHighSeverityFindings = attackFindings.some(
+        (f: any) => f.severity === 'critical' || f.severity === 'high',
+      );
 
-      // Suspicious intent with corroborating evidence
-      const isSuspiciousCorroborated =
-        ast.intentClassification === 'suspicious' &&
-        ast.intentConfidence > 0.5 &&
-        (hasAttackFindings || hasRiskSurfaces);
-
-      if (!isMaliciousByIntent && !hasAttackFindings && !isSuspiciousCorroborated) {
+      if (!hasHighSeverityFindings) {
         return {
           sampleId,
           verdict: 'benign',
@@ -302,7 +390,7 @@ export class HMAPipelineAdapter implements ScannerAdapter {
 
 export class HMAPipelineStaticAdapter implements ScannerAdapter {
   name = 'HMA Static Patterns (no NanoMind)';
-  version = '0.12.9';
+  version = hmaBuildVersion();
   id = 'hma-static-pipeline';
 
   async scan(content: string, sampleId: string): Promise<ScannerResult> {
