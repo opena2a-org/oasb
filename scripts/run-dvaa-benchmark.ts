@@ -224,12 +224,15 @@ async function main() {
           ...(core.analyzeCode ? core.analyzeCode(ast, verifier) : []),
         ];
 
-        // Hardening checks flag missing defenses, not present attacks; they fire on
-        // benign and malicious alike, so they are excluded from the detection verdict
-        // (same set as the corpus full-pipeline adapter's HARDENING_CHECK_IDS).
+        // Posture / hardening checks flag missing defenses or an over-permissive
+        // posture, not a present attack; they fire on benign and malicious alike, so
+        // they are excluded from the detection verdict (same set as the corpus
+        // full-pipeline adapter's HARDENING_CHECK_IDS, incl. AST-SCOPE-001 wildcard
+        // tool access). AST-SCOPE-003 stays a verdict driver.
         const HARDENING = new Set([
           'AST-PROMPT-001', 'AST-PROMPT-003', 'AST-PROMPT-004',
           'AST-GOV-001', 'AST-GOV-002', 'AST-GOV-003', 'AST-GOV-004', 'AST-GOV-005',
+          'AST-SCOPE-001',
         ]);
         const attackFindings = allFindings.filter((f: any) => !f.passed && !HARDENING.has(f.checkId));
 

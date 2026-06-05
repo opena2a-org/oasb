@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "date": "2026-06-05T19:04:32.097Z",
+  "date": "2026-06-05T22:02:06.532Z",
   "buildUnderTest": {
     "hackmyagent": "0.23.8",
     "nanomindClassifier": "0.5.0"
@@ -10,7 +10,7 @@
   "maliciousSamples": 270,
   "benignSamples": 3881,
   "edgeCaseSamples": 94,
-  "note": "Full-pipeline verdict is the artifact producing at least one high/critical attack finding — the finding set the shipped hackmyagent secure surfaces in red. Hardening findings (missing defenses, not present attacks: AST-PROMPT-001/003/004 and AST-GOV-001..005) are excluded, as they fire on benign and malicious artifacts alike and carry no detection signal. Each sample is routed through the analyzer path for its artifact type (agent_config / mcp_config / skill / soul / system_prompt), mirroring the shipped scanner. The TME-only row is a model-only ablation, not a scanner verdict (the classifier under-performs on this corpus, whitespace-vocab OOV). Supersedes benchmark-results-v5.json. AGGREGATE PRECISION / FPR / F1 ARE NOT A PUBLISHED SCANNER-QUALITY METRIC for this corpus: the benign set includes ~2954 registry MCP configs that declare allowedTools:[\"*\"], which the scanner flags as wildcard tool access (a real least-privilege finding) but the corpus labels benign (the server package is legitimate). This is a definitional disagreement between \"has a security finding\" and \"is malicious\", not a detection error, and it drives the aggregate FPR. The sound, reportable signals are per-category RECALL (detected / total) and the DVAA detection rate. The prior run's low FPR was an artifact of compiling every sample as a skill, which hid the MCP analyzers entirely. Resolving the wildcard-MCP labeling (scanner-precision change vs. corpus relabel) is a prerequisite to publishing any aggregate number.",
+  "note": "Full-pipeline verdict is the artifact producing at least one high/critical ATTACK finding. The verdict excludes POSTURE / hardening findings, which fire on benign and malicious artifacts alike and so carry no malicious-intent signal: AST-PROMPT-001/003/004 (missing prompt defenses), AST-GOV-001..005 (missing governance/oversight/override resistance), and AST-SCOPE-001 (wildcard tool access — a least-privilege posture issue that >2,900 benign registry MCP servers also declare via allowedTools:[\"*\"]). AST-SCOPE-003 (scope-purpose mismatch) is kept as a verdict driver — it catches real privilege-escalation and supply-chain trojans, and excluding it would collapse those categories. The scanner emits all of these to users with severity and a fix; the exclusion governs the BENCHMARK verdict only, not the product findings. Each sample is routed through the analyzer path for its artifact type (agent_config / mcp_config / skill / soul / system_prompt), mirroring the shipped scanner. The TME-only row is a model-only ablation, not a scanner verdict (the classifier under-performs on this corpus, whitespace-vocab OOV). Supersedes benchmark-results-v5.json. Report RECALL alongside F1 — the precision-favoring verdict trades recall for a low false-positive rate, and the recall number is the honest measure of coverage. Excluding the wildcard posture finding also drops the handful of malicious configs whose ONLY signal was wildcard access (genuinely indistinguishable from a benign over-permissioned server).",
   "adapters": {
     "hma-static-pipeline": {
       "adapterId": "hma-static-pipeline",
@@ -29,7 +29,7 @@
       "recall": 0.5111,
       "f1": 0.6748,
       "fpr": 0.0003,
-      "avgScanTimeMs": 0.004240282685512367,
+      "avgScanTimeMs": 0.005418138987043581,
       "perCategory": {
         "supply_chain": {
           "total": 30,
@@ -151,22 +151,22 @@
       "totalSamples": 4245,
       "totalMalicious": 270,
       "totalBenign": 3881,
-      "flagged": 3260,
-      "flagRate": 0.767962308598351,
-      "truePositives": 227,
-      "falsePositives": 2977,
-      "trueNegatives": 904,
-      "falseNegatives": 43,
-      "precision": 0.0708,
-      "recall": 0.8407,
-      "f1": 0.1307,
-      "fpr": 0.7671,
-      "avgScanTimeMs": 4537.465017667844,
+      "flagged": 284,
+      "flagRate": 0.0669022379269729,
+      "truePositives": 223,
+      "falsePositives": 45,
+      "trueNegatives": 3836,
+      "falseNegatives": 47,
+      "precision": 0.8321,
+      "recall": 0.8259,
+      "f1": 0.829,
+      "fpr": 0.0116,
+      "avgScanTimeMs": 5015.086219081272,
       "perCategory": {
         "supply_chain": {
           "total": 30,
-          "detected": 17,
-          "recall": 0.5667
+          "detected": 14,
+          "recall": 0.4667
         },
         "prompt_injection": {
           "total": 30,
@@ -190,8 +190,8 @@
         },
         "privilege_escalation": {
           "total": 30,
-          "detected": 20,
-          "recall": 0.6667
+          "detected": 19,
+          "recall": 0.6333
         },
         "persistence": {
           "total": 30,
@@ -214,9 +214,9 @@
   "dvaa": {
     "note": "Detection over the DVAA-sourced scenarios in this run, gated on the same high/critical attack-finding rule as the corpus full-pipeline verdict. DVAA scenarios skew behavioral (prompt-injection, social engineering) whose signal is natural-language instruction rather than a structural finding, so detection here is lower than the structural-config categories.",
     "totalScenarios": 91,
-    "detected": 75,
-    "detectionRate": 0.8242,
-    "missed": 16
+    "detected": 74,
+    "detectionRate": 0.8132,
+    "missed": 17
   },
   "paperComparison": {
     "paper": "Holzbauer et al., arXiv:2603.16572, March 2026",

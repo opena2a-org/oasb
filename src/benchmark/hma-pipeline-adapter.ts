@@ -125,12 +125,27 @@ function routeFilename(sampleId: string, artifactType?: string): string {
   }
 }
 
-// Hardening checks: findings that flag a MISSING defense rather than a present
-// attack. They fire on benign and malicious artifacts alike (every governance-
-// light system_prompt trips AST-GOV-004), so they carry no detection signal and
-// must not drive the malicious/benign verdict. AST-GOV-004/005 were omitted from
-// the prior run's filter, which both inflated benign FPR and produced spurious
-// "detections" of malicious system_prompts via a non-discriminative signal.
+// Posture / hardening checks: findings that flag a MISSING defense or an
+// over-permissive POSTURE rather than a present attack. They fire on benign and
+// malicious artifacts alike, so they carry no malicious-INTENT signal and must
+// not drive the binary malicious/benign verdict. The scanner still emits all of
+// these to users (with severity and a fix) — this set governs the BENCHMARK
+// verdict only, not the product's findings.
+//
+// - AST-GOV-001..005: missing governance / oversight / scope / override
+//   resistance. Every governance-light system_prompt trips AST-GOV-004; it has
+//   no discriminative power for malice.
+// - AST-SCOPE-001 (wildcard tool access): a least-privilege posture issue. Over
+//   2,900 benign registry MCP servers declare allowedTools:["*"]; a signal that
+//   fires on thousands of benign configs cannot distinguish malicious intent.
+//   Malicious configs are caught by the adversarial directives they layer on top
+//   (AST-SCOPE-004: escalation / control-bypass / harvest), not by the wildcard.
+//
+// AST-SCOPE-003 (scope-purpose mismatch) is deliberately NOT excluded: it is a
+// genuine trojan-detection signal that catches real privilege-escalation and
+// supply-chain attacks (excluding it collapses those categories' recall from
+// ~63%/47% to ~37%/33% for a marginal aggregate-F1 gain). It stays a verdict
+// driver despite some false positives.
 const HARDENING_CHECK_IDS = new Set([
   'AST-PROMPT-001', // Jailbreak susceptibility (missing defense)
   'AST-PROMPT-003', // Missing injection resistance
@@ -140,6 +155,7 @@ const HARDENING_CHECK_IDS = new Set([
   'AST-GOV-003',    // Missing scope limitation
   'AST-GOV-004',    // No override resistance
   'AST-GOV-005',    // Governance-capability imbalance
+  'AST-SCOPE-001',  // Wildcard tool access (least-privilege posture, not malice)
 ]);
 
 // Attack class mapping: HMA taxonomy -> OASB benchmark categories

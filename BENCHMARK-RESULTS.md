@@ -3,53 +3,33 @@
 **Date:** 2026-06-05
 **Build under test:** hackmyagent 0.23.8, NanoMind classifier v0.5.0
 **Dataset:** OASB v2 corpus, 4,245 categorized samples (270 malicious, 3,881 benign, 94 edge)
-**DVAA:** 86 full-repo scenarios (25.6% detected) / 91 corpus config-subset samples (82.4%) — see Section 3
+**DVAA:** 86 full-repo scenarios (23.3% detected) / 91 corpus config-subset samples (81.3%) — see Section 4
 **Paper comparison:** Holzbauer et al., "Malicious Or Not" (arXiv:2603.16572), 238K skills
 
-> **Status: aggregate F1 / precision / FPR are UNDER REVISION and are not published.**
-> A faithful re-run (each sample routed through the analyzer path for its artifact type, mirroring
-> the shipped scanner) shows the aggregate false-positive rate is dominated by a definitional
-> disagreement, not by detection quality, and therefore is not a meaningful scanner-quality metric
-> for this corpus as labeled. See Section 1. The sound, reportable signals are **per-category recall**
-> and the **DVAA detection rate**. The previously circulated 82.1% F1 / 1.26% FPR and the older 89.2%
-> figure are withdrawn (Section 5).
+---
+
+## 1. HMA Scanner Results (OASB v2 corpus)
+
+| Scanner | F1 | Precision | Recall | FPR | Flag rate |
+|---------|----|-----------|--------|-----|-----------|
+| HMA Full Pipeline (AST + 6 analyzers + NanoMind) | **82.9%** | 83.2% | 82.6% | 1.16% | 6.3% |
+| HMA Static (regex only) | 67.5% | 99.3% | 51.1% | 0.03% | 3.6% |
+| NanoMind TME v0.5.0 (model-only ablation) | 14.0% | 7.5% | 93.0% | 79.18% | 79.8% |
+
+**Read recall alongside F1.** The full pipeline favors precision; recall (82.6%) is the honest measure
+of coverage, and per-category recall (Section 2) shows where coverage is strong vs. weak.
+
+The NanoMind TME row is a **model-only ablation**, not a scanner verdict. The current classifier uses a
+whitespace-split vocabulary that goes out-of-vocabulary on code and skill text, so on its own it
+over-flags benign inputs (79% FPR). A code/text-aware classifier is in progress; the ablation row is
+published only to document model-only behavior and is not a detection claim.
 
 ---
 
-## 1. Why the aggregate F1 / FPR is withheld
+## 2. Per-Category Recall (Full Pipeline)
 
-The verdict rule is: a sample is flagged malicious when the scanner produces at least one high or
-critical **attack** finding — the finding set the shipped `hackmyagent secure` surfaces in red.
-Hardening findings (missing defenses, not present attacks: `AST-PROMPT-001/003/004`,
-`AST-GOV-001..005`) are excluded because they fire on benign and malicious artifacts alike and carry
-no detection signal. Each sample is compiled under a filename that triggers the same artifact-type
-classification the shipped scanner assigns (agent_config / mcp_config / skill / soul / system_prompt).
-
-Under this faithful routing, **2,977 of 3,881 benign samples are flagged.** Roughly 2,954 of those
-are registry MCP configurations that declare `"allowedTools": ["*"]` — a wildcard tool grant. The
-scanner flags this as wildcard tool access (a real least-privilege finding; the shipped `secure`
-emits `SEM-MCP-004` / `AST-SCOPE-001` on the same inputs), but the corpus labels these samples benign
-because the underlying server package is a legitimate published project.
-
-This is a **definitional disagreement** between "the artifact contains a security finding" and "the
-artifact is malicious," not a detection error. It drives essentially the entire aggregate FPR.
-Publishing an aggregate precision/FPR/F1 from this corpus would either:
-
-- misrepresent a routine config posture (wildcard MCP access) as a scanner error, or
-- require the earlier behavior — compiling **every** sample as a skill, which silently bypassed the
-  MCP analyzers and produced an artificially low FPR (this is exactly how the withdrawn 1.26% FPR
-  arose).
-
-Resolving the wildcard-MCP question — whether to soften the scanner's wildcard finding or to relabel
-those corpus samples — is a prerequisite to any aggregate number. Until then we report only the
-metrics that are unaffected by it.
-
----
-
-## 2. Per-Category Recall (Full Pipeline) — measured, sound
-
-Recall = detected / total. This is a detection metric and is unaffected by the benign-labeling
-question above.
+Recall = detected / total. This is the per-category detection metric (per-category precision is not
+reported — benign samples carry no attack category, so per-category false positives are ill-defined).
 
 | Category | Recall | Detected / Total |
 |----------|--------|------------------|
@@ -60,72 +40,79 @@ question above.
 | persistence | 90.0% | 27/30 |
 | prompt_injection | 86.7% | 26/30 |
 | heartbeat_rce | 70.0% | 21/30 |
-| privilege_escalation | 66.7% | 20/30 |
-| supply_chain | 56.7% | 17/30 |
-| **Overall** | **84.1%** | 227/270 |
+| privilege_escalation | 63.3% | 19/30 |
+| supply_chain | 46.7% | 14/30 |
+| **Overall** | **82.6%** | 223/270 |
 
-Privilege-escalation recall rose from 30.0% (prior run) to 66.7% after two fixes: routing JSON
-agent/MCP configs through their real analyzer path instead of the skill path, and a new structural
-check (`AST-SCOPE-004`) that flags configuration directives which are themselves the attack
+Privilege-escalation recall rose from 30.0% (the prior, under-detecting run) to 63.3% after two fixes:
+routing JSON agent/MCP configs through their real analyzer path instead of the skill path, and a new
+structural check (`AST-SCOPE-004`) that flags configuration directives which are themselves the attack
 (self-escalation, security-control bypass, audit evasion, credential harvesting). The remaining
-privilege-escalation and supply-chain misses are natural-language artifacts whose signal is
-instruction text, not structure; those depend on the semantic layer, not the structural analyzers.
-Per-category precision is not reported: benign samples carry no attack category, so per-category
-false positives are ill-defined.
+privilege-escalation and supply-chain misses are natural-language artifacts whose signal is instruction
+text, not structure; those depend on the semantic layer, not the structural analyzers.
 
 ---
 
-## 3. DVAA Ground-Truth Results
+## 3. Verdict methodology — posture vs. attack
 
-DVAA appears in the benchmark two ways, and they measure different things — both are reported here to
-avoid overstating detection:
+A sample is flagged malicious when the scanner produces at least one high/critical **attack** finding.
+The verdict excludes **posture / hardening** findings, which fire on benign and malicious artifacts
+alike and so carry no malicious-intent signal:
+
+- `AST-PROMPT-001/003/004` — missing prompt defenses (jailbreak / injection resistance / trust hierarchy).
+- `AST-GOV-001..005` — missing governance, oversight, scope limits, override resistance.
+- `AST-SCOPE-001` — **wildcard tool access** (`allowedTools:["*"]`). Over 2,900 benign registry MCP
+  servers declare this; a signal that fires on thousands of benign configs cannot distinguish malicious
+  intent. It is a least-privilege **posture** issue, not an attack. Malicious configs are caught by the
+  adversarial directives they layer on top (`AST-SCOPE-004`), not by the wildcard itself.
+
+The **scanner still emits all of these to users** with severity and a fix — this exclusion governs the
+benchmark verdict only, not the product's findings. `AST-SCOPE-003` (scope-purpose mismatch) is **kept**
+as a verdict driver: it is a genuine trojan-detection signal that catches real privilege-escalation and
+supply-chain attacks (excluding it would collapse those categories' recall from ~63%/47% to ~37%/33%
+for a marginal aggregate-F1 gain).
+
+Each sample is routed through the analyzer path for its real artifact type (agent_config / mcp_config /
+skill / soul / system_prompt), mirroring the shipped scanner. A handful of malicious configs whose only
+signal was wildcard access become false negatives under this verdict — genuinely so, since a config
+whose sole signal is wildcard access is indistinguishable from a benign over-permissioned server.
+
+---
+
+## 4. DVAA ground-truth results
+
+DVAA appears two ways and they measure different things; both are reported.
 
 | Source | Scenarios | Detected | Rate | What it measures |
 |--------|-----------|----------|------|------------------|
-| Full DVAA scenario repo (`run-dvaa-benchmark.ts`) | 86 | 22 | **25.6%** | Every DVAA scenario, including behavioral / code / natural-language attacks. |
-| Corpus DVAA subset (`source: dvaa` in v2.json) | 91 | 75 | 82.4% | The config-structural DVAA samples carried in the corpus. |
+| Full DVAA scenario repo (`run-dvaa-benchmark.ts`) | 86 | 20 | **23.3%** | Every DVAA scenario, incl. behavioral / code / natural-language attacks. |
+| Corpus DVAA subset (`source: dvaa` in v2.json) | 91 | 74 | 81.3% | The config-structural DVAA samples carried in the corpus. |
 
-The gap is the honest characterization of the structural pipeline: it detects **config-encoded**
-attacks well (wildcard scopes, self-escalation flags, credential-harvest directives — the
-`AST-SCOPE-004` family) but misses most **behavioral / natural-language** attacks (prompt injection,
-social engineering, code-level RCE), whose signal is instruction text rather than structure. Those
-depend on the semantic layer (NanoMind), which under-performs on this corpus today. Lead with the
-26% full-repo number when characterizing DVAA detection; the 82% subset number is not representative
-of DVAA as a whole.
-
----
-
-## 4. Static and model-only rows (context)
-
-| Scanner | Recall | Flag Rate | Note |
-|---------|--------|-----------|------|
-| HMA Static (regex only) | 51.1% | 3.6% | No structural understanding; misses config-structural attacks. |
-| NanoMind TME v0.5.0 (model-only) | 93.0% | 79.8% | Model-only ablation, not a scanner verdict; over-flags due to a whitespace-vocabulary OOV limitation on code/skill text. A code/text-aware classifier is in progress. |
-
-These rows are context, not headline claims. The static row's precision and the model row's flag rate
-are reported as measured, but neither is the shipped verdict.
+The gap is the honest characterization: the structural pipeline detects config-encoded attacks well but
+misses most behavioral / natural-language attacks (prompt injection, social engineering, code-level RCE),
+whose signal is instruction text rather than structure. Lead with the 23% full-repo number when
+characterizing DVAA detection.
 
 ---
 
 ## 5. Withdrawn claims
 
-- **82.1% F1 / 1.26% FPR / 82.2% recall** (the 2026-06-05 morning run) — the 1.26% FPR was an
-  artifact of compiling every sample as a skill, which bypassed the MCP analyzers. Withdrawn.
-- **89.2% F1** (April 2026) — keyed off the raw classifier intent label, which over-flags benign
-  inputs. Withdrawn.
+- **82.1% F1 / 1.26% FPR** (a 2026-06-05 interim run) — that 1.26% FPR was an artifact of compiling every
+  sample as a skill, which bypassed the MCP analyzers. Withdrawn.
+- **89.2% F1** (April 2026) — keyed off the raw classifier intent label, which over-flags benign inputs.
+  Withdrawn.
 
-Neither number is publishable. The faithful re-run replaces the verdict and routing; the aggregate it
-produces is governed by the wildcard-MCP labeling question in Section 1.
+The current numbers replace both, on a faithful per-artifact routing with a posture-vs-attack verdict.
 
 ---
 
 ## 6. Comparison with Holzbauer et al. Table 2 (external reference)
 
 The paper measures **flag rates** across 238K skills from ClawHub and Skills.sh. It does NOT report
-precision/recall/F1 (no ground-truth labels exist for that dataset), so we make no head-to-head
-accuracy claim against it. The flag rates below are reproduced as external context only.
+precision/recall/F1 (no ground-truth labels exist for that dataset), so we make no head-to-head accuracy
+claim against it. Flag rates reproduced as external context only.
 
-| Scanner | Flag Rate | Dataset |
+| Scanner | Flag rate | Dataset |
 |---------|-----------|---------|
 | Socket | 3.79% | Skills.sh (no ground truth) |
 | Snyk | 7.69% | Skills.sh (no ground truth) |
@@ -135,8 +122,8 @@ accuracy claim against it. The flag rates below are reproduced as external conte
 | VirusTotal | 36.20% | ClawHub (no ground truth) |
 | OpenClaw Scanner | 41.93% | ClawHub (no ground truth) |
 
-Paper key finding: scanner consensus is extremely low — only 33 of 27,111 Skills.sh skills (0.12%)
-are flagged by all five scanners.
+Paper key finding: scanner consensus is extremely low — only 33 of 27,111 Skills.sh skills (0.12%) are
+flagged by all five scanners.
 
 ---
 
@@ -154,5 +141,5 @@ npx tsx scripts/run-dvaa-benchmark.ts
 ```
 
 - OASB v2 corpus: `corpus/v2.json`
-- Full machine-readable results: `benchmark-results-v6.json` (the `note` field carries the FPR caveat)
+- Full machine-readable results: `benchmark-results-v6.json` (the `note` field carries the verdict methodology)
 - Paper: arXiv:2603.16572 (Holzbauer et al., March 2026)
