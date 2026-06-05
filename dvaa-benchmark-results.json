@@ -1,8 +1,8 @@
 {
-  "date": "2026-06-05T18:38:45.764Z",
+  "date": "2026-06-05T22:02:38.253Z",
   "totalScenarios": 86,
-  "detected": 22,
-  "detectionRate": 0.2558139534883721,
+  "detected": 20,
+  "detectionRate": 0.23255813953488372,
   "perCategory": {
     "privilege_escalation": {
       "total": 20,
@@ -30,7 +30,7 @@
     },
     "supply_chain": {
       "total": 15,
-      "detected": 8
+      "detected": 6
     },
     "prompt_injection": {
       "total": 7,
@@ -58,7 +58,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999777010405688,
-      "scanTimeMs": 129,
+      "scanTimeMs": 142,
       "attackFindings": []
     },
     {
@@ -69,7 +69,7 @@
       "findings": 0,
       "intentClass": "benign",
       "intentConfidence": 0.9999921734564452,
-      "scanTimeMs": 90,
+      "scanTimeMs": 99,
       "attackFindings": []
     },
     {
@@ -80,7 +80,7 @@
       "findings": 0,
       "intentClass": "benign",
       "intentConfidence": 0.9999921734564452,
-      "scanTimeMs": 89,
+      "scanTimeMs": 113,
       "attackFindings": []
     },
     {
@@ -91,7 +91,7 @@
       "findings": 0,
       "intentClass": "benign",
       "intentConfidence": 0.9999921734564452,
-      "scanTimeMs": 96,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -102,7 +102,7 @@
       "findings": 0,
       "intentClass": "benign",
       "intentConfidence": 0.9999921734564452,
-      "scanTimeMs": 91,
+      "scanTimeMs": 99,
       "attackFindings": []
     },
     {
@@ -114,7 +114,7 @@
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.7672524452209473,
-      "scanTimeMs": 89,
+      "scanTimeMs": 98,
       "attackFindings": [
         "AST-EXFIL-001:SKILL-EXFIL",
         "AST-CRED-002:CRED-EXFIL"
@@ -131,7 +131,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9049519896507263,
-      "scanTimeMs": 88,
+      "scanTimeMs": 97,
       "attackFindings": []
     },
     {
@@ -143,7 +143,7 @@
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.999995231628418,
-      "scanTimeMs": 93,
+      "scanTimeMs": 97,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
@@ -157,7 +157,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999997019767761,
-      "scanTimeMs": 93,
+      "scanTimeMs": 97,
       "attackFindings": []
     },
     {
@@ -171,7 +171,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999988306717109,
-      "scanTimeMs": 92,
+      "scanTimeMs": 101,
       "attackFindings": []
     },
     {
@@ -185,7 +185,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9998699582165976,
-      "scanTimeMs": 95,
+      "scanTimeMs": 103,
       "attackFindings": []
     },
     {
@@ -199,7 +199,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.7512606382369995,
-      "scanTimeMs": 91,
+      "scanTimeMs": 104,
       "attackFindings": []
     },
     {
@@ -212,7 +212,7 @@
       "findings": 0,
       "intentClass": "benign",
       "intentConfidence": 0.9999884960023888,
-      "scanTimeMs": 87,
+      "scanTimeMs": 98,
       "attackFindings": []
     },
     {
@@ -226,7 +226,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999958790425036,
-      "scanTimeMs": 84,
+      "scanTimeMs": 97,
       "attackFindings": []
     },
     {
@@ -241,7 +241,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.98697829246521,
-      "scanTimeMs": 92,
+      "scanTimeMs": 96,
       "attackFindings": []
     },
     {
@@ -262,7 +262,7 @@
       "findings": 0,
       "intentClass": "benign",
       "intentConfidence": 0.7,
-      "scanTimeMs": 89,
+      "scanTimeMs": 98,
       "attackFindings": []
     },
     {
@@ -273,7 +273,7 @@
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999275207519531,
-      "scanTimeMs": 91,
+      "scanTimeMs": 103,
       "attackFindings": [
         "AST-CRED-001:CRED-HARVEST",
         "AST-CRED-003:CRED-HARDCODED"
@@ -290,7 +290,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9977267384529114,
-      "scanTimeMs": 88,
+      "scanTimeMs": 104,
       "attackFindings": []
     },
     {
@@ -302,7 +302,7 @@
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.9910723567008972,
-      "scanTimeMs": 87,
+      "scanTimeMs": 108,
       "attackFindings": [
         "AST-INJECT-001:PROMPT-INJECT"
       ]
@@ -318,7 +318,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9861320853233337,
-      "scanTimeMs": 86,
+      "scanTimeMs": 101,
       "attackFindings": []
     },
     {
@@ -330,7 +330,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999992847442627,
-      "scanTimeMs": 87,
+      "scanTimeMs": 103,
       "attackFindings": []
     },
     {
@@ -342,7 +342,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.7782512903213501,
-      "scanTimeMs": 89,
+      "scanTimeMs": 94,
       "attackFindings": []
     },
     {
@@ -354,7 +354,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9994881317554063,
-      "scanTimeMs": 96,
+      "scanTimeMs": 94,
       "attackFindings": []
     },
     {
@@ -366,7 +366,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.999999975091965,
-      "scanTimeMs": 86,
+      "scanTimeMs": 98,
       "attackFindings": []
     },
     {
@@ -378,7 +378,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999910608092082,
-      "scanTimeMs": 88,
+      "scanTimeMs": 99,
       "attackFindings": []
     },
     {
@@ -390,7 +390,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999988079071045,
-      "scanTimeMs": 87,
+      "scanTimeMs": 97,
       "attackFindings": []
     },
     {
@@ -402,7 +402,7 @@
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.999994158744812,
-      "scanTimeMs": 99,
+      "scanTimeMs": 103,
       "attackFindings": [
         "AST-GOVERN-001:SOUL-BYPASS"
       ]
@@ -416,7 +416,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9462442398071289,
-      "scanTimeMs": 87,
+      "scanTimeMs": 102,
       "attackFindings": []
     },
     {
@@ -427,7 +427,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999985694885254,
-      "scanTimeMs": 85,
+      "scanTimeMs": 103,
       "attackFindings": []
     },
     {
@@ -441,7 +441,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9531161189079285,
-      "scanTimeMs": 97,
+      "scanTimeMs": 99,
       "attackFindings": []
     },
     {
@@ -464,7 +464,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.99962317943573,
-      "scanTimeMs": 95,
+      "scanTimeMs": 100,
       "attackFindings": []
     },
     {
@@ -476,7 +476,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999974370002747,
-      "scanTimeMs": 92,
+      "scanTimeMs": 99,
       "attackFindings": []
     },
     {
@@ -490,7 +490,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999692440032959,
-      "scanTimeMs": 91,
+      "scanTimeMs": 102,
       "attackFindings": []
     },
     {
@@ -502,7 +502,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999944836122697,
-      "scanTimeMs": 98,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -514,7 +514,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.8199037313461304,
-      "scanTimeMs": 86,
+      "scanTimeMs": 93,
       "attackFindings": []
     },
     {
@@ -526,7 +526,7 @@
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.998124361038208,
-      "scanTimeMs": 90,
+      "scanTimeMs": 100,
       "attackFindings": [
         "AST-HEARTBEAT-001:HEARTBEAT-RCE"
       ]
@@ -540,7 +540,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 1,
-      "scanTimeMs": 102,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -565,7 +565,7 @@
       "findings": 2,
       "intentClass": "suspicious",
       "intentConfidence": 0.4108634255580028,
-      "scanTimeMs": 91,
+      "scanTimeMs": 101,
       "attackFindings": [
         "AST-HEARTBEAT-001:HEARTBEAT-RCE",
         "AST-MANIP-001:SCAN-EVASION"
@@ -582,7 +582,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999575018882751,
-      "scanTimeMs": 85,
+      "scanTimeMs": 106,
       "attackFindings": []
     },
     {
@@ -596,7 +596,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999999572107809,
-      "scanTimeMs": 97,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -609,7 +609,7 @@
       "findings": 0,
       "intentClass": "benign",
       "intentConfidence": 0.9998635659814178,
-      "scanTimeMs": 87,
+      "scanTimeMs": 105,
       "attackFindings": []
     },
     {
@@ -623,7 +623,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999983161106147,
-      "scanTimeMs": 86,
+      "scanTimeMs": 98,
       "attackFindings": []
     },
     {
@@ -637,7 +637,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999991059753967,
-      "scanTimeMs": 85,
+      "scanTimeMs": 98,
       "attackFindings": []
     },
     {
@@ -645,13 +645,12 @@
       "category": "unknown",
       "expectedChecks": [],
       "detected": true,
-      "findings": 3,
+      "findings": 2,
       "intentClass": "benign",
       "intentConfidence": 0.8609868527205772,
-      "scanTimeMs": 87,
+      "scanTimeMs": 98,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
@@ -661,13 +660,12 @@
       "expectedChecks": [],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 3,
+      "findings": 2,
       "intentClass": "suspicious",
       "intentConfidence": 0.6724354288103934,
-      "scanTimeMs": 86,
+      "scanTimeMs": 104,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
@@ -686,17 +684,15 @@
       "scenario": "mcp-rug-pull",
       "category": "supply_chain",
       "expectedChecks": [],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "lateral_movement",
-      "findings": 4,
+      "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999787670360668,
-      "scanTimeMs": 88,
+      "scanTimeMs": 101,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-SCOPE-001:SCOPE-WILDCARD"
+        "AST-CAP-002:CAPABILITY-ABUSE"
       ]
     },
     {
@@ -705,13 +701,12 @@
       "expectedChecks": [],
       "detected": true,
       "detectedCategory": "social_engineering",
-      "findings": 3,
+      "findings": 2,
       "intentClass": "suspicious",
       "intentConfidence": 0.6365670693095197,
-      "scanTimeMs": 90,
+      "scanTimeMs": 101,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
@@ -721,13 +716,12 @@
       "expectedChecks": [],
       "detected": true,
       "detectedCategory": "lateral_movement",
-      "findings": 3,
+      "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9875154675625276,
-      "scanTimeMs": 86,
+      "scanTimeMs": 94,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
@@ -737,13 +731,12 @@
       "expectedChecks": [],
       "detected": true,
       "detectedCategory": "lateral_movement",
-      "findings": 3,
+      "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999741399223873,
-      "scanTimeMs": 88,
+      "scanTimeMs": 94,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
       ]
     },
@@ -758,7 +751,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9997792840003967,
-      "scanTimeMs": 88,
+      "scanTimeMs": 111,
       "attackFindings": []
     },
     {
@@ -770,7 +763,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9687293767929077,
-      "scanTimeMs": 88,
+      "scanTimeMs": 113,
       "attackFindings": []
     },
     {
@@ -782,7 +775,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9911804795265198,
-      "scanTimeMs": 87,
+      "scanTimeMs": 100,
       "attackFindings": []
     },
     {
@@ -794,7 +787,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.7680687308311462,
-      "scanTimeMs": 90,
+      "scanTimeMs": 99,
       "attackFindings": []
     },
     {
@@ -806,7 +799,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9992740614594776,
-      "scanTimeMs": 92,
+      "scanTimeMs": 94,
       "attackFindings": []
     },
     {
@@ -818,7 +811,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9329890566057296,
-      "scanTimeMs": 93,
+      "scanTimeMs": 94,
       "attackFindings": []
     },
     {
@@ -830,7 +823,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9885116815567017,
-      "scanTimeMs": 90,
+      "scanTimeMs": 93,
       "attackFindings": []
     },
     {
@@ -842,7 +835,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9988113641738892,
-      "scanTimeMs": 91,
+      "scanTimeMs": 102,
       "attackFindings": []
     },
     {
@@ -854,7 +847,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9138903617858887,
-      "scanTimeMs": 88,
+      "scanTimeMs": 100,
       "attackFindings": []
     },
     {
@@ -866,19 +859,15 @@
       ],
       "detected": true,
       "detectedCategory": "injection",
-      "findings": 12,
+      "findings": 8,
       "intentClass": "malicious",
       "intentConfidence": 0.9894055724143982,
-      "scanTimeMs": 90,
+      "scanTimeMs": 108,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
         "AST-SCOPE-003:SEMANTIC-MISMATCH",
         "AST-SCOPE-003:SEMANTIC-MISMATCH",
         "AST-SCOPE-003:SEMANTIC-MISMATCH",
@@ -894,7 +883,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.99999999999999,
-      "scanTimeMs": 89,
+      "scanTimeMs": 109,
       "attackFindings": []
     },
     {
@@ -909,7 +898,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999999475394653,
-      "scanTimeMs": 87,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -921,7 +910,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 1,
-      "scanTimeMs": 85,
+      "scanTimeMs": 99,
       "attackFindings": []
     },
     {
@@ -933,7 +922,7 @@
       "findings": 0,
       "intentClass": "suspicious",
       "intentConfidence": 0.45,
-      "scanTimeMs": 86,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -956,7 +945,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999999999999993,
-      "scanTimeMs": 85,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -970,7 +959,7 @@
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.9999960660934448,
-      "scanTimeMs": 92,
+      "scanTimeMs": 96,
       "attackFindings": [
         "AST-HEARTBEAT-001:HEARTBEAT-RCE"
       ]
@@ -986,7 +975,7 @@
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999999735450764,
-      "scanTimeMs": 94,
+      "scanTimeMs": 97,
       "attackFindings": [
         "AST-INJECT-001:PROMPT-INJECT",
         "AST-CRED-001:CRED-HARVEST"
@@ -1001,7 +990,7 @@
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.9999473223733949,
-      "scanTimeMs": 87,
+      "scanTimeMs": 93,
       "attackFindings": [
         "AST-HEARTBEAT-001:HEARTBEAT-RCE"
       ]
@@ -1023,7 +1012,7 @@
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999998211860657,
-      "scanTimeMs": 87,
+      "scanTimeMs": 95,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
@@ -1037,7 +1026,7 @@
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.9999956488609314,
-      "scanTimeMs": 101,
+      "scanTimeMs": 100,
       "attackFindings": [
         "AST-CRED-002:CRED-EXFIL"
       ]
@@ -1051,7 +1040,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999999999999183,
-      "scanTimeMs": 88,
+      "scanTimeMs": 96,
       "attackFindings": []
     },
     {
@@ -1065,7 +1054,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.993160605430603,
-      "scanTimeMs": 84,
+      "scanTimeMs": 97,
       "attackFindings": []
     },
     {
@@ -1079,7 +1068,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9999997615814209,
-      "scanTimeMs": 86,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
@@ -1091,7 +1080,7 @@
       "findings": 1,
       "intentClass": "malicious",
       "intentConfidence": 0.9992544054985046,
-      "scanTimeMs": 91,
+      "scanTimeMs": 102,
       "attackFindings": [
         "AST-INJECT-001:PROMPT-INJECT"
       ]
@@ -1105,7 +1094,7 @@
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.999998927116394,
-      "scanTimeMs": 90,
+      "scanTimeMs": 102,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
         "AST-SCOPE-003:SEMANTIC-MISMATCH"
@@ -1120,24 +1109,22 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.9240163564682007,
-      "scanTimeMs": 85,
+      "scanTimeMs": 95,
       "attackFindings": []
     },
     {
       "scenario": "typosquatting-mcp",
       "category": "supply_chain",
       "expectedChecks": [],
-      "detected": true,
+      "detected": false,
       "detectedCategory": "lateral_movement",
-      "findings": 4,
+      "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 1,
-      "scanTimeMs": 88,
+      "scanTimeMs": 95,
       "attackFindings": [
         "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-CAP-002:CAPABILITY-ABUSE",
-        "AST-SCOPE-001:SCOPE-WILDCARD",
-        "AST-SCOPE-001:SCOPE-WILDCARD"
+        "AST-CAP-002:CAPABILITY-ABUSE"
       ]
     },
     {
@@ -1149,7 +1136,7 @@
       "findings": 2,
       "intentClass": "malicious",
       "intentConfidence": 0.9999917202096767,
-      "scanTimeMs": 87,
+      "scanTimeMs": 95,
       "attackFindings": [
         "AST-INJECT-001:PROMPT-INJECT",
         "AST-CRED-001:CRED-HARVEST"
@@ -1203,7 +1190,7 @@
       "findings": 0,
       "intentClass": "malicious",
       "intentConfidence": 0.999999984538607,
-      "scanTimeMs": 94,
+      "scanTimeMs": 104,
       "attackFindings": []
     },
     {

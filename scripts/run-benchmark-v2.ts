@@ -216,21 +216,21 @@ const EXTERNAL_PAPER_COMPARISON = {
 } as const;
 
 const METHODOLOGY_NOTE =
-  'Full-pipeline verdict is the artifact producing at least one high/critical attack finding — the ' +
-  'finding set the shipped hackmyagent secure surfaces in red. Hardening findings (missing defenses, ' +
-  'not present attacks: AST-PROMPT-001/003/004 and AST-GOV-001..005) are excluded, as they fire on ' +
-  'benign and malicious artifacts alike and carry no detection signal. Each sample is routed through ' +
-  'the analyzer path for its artifact type (agent_config / mcp_config / skill / soul / system_prompt), ' +
-  'mirroring the shipped scanner. The TME-only row is a model-only ablation, not a scanner verdict ' +
-  '(the classifier under-performs on this corpus, whitespace-vocab OOV). Supersedes benchmark-results-v5.json. ' +
-  'AGGREGATE PRECISION / FPR / F1 ARE NOT A PUBLISHED SCANNER-QUALITY METRIC for this corpus: the benign ' +
-  'set includes ~2954 registry MCP configs that declare allowedTools:["*"], which the scanner flags as ' +
-  'wildcard tool access (a real least-privilege finding) but the corpus labels benign (the server package ' +
-  'is legitimate). This is a definitional disagreement between "has a security finding" and "is malicious", ' +
-  'not a detection error, and it drives the aggregate FPR. The sound, reportable signals are per-category ' +
-  'RECALL (detected / total) and the DVAA detection rate. The prior run\'s low FPR was an artifact of ' +
-  'compiling every sample as a skill, which hid the MCP analyzers entirely. Resolving the wildcard-MCP ' +
-  'labeling (scanner-precision change vs. corpus relabel) is a prerequisite to publishing any aggregate number.';
+  'Full-pipeline verdict is the artifact producing at least one high/critical ATTACK finding. The verdict ' +
+  'excludes POSTURE / hardening findings, which fire on benign and malicious artifacts alike and so carry no ' +
+  'malicious-intent signal: AST-PROMPT-001/003/004 (missing prompt defenses), AST-GOV-001..005 (missing ' +
+  'governance/oversight/override resistance), and AST-SCOPE-001 (wildcard tool access — a least-privilege ' +
+  'posture issue that >2,900 benign registry MCP servers also declare via allowedTools:["*"]). AST-SCOPE-003 ' +
+  '(scope-purpose mismatch) is kept as a verdict driver — it catches real privilege-escalation and supply-chain ' +
+  'trojans, and excluding it would collapse those categories. The scanner emits all of these to users with ' +
+  'severity and a fix; the exclusion governs the ' +
+  'BENCHMARK verdict only, not the product findings. Each sample is routed through the analyzer path for its ' +
+  'artifact type (agent_config / mcp_config / skill / soul / system_prompt), mirroring the shipped scanner. ' +
+  'The TME-only row is a model-only ablation, not a scanner verdict (the classifier under-performs on this ' +
+  'corpus, whitespace-vocab OOV). Supersedes benchmark-results-v5.json. Report RECALL alongside F1 — the ' +
+  'precision-favoring verdict trades recall for a low false-positive rate, and the recall number is the honest ' +
+  'measure of coverage. Excluding the wildcard posture finding also drops the handful of malicious configs ' +
+  'whose ONLY signal was wildcard access (genuinely indistinguishable from a benign over-permissioned server).';
 
 function printDetailedResults(detailed: DetailedResult): void {
   console.log(`\n${'='.repeat(80)}`);

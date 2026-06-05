@@ -24,7 +24,7 @@
 
 | Date | Change |
 |------|--------|
-| 2026-06-05 | Re-ran the scanner benchmark faithfully (each sample routed through its real artifact-type analyzer path; verdict gated on high/critical attack findings; non-discriminative governance/hardening checks excluded). Recall recovered (overall 84.1%; privilege_escalation 30.0% -> 66.7% after routing + the new `AST-SCOPE-004` config-directive check; DVAA 82.4%). **Aggregate F1/precision/FPR withheld under revision** — the faithful run exposes that the prior 1.26% FPR was an artifact of compiling every sample as a skill, which bypassed the MCP analyzers; the true aggregate FPR is governed by registry wildcard-MCP configs the scanner flags but the corpus labels benign (a labeling disagreement, not a detection error). The 82.1% F1 and the older 89.2% figure are withdrawn. |
+| 2026-06-05 | Re-ran the scanner benchmark faithfully (each sample routed through its real artifact-type analyzer path; verdict = high/critical attack findings). Adopted a posture-vs-attack verdict: missing-defense and over-permissive-posture findings (prompt/governance defenses, and wildcard tool access `allowedTools:["*"]` that 2,900+ benign registry MCP servers also declare) are excluded from the malicious verdict but still surfaced by the scanner. Result: **F1 82.9%, recall 82.6%, precision 83.2%, FPR 1.16%**; privilege_escalation recall 30.0% -> 63.3% (routing + new `AST-SCOPE-004` config-directive check). The earlier 82.1% F1 / 1.26% FPR (a skill-routing artifact that bypassed the MCP analyzers) and the older 89.2% figure are withdrawn. |
 | 2026-06-03 | Remapped all scenarios to current MITRE ATLAS (15 techniques, incl. the 2025 AI-agent technique family); corrected four legacy mappings. Capability gating now produces N/A (not FAIL) for surfaces a product does not declare. Pooled scoring-engine metrics (FPR no longer macro-averaged; category-agnostic detectors credited on recall). Counts reconciled to `npm test`. |
 | 2026-04-02 | Scanner Benchmark v2: 4,245-sample corpus, 3 HMA adapter tiers (static/TME/pipeline), DVAA ground-truth comparison. Comparison with Holzbauer et al. (arXiv:2603.16572). Numbers superseded by the 2026-06-05 re-run. |
 | 2026-03-23 | `arp-guard` v0.3.0 - ARP now re-exports from HackMyAgent. Updated OASB to v0.3.0. All 222 tests pass. Updated Quick Start (no standalone ARP clone). |
@@ -454,28 +454,27 @@ npx tsx scripts/run-dvaa-benchmark.ts                              # DVAA ground
 
 Measured on hackmyagent 0.23.8 (NanoMind classifier v0.5.0), full pipeline, 4,245 labeled samples.
 
-**Aggregate F1 / precision / FPR are under revision and are not published.** A faithful re-run (each
-sample routed through the analyzer path for its artifact type) shows the aggregate false-positive rate
-is dominated by registry MCP configs that declare `"allowedTools": ["*"]` — the scanner flags this as
-wildcard tool access (a real least-privilege finding) but the corpus labels them benign. That is a
-labeling disagreement, not a detection error, so the aggregate is not a meaningful scanner-quality
-metric for this corpus as labeled. The previously circulated 82.1% F1 / 1.26% FPR and the older 89.2%
-figure are **withdrawn**. The sound, reportable signals:
+| Scanner | F1 | Precision | Recall | FPR |
+|---------|----|-----------|--------|-----|
+| HMA Full Pipeline | **82.9%** | 83.2% | 82.6% | 1.16% |
+| HMA Static (regex) | 67.5% | 99.3% | 51.1% | 0.03% |
+| NanoMind TME v0.5.0 (ablation) | 14.0% | 7.5% | 93.0% | 79.2% |
 
-| Signal | Value |
-|--------|-------|
-| Corpus recall, full pipeline (config-structural attacks) | 84.1% (227/270) |
-| privilege_escalation recall | 66.7% (was 30.0%) |
-| DVAA full-repo detection (incl. behavioral) | 25.6% (22/86) |
-| DVAA corpus config-subset | 82.4% (75/91) |
-| HMA Static recall | 51.1% (precision 99.3%) |
+Verdict = high/critical **attack** findings. Posture findings that fire on benign and malicious alike are
+excluded from the verdict (but still surfaced by the scanner): missing prompt/governance defenses, and
+**wildcard tool access** (`allowedTools:["*"]`, declared by 2,900+ benign registry MCP servers — a
+least-privilege posture issue, not malice). The previously circulated 82.1% F1 / 1.26% FPR and the older
+89.2% figure are **withdrawn**: that 1.26% was an artifact of compiling every sample as a skill, which
+bypassed the MCP analyzers.
 
-The corpus recall and the DVAA full-repo number together are the honest characterization: the
-structural pipeline catches config-encoded attacks well but misses most behavioral / natural-language
-attacks (which need the semantic layer).
+Per-category recall (read alongside F1): credential/stego/social/data 96.7%, persistence 90.0%,
+prompt_injection 86.7%, heartbeat_rce 70.0%, privilege_escalation **63.3%** (up from 30.0% after routing
++ the new `AST-SCOPE-004` check), supply_chain 46.7%. DVAA: full-repo 23.3% (20/86, incl. behavioral),
+corpus config-subset 81.3% (74/91) — the structural pipeline catches config-encoded attacks well but
+misses most behavioral / natural-language attacks (which need the semantic layer).
 
-See [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) for the full per-category breakdown, the wildcard-MCP
-labeling caveat, and comparison with Holzbauer et al. (arXiv:2603.16572).
+See [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) for the full per-category breakdown, the posture-vs-attack
+verdict methodology, and comparison with Holzbauer et al. (arXiv:2603.16572).
 
 ---
 
