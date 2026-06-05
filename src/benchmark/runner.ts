@@ -26,8 +26,17 @@ export interface ScannerAdapter {
   name: string;
   version: string;
   id: string;
-  /** Scan a single artifact and return a verdict */
-  scan(content: string, sampleId: string): Promise<ScannerResult>;
+  /**
+   * Scan a single artifact and return a verdict.
+   *
+   * `artifactType` is the corpus-declared artifact kind (skill / mcp_tool /
+   * soul / system_prompt / agent_config). The HMA pipeline adapter uses it to
+   * route the sample through the same analyzer path the shipped scanner would
+   * pick for that artifact kind — compiling an agent_config as a skill hides
+   * the structural scope/capability findings. Adapters that don't need it
+   * (static regex, model-only) ignore the argument.
+   */
+  scan(content: string, sampleId: string, artifactType?: string): Promise<ScannerResult>;
 }
 
 /**
@@ -222,7 +231,7 @@ export async function runBenchmark(
     const results: ScannerResult[] = [];
 
     for (const sample of dataset) {
-      const result = await adapter.scan(sample.content, sample.id);
+      const result = await adapter.scan(sample.content, sample.id, sample.artifactType);
       results.push(result);
     }
 

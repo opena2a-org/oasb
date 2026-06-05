@@ -212,26 +212,36 @@ async function main() {
       try {
         const { ast } = await compiler.compile(content, filename);
 
-        // Run analyzers
+        // Run analyzers exactly as the corpus full-pipeline adapter does: pass the
+        // raw content so content-based checks (AST-SCOPE-004 etc.) fire.
         const verifier = (a: any) => compiler.verifyAST(a);
         const allFindings = [
           ...core.analyzeCapabilities(ast),
-          ...(core.analyzeCredentials ? core.analyzeCredentials(ast, verifier) : []),
-          ...(core.analyzeGovernance ? core.analyzeGovernance(ast, verifier) : []),
-          ...(core.analyzeScope ? core.analyzeScope(ast, verifier) : []),
-          ...(core.analyzePrompt ? core.analyzePrompt(ast, verifier) : []),
+          ...(core.analyzeCredentials ? core.analyzeCredentials(ast, verifier, undefined, content) : []),
+          ...(core.analyzeGovernance ? core.analyzeGovernance(ast, verifier, undefined, undefined, content) : []),
+          ...(core.analyzeScope ? core.analyzeScope(ast, verifier, undefined, content) : []),
+          ...(core.analyzePrompt ? core.analyzePrompt(ast, verifier, undefined, content) : []),
           ...(core.analyzeCode ? core.analyzeCode(ast, verifier) : []),
         ];
 
-        const failedFindings = allFindings.filter((f: any) => !f.passed);
+        // Hardening checks flag missing defenses, not present attacks; they fire on
+        // benign and malicious alike, so they are excluded from the detection verdict
+        // (same set as the corpus full-pipeline adapter's HARDENING_CHECK_IDS).
+        const HARDENING = new Set([
+          'AST-PROMPT-001', 'AST-PROMPT-003', 'AST-PROMPT-004',
+          'AST-GOV-001', 'AST-GOV-002', 'AST-GOV-003', 'AST-GOV-004', 'AST-GOV-005',
+        ]);
+        const attackFindings = allFindings.filter((f: any) => !f.passed && !HARDENING.has(f.checkId));
 
-        // Check for TME detection
+        // TME informs the category label only, not the detection decision.
         const tmeResult = await tme.classifyAsync(content);
 
-        const isMalicious =
-          ast.intentClassification === 'malicious' ||
-          (ast.intentClassification === 'suspicious' && failedFindings.length > 0) ||
-          tmeResult.intentClass === 'malicious';
+        // Verdict: at least one high/critical attack finding — the finding set the
+        // shipped scanner surfaces in red. Matches the corpus full-pipeline adapter.
+        const highSeverityFindings = attackFindings.filter(
+          (f: any) => f.severity === 'critical' || f.severity === 'high',
+        );
+        const isMalicious = highSeverityFindings.length > 0;
 
         if (isMalicious && !scenarioDetected) {
           scenarioDetected = true;
@@ -243,11 +253,11 @@ async function main() {
           expectedChecks: scenario.expectedChecks,
           detected: isMalicious,
           detectedCategory: tmeResult.attackClass !== 'none' ? tmeResult.attackClass : undefined,
-          findings: failedFindings.length,
+          findings: attackFindings.length,
           intentClass: ast.intentClassification,
           intentConfidence: ast.intentConfidence,
           scanTimeMs: Date.now() - startMs,
-          attackFindings: failedFindings.map((f: any) => `${f.checkId}:${f.attackClass || '-'}`),
+          attackFindings: attackFindings.map((f: any) => `${f.checkId}:${f.attackClass || '-'}`),
         };
 
         if (!bestResult || result.findings > bestResult.findings) {
