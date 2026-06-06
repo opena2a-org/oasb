@@ -3,7 +3,7 @@
 **Date:** 2026-06-05
 **Build under test:** hackmyagent 0.23.8, NanoMind classifier v0.5.0
 **Dataset:** OASB v2 corpus, 4,245 categorized samples (270 malicious, 3,881 benign, 94 edge)
-**DVAA:** 86 full-repo scenarios (23.3% detected) / 91 corpus config-subset samples (81.3%) — see Section 4
+**DVAA:** 86 full-repo scenarios (29.1% detected) / 91 corpus config-subset samples (81.3%) - see Section 4
 **Paper comparison:** Holzbauer et al., "Malicious Or Not" (arXiv:2603.16572), 238K skills
 
 ---
@@ -85,12 +85,38 @@ DVAA appears two ways and they measure different things; both are reported.
 
 | Source | Scenarios | Detected | Rate | What it measures |
 |--------|-----------|----------|------|------------------|
-| Full DVAA scenario repo (`run-dvaa-benchmark.ts`) | 86 | 20 | **23.3%** | Every DVAA scenario, incl. behavioral / code / natural-language attacks. |
+| Full DVAA scenario repo (`run-dvaa-benchmark.ts`) | 86 | 25 | **29.1%** | Every DVAA scenario, incl. behavioral / code / natural-language attacks. |
 | Corpus DVAA subset (`source: dvaa` in v2.json) | 91 | 74 | 81.3% | The config-structural DVAA samples carried in the corpus. |
+
+The full-repo loader reads each scenario's `vulnerable/` tree recursively, mirroring what HMA reads on
+a real repository: every subdirectory (e.g. `knowledge-base/`, `public/`) and every dot-directory or
+dot-file that carries a payload (`.well-known/`, `.github/`, `.streamlit/`, an exposed `.env`), skipping
+only true noise (`.git`, `.DS_Store`, `node_modules`). The earlier top-level-only read scanned nothing
+for scenarios whose entire payload sat below the top level, scoring them as misses. The honest number
+was 23.3% (20/86) and is now **29.1% (25/86), +5, with zero regressions** (every scenario detected
+before is still detected).
+
+Where the +5 come from, so the number is auditable:
+
+- `indirect-prompt-injection-doc`, `webexpose-claude-md` - payload was in a non-dot subdirectory the
+  top-level read missed; now structurally detected.
+- `embedding-adversarial-rag`, `behavioral-drift-to-exfil` - these had readable top-level files but
+  their attack payload (a poisoned `knowledge-base/` doc, an exfil `skills/` file) sat in a
+  subdirectory, so they only fire once the subtree is read.
+- `a2a-agent-noauth` - its A2A agent card lives in `.well-known/agent.json` by spec; a loader that
+  skipped dot-directories could not see it at all. This is why dot-directories must be read: skipping
+  `.well-known/` structurally blinds the benchmark to the entire A2A scenario family.
+
+What is read but still **not** detected, and why that is correct: `mcp-discovery-exposed`
+(`.well-known/mcp.json`), `docker-provenance-disabled` (`.github/workflows/docker.yml`), and
+`webexpose-env-file` (`public/.env`) are now read in full but remain undetected - they are
+posture / exposure, not attack content, and the structural verdict counts only high/critical attack
+findings (posture findings are excluded by design, per the posture-vs-attack methodology). Reading the
+exposed `.env` produced no finding, confirming the loader fix does not inflate the number via posture.
 
 The gap is the honest characterization: the structural pipeline detects config-encoded attacks well but
 misses most behavioral / natural-language attacks (prompt injection, social engineering, code-level RCE),
-whose signal is instruction text rather than structure. Lead with the 23% full-repo number when
+whose signal is instruction text rather than structure. Lead with the 29.1% full-repo number when
 characterizing DVAA detection.
 
 ---

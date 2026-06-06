@@ -152,19 +152,32 @@ async function loadDVAAScenarios(): Promise<DVAAScenario[]> {
     const fileContents = new Map<string, string>();
 
     if (existsSync(vulnDir)) {
-      const files = readdirSync(vulnDir).filter(f => !f.startsWith('.'));
-      for (const file of files) {
-        const filePath = join(vulnDir, file);
-        if (statSync(filePath).isFile()) {
-          try {
-            const content = readFileSync(filePath, 'utf-8');
-            vulnerableFiles.push(file);
-            fileContents.set(file, content);
-          } catch {
-            // Skip binary files
+      // Walk vulnerable/ recursively, mirroring what HMA reads on a real repo.
+      // A top-level-only read missed scenarios whose payload lives in a
+      // subdirectory (knowledge-base/, public/) or a dot-directory/dot-file
+      // (.well-known/, .github/, .streamlit/, an exposed .env) - those were
+      // scanned as nothing and scored as misses. Only true noise is skipped.
+      const SKIP = new Set(['.git', '.DS_Store', 'node_modules']);
+      const walk = (d: string, rel: string) => {
+        for (const entry of readdirSync(d)) {
+          if (SKIP.has(entry)) continue;
+          const filePath = join(d, entry);
+          const relPath = rel ? `${rel}/${entry}` : entry;
+          const st = statSync(filePath);
+          if (st.isDirectory()) {
+            walk(filePath, relPath);
+          } else if (st.isFile()) {
+            try {
+              const content = readFileSync(filePath, 'utf-8');
+              vulnerableFiles.push(relPath);
+              fileContents.set(relPath, content);
+            } catch {
+              // Skip binary files
+            }
           }
         }
-      }
+      };
+      walk(vulnDir, '');
     }
 
     scenarios.push({ name: dir, expectedChecks, category, vulnerableFiles, fileContents });

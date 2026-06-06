@@ -469,7 +469,7 @@ bypassed the MCP analyzers.
 
 Per-category recall (read alongside F1): credential/stego/social/data 96.7%, persistence 90.0%,
 prompt_injection 86.7%, heartbeat_rce 70.0%, privilege_escalation **63.3%** (up from 30.0% after routing
-+ the new `AST-SCOPE-004` check), supply_chain 46.7%. DVAA: full-repo 23.3% (20/86, incl. behavioral),
++ the new `AST-SCOPE-004` check), supply_chain 46.7%. DVAA: full-repo 29.1% (25/86, incl. behavioral),
 corpus config-subset 81.3% (74/91) — the structural pipeline catches config-encoded attacks well but
 misses most behavioral / natural-language attacks (which need the semantic layer).
 
