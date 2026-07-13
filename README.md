@@ -20,6 +20,12 @@
 
 ---
 
+## Contributing
+
+This benchmark is early and authored in the open. We are looking for co-authors, an independent second implementation, and new attack scenarios before it goes to an external standards body. Run your detector against the suite, contribute scenarios, or open an issue to be listed as an adopter. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 ## Updates
 
 | Date | Change |
