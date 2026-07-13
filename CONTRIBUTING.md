@@ -25,7 +25,7 @@ We especially welcome:
 - Or email info@opena2a.org with "co-author" in the subject line.
 - Run your detector against the benchmark and contribute attack scenarios. New scenarios should be mapped to MITRE ATLAS and the OWASP LLM/Agentic Top 10, and include the ground-truth label and reproduction steps.
 - To be listed as an adopter, open an issue describing how you run OASB and against which product.
-- For new attack techniques or coordinated disclosure, email info@opena2a.org or info@opena2a.org.
+- For new attack techniques or coordinated disclosure, email info@opena2a.org with "disclosure" in the subject line.
 
 Small fixes (typos, broken links, clarifications) can go straight to a pull request. For new scenarios or changes to the scoring engine, open an issue first so the change can be discussed and validated against the harness before implementation work begins.
 
