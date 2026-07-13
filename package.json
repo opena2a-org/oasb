@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "smoke": "bash scripts/release-smoke.sh",
     "test:atomic": "vitest run src/atomic/",
     "test:integration": "vitest run src/integration/",
     "test:baseline": "vitest run src/baseline/",
@@ -61,7 +62,7 @@
   "author": "OpenA2A",
   "license": "Apache-2.0",
   "dependencies": {
-    "hackmyagent": "^0.17.9",
+    "hackmyagent": "0.23.8",
     "pg": "^8.20.0"
   }
 }

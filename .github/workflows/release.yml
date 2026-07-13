@@ -21,7 +21,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ARP_CLONE_TOKEN }}
         run: |
-          git clone https://x-access-token:${GH_TOKEN}@github.com/opena2a-org/arp.git ../arp
+          git clone https://x-access-token:${GH_TOKEN}@github.com/opena2a-org/agent-runtime-protection.git ../arp
           cd ../arp && npm install && npm run build
 
       - uses: actions/setup-node@v4
@@ -34,7 +34,19 @@ jobs:
       - run: npm run build
       - run: npm test -- --exclude src/e2e/
 
+      - name: Skip if version already published
+        id: check
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "@opena2a/oasb@${version}" version >/dev/null 2>&1; then
+            echo "@opena2a/oasb@${version} already on npm, skipping publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm with provenance
+        if: steps.check.outputs.skip != 'true'
         run: npm publish --provenance --access public
 
       - name: Verify provenance on npm
