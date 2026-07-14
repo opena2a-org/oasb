@@ -14,7 +14,7 @@
 
 222 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. Each scenario is mapped to MITRE ATLAS (15 techniques, including the AI-agent technique family) and the OWASP LLM/Agentic Top 10. Plug in your product, run the suite, get a detection coverage scorecard.
 
-> **Counts.** `npm test` runs **245 tests** (244 passing, 1 skipped when `lsof`/`ss` is unavailable): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests**. "222" is the scenario count; "244 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested).
+> **Counts.** `npm test` runs **245 tests** (244 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests**. "222" is the scenario count; "244 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested).
 
 [OASB Website](https://oasb.ai) | [MITRE ATLAS Coverage](#mitre-atlas-coverage)
 
@@ -94,10 +94,33 @@ npm test                    # Full suite: 245 tests (244 pass, 1 skip)
 npm run test:atomic         # 144 atomic detection tests (no external deps)
 npm run test:integration    # 43 tests across 8 integration scenarios
 npm run test:baseline       # 12 false-positive / baseline tests
-npm run test:e2e            # 23 E2E tests (real OS detection; 1 skips without lsof)
+npm run test:e2e            # 23 E2E tests (real OS detection; E2E-003 currently skipped)
 ```
 
 ![OASB Demo](docs/oasb-demo.gif)
+
+### Use as a library
+
+The suite is also published as [`@opena2a/oasb`](https://www.npmjs.com/package/@opena2a/oasb) for building adapters and consuming the scoring engine programmatically:
+
+```bash
+npm install @opena2a/oasb
+```
+
+```ts
+import type { SecurityProductAdapter } from '@opena2a/oasb';
+import { createAdapter, getCapabilityMatrix, benchmark } from '@opena2a/oasb';
+
+// Implement SecurityProductAdapter for your product, or select one via
+// the OASB_ADAPTER env var (see "Evaluating Other Products" below).
+const adapter = createAdapter();
+console.log(getCapabilityMatrix());
+
+// Scoring engine + scanner-benchmark runner
+const tier = benchmark.determineTier(/* aggregate metrics */);
+```
+
+The package exports the adapter contract (`SecurityProductAdapter`, event and enforcement types), capability helpers, the worked adapter examples (`ArpWrapper`, `LLMGuardWrapper`, `RebuffWrapper` - each lazy-loads its underlying product, so none are required to install), harness utilities (`EventCollector`, `MockLLMAdapter`, metrics), and the skills-security scoring engine under `benchmark`. Running the full attack-scenario suite still happens from a repo checkout with `npm test`.
 
 ---
 
@@ -293,7 +316,7 @@ Real OS-level detection - no mocks, no event injection. These tests spawn real p
 |------|---------|-------------------------------|
 | E2E-001 | ~200ms | fs.watch detects .env, .ssh, .bashrc, .npmrc writes |
 | E2E-002 | ~1000ms | ps polling detects child processes, suspicious binaries |
-| E2E-003 | ~1000ms | lsof detects outbound TCP (skips if unavailable) |
+| E2E-003 | ~1000ms | Outbound TCP detection (currently skipped pending a reliable cross-platform check) |
 
 </details>
 
