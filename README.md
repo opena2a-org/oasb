@@ -30,13 +30,15 @@ This benchmark is early and authored in the open. We are looking for co-authors,
 
 | Date | Change |
 |------|--------|
-| 2026-06-05 | Re-ran the scanner benchmark faithfully (each sample routed through its real artifact-type analyzer path; verdict = high/critical attack findings). Adopted a posture-vs-attack verdict: missing-defense and over-permissive-posture findings (prompt/governance defenses, and wildcard tool access `allowedTools:["*"]` that 2,900+ benign registry MCP servers also declare) are excluded from the malicious verdict but still surfaced by the scanner. Result: **F1 82.9%, recall 82.6%, precision 83.2%, FPR 1.16%**; privilege_escalation recall 30.0% -> 63.3% (routing + new `AST-SCOPE-004` config-directive check). The earlier 82.1% F1 / 1.26% FPR (a skill-routing artifact that bypassed the MCP analyzers) and the older 89.2% figure are withdrawn. |
-| 2026-06-03 | Remapped all scenarios to current MITRE ATLAS (15 techniques, incl. the 2025 AI-agent technique family); corrected four legacy mappings. Capability gating now produces N/A (not FAIL) for surfaces a product does not declare. Pooled scoring-engine metrics (FPR no longer macro-averaged; category-agnostic detectors credited on recall). Counts reconciled to `npm test`. |
-| 2026-04-02 | Scanner Benchmark v2: 4,245-sample corpus, 3 HMA adapter tiers (static/TME/pipeline), DVAA ground-truth comparison. Comparison with Holzbauer et al. (arXiv:2603.16572). Numbers superseded by the 2026-06-05 re-run. |
-| 2026-03-23 | `arp-guard` v0.3.0 - ARP now re-exports from HackMyAgent. Updated OASB to v0.3.0. All 222 tests pass. Updated Quick Start (no standalone ARP clone). |
-| 2026-02-19 | Added 40 AI-layer test scenarios (AT-AI-001 through AT-AI-005) for prompt, MCP, and A2A scanning via ARP v0.2.0. Total tests: 222. |
-| 2026-02-18 | Added integration tests for DVAA v0.4.0 MCP JSON-RPC and A2A endpoints. |
-| 2026-02-09 | Initial release -- 182 attack scenarios across 10 MITRE ATLAS techniques. |
+| 2026-07-13 | **v0.4.0** - working package entry point (`import '@opena2a/oasb'`), reproducible installs, committed release smoke gate, [CONTRIBUTING.md](CONTRIBUTING.md). First release via npm Trusted Publishing (SLSA provenance). |
+| 2026-06-05 | Scanner benchmark re-measured with a posture-vs-attack verdict: **F1 82.9%, FPR 1.16%**. Earlier 82.1% and 89.2% figures withdrawn - see [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md). |
+| 2026-06-03 | Remapped to current MITRE ATLAS (15 techniques); capability gating reports N/A, not FAIL; pooled metrics. Audit: [docs/AUDIT-2026-06-03.md](docs/AUDIT-2026-06-03.md). |
+| 2026-04-02 | Scanner Benchmark v2: 4,245-sample corpus, 3 HMA adapter tiers. Superseded by the 2026-06-05 re-measurement. |
+| 2026-03-23 | v0.3.0 - `arp-guard` re-exports from HackMyAgent; simplified Quick Start. |
+| 2026-02-19 | 40 AI-layer scenarios (AT-AI-001 to AT-AI-005) for prompt, MCP, and A2A scanning. |
+| 2026-02-09 | Initial release: 182 attack scenarios across 10 MITRE ATLAS techniques. |
+
+Full history with methodology detail: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
