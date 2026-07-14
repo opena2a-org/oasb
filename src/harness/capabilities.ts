@@ -14,40 +14,13 @@
  *   });
  */
 import { describe } from 'vitest';
-import { createAdapter } from './create-adapter';
-import type { Capability, CapabilityMatrix } from './adapter';
+import type { Capability } from './adapter';
+import { hasCapability } from './capabilities-core';
 
-let _matrix: CapabilityMatrix | null = null;
-
-function getMatrix(): CapabilityMatrix {
-  if (!_matrix) {
-    const adapter = createAdapter();
-    _matrix = adapter.getCapabilities();
-  }
-  return _matrix;
-}
-
-/**
- * Check if the current adapter has a capability.
- */
-export function hasCapability(cap: Capability): boolean {
-  return getMatrix().capabilities.has(cap);
-}
-
-/**
- * Call at the top of a describe() block to skip the entire suite
- * if the adapter lacks the required capability.
- *
- * Uses describe.skipIf() so the tests show as skipped, not failed.
- */
-export function requireCapability(cap: Capability): void {
-  const has = hasCapability(cap);
-  if (!has) {
-    // Can't use describe.skipIf at this point, but we can use
-    // a beforeAll that throws a skip. The caller should use
-    // describeWithCapability instead for cleaner skip behavior.
-  }
-}
+// Vitest-free helpers live in capabilities-core so the package entry point
+// can be require()d without vitest; re-exported here so test files keep
+// importing everything from './capabilities'.
+export { hasCapability, requireCapability, getCapabilityMatrix } from './capabilities-core';
 
 /**
  * A describe() wrapper that skips the entire suite if the adapter
@@ -70,10 +43,3 @@ export const describeWithCapability = (
     describe.skip(`${name} [requires: ${cap}]`, fn);
   }
 };
-
-/**
- * Get the full capability matrix for reporting.
- */
-export function getCapabilityMatrix(): CapabilityMatrix {
-  return getMatrix();
-}

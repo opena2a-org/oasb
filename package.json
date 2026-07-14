@@ -9,7 +9,10 @@
     "src",
     "config",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "STATUS.md",
+    "BENCHMARK-RESULTS.md"
   ],
   "scripts": {
     "build": "tsc",
