@@ -31,7 +31,8 @@ This benchmark is early and authored in the open. We are looking for co-authors,
 | Date | Change |
 |------|--------|
 | 2026-07-13 | **v0.4.0** - working package entry point (`import '@opena2a/oasb'`), reproducible installs, committed release smoke gate, [CONTRIBUTING.md](CONTRIBUTING.md). First release via npm Trusted Publishing (SLSA provenance). |
-| 2026-06-05 | Scanner benchmark re-measured with a posture-vs-attack verdict: **F1 82.9%, FPR 1.16%**. Earlier 82.1% and 89.2% figures withdrawn - see [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md). |
+| 2026-08-09 | **Comparative scanner scores withdrawn.** The benign class of this corpus was labeled by the scanner under test, so F1, precision, FPR and flag rate were determined by the labeling rule rather than measured. Recall is retained with disclosure - see [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) § 1. |
+| 2026-06-05 | ~~Scanner benchmark re-measured with a posture-vs-attack verdict: **F1 82.9%, FPR 1.16%**.~~ **Withdrawn 2026-08-09** (see above); the row is kept so the record of what was published stays visible. Earlier 82.1% and 89.2% figures also withdrawn - see [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md). |
 | 2026-06-03 | Remapped to current MITRE ATLAS (15 techniques); capability gating reports N/A, not FAIL; pooled metrics. Audit: [docs/AUDIT-2026-06-03.md](docs/AUDIT-2026-06-03.md). |
 | 2026-04-02 | Scanner Benchmark v2: 4,245-sample corpus, 3 HMA adapter tiers. Superseded by the 2026-06-05 re-measurement. |
 | 2026-03-23 | v0.3.0 - `arp-guard` re-exports from HackMyAgent; simplified Quick Start. |
@@ -481,28 +482,44 @@ npx tsx scripts/run-benchmark-v2.ts --categorized-only --limit=100  # Quick test
 npx tsx scripts/run-dvaa-benchmark.ts                              # DVAA ground-truth comparison (70 scenarios)
 ```
 
-### Latest Results (2026-06-05)
+### Latest Results (2026-06-05, partially withdrawn 2026-08-09)
 
-Measured on hackmyagent 0.23.8 (NanoMind classifier v0.5.0), full pipeline, 4,245 labeled samples.
+**F1, precision, false-positive rate and flag rate are withdrawn.** The benign class of this corpus
+was labeled by the scanner under test: `scripts/export-registry-corpus.mjs` lines 9-11 assign
+`verdict=safe AND score >= 80`, as reported by HackMyAgent itself, to the benign class, and 3,811 of
+the 3,881 benign samples came from that rule. Anything HackMyAgent would have flagged was excluded
+from the benign class by construction, so a near-zero false-positive rate was guaranteed before a
+single scan ran. Those figures are not restated here, and no replacement figure is offered.
 
-| Scanner | F1 | Precision | Recall | FPR |
-|---------|----|-----------|--------|-----|
-| HMA Full Pipeline | **82.9%** | 83.2% | 82.6% | 1.16% |
-| HMA Static (regex) | 67.5% | 99.3% | 51.1% | 0.03% |
-| NanoMind TME v0.5.0 (ablation) | 14.0% | 7.5% | 93.0% | 79.2% |
+**Recall is retained**, because it reads only the malicious class, and the published run excludes the
+225 registry samples labeled malicious by that same rule (`--categorized-only`). Measured on
+hackmyagent 0.23.8, full pipeline:
+
+| Scanner | Recall | F1 / Precision / FPR / Flag rate |
+|---------|--------|----------------------------------|
+| HMA Full Pipeline | **82.6%** (223/270) | withdrawn |
+| HMA Static (regex) | 51.1% | withdrawn |
+| NanoMind TME v0.5.0 (ablation) | 93.0% | withdrawn |
+
+Read that 82.6% with its denominator: all 270 attack fixtures are ones we wrote (ARIA 89, DVAA 91,
+HackMyAgent's own test payloads 90). Excluding HMA's own payloads it is 82.2% (148/180) — they are
+not inflating it. Scored over all 495 samples the corpus calls malicious, including the 225
+self-labeled ones, it is 47.3% (234/495). This is detection against a fixed fixture set we authored,
+not a measure of detection in the wild, and not comparable to another scanner's number on another
+corpus. Full breakdown: [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) § 1a.
 
 Verdict = high/critical **attack** findings. Posture findings that fire on benign and malicious alike are
 excluded from the verdict (but still surfaced by the scanner): missing prompt/governance defenses, and
 **wildcard tool access** (`allowedTools:["*"]`, declared by 2,900+ benign registry MCP servers — a
-least-privilege posture issue, not malice). The previously circulated 82.1% F1 / 1.26% FPR and the older
-89.2% figure are **withdrawn**: that 1.26% was an artifact of compiling every sample as a skill, which
-bypassed the MCP analyzers.
+least-privilege posture issue, not malice).
 
-Per-category recall (read alongside F1): credential/stego/social/data 96.7%, persistence 90.0%,
-prompt_injection 86.7%, heartbeat_rce 70.0%, privilege_escalation **63.3%** (up from 30.0% after routing
-+ the new `AST-SCOPE-004` check), supply_chain 46.7%. DVAA: full-repo 29.1% (25/86, incl. behavioral),
-corpus config-subset 81.3% (74/91) — the structural pipeline catches config-encoded attacks well but
-misses most behavioral / natural-language attacks (which need the semantic layer).
+Per-category detection, as counts (each cell is 30 samples, roughly ±9pp standard error, so the
+percentages that used to appear here claimed more precision than the sample size supports):
+credential/stego/social/data 29/30, persistence 27/30, prompt_injection 26/30, heartbeat_rce 21/30,
+privilege_escalation 19/30 (up from 9/30 after routing + the new `AST-SCOPE-004` check), supply_chain
+14/30. DVAA: full-repo 25/86, corpus config-subset 74/91 — the structural pipeline catches
+config-encoded attacks well but misses most behavioral / natural-language attacks (which need the
+semantic layer).
 
 See [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) for the full per-category breakdown, the posture-vs-attack
 verdict methodology, and comparison with Holzbauer et al. (arXiv:2603.16572).
