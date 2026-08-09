@@ -4,6 +4,36 @@ Full history of the benchmark, its methodology changes, and its releases.
 Metric revisions are never silently replaced: superseded or withdrawn figures
 stay on record here with the reason they changed.
 
+## Comparative scanner scores withdrawn - 2026-08-09
+
+**F1 82.9%, precision 83.2%, FPR 1.16% and flag rate 6.3% are withdrawn.** The
+benign class of the v2 corpus was labeled by the scanner under test:
+`scripts/export-registry-corpus.mjs` lines 9-11 assign `verdict=safe AND
+score >= 80`, as reported by HackMyAgent itself, to the benign class, and
+3,811 of the 3,881 benign samples came from that rule. Any artifact
+HackMyAgent would have flagged was excluded from the benign class by
+construction, so a near-zero false-positive rate was guaranteed before a
+single scan ran. Those are labeling artifacts presented as measurements.
+
+No replacement figure is offered. The two prior withdrawals on this page each
+replaced one number with a better number drawn from the same self-labeled
+corpus, which carried the defect forward; this one does not.
+
+**Recall is not withdrawn.** It reads only the malicious class, and the
+published run already excluded the 225 registry samples labeled malicious by
+the same rule. It remains 82.6% (223/270) on fixtures we authored, and
+BENCHMARK-RESULTS.md § 1a now discloses the denominator, the per-source
+split, and the 47.3% (234/495) figure that results if the self-labeled
+samples are scored too.
+
+Also corrected: `--categorized-only` printed "Filtered to N samples with
+content-derived labels". That filter applies to the malicious class only, and
+the sentence asserted of the benign class exactly the property it lacked. It
+now names the benign class as scanner-labeled.
+
+The corpus, taxonomy, methodology, DVAA results and the third-party paper
+comparison are unaffected and remain published.
+
 ## 0.4.0 - 2026-07-13
 
 First release published through npm Trusted Publishing (GitHub Actions OIDC,
@@ -53,9 +83,13 @@ findings (prompt/governance defenses, and wildcard tool access
 `allowedTools:["*"]` that 2,900+ benign registry MCP servers also declare)
 are excluded from the malicious verdict but still surfaced by the scanner.
 
-Result: **F1 82.9%, recall 82.6%, precision 83.2%, FPR 1.16%**;
-privilege_escalation recall 30.0% -> 63.3% (routing + the new
+Result as published at the time: **F1 82.9%, recall 82.6%, precision 83.2%,
+FPR 1.16%**; privilege_escalation recall 9/30 -> 19/30 (routing + the new
 `AST-SCOPE-004` config-directive check).
+
+**F1, precision and FPR from this run were withdrawn on 2026-08-09** — see
+the entry at the top of this file. Recall (82.6%) stands, with the
+disclosure in [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) § 1a.
 
 **Withdrawn figures:** the earlier 82.1% F1 / 1.26% FPR (a skill-routing
 artifact that compiled every sample as a skill and bypassed the MCP

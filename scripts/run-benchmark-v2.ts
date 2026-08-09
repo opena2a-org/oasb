@@ -312,7 +312,14 @@ async function main() {
     samples = samples.filter(s =>
       s.label !== 'malicious' || (s.label === 'malicious' && s.category)
     );
-    console.log(`[--categorized-only] Filtered to ${samples.length} samples with content-derived labels`);
+    const benignCount = samples.filter(s => s.label === 'benign').length;
+    console.log(`[--categorized-only] Dropped malicious samples with no attack category. ${samples.length} remain.`);
+    console.log(
+      `[--categorized-only] This filter applies to the MALICIOUS class ONLY. The ${benignCount} benign ` +
+      `samples are NOT content-derived: most were labeled by the scanner's own verdict ` +
+      `(verdict=safe AND score >= 80, see scripts/export-registry-corpus.mjs). Any metric that reads ` +
+      `the benign class -- FPR, precision, F1, flag rate -- is circular and must not be published.`
+    );
   }
 
   if (limit) {

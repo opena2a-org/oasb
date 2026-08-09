@@ -2,7 +2,9 @@
 
 **Date:** 2026-06-05
 **Build under test:** hackmyagent 0.23.8, NanoMind classifier v0.5.0
-**Dataset:** OASB v2 corpus, 4,245 categorized samples (270 malicious, 3,881 benign, 94 edge)
+**Dataset:** OASB v2 corpus, 4,245 categorized samples (270 malicious, 3,881 benign, 94 edge).
+**3,811 of the 3,881 benign samples were labeled by the scanner under test** — see the withdrawal
+notice in Section 1 before quoting anything from this document.
 **DVAA:** 86 full-repo scenarios (29.1% detected) / 91 corpus config-subset samples (81.3%) - see Section 4
 **Paper comparison:** Holzbauer et al., "Malicious Or Not" (arXiv:2603.16572), 238K skills
 
@@ -10,14 +12,57 @@
 
 ## 1. HMA Scanner Results (OASB v2 corpus)
 
-| Scanner | F1 | Precision | Recall | FPR | Flag rate |
-|---------|----|-----------|--------|-----|-----------|
-| HMA Full Pipeline (AST + 6 analyzers + NanoMind) | **82.9%** | 83.2% | 82.6% | 1.16% | 6.3% |
-| HMA Static (regex only) | 67.5% | 99.3% | 51.1% | 0.03% | 3.6% |
-| NanoMind TME v0.5.0 (model-only ablation) | 14.0% | 7.5% | 93.0% | 79.18% | 79.8% |
+> **F1, precision, false-positive rate and flag rate are withdrawn (2026-08-09).** The benign class
+> of this corpus was labeled by the scanner under test. `scripts/export-registry-corpus.mjs` lines
+> 9-11 assign `verdict=safe AND score >= 80`, as reported by HackMyAgent itself, to the benign class,
+> and 3,811 of the 3,881 benign samples came from that rule. Any artifact HackMyAgent would have
+> flagged was therefore excluded from the benign class by construction, and a near-zero false-positive
+> rate was guaranteed before a single scan ran. Every metric that reads the benign class -- FPR,
+> precision, F1, flag rate -- is a labeling artifact, not a measurement. They are not restated here.
+>
+> **Recall is not withdrawn**, and the distinction is not a convenience. Recall reads only the
+> malicious class, and the published run excludes the 225 registry samples labeled malicious by the
+> same rule (`run-benchmark-v2.ts --categorized-only`). What remains is 270 fixtures we authored.
+> Read Section 1a before quoting the number.
 
-**Read recall alongside F1.** The full pipeline favors precision; recall (82.6%) is the honest measure
-of coverage, and per-category recall (Section 2) shows where coverage is strong vs. weak.
+| Scanner | Recall | F1 | Precision | FPR | Flag rate |
+|---------|--------|----|-----------|-----|-----------|
+| HMA Full Pipeline (AST + 6 analyzers + NanoMind) | **82.6%** (223/270) | withdrawn | withdrawn | withdrawn | withdrawn |
+| HMA Static (regex only) | 51.1% | withdrawn | withdrawn | withdrawn | withdrawn |
+| NanoMind TME v0.5.0 (model-only ablation) | 93.0% | withdrawn | withdrawn | withdrawn | withdrawn |
+
+The NanoMind TME row is a **model-only ablation**, not a scanner verdict, and its recall is not a
+detection claim: the classifier uses a whitespace-split vocabulary that goes out-of-vocabulary on code
+and skill text, so it flags most of what it is shown. Its high recall is the arithmetic consequence of
+over-flagging, and the metric that would have exposed that -- its false-positive rate -- is one of the
+withdrawn ones.
+
+### 1a. What the recall number is measured on
+
+The 270-sample malicious class is authored entirely by us:
+
+| Source | Samples | Detected | Recall |
+|--------|---------|----------|--------|
+| `aria` (our offensive-research findings) | 89 | 74 | 83.1% |
+| `dvaa` (our deliberately-vulnerable app) | 91 | 74 | 81.3% |
+| `hma_payload` (HackMyAgent's own test payloads) | 90 | 75 | 83.3% |
+| **Total** | **270** | **223** | **82.6%** |
+
+Two things this table is here to let a reader check rather than take on trust:
+
+- **A third of the denominator is the scanner's own test payloads.** They are not inflating the
+  result: 83.3% on its own payloads against 81.3% on DVAA and 83.1% on ARIA. Excluding
+  `hma_payload` entirely, recall is **82.2% (148/180)**.
+- **Excluding the 225 self-labeled registry samples raises the number a great deal.** Scored over all
+  495 samples the corpus calls malicious, recall is **47.3% (234/495)**. We report 82.6% because the
+  225 carry no attack content -- they are registry entries HackMyAgent happened to block -- and
+  scoring against them would be the same circularity in the other direction. A reader who disagrees
+  with that exclusion should use 47.3%.
+
+This measures detection against a known, fixed fixture set that we wrote. It is not a measure of
+detection in the wild, and it is not comparable to a figure another scanner reports on another corpus.
+
+Source data: `nanomind-training/evaluation/phase-a/corpus-structural-verdicts.json`.
 
 The NanoMind TME row is a **model-only ablation**, not a scanner verdict. The current classifier uses a
 whitespace-split vocabulary that goes out-of-vocabulary on code and skill text, so on its own it
@@ -31,18 +76,27 @@ published only to document model-only behavior and is not a detection claim.
 Recall = detected / total. This is the per-category detection metric (per-category precision is not
 reported — benign samples carry no attack category, so per-category false positives are ill-defined).
 
-| Category | Recall | Detected / Total |
-|----------|--------|------------------|
-| credential_exfiltration | 96.7% | 29/30 |
-| unicode_stego | 96.7% | 29/30 |
-| social_engineering | 96.7% | 29/30 |
-| data_exfiltration | 96.7% | 29/30 |
-| persistence | 90.0% | 27/30 |
-| prompt_injection | 86.7% | 26/30 |
-| heartbeat_rce | 70.0% | 21/30 |
-| privilege_escalation | 63.3% | 19/30 |
-| supply_chain | 46.7% | 14/30 |
-| **Overall** | **82.6%** | 223/270 |
+**Reported as counts, deliberately.** Each cell is 30 samples, which carries a standard error of
+roughly ±9 percentage points. `46.7%` on 14 of 30 claims a precision the sample size does not
+support, so the percentage column has been removed rather than restated.
+
+| Category | Detected / Total |
+|----------|------------------|
+| credential_exfiltration | 29/30 |
+| unicode_stego | 29/30 |
+| social_engineering | 29/30 |
+| data_exfiltration | 29/30 |
+| persistence | 27/30 |
+| prompt_injection | 26/30 |
+| heartbeat_rce | 21/30 |
+| privilege_escalation | 19/30 |
+| supply_chain | 14/30 |
+| **Overall** | **223/270** |
+
+Neighbouring cells are not separated by these data. `29/30` and `27/30` are one sample apart; the
+ordering above is not evidence that credential exfiltration is detected more reliably than
+persistence. The gap that does survive the sample size is between the top of this table and
+`supply_chain` at 14/30.
 
 Privilege-escalation recall rose from 30.0% (the prior, under-detecting run) to 63.3% after two fixes:
 routing JSON agent/MCP configs through their real analyzer path instead of the skill path, and a new
@@ -127,8 +181,16 @@ characterizing DVAA detection.
   sample as a skill, which bypassed the MCP analyzers. Withdrawn.
 - **89.2% F1** (April 2026) — keyed off the raw classifier intent label, which over-flags benign inputs.
   Withdrawn.
+- **82.9% F1 / 83.2% precision / 1.16% FPR / 6.3% flag rate** (2026-06-05, the run this document
+  reports) — **withdrawn 2026-08-09.** The benign class was labeled by the scanner under test, so
+  every metric that reads it was determined by the labeling rule rather than measured. Recall from
+  the same run is retained under the disclosure in Section 1a.
 
-The current numbers replace both, on a faithful per-artifact routing with a posture-vs-attack verdict.
+Note what the first two withdrawals have in common with the third: each replaced a number with a
+better number from the same self-labeled corpus, and each therefore carried the defect forward. The
+third withdrawal is not followed by a replacement figure. There is no comparative accuracy claim in
+this document, and there will not be one until the measurement runs on a corpus we neither own nor
+labeled.
 
 ---
 
