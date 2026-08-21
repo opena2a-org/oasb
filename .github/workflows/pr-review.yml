@@ -219,7 +219,13 @@ jobs:
             build_request false
             HTTP_CODE=$(call_api)
             if [ "$HTTP_CODE" = "200" ]; then
-              REVIEW_TEXT=$(jq -r '.content[0].text // ""' /tmp/response.json 2>/dev/null || echo "")
+              # Attempt 1 above already takes every text block; this one did not,
+              # and the asymmetry was the whole bug. It is safe TODAY only because
+              # this request sets thinking off, so content[0] happens to be text --
+              # a correctness argument that depends on a field set 40 lines away.
+              # It also silently dropped everything after the first block. Match
+              # attempt 1 so neither depends on the other's request shape.
+              REVIEW_TEXT=$(jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null || echo "")
             else
               echo "::warning::Claude API attempt 2 returned HTTP $HTTP_CODE"
             fi
