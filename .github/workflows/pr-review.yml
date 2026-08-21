@@ -152,7 +152,7 @@ jobs:
         # first content block, and a byte cap standing in for a token budget — and
         # copy-paste is how one defect became nine. Pinned to a SHA, never @main:
         # @main would move every consuming repo the instant that file changed.
-        uses: opena2a-org/.github/actions/claude-review@ac20e9dd9271f4582dacb9f3b3f74b3641711a0b
+        uses: opena2a-org/.github/actions/claude-review@efd55cab0755db02ef6ebb8e60e8021ce6cc049c
         with:
           # A composite action cannot read `secrets`, so the caller passes it in.
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -208,7 +208,7 @@ jobs:
               PATH_NOTE="review path: primary."
               ;;
             *)
-              PATH_NOTE="review path: not reported — no model request was recorded for this run."
+              PATH_NOTE="review path: none — no model request produced this result."
               ;;
           esac
 
