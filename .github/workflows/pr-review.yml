@@ -23,9 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Gather review context
-        id: context
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -34,30 +32,27 @@ jobs:
           gh pr view "$PR_NUMBER" --json title -q '.title' > /tmp/pr_title.txt
           gh pr view "$PR_NUMBER" --json body -q '.body' | head -c 2000 > /tmp/pr_body.txt
 
+          # The diff is passed WHOLE. The 120,000-byte cap that used to sit here
+          # stood in for a token budget, and bytes are the wrong instrument: the
+          # shared review action measures the actual request with count_tokens
+          # and refuses over its token budget. Truncating here as well would
+          # send the model a cut-down diff behind a token count that passes,
+          # which is the worst of both.
           DIFF_BYTES=$(wc -c < /tmp/pr_diff.txt | tr -d ' ')
           echo "$DIFF_BYTES" > /tmp/diff_size.txt
           FILE_COUNT=$(wc -l < /tmp/changed_files.txt | tr -d ' ')
           echo "$FILE_COUNT" > /tmp/file_count.txt
-          echo "diff_bytes=$DIFF_BYTES" >> "$GITHUB_OUTPUT"
-
-          # An over-cap diff used to be silently reduced to its first 120KB and
-          # reviewed as if it were the whole change, so the verdict described a
-          # slice while reporting on the PR. The cap is unchanged; what changed
-          # is that going over it is now reported as a fact the next step acts
-          # on, rather than being papered over with a marker in the prompt.
-          if [ "$DIFF_BYTES" -gt 120000 ]; then
-            echo "truncated=true" >> "$GITHUB_OUTPUT"
-            head -c 120000 /tmp/pr_diff.txt > /tmp/pr_diff_trunc.txt
-            printf '\n\n[DIFF TRUNCATED — original was %s bytes]\n' "$DIFF_BYTES" >> /tmp/pr_diff_trunc.txt
-            mv /tmp/pr_diff_trunc.txt /tmp/pr_diff.txt
-          else
-            echo "truncated=false" >> "$GITHUB_OUTPUT"
-          fi
 
           echo "" > /tmp/full_files.txt
           TOTAL_SIZE=0
           MAX_FULL_SIZE=200000
-          while IFS= read -r file; do
+          # The list is read on fd 3 and nl reads through a stdin redirect. A
+          # changed file literally named '-' is an operand nl treats as STANDARD
+          # INPUT, and the loop's stdin is this very list, so `nl -ba "$file"`
+          # consumed the remaining filenames and printed them where that file's
+          # source belonged. `--` does not help: it ends option parsing, but '-'
+          # still means stdin.
+          while IFS= read -r file <&3; do
             case "$file" in
               *.test.* | *.spec.* | package-lock.json | *.lock) continue ;;
             esac
@@ -70,49 +65,27 @@ jobs:
             fi
             TOTAL_SIZE=$NEW_TOTAL
             printf '\n=== %s ===\n' "$file" >> /tmp/full_files.txt
-            nl -ba "$file" >> /tmp/full_files.txt
-          done < /tmp/changed_files.txt
+            nl -ba < "$file" >> /tmp/full_files.txt
+          done 3< /tmp/changed_files.txt
 
           # This job comments rather than submitting reviews, so the previous
           # pass is recovered from issue comments, not from the reviews list.
-          gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-            --jq '[.[] | select(.body | test("Claude Code Review")) | .body] | last // ""' \
-            2>/dev/null | head -c 4000 > /tmp/previous_review.txt || echo "" > /tmp/previous_review.txt
+          # Restricted to the bot's own comments: an arbitrary commenter quoting
+          # "Claude Code Review" must not be able to feed text back as the
+          # model's own prior verdict. Paginated because an unpaginated call
+          # returns only the OLDEST 30 comments, so a busy PR would replay a
+          # superseded review as if it were the latest; jq runs standalone
+          # because gh rejects --slurp combined with --jq.
+          gh api --paginate --slurp "repos/${{ github.repository }}/issues/$PR_NUMBER/comments?per_page=100" 2>/dev/null \
+            | jq -r '[.[][] | select(.user.login == "github-actions[bot]") | select(.body | test("Claude Code Review")) | .body] | last // ""' \
+            | head -c 4000 > /tmp/previous_review.txt || echo "" > /tmp/previous_review.txt
 
-      - name: Run Claude review
-        id: review
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: Build review prompt
         run: |
-          # This step never fails the job and never decides it. It resolves the
-          # review to exactly one of APPROVE / REQUEST_CHANGES / INCONCLUSIVE
-          # and hands that to the enforcing step at the end. Every condition
-          # under which the review did not actually happen -- no key, non-200,
-          # empty content, unparseable verdict, over-cap diff -- resolves to
-          # INCONCLUSIVE. Unknown is a third state and it is not a pass.
           PR_TITLE=$(cat /tmp/pr_title.txt)
 
-          if [ "${{ steps.context.outputs.truncated }}" = "true" ]; then
-            echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
-            {
-              printf 'The diff is %s bytes, over the 120000-byte review cap.\n\n' "${{ steps.context.outputs.diff_bytes }}"
-              printf 'Only part of it can be examined, so an automated verdict would describe a\n'
-              printf 'subset of the change. A human review is required.\n'
-            } > /tmp/review_body.txt
-            exit 0
-          fi
-
-          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-            echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
-            printf 'Automated review did not run: ANTHROPIC_API_KEY is unavailable to this run.\nA human review is required.\n' > /tmp/review_body.txt
-            exit 0
-          fi
-
-          # Per-run nonce. The verdict is read back as VERDICT-<nonce>, so the
-          # marker cannot be pre-placed in the diff: the value does not exist
-          # until this step runs and never appears in PR-authored content.
-          NONCE=$(head -c 16 /dev/urandom | xxd -p)
-
+          # Build system prompt. This stays local on purpose: the tech stack and
+          # the review focus are this repo's own. Only the model call is shared.
           cat > /tmp/system_prompt.txt << 'SYSPROMPT'
           You are a senior security engineer reviewing a pull request for ARP Lab — a comprehensive security test suite for ARP (Agent Runtime Protection). The lab contains 182 tests across 42 files that validate runtime security monitoring for AI agents.
 
@@ -137,20 +110,24 @@ jobs:
 
           SYSPROMPT
 
-          # The verdict marker is appended outside the quoted heredoc so it can
-          # carry the nonce, and it is demanded FIRST so that it cannot be lost
-          # if the reply is cut short.
-          {
-            printf 'Response format (strict):\n\n'
-            printf 'Your reply MUST BEGIN with exactly one of these two lines, with nothing whatsoever before it:\n'
-            printf 'VERDICT-%s: APPROVE\n' "$NONCE"
-            printf 'VERDICT-%s: REQUEST_CHANGES\n\n' "$NONCE"
-            printf 'Then, after that line:\n'
-            printf 'SUMMARY: One paragraph.\n'
-            printf 'FINDINGS:\n'
-            printf -- '- [CRITICAL|HIGH|MEDIUM] path/file.ts:line — Description.\n'
-            printf '(omit FINDINGS section if none)\n'
-          } >> /tmp/system_prompt.txt
+          # Response format. __NONCE__ is a PLACEHOLDER, not a shell variable: the
+          # shared action mints a per-run nonce and substitutes it here, then
+          # requires the reply's first line to match exactly. The marker therefore
+          # does not exist until the review runs and cannot be pre-placed in an
+          # attacker-authored diff. This heredoc is quoted — nothing expands.
+          cat >> /tmp/system_prompt.txt << 'SYSPROMPT_FORMAT'
+          Response format (strict):
+
+          Your reply MUST BEGIN with exactly one of these two lines, with nothing whatsoever before it:
+          VERDICT-__NONCE__: APPROVE
+          VERDICT-__NONCE__: REQUEST_CHANGES
+
+          Then, after that line:
+          SUMMARY: One paragraph.
+          FINDINGS:
+          - [CRITICAL|HIGH|MEDIUM] path/file.ts:line — Description.
+          (omit FINDINGS section if none)
+          SYSPROMPT_FORMAT
 
           {
             printf 'PR #%s: %s\n\nDescription:\n' "$PR_NUMBER" "$PR_TITLE"
@@ -168,152 +145,105 @@ jobs:
             cat /tmp/previous_review.txt >> /tmp/user_msg.txt
           fi
 
-          build_request() {
-            # $1 = "true" to request extended thinking (first attempt).
-            if [ "$1" = "true" ]; then
-              jq -n \
-                --rawfile system /tmp/system_prompt.txt \
-                --rawfile user /tmp/user_msg.txt \
-                '{
-                  model: "claude-sonnet-4-5-20250929",
-                  max_tokens: 16000,
-                  thinking: { type: "enabled", budget_tokens: 10000 },
-                  system: $system,
-                  messages: [{ role: "user", content: $user }]
-                }' > /tmp/request.json
-            else
-              jq -n \
-                --rawfile system /tmp/system_prompt.txt \
-                --rawfile user /tmp/user_msg.txt \
-                '{
-                  model: "claude-sonnet-4-5-20250929",
-                  max_tokens: 8192,
-                  system: $system,
-                  messages: [{ role: "user", content: $user }]
-                }' > /tmp/request.json
-            fi
-          }
-
-          call_api() {
-            curl -s -o /tmp/response.json -w '%{http_code}' \
-              -X POST "https://api.anthropic.com/v1/messages" \
-              -H "Content-Type: application/json" \
-              -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-              -H "anthropic-version: 2023-06-01" \
-              -d @/tmp/request.json
-          }
-
-          # Attempt 1: extended thinking. Attempt 2 (the existing retry) drops
-          # thinking and lowers max_tokens. A non-200 on either attempt is an
-          # outcome, not a verdict.
-          build_request true
-          HTTP_CODE=$(call_api)
-          REVIEW_TEXT=""
-          if [ "$HTTP_CODE" = "200" ]; then
-            REVIEW_TEXT=$(jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null || echo "")
-          else
-            echo "::warning::Claude API attempt 1 returned HTTP $HTTP_CODE"
-          fi
-
-          if [ -z "$REVIEW_TEXT" ]; then
-            build_request false
-            HTTP_CODE=$(call_api)
-            if [ "$HTTP_CODE" = "200" ]; then
-              # Attempt 1 above already takes every text block; this one did not,
-              # and the asymmetry was the whole bug. It is safe TODAY only because
-              # this request sets thinking off, so content[0] happens to be text --
-              # a correctness argument that depends on a field set 40 lines away.
-              # It also silently dropped everything after the first block. Match
-              # attempt 1 so neither depends on the other's request shape.
-              REVIEW_TEXT=$(jq -r '[(.content // [])[] | select(.type == "text") | .text] | join("\n")' /tmp/response.json 2>/dev/null || echo "")
-            else
-              echo "::warning::Claude API attempt 2 returned HTTP $HTTP_CODE"
-            fi
-          fi
-
-          if [ -z "$REVIEW_TEXT" ]; then
-            # This is the case that approved a pull request: the API returned an
-            # error and the run went on to record APPROVE. It is now INCONCLUSIVE
-            # and the enforcing step exits non-zero on it.
-            ERROR=$(jq -r '.error.message // "no text content returned"' /tmp/response.json 2>/dev/null || echo "no response body")
-            echo "::warning::Claude API call did not produce a review (HTTP $HTTP_CODE): $ERROR"
-            echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
-            {
-              printf 'Automated review could not be completed (HTTP %s): %s\n\n' "$HTTP_CODE" "$ERROR"
-              printf 'This is not an approval. A human review is required.\n'
-            } > /tmp/review_body.txt
-            exit 0
-          fi
-
-          # Strip the marker out of what gets posted, so the nonce is never
-          # echoed into a comment where a later run could read it back.
-          printf '%s\n' "$REVIEW_TEXT" | grep -v "VERDICT-$NONCE:" > /tmp/review_body.txt || true
-
-          # Read the verdict from the FIRST line only, and require an exact
-          # match. A grep across the whole body would match a verdict string
-          # quoted from the diff.
-          FIRST_LINE=$(printf '%s\n' "$REVIEW_TEXT" | sed -n '1p')
-          if [ "$FIRST_LINE" = "VERDICT-$NONCE: APPROVE" ]; then
-            echo "verdict=APPROVE" >> "$GITHUB_OUTPUT"
-          elif [ "$FIRST_LINE" = "VERDICT-$NONCE: REQUEST_CHANGES" ]; then
-            echo "verdict=REQUEST_CHANGES" >> "$GITHUB_OUTPUT"
-          else
-            echo "verdict=INCONCLUSIVE" >> "$GITHUB_OUTPUT"
-            {
-              printf '\n\nThe verdict line could not be parsed, so this review is inconclusive.\n'
-              printf 'A human review is required.\n'
-            } >> /tmp/review_body.txt
-          fi
+      - name: Run Claude review
+        id: review
+        # The model call is shared across the org. It held three defects at once —
+        # an anthropic-version the API rejected, an extraction that read only the
+        # first content block, and a byte cap standing in for a token budget — and
+        # copy-paste is how one defect became nine. Pinned to a SHA, never @main:
+        # @main would move every consuming repo the instant that file changed.
+        uses: opena2a-org/.github/actions/claude-review@ac20e9dd9271f4582dacb9f3b3f74b3641711a0b
+        with:
+          # A composite action cannot read `secrets`, so the caller passes it in.
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          system-prompt-file: /tmp/system_prompt.txt
+          user-message-file: /tmp/user_msg.txt
+          # Both are this repo's existing settings. The action defaults to thinking
+          # OFF at 4096 output tokens, so omitting them would silently downgrade
+          # this review rather than fail visibly.
+          thinking-budget: "10000"
+          max-tokens: "16000"
 
       - name: Post review
         # Posting is best effort and must never decide the outcome. A run that
-        # cannot comment -- a read-only token, a rate limit -- is a delivery
-        # problem, not a review result. The conclusion is set by the next step.
+        # cannot comment — read-only token, rate limit — is a delivery problem,
+        # not a review result. The conclusion is set by the next step.
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Bound through env rather than spliced into the script with ${{ }}:
+          # an expression is substituted into the shell SOURCE before bash sees
+          # it, so a value carrying shell syntax would be parsed as code. These
+          # values are action-controlled today; binding them is what keeps that
+          # from being the only reason it is safe.
+          VERDICT: ${{ steps.review.outputs.verdict }}
+          REVIEW_FILE: ${{ steps.review.outputs.review-file }}
+          REVIEW_PATH: ${{ steps.review.outputs.review-path }}
+          INPUT_TOKENS: ${{ steps.review.outputs.input-tokens }}
         run: |
-          VERDICT="${{ steps.review.outputs.verdict }}"
+          # An absent verdict means the review step never reached a decision —
+          # including the case where the action itself failed to run at all.
           [ -n "$VERDICT" ] || VERDICT="INCONCLUSIVE"
           DIFF_SIZE=$(cat /tmp/diff_size.txt 2>/dev/null || echo "unknown")
           FILE_COUNT=$(cat /tmp/file_count.txt 2>/dev/null || echo "unknown")
-          REVIEW_BODY=$(cat /tmp/review_body.txt 2>/dev/null || echo "No review body was produced.")
+
+          # Guard: if the review body is missing, say so. Do not manufacture one
+          # that reads as an approval.
+          if [ -z "$REVIEW_FILE" ] || [ ! -f "$REVIEW_FILE" ]; then
+            REVIEW_FILE=/tmp/review_body_missing.txt
+            echo "SUMMARY: Automated review could not be completed and produced no output. A human review is required." > "$REVIEW_FILE"
+          fi
+
+          # Which request answered is stated on EVERY review, not only on the
+          # fallback. A fallback that runs on every PR is indistinguishable from a
+          # primary that works — that is exactly how an invalid anthropic-version
+          # survived unnoticed across nine repos, with every review silently
+          # coming from the fallback at 8192 tokens and no extended thinking.
+          case "$REVIEW_PATH" in
+            fallback)
+              PATH_NOTE="review path: FALLBACK — the primary request failed and this verdict came from the retry, without extended thinking. See the run log."
+              ;;
+            primary)
+              PATH_NOTE="review path: primary."
+              ;;
+            *)
+              PATH_NOTE="review path: not reported — no model request was recorded for this run."
+              ;;
+          esac
 
           {
             echo "## Claude Code Review"
             echo ""
-            echo "**Verdict: $VERDICT**"
+            echo "**VERDICT: $VERDICT**"
             echo ""
-            echo "$REVIEW_BODY"
+            cat "$REVIEW_FILE"
             echo ""
             echo "---"
-            echo "*Reviewed ${FILE_COUNT} files changed (${DIFF_SIZE} bytes)*"
+            echo "*Reviewed ${FILE_COUNT} files changed (${DIFF_SIZE} bytes, ${INPUT_TOKENS:-unmeasured} input tokens) — ${PATH_NOTE}*"
           } > /tmp/full_review.txt
 
           BODY=$(cat /tmp/full_review.txt)
 
-          # The job summary is written first, so the review survives even if the
-          # comment cannot be posted.
-          cat /tmp/full_review.txt >> "$GITHUB_STEP_SUMMARY"
+          # Write the summary first, so the review survives a failed comment.
+          printf '%s\n' "$BODY" >> "$GITHUB_STEP_SUMMARY"
 
           # Comment only. This job does not submit pull request reviews: an
           # approving review from GITHUB_TOKEN counts toward a required-approval
-          # rule, which would let the bot satisfy a human requirement.
+          # rule, which is not a human requirement a bot may satisfy on its own.
           if ! gh pr comment "$PR_NUMBER" --body "$BODY"; then
             echo "::warning::Could not post the review comment; it is in the job summary instead."
           fi
 
       - name: Enforce verdict
         # The job conclusion IS the policy decision, and it is decided here so
-        # that nothing upstream can turn a REQUEST_CHANGES or an INCONCLUSIVE
-        # into a green check by succeeding at something unrelated. It runs on
-        # always() so that a crashed earlier step cannot skip enforcement.
+        # that nothing upstream can turn a REQUEST_CHANGES or an inconclusive run
+        # into a green check by succeeding at something unrelated.
         if: always()
+        env:
+          VERDICT: ${{ steps.review.outputs.verdict }}
         run: |
-          VERDICT="${{ steps.review.outputs.verdict }}"
-          [ -n "$VERDICT" ] || VERDICT="INCONCLUSIVE"
-          case "$VERDICT" in
+          case "${VERDICT:-INCONCLUSIVE}" in
             APPROVE)
               echo "Automated review approved."
               ;;
@@ -322,7 +252,7 @@ jobs:
               exit 1
               ;;
             *)
-              echo "::error::Automated review was inconclusive ($VERDICT). Treated as not passing."
+              echo "::error::Automated review was inconclusive (${VERDICT:-no verdict recorded}). Unknown is not a pass."
               exit 1
               ;;
           esac
