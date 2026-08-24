@@ -4,6 +4,21 @@ Full history of the benchmark, its methodology changes, and its releases.
 Metric revisions are never silently replaced: superseded or withdrawn figures
 stay on record here with the reason they changed.
 
+## 0.4.1 (unreleased)
+
+### Removed
+
+- `hackmyagent` is removed from `dependencies`. It was pinned at 0.23.8 (now
+  deprecated, and inside two published critical advisories,
+  GHSA-jmq8-2mfr-49mh and GHSA-44f3-xgp9-pvp2), but nothing in the shipped
+  package ever imported it by name: the real-adapter and telemetry-bridge load
+  the scanner from a monorepo sibling path (`../../../hackmyagent/dist/...`),
+  which resolves only inside this repo's development checkout and never in a
+  consumer install. Removing the pin drops that whole advisory-affected
+  subtree from every consumer's install closure and changes no behavior. If
+  you were relying on `@opena2a/oasb` to pull `hackmyagent` transitively,
+  install it directly at 0.32.0 or later.
+
 ## Comparative scanner scores withdrawn - 2026-08-09
 
 **F1 82.9%, precision 83.2%, FPR 1.16% and flag rate 6.3% are withdrawn.** The
