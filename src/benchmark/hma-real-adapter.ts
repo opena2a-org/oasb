@@ -14,7 +14,7 @@ import type { ScannerAdapter } from './runner.js';
 import type { ScannerResult, AttackCategory } from './types.js';
 
 // Import real HMA scanner components
-// These come from the hackmyagent npm package
+// Loaded from the monorepo sibling build, not from an npm dependency (see below).
 let SemanticCompiler: any;
 let analyzeCapabilities: any;
 let analyzeCredentials: any;
