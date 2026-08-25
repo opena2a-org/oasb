@@ -192,7 +192,8 @@ export class HMARealASTAdapter implements ScannerAdapter {
 // ============================================================================
 
 /**
- * Uses HMA's static pattern matching (238 checks) without NanoMind.
+ * Uses a copy of HMA's static regex patterns without NanoMind. The current
+ * static check count is printed by `npx hackmyagent check-metadata --json`.
  * Baseline for comparison.
  */
 export class HMARealStaticAdapter implements ScannerAdapter {
