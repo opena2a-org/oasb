@@ -493,7 +493,8 @@ single scan ran. Those figures are not restated here, and no replacement figure 
 
 **Recall is retained**, because it reads only the malicious class, and the published run excludes the
 225 registry samples labeled malicious by that same rule (`--categorized-only`). Measured on
-hackmyagent 0.23.8, full pipeline:
+hackmyagent 0.23.8 (the build under test on 2026-06-05; these figures have not been re-run against
+later releases), full pipeline:
 
 | Scanner | Recall | F1 / Precision / FPR / Flag rate |
 |---------|--------|----------------------------------|
@@ -550,7 +551,7 @@ Apache-2.0
 | Project | Description | Install |
 |---------|-------------|---------|
 | [**AIM**](https://github.com/opena2a-org/agent-identity-management) | Agent Identity Management -- identity and access control for AI agents | `npm install @opena2a/aim-core` |
-| [**HackMyAgent**](https://github.com/opena2a-org/hackmyagent) | Security scanner -- 238 checks, attack mode, auto-fix | `npx hackmyagent secure` |
+| [**HackMyAgent**](https://github.com/opena2a-org/hackmyagent) | Security scanner -- static, NanoMind semantic, and adversarial checks, attack mode, auto-fix (current check counts: `npx hackmyagent check-metadata --json`) | `npx hackmyagent secure` |
 | [**ARP**](https://www.npmjs.com/package/arp-guard) | Agent Runtime Protection -- process, network, filesystem, AI-layer monitoring | `npm install arp-guard` |
 | [**Secretless AI**](https://github.com/opena2a-org/secretless-ai) | Keep credentials out of AI context windows | `npx secretless-ai init` |
 | [**DVAA**](https://github.com/opena2a-org/damn-vulnerable-ai-agent) | Damn Vulnerable AI Agent -- security training and red-teaming | `docker pull opena2a/dvaa` |
