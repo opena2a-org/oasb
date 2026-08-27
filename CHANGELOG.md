@@ -23,12 +23,14 @@ stay on record here with the reason they changed.
 
 **F1 82.9%, precision 83.2%, FPR 1.16% and flag rate 6.3% are withdrawn.** The
 benign class of the v2 corpus was labeled by the scanner under test:
-`scripts/export-registry-corpus.mjs` lines 9-11 assign `verdict=safe AND
+`scripts/export-registry-corpus.mjs` lines 146-164 assign `verdict=safe AND
 score >= 80`, as reported by HackMyAgent itself, to the benign class, and
-3,811 of the 3,881 benign samples came from that rule. Any artifact
+3,704 of the 3,881 benign samples came from that rule. Any artifact
 HackMyAgent would have flagged was excluded from the benign class by
 construction, so a near-zero false-positive rate was guaranteed before a
 single scan ran. Those are labeling artifacts presented as measurements.
+
+**Corrected 2026-08-27.** The entry above originally cited the docstring at `export-registry-corpus.mjs:9` (`verdict=safe AND score >= 80`) rather than the rule the code applies at `:146-164`. The shipped corpus settles it: `metadata.scanVerdict` is warning 3,746 / blocked 205 / passed 23, and `safe` appears zero times. The benign class is artifacts the scanner emitted a WARNING on and kept for scoring >= 70, which is worse than the published account, not better. The scanner-labeled count is 3,704, not 3,811; the remaining 177 benign are hand-authored fixtures. Separately, the posture-vs-attack methodology retained in BENCHMARK-RESULTS.md was justified by a wildcard-frequency claim that the corpus builder itself wrote in; see the correction there.
 
 No replacement figure is offered. The two prior withdrawals on this page each
 replaced one number with a better number drawn from the same self-labeled

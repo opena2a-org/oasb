@@ -5,10 +5,20 @@
  * Pulls scanned packages from the OpenA2A Registry and converts
  * HMA scan results into ground-truth labeled benchmark samples.
  *
- * Each package with a completed scan becomes a sample:
- * - verdict=safe + score>=80 -> benign
- * - verdict=blocked + critical findings -> malicious (category from findings)
- * - verdict=caution -> edge_case
+ * Each package with a completed scan becomes a sample. THIS COMMENT DRIFTED ONCE AND THE
+ * DRIFT REACHED FIVE PUBLIC SURFACES: it described a `verdict=safe + score>=80` rule that the
+ * code has not applied since commit f689b86, and the 2026-08-09 withdrawal notice quoted the
+ * comment rather than the code. Keep it in step with labelClassification() below or delete it.
+ *
+ * The rule as implemented:
+ * - verdict=blocked                          -> malicious
+ * - verdict=warning AND overall_score >= 70  -> benign
+ * - verdict=warning AND overall_score <  40  -> malicious
+ * - anything else (incl. warning 40-69)      -> edge_case
+ *
+ * Note what the second line means: the benign class is not "artifacts the scanner called
+ * clean". There is no `safe` verdict in the shipped corpus at all. It is artifacts the
+ * scanner emitted a WARNING on and kept because they scored 70 or above.
  *
  * Usage:
  *   DATABASE_URL="postgresql://..." node scripts/export-registry-corpus.mjs --limit=10000

@@ -3,7 +3,7 @@
 **Date:** 2026-06-05
 **Build under test:** hackmyagent 0.23.8, NanoMind classifier v0.5.0
 **Dataset:** OASB v2 corpus, 4,245 categorized samples (270 malicious, 3,881 benign, 94 edge).
-**3,811 of the 3,881 benign samples were labeled by the scanner under test** — see the withdrawal
+**3,704 of the 3,881 benign samples were labeled by the scanner under test** — see the withdrawal
 notice in Section 1 before quoting anything from this document.
 **DVAA:** 86 full-repo scenarios (29.1% detected) / 91 corpus config-subset samples (81.3%) - see Section 4
 **Paper comparison:** Holzbauer et al., "Malicious Or Not" (arXiv:2603.16572), 238K skills
@@ -13,11 +13,21 @@ notice in Section 1 before quoting anything from this document.
 ## 1. HMA Scanner Results (OASB v2 corpus)
 
 > **F1, precision, false-positive rate and flag rate are withdrawn (2026-08-09).** The benign class
-> of this corpus was labeled by the scanner under test. `scripts/export-registry-corpus.mjs` lines
-> 9-11 assign `verdict=safe AND score >= 80`, as reported by HackMyAgent itself, to the benign class,
-> and 3,811 of the 3,881 benign samples came from that rule. Any artifact HackMyAgent would have
-> flagged was therefore excluded from the benign class by construction, and a near-zero false-positive
-> rate was guaranteed before a single scan ran. Every metric that reads the benign class -- FPR,
+> of this corpus was labeled by the scanner under test.
+>
+> **Correction, 2026-08-27: this notice previously quoted the wrong rule, and the true one is
+> worse.** It cited the docstring at `scripts/export-registry-corpus.mjs:9`
+> (`verdict=safe AND score >= 80`). The rule the code actually applies is at `:146-164`:
+> `verdict === 'warning' && overall_score >= 70`. The shipped corpus proves which one ran:
+> `metadata.scanVerdict` across the registry samples is **warning 3,746 / blocked 205 / passed 23**,
+> and **`safe` appears zero times**. So the benign class is not "artifacts HackMyAgent called
+> clean". It is **artifacts HackMyAgent emitted a warning on, kept because they scored 70 or
+> above**. The count was also overstated: **3,704** benign samples carry a scanner verdict, and a
+> further 177 are hand-authored fixtures that merely declare `source: 'registry'`.
+>
+> The conclusion is unchanged and, if anything, stronger. Any artifact the scanner scored below 70
+> was excluded from the benign class by construction, so a near-zero false-positive rate was
+> guaranteed before a single scan ran. Every metric that reads the benign class -- FPR,
 > precision, F1, flag rate -- is a labeling artifact, not a measurement. They are not restated here.
 >
 > **Recall is not withdrawn**, and the distinction is not a convenience. Recall reads only the
@@ -115,10 +125,22 @@ alike and so carry no malicious-intent signal:
 
 - `AST-PROMPT-001/003/004` — missing prompt defenses (jailbreak / injection resistance / trust hierarchy).
 - `AST-GOV-001..005` — missing governance, oversight, scope limits, override resistance.
-- `AST-SCOPE-001` — **wildcard tool access** (`allowedTools:["*"]`). Over 2,900 benign registry MCP
-  servers declare this; a signal that fires on thousands of benign configs cannot distinguish malicious
-  intent. It is a least-privilege **posture** issue, not an attack. Malicious configs are caught by the
-  adversarial directives they layer on top (`AST-SCOPE-004`), not by the wildcard itself.
+- `AST-SCOPE-001` — **wildcard tool access** (`allowedTools:["*"]`). It is a least-privilege
+  **posture** issue, not an attack, and malicious configs are caught by the adversarial directives
+  they layer on top (`AST-SCOPE-004`) rather than by the wildcard itself.
+
+  > **Correction, 2026-08-27.** This exclusion was previously justified by the claim that "over
+  > 2,900 benign registry MCP servers declare this". **Those servers did not declare it.**
+  > `scripts/export-registry-corpus.mjs:233` hard-codes `allowedTools: ['*']` into every
+  > synthesized `mcp_tool` sample, so all **3,101 of 3,101** registry-derived MCP samples contain
+  > it and **2,954** of those are labeled benign. The observation that motivated excluding a check
+  > class from the verdict was written into the corpus by the corpus builder, which is the same
+  > defect class as the withdrawn metrics in Section 1 and was missed when those were withdrawn.
+  >
+  > The exclusion itself is retained on the argument above, which does not depend on the frequency
+  > claim: a wildcard grant is a posture finding whether it appears once or three thousand times.
+  > But the frequency claim is not evidence and must not be cited as though the corpus measured
+  > something about real registry servers. It measured its own generator.
 
 The **scanner still emits all of these to users** with severity and a fix — this exclusion governs the
 benchmark verdict only, not the product's findings. `AST-SCOPE-003` (scope-purpose mismatch) is **kept**
