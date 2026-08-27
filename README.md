@@ -486,7 +486,7 @@ npx tsx scripts/run-dvaa-benchmark.ts                              # DVAA ground
 
 **F1, precision, false-positive rate and flag rate are withdrawn.** The benign class of this corpus
 was labeled by the scanner under test: `scripts/export-registry-corpus.mjs` lines 9-11 assign
-`verdict=safe AND score >= 80`, as reported by HackMyAgent itself, to the benign class, and 3,811 of
+`verdict='warning' AND overall_score >= 70`, as reported by HackMyAgent itself, to the benign class, and 3,704 of
 the 3,881 benign samples came from that rule. Anything HackMyAgent would have flagged was excluded
 from the benign class by construction, so a near-zero false-positive rate was guaranteed before a
 single scan ran. Those figures are not restated here, and no replacement figure is offered.

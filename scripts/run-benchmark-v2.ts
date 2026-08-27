@@ -317,7 +317,7 @@ async function main() {
     console.log(
       `[--categorized-only] This filter applies to the MALICIOUS class ONLY. The ${benignCount} benign ` +
       `samples are NOT content-derived: most were labeled by the scanner's own verdict ` +
-      `(verdict=safe AND score >= 80, see scripts/export-registry-corpus.mjs). Any metric that reads ` +
+      `(verdict='warning' AND overall_score >= 70, see scripts/export-registry-corpus.mjs). Any metric that reads ` +
       `the benign class -- FPR, precision, F1, flag rate -- is circular and must not be published.`
     );
   }
