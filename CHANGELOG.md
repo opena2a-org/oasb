@@ -19,19 +19,18 @@ stay on record here with the reason they changed.
   you were relying on `@opena2a/oasb` to pull `hackmyagent` transitively,
   install it directly at 0.32.0 or later.
 
-## Behavioral governance draft withdrawn on 2026-09-08
+## Behavioral governance draft withdrawn on 2026-09-09
 
 `docs/oasb-v2-behavioral-governance.md` (2.0.0-draft, 2026-03-03) is withdrawn
 and retained for history with a notice at its top. Its figures, 68 behavioral
 controls in 8 domains numbered 7 to 14 and 114 total controls, are superseded:
 the behavioral domains are published as OASB-2 in the agent-governance-spec
 repository with 72 controls in nine domains numbered 11 to 19, machine checked
-there against the domain files. The OASB-1 infrastructure count stays
-documented as 46; no control artifact in this repository carries it. The
-unified total is 118, a derived figure (72 + 46), not a measured one. The 222
-Eval scenario count is unchanged. No control content, scenario, or test
-changes; the README counts are untouched and the release smoke gate is
-unaffected.
+there against the domain files. The OASB-1 count, 46, is published at oasb.ai
+and is not carried in this repository. The unified total, 118, is the sum
+72 + 46 and is not measured on its own. The 222 Eval scenario count is
+unchanged. No control content, scenario, or test changes; the README counts
+are untouched.
 
 ## Comparative scanner scores withdrawn - 2026-08-09
 
