@@ -30,7 +30,7 @@ async function findingsOf(content, fname) {
     ...analyzePrompt(ast, v, undefined, content),
     ...analyzeCode(ast, v),
   ];
-  const stego = /[​‌‍⁠⁢­﻿]/.test(content);
+  const stego = /[\u200B\u200C\u200D\u2060\u2062\u00AD\uFEFF]/.test(content);
   return { findings: all.filter(f => !f.passed), stego };
 }
 

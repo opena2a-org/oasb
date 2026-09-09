@@ -1,9 +1,26 @@
 # OASB v2: Behavioral Governance Domains
 
 **Version:** 2.0.0-draft
-**Status:** Draft
+**Status:** Withdrawn 2026-09-09; superseded by OASB-2 (see the withdrawal notice below)
 **Date:** 2026-03-03
 **Authors:** OpenA2A Security Team
+
+---
+
+## Withdrawal notice
+
+Withdrawn on 2026-09-09. This draft is retained for history and is not updated. It is superseded by the Agent Behavioral Governance Specification (OASB-2), published in the agent-governance-spec repository: https://github.com/opena2a-standards/agent-governance-spec (the specification is `specification.md`; the control definitions are under `domains/`).
+
+The figures below this notice are those of 2026-03-03 and no longer hold:
+
+| Figure in this draft | Figure at withdrawal (2026-09-09) | Where that figure is measured or documented |
+|---|---|---|
+| 68 behavioral controls in 8 domains numbered 7 to 14 | 72 controls in nine domains numbered 11 to 19 | agent-governance-spec, the `### SOUL-XX-NNN:` headings under `domains/`, machine checked by `scripts/check_crosswalks.py` |
+| 46 infrastructure controls (OASB-1) | 46, published at oasb.ai | oasb.ai; this repository does not carry the OASB-1 catalogue |
+| 114 total controls | 118, the sum 72 + 46, not measured on its own | arithmetic on the two rows above |
+| not stated in this draft | 222 OASB Eval scenarios | the README of this repository, held to the `npm test` totals by `scripts/release-smoke.sh` |
+
+The merge statement in the abstract (the Agent Behavioral Governance Rubric merged into OASB as domains 7 to 14) is withdrawn with the figures: the behavioral domains are published as OASB-2, domains 11 to 19, in the repository named above, and this repository carries no copy of them. Control identifiers and their stability rule, and the mapping from this repository's corpus and scenario vocabularies onto OASB-2 controls, are defined there (`specification.md`, sections 8.2 and 9).
 
 ---
 
@@ -11,7 +28,7 @@
 
 This document specifies the behavioral governance extension to the Open Agent Security Benchmark (OASB). OASB v1 (domains 1-6) evaluates agent infrastructure security -- filesystem, network, process, and runtime detection. OASB v2 adds domains 7-14, which evaluate whether an agent's behavioral directives (system prompts, SOUL.md, constitution files) adequately govern trust, capabilities, safety, and transparency.
 
-The Agent Behavioral Governance Rubric (ABGR) is hereby merged into OASB as domains 7-14. The result is a single benchmark, a single composite score, and a single compliance badge.
+~~The Agent Behavioral Governance Rubric (ABGR) is hereby merged into OASB as domains 7-14. The result is a single benchmark, a single composite score, and a single compliance badge.~~ **Withdrawn 2026-09-09** (see the withdrawal notice above).
 
 ---
 
@@ -27,7 +44,7 @@ Agent infrastructure security (domains 1-6) is necessary but insufficient. An ag
 
 These failures originate not in infrastructure but in the agent's behavioral directives -- the system prompt, SOUL.md, or equivalent configuration that defines what the agent should and should not do.
 
-OASB v2 closes this gap by defining 68 controls across 8 governance domains. Combined with the existing 46 infrastructure controls, OASB v2 provides 114 total controls for comprehensive agent security evaluation.
+~~OASB v2 closes this gap by defining 68 controls across 8 governance domains. Combined with the existing 46 infrastructure controls, OASB v2 provides 114 total controls for comprehensive agent security evaluation.~~ **Withdrawn 2026-09-09** (see the withdrawal notice above).
 
 ---
 
@@ -591,3 +608,4 @@ Equal weighting reflects the position that infrastructure hardening without beha
 | Version | Date | Changes |
 |---------|------|---------|
 | 2.0.0-draft | 2026-03-03 | Initial draft. 8 domains, 68 controls, 3 conformance levels. |
+| 2.0.0-draft (withdrawn) | 2026-09-09 | Withdrawn and retained for history; superseded by OASB-2 in agent-governance-spec (72 controls in nine domains numbered 11 to 19). See the withdrawal notice at the top. |
