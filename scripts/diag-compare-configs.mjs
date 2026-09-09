@@ -41,7 +41,7 @@ async function verdict(content, fname, hardSet, passContent) {
     ...analyzePrompt(ast, v, undefined, c),
     ...analyzeCode(ast, v),
   ];
-  if (/[​‌‍⁠⁢­﻿]/.test(content)) return true; // unicode stego
+  if (/[\u200B\u200C\u200D\u2060\u2062\u00AD\uFEFF]/.test(content)) return true; // unicode stego (escaped so the source carries no invisible codepoints)
   const attack = all.filter(f => !f.passed && !hardSet.has(f.checkId));
   const highCrit = attack.some(f => f.severity === 'critical' || f.severity === 'high');
   const hasRisk = (ast.inferredRiskSurface?.length ?? 0) > 0;
