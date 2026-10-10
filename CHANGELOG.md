@@ -34,6 +34,14 @@ stay on record here with the reason they changed.
   values of a set of inputs. A pinned run does not verify the scanner's
   dependencies (it records the sha256 of their lockfile);
   `docs/pinned-benchmark.md` lists what a run checks and what it does not.
+- `results/2026-10-10-d8306ef8/` is the first pinned run of record:
+  hackmyagent 0.33.2, the npm release current on 2026-10-10, on the v2 corpus
+  and DVAA commit `57918267d8d5`, with the classifier files that release
+  expects. It is a first pinned measurement. Earlier figures came from
+  unpinned runs, so it does not revise them and a difference from them is not
+  a regression. `src/benchmark/pinned/runs-of-record.test.ts` checks that
+  every committed run names its pinned inputs and that its summary is the one
+  its per-sample predictions give.
 
 ### Removed
 

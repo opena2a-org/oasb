@@ -1,0 +1,244 @@
+{
+  "runId": "d8306ef8",
+  "note": "Detection over the malicious class only. F1, precision, false-positive rate and flag rate are not computed: most benign corpus samples were labeled by the scanner under test, so any metric that reads the benign class is circular. The corpus set is the categorized set (malicious samples without an attack category are left out); predictions for every scanned sample, benign included, are in corpus-predictions.jsonl. A malicious sample is detected when the adapter returns a malicious verdict; an unknown verdict counts as not detected. This is a pinned measurement: earlier figures came from unpinned runs on unrecorded inputs, so they are not a baseline for it and a difference from them is not a regression.",
+  "corpus": {
+    "datasetVersion": "v2.0",
+    "samplesScanned": 4245,
+    "maliciousSamples": 270,
+    "adapters": {
+      "hma-static-pipeline": {
+        "name": "HMA Static Patterns (no NanoMind)",
+        "version": "0.33.2",
+        "malicious": {
+          "total": 270,
+          "detected": 138,
+          "recall": 0.5111
+        },
+        "unknownVerdicts": 0,
+        "perCategory": {
+          "supply_chain": {
+            "total": 30,
+            "detected": 16,
+            "recall": 0.5333
+          },
+          "prompt_injection": {
+            "total": 30,
+            "detected": 9,
+            "recall": 0.3
+          },
+          "credential_exfiltration": {
+            "total": 30,
+            "detected": 9,
+            "recall": 0.3
+          },
+          "heartbeat_rce": {
+            "total": 30,
+            "detected": 17,
+            "recall": 0.5667
+          },
+          "unicode_stego": {
+            "total": 30,
+            "detected": 29,
+            "recall": 0.9667
+          },
+          "privilege_escalation": {
+            "total": 30,
+            "detected": 11,
+            "recall": 0.3667
+          },
+          "persistence": {
+            "total": 30,
+            "detected": 13,
+            "recall": 0.4333
+          },
+          "social_engineering": {
+            "total": 30,
+            "detected": 13,
+            "recall": 0.4333
+          },
+          "data_exfiltration": {
+            "total": 30,
+            "detected": 21,
+            "recall": 0.7
+          }
+        }
+      },
+      "hma-tme-only": {
+        "name": "NanoMind TME vunknown (model only)",
+        "version": "unknown",
+        "malicious": {
+          "total": 270,
+          "detected": 251,
+          "recall": 0.9296
+        },
+        "unknownVerdicts": 0,
+        "perCategory": {
+          "supply_chain": {
+            "total": 30,
+            "detected": 26,
+            "recall": 0.8667
+          },
+          "prompt_injection": {
+            "total": 30,
+            "detected": 26,
+            "recall": 0.8667
+          },
+          "credential_exfiltration": {
+            "total": 30,
+            "detected": 27,
+            "recall": 0.9
+          },
+          "heartbeat_rce": {
+            "total": 30,
+            "detected": 28,
+            "recall": 0.9333
+          },
+          "unicode_stego": {
+            "total": 30,
+            "detected": 30,
+            "recall": 1
+          },
+          "privilege_escalation": {
+            "total": 30,
+            "detected": 30,
+            "recall": 1
+          },
+          "persistence": {
+            "total": 30,
+            "detected": 29,
+            "recall": 0.9667
+          },
+          "social_engineering": {
+            "total": 30,
+            "detected": 29,
+            "recall": 0.9667
+          },
+          "data_exfiltration": {
+            "total": 30,
+            "detected": 26,
+            "recall": 0.8667
+          }
+        }
+      },
+      "hma-pipeline": {
+        "name": "HMA Full Pipeline (AST + NanoMind vunknown)",
+        "version": "0.33.2",
+        "malicious": {
+          "total": 270,
+          "detected": 192,
+          "recall": 0.7111
+        },
+        "unknownVerdicts": 0,
+        "perCategory": {
+          "supply_chain": {
+            "total": 30,
+            "detected": 12,
+            "recall": 0.4
+          },
+          "prompt_injection": {
+            "total": 30,
+            "detected": 20,
+            "recall": 0.6667
+          },
+          "credential_exfiltration": {
+            "total": 30,
+            "detected": 20,
+            "recall": 0.6667
+          },
+          "heartbeat_rce": {
+            "total": 30,
+            "detected": 21,
+            "recall": 0.7
+          },
+          "unicode_stego": {
+            "total": 30,
+            "detected": 29,
+            "recall": 0.9667
+          },
+          "privilege_escalation": {
+            "total": 30,
+            "detected": 18,
+            "recall": 0.6
+          },
+          "persistence": {
+            "total": 30,
+            "detected": 24,
+            "recall": 0.8
+          },
+          "social_engineering": {
+            "total": 30,
+            "detected": 21,
+            "recall": 0.7
+          },
+          "data_exfiltration": {
+            "total": 30,
+            "detected": 27,
+            "recall": 0.9
+          }
+        }
+      }
+    },
+    "dvaaSourcedSamples": {
+      "total": 91,
+      "detected": 69,
+      "recall": 0.7582
+    }
+  },
+  "dvaaRepository": {
+    "total": 86,
+    "detected": 17,
+    "recall": 0.1977,
+    "perCategory": {
+      "credential_exfiltration": {
+        "total": 9,
+        "detected": 0,
+        "recall": 0
+      },
+      "data_exfiltration": {
+        "total": 7,
+        "detected": 3,
+        "recall": 0.4286
+      },
+      "heartbeat_rce": {
+        "total": 3,
+        "detected": 0,
+        "recall": 0
+      },
+      "persistence": {
+        "total": 4,
+        "detected": 1,
+        "recall": 0.25
+      },
+      "privilege_escalation": {
+        "total": 20,
+        "detected": 2,
+        "recall": 0.1
+      },
+      "prompt_injection": {
+        "total": 7,
+        "detected": 4,
+        "recall": 0.5714
+      },
+      "social_engineering": {
+        "total": 4,
+        "detected": 1,
+        "recall": 0.25
+      },
+      "supply_chain": {
+        "total": 15,
+        "detected": 6,
+        "recall": 0.4
+      },
+      "unicode_stego": {
+        "total": 1,
+        "detected": 0,
+        "recall": 0
+      },
+      "unknown": {
+        "total": 16,
+        "detected": 0,
+        "recall": 0
+      }
+    }
+  }
+}
