@@ -19,6 +19,7 @@
     "build": "tsc",
     "test": "vitest run",
     "smoke": "bash scripts/release-smoke.sh",
+    "check:readme": "node scripts/check-readme.mjs",
     "test:atomic": "vitest run src/atomic/",
     "test:integration": "vitest run src/integration/",
     "test:baseline": "vitest run src/baseline/",

@@ -13,6 +13,11 @@ the claims this repository publishes:
    no sibling checkouts and runs `npm ci`. Catches dependencies that only
    resolve because of local state (a sibling `../arp` checkout, a stale
    `node_modules`, an unpinned range that drifted from the measured version).
+   Before installing, `scripts/check-readme.mjs` (also `npm run check:readme`)
+   checks the README layout: under 400 lines, "Quick Start" is the first H2
+   and starts before line 25, a shell command appears before line 30, and
+   every relative link and anchor resolves. Reference detail belongs in
+   `docs/` (for example `docs/test-catalog.md`), linked from the README.
 2. **Build + full suite.** `npm run build` then the complete vitest run,
    including E2E. One test (E2E-003) may skip on machines without `lsof`/`ss`;
    the guard tolerates environment skips but not failures.

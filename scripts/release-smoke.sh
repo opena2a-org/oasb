@@ -4,6 +4,7 @@
 # Simulates a new user: clones the current HEAD into a temp directory with no
 # sibling checkouts, installs from the lockfile, builds, runs the full suite,
 # and cross-checks the live test totals against the counts the README claims.
+# Checks the README layout (Quick Start first, under 400 lines) and its links.
 # Also inspects the npm pack file list so a publish never ships without the
 # README, LICENSE, or the harness sources.
 #
@@ -19,6 +20,9 @@ trap 'rm -rf "$TMP"' EXIT
 echo "==> Fresh clone of HEAD into $TMP/oasb (no sibling checkouts)"
 git clone --quiet "$ROOT" "$TMP/oasb"
 cd "$TMP/oasb"
+
+echo "==> README layout and link check"
+node scripts/check-readme.mjs
 
 echo "==> npm ci (lockfile install, registry deps only)"
 npm ci --silent

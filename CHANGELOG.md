@@ -19,6 +19,27 @@ stay on record here with the reason they changed.
   you were relying on `@opena2a/oasb` to pull `hackmyagent` transitively,
   install it directly at 0.32.0 or later.
 
+### Changed
+
+- The README opens with Quick Start (clone, `npm ci`, `npm test`) and is under
+  400 lines. The per-test tables moved to `docs/test-catalog.md`; Contributing
+  and Updates moved below the reference sections. `npm run check:readme` checks
+  that layout and every relative link and anchor, and `npm run smoke` runs it.
+- The README's Skills Security Benchmark section now matches the scoring code:
+  the nine attack categories in `src/benchmark/types.ts`, controls SS-01 to
+  SS-10 and SEC-021 with their compliance levels in
+  `src/benchmark/controls.ts`, and tiers assigned from F1, false-positive
+  rate, category coverage and kappa in `src/benchmark/scoring.ts`. The
+  previous tables listed categories, level requirements and tier criteria the
+  code does not use. No tier is published for the v2 corpus, because its F1
+  and false-positive rate are withdrawn.
+- The README no longer repeats two claims corrected elsewhere: that over 2,900
+  benign registry MCP servers declare wildcard tool access (corrected in
+  BENCHMARK-RESULTS.md § 3 on 2026-08-27), and the "lines 9-11" location of
+  the corpus labeling rule, which now points at the rule's code. The DVAA
+  runner comment names its sibling-checkout prerequisite instead of a stale
+  "70 scenarios" count.
+
 ## Behavioral governance draft withdrawn on 2026-09-09
 
 `docs/oasb-v2-behavioral-governance.md` (2.0.0-draft, 2026-03-03) is withdrawn
