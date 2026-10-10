@@ -204,7 +204,10 @@ count in `summary.json` is the one the two predictions files give. In a
 checkout with full history (not a shallow clone) it checks that the record's
 `oasb.commit` is an ancestor of `HEAD`. For a v2 run it also checks that the `nanomindUse` counts in the summary and the record
 are the sums of the prediction lines, and that no daemon answered. The test
-fails when no committed run is a v2 run.
+fails when no committed run says what scored its samples: a run whose schema
+is not v1 and whose record holds `nanomindUse`. The checks loop over the runs
+inside a fixed set of tests, so committing a run does not change the test
+totals the README states.
 
 | Run | Schema | hackmyagent | DVAA commit | NanoMind manifest sha256 |
 |---|---|---|---|---|
@@ -218,6 +221,13 @@ the word list scored the benign sample `REG-0023E588`. The model scored the
 84 DVAA scenarios that have a vulnerable file to scan; the other two list
 none, so nothing was compiled for them. The scanner sent 56 requests to the
 daemon address and every one was refused.
+
+Both runs were written before the harness named the NanoMind model by the
+verified directory's version or manifest sha256, and they keep the labels
+they were written with: their `summary.json` names the two adapters that use
+NanoMind `NanoMind TME vunknown (model only)`, with `"version": "unknown"`,
+and `HMA Full Pipeline (AST + NanoMind vunknown)`. The model those runs used
+is the one whose manifest sha256 the record holds.
 
 To repeat a run, check out OASB at the record's `oasb.commit`, write a pin
 file from its `hackmyagent.version`, `hackmyagent.integrity`, `dvaa.commit`

@@ -27,12 +27,20 @@ the claims this repository publishes:
 2. **Build + full suite.** `npm run build` then the complete vitest run,
    including E2E. One test (E2E-003) may skip on machines without `lsof`/`ss`;
    the guard tolerates environment skips but not failures.
-3. **README count drift guard.** Parses the live totals from the JSON reporter
-   and cross-checks three numbers the README claims: the `npm test` total, the
-   attack-scenario count (total minus `src/benchmark` scoring-engine tests),
-   and the passing-count badge. Any mismatch fails the smoke. If you add or
-   remove tests, update the README in the same change or this gate blocks the
-   release - that is the point.
+3. **README count drift guard.** `scripts/check-test-counts.mjs` reads the
+   per-file results of the JSON reporter and compares every test count the
+   README states with them: the tests badge, the Quick Start comment, the
+   Counts note (total, passing, skipped, attack scenarios, scoring-engine and
+   pinned harness tests), the per-group `npm run test:*` comments, the
+   scenario counts in the prose, the scenario-file count under MITRE ATLAS
+   Coverage, and every row of the What Gets Tested table, whose source rows
+   must add up to the suite total. A statement it cannot find fails too, so a
+   wording change has to update the guard. Its own tests
+   (`npm run test:scripts`) run first. Any mismatch fails the smoke. If you
+   add or remove tests, update the README in the same change or this gate
+   blocks the release - that is the point. Committing a run under `results/`
+   does not change the totals: the run-of-record checks are a fixed set of
+   tests.
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.

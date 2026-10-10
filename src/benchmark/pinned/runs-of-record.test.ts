@@ -72,13 +72,8 @@ function fullHistory(): boolean {
   return shallow.status === 0 && shallow.stdout.trim() === 'false';
 }
 
-/** The record schema of a run, read when the tests are collected; null when unreadable. */
-function recordSchema(dir: string): string | null {
-  try {
-    return JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8')).schema ?? null;
-  } catch {
-    return null;
-  }
+function readRecord(dir: string): PinnedRunRecord {
+  return JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
 }
 
 function readJsonl<T>(path: string): T[] {
@@ -104,6 +99,22 @@ function tally(rows: Array<{ category: string; detected: boolean }>) {
   );
 }
 
+/**
+ * Runs a check on every committed run and names the run in a failure. The
+ * checks loop over the runs inside a fixed set of tests, so committing a run
+ * does not change the test totals the README states.
+ */
+function eachRun(runs: string[], check: (dirName: string, dir: string) => void) {
+  for (const dirName of runs) {
+    try {
+      check(dirName, join(RESULTS_ROOT, dirName));
+    } catch (err) {
+      if (err instanceof Error) err.message = `results/${dirName}: ${err.message}`;
+      throw err;
+    }
+  }
+}
+
 describe('committed pinned runs', () => {
   const runs = runDirectories();
 
@@ -111,20 +122,23 @@ describe('committed pinned runs', () => {
     expect(runs.length).toBeGreaterThan(0);
   });
 
-  // A v1 run does not show whether the model or the word list produced its verdicts.
+  // A v1 run does not show whether the model or the word list produced its
+  // verdicts. Every later schema records it, so a run of any schema but v1
+  // with run totals in its record counts, whichever schema is current.
   it('holds at least one run of record that says what scored each sample', () => {
-    const schemas = runs.map(name => (JSON.parse(readFileSync(join(RESULTS_ROOT, name, 'record.json'), 'utf-8')) as PinnedRunRecord).schema);
-    expect(schemas).toContain(RECORD_SCHEMA);
+    const saying = runs.filter(name => {
+      const record = readRecord(join(RESULTS_ROOT, name));
+      return record.schema !== RECORD_SCHEMA_V1 && record.nanomindUse !== undefined;
+    });
+    expect(saying).not.toEqual([]);
   });
 
-  describe.each(runs)('results/%s', dirName => {
-    const dir = join(RESULTS_ROOT, dirName);
-
-    it('is a complete run: the four files the harness writes and nothing else', () => {
+  describe('every run', () => {
+    it('is a complete run: the four files the harness writes and nothing else', () => eachRun(runs, (_dirName, dir) => {
       expect(readdirSync(dir).sort()).toEqual(RUN_FILES);
-    });
+    }));
 
-    it('names every pinned input in its record', () => {
+    it('names every pinned input in its record', () => eachRun(runs, (dirName, dir) => {
       const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
       expect([RECORD_SCHEMA_V1, RECORD_SCHEMA]).toContain(record.schema);
       expect(dirName).toBe(`${record.startedAt.slice(0, 10)}-${record.runId}`);
@@ -151,9 +165,9 @@ describe('committed pinned runs', () => {
       expect(record.otherModelSources.checked).toBe('before-and-after-scan');
       expect(record.otherModelSources.secondClassifierFiles).toEqual([...SECOND_CLASSIFIER_FILES]);
       expect(record.otherModelSources.daemon).toMatch(/^[^\s:]+:\d+$/);
-    });
+    }));
 
-    it('has a summary that its corpus predictions give', () => {
+    it('has a summary that its corpus predictions give', () => eachRun(runs, (_dirName, dir) => {
       const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
       const summary: PinnedRunSummary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf-8'));
       const rows = readJsonl<CorpusPrediction>(join(dir, record.outputs.corpusPredictions));
@@ -184,9 +198,9 @@ describe('committed pinned runs', () => {
       expect(summary.corpus.dvaaSourcedSamples).toEqual(
         adapterIds.includes('hma-pipeline') ? count(pipeline.length, pipeline.filter(r => r.verdict === 'malicious').length) : null,
       );
-    });
+    }));
 
-    it('has a summary that its DVAA predictions give', () => {
+    it('has a summary that its DVAA predictions give', () => eachRun(runs, (_dirName, dir) => {
       const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
       const summary: PinnedRunSummary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf-8'));
       const rows = readJsonl<DvaaPrediction>(join(dir, record.outputs.dvaaPredictions));
@@ -199,14 +213,14 @@ describe('committed pinned runs', () => {
       const { perCategory, ...repository } = summary.dvaaRepository;
       expect(repository).toEqual(count(rows.length, rows.filter(r => r.detected).length));
       expect(perCategory).toEqual(tally(rows));
-    });
+    }));
 
-    // A v1 run does not record what scored its samples, so this test is
-    // registered for other runs only and is not reported as passed for one.
-    if (recordSchema(dir) === RECORD_SCHEMA_V1) return;
-
-    it('says what scored every sample, and no daemon answered', () => {
+    // A v1 run does not record what scored its samples, so this check skips
+    // it; the test above that a run says what scored each sample keeps at
+    // least one run checked.
+    it('says what scored every sample, and no daemon answered', () => eachRun(runs, (_dirName, dir) => {
       const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
+      if (record.schema === RECORD_SCHEMA_V1) return;
       const summary: PinnedRunSummary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf-8'));
       const corpus = readJsonl<CorpusPrediction>(join(dir, record.outputs.corpusPredictions));
       const dvaa = readJsonl<DvaaPrediction>(join(dir, record.outputs.dvaaPredictions));
@@ -224,6 +238,6 @@ describe('committed pinned runs', () => {
       const all = [...corpus, ...dvaa].reduce((sum, r) => addUse(sum, r.nanomind!), noUse());
       expect(record.nanomindUse).toEqual(all);
       expect(record.nanomindUse!.daemonAnswers).toBe(0);
-    });
+    }));
   });
 });

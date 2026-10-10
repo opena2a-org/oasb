@@ -66,7 +66,7 @@ stay on record here with the reason they changed.
   scan (84 of 86). No daemon answered any of the 56 requests the scanner sent
   to the daemon address.
   `src/benchmark/pinned/runs-of-record.test.ts` now fails when no committed
-  run is a v2 run.
+  run says what scored its samples.
 
 ### Removed
 
@@ -88,16 +88,18 @@ stay on record here with the reason they changed.
   model directory, or by the directory's manifest sha256 when it has no
   version. It read the version from `~/.nanomind/models` whichever directory
   was verified, and wrote `vunknown` and `"version": "unknown"` when there was
-  no version file; `results/2026-10-10-d8306ef8/` keeps the labels it was
-  written with. The same change renames the two adapters in
+  no version file; `results/2026-10-10-d8306ef8/` and
+  `results/2026-10-10-2a89ce5d/`, both written before this change, keep the
+  labels they were written with. The same change renames the two adapters in
   `scripts/run-benchmark-v2.ts`, which verifies no model directory and still
   reads `~/.nanomind/models`: without a version file there they are now
   `NanoMind TME (model only)` and `HMA Full Pipeline (AST + NanoMind)`, where
   they were `NanoMind TME vunknown (model only)` and
   `HMA Full Pipeline (AST + NanoMind vunknown)`; the model-only adapter's
   version is still `unknown` (`src/benchmark/hma-pipeline-adapter.test.ts`
-  checks these names). `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a
-  checkout with full history, that each run's `oasb.commit` is an ancestor of
+  checks these names).
+  `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a checkout
+  with full history, that each run's `oasb.commit` is an ancestor of
   `HEAD`. `docs/pinned-benchmark.md` and `--help` describe two more refusals:
   a scanner whose classifier the harness cannot trace (exit 2), and a
   classifier whose model session after the scan is not the one it loaded
@@ -135,6 +137,19 @@ stay on record here with the reason they changed.
   the corpus labeling rule, which now points at the rule's code. The DVAA
   runner comment names its sibling-checkout prerequisite instead of a stale
   "70 scenarios" count.
+- The release smoke's drift guard (`scripts/check-test-counts.mjs`, run by
+  `npm run smoke`) compares every test count the README states with the
+  suite: the badge, the Quick Start comment, the Counts note, the per-group
+  comments, the scenario counts in the prose, the scenario-file count and
+  every row of the What Gets Tested table. It read three of them before, and
+  passed a badge lower than the passing count. Its tests run with
+  `npm run test:scripts`.
+- `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
+  inside a fixed set of seven tests, so committing a run no longer changes the
+  `npm test` total (336 tests, 335 passing). It no longer needs a committed
+  run of the current record schema: a run of any schema but v1 that records
+  what scored its samples is enough, so raising the schema does not fail it
+  before a run of the new schema exists.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
