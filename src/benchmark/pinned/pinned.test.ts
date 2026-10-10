@@ -1174,6 +1174,14 @@ describe('--observe', () => {
     expect(g.__oasbFakeScans).toBe(0);
   });
 
+  it('names the printed value the registry integrity must equal', async () => {
+    const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);
+    expect(r.code).toBe(0);
+    expect(r.err).toContain(
+      'The registry integrity of hackmyagent 9.9.9 must equal hackmyagent.integrity above: npm view hackmyagent@9.9.9 dist.integrity',
+    );
+  });
+
   it('reports a dirty input and exits 2', async () => {
     appendFileSync(join(fx.installed, 'dist', 'nanomind-core', 'index.js'), '\n');
     const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);

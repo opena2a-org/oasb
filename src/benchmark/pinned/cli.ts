@@ -139,8 +139,12 @@ async function observe(
 
   io.out(JSON.stringify(pins, null, 2));
   const version = (pins.hackmyagent as { version?: string } | undefined)?.version;
+  // An instruction for the operator, not a step of this command: --observe
+  // never contacts the registry and runs nothing after printing it.
   if (version) {
-    io.err(`Check the integrity against the registry before pinning it: npm view hackmyagent@${version} dist.integrity`);
+    io.err(
+      `The registry integrity of hackmyagent ${version} must equal hackmyagent.integrity above: npm view hackmyagent@${version} dist.integrity`,
+    );
   }
   for (const p of problems) io.err(`problem: ${p}`);
   return problems.length > 0 ? 2 : 0;
