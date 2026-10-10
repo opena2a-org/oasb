@@ -13,7 +13,7 @@ import { connect } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { gitBlobId, type DVAAReadFile } from '../dvaa-suite.js';
-import { PinError, type DvaaPin, type HackmyagentPin, type NanomindPin } from './pins.js';
+import { isExactVersion, PinError, type DvaaPin, type HackmyagentPin, type NanomindPin } from './pins.js';
 
 function sha256Hex(bytes: Buffer | string): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -297,6 +297,14 @@ export function observeHackmyagent(hmaDir: string): HackmyagentPin {
     );
   }
   const version = tarballs[0].slice('hackmyagent-'.length, -'.tgz'.length);
+  // The version goes into the pin values and into the npm command --observe
+  // suggests, so it gets the same exact-version check as a pin file.
+  if (!isExactVersion(version)) {
+    throw new PinError(
+      `unpinned input: the tarball name ${JSON.stringify(tarballs[0])} does not carry an exact version; ` +
+        'the --hma directory needs the hackmyagent-<x.y.z>.tgz that npm pack writes',
+    );
+  }
   return { version, integrity: integrityOf(readFileSync(join(hmaDir, tarballs[0])), 'sha512') };
 }
 

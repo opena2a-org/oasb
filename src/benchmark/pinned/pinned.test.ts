@@ -17,6 +17,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -1178,8 +1179,20 @@ describe('--observe', () => {
     const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);
     expect(r.code).toBe(0);
     expect(r.err).toContain(
-      'The registry integrity of hackmyagent 9.9.9 must equal hackmyagent.integrity above: npm view hackmyagent@9.9.9 dist.integrity',
+      'The registry integrity of hackmyagent 9.9.9 must equal hackmyagent.integrity in the pin values printed on stdout: npm view hackmyagent@9.9.9 dist.integrity',
     );
+  });
+
+  it('refuses a tarball name without an exact version and suggests no command with it', async () => {
+    renameSync(join(fx.hma, 'hackmyagent-9.9.9.tgz'), join(fx.hma, 'hackmyagent-1.0.0;id.tgz'));
+    const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);
+    expect(r.code).toBe(2);
+    expect(JSON.parse(r.out.join('\n')).hackmyagent).toBeUndefined();
+    const err = r.err.join('\n');
+    expect(err).toMatch(
+      /problem: unpinned input: the tarball name "hackmyagent-1\.0\.0;id\.tgz" does not carry an exact version/,
+    );
+    expect(err).not.toMatch(/npm view|npm install/);
   });
 
   it('reports a dirty input and exits 2', async () => {

@@ -13,8 +13,9 @@ the claims this repository publishes:
    no sibling checkouts and runs `npm ci`. Catches dependencies that only
    resolve because of local state (a sibling `../arp` checkout, a stale
    `node_modules`, an unpinned range that drifted from the measured version).
-   Before installing, `scripts/check-readme.mjs` (also `npm run check:readme`)
-   checks the README layout: under 400 lines, "Quick Start" is the first H2
+   Before installing, `scripts/check-readme.mjs` (also `npm run check:readme`,
+   which compares the test counts too, see step 3) checks the README layout:
+   under 400 lines, "Quick Start" is the first H2
    and starts before line 25, a shell command appears before line 30, and
    the relative links it reads resolve. It reads three link forms, each
    written within one line: inline links (`[text](path)`, with an optional
@@ -23,10 +24,12 @@ the claims this repository publishes:
    only in links to `.md` files. Other forms, such as an unquoted `href` or a
    definition inside a list item, are not checked. The checker's own tests
    (`npm run test:scripts`) run first. Reference detail belongs in `docs/`
-   (for example `docs/test-catalog.md`), linked from the README.
+   (for example `docs/test-catalog.md`), linked from the README. This step
+   runs the checker with `--no-counts`: vitest is not installed yet, and
+   step 3 compares the test counts with the suite's report.
 2. **Build + full suite.** `npm run build` then the complete vitest run,
-   including E2E. One test (E2E-003) may skip on machines without `lsof`/`ss`;
-   the guard tolerates environment skips but not failures.
+   including E2E. E2E-003 is skipped on every platform (`it.skip`); any
+   failure fails the smoke.
 3. **README count drift guard.** `scripts/check-test-counts.mjs` reads the
    per-file results of the JSON reporter and compares every test count the
    README states with them: the tests badge, the Quick Start comment, the
@@ -40,7 +43,13 @@ the claims this repository publishes:
    add or remove tests, update the README in the same change or this gate
    blocks the release - that is the point. Committing a run under `results/`
    does not change the totals: the run-of-record checks are a fixed set of
-   tests.
+   tests. `npm run check:readme` compares the README's test counts without
+   a report, after `npm ci`: it collects the suite with vitest (nothing
+   runs) and compares each passing count with the tests that are not
+   skipped, so it catches a stale count before a release without running the
+   suite. It cannot tell a failing test from a passing one; this step can.
+   With `--tests <report>` it reads a JSON report instead and compares the
+   passing counts with the tests that passed.
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.

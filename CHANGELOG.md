@@ -31,8 +31,11 @@ stay on record here with the reason they changed.
   never writes to an existing file. A run writes nothing and exits 3 when the
   hackmyagent install, the model directory, the DVAA checkout or the other
   model sources check fails again after the scan. `--observe` prints the pin
-  values of a set of inputs. A pinned run does not verify the scanner's
-  dependencies (it records the sha256 of their lockfile);
+  values of a set of inputs on stdout and, on stderr, the `npm view` command
+  whose output must equal the printed integrity; it reports a tarball whose
+  name does not carry an exact version (`hackmyagent-<x.y.z>.tgz`) as a
+  problem (exit 2) and prints no command for it. A pinned run does not verify
+  the scanner's dependencies (it records the sha256 of their lockfile);
   `docs/pinned-benchmark.md` lists what a run checks and what it does not.
 - `results/2026-10-10-d8306ef8/` is the first pinned run of record:
   hackmyagent 0.33.2, the npm release current on 2026-10-10, on the v2 corpus
@@ -97,7 +100,10 @@ stay on record here with the reason they changed.
   they were `NanoMind TME vunknown (model only)` and
   `HMA Full Pipeline (AST + NanoMind vunknown)`; the model-only adapter's
   version is still `unknown` (`src/benchmark/hma-pipeline-adapter.test.ts`
-  checks these names).
+  checks these names). The package exports the same classes as
+  `benchmark.HMATMEOnlyAdapter` and `benchmark.HMAPipelineAdapter`, and they
+  also read `~/.nanomind/models` there, so code that constructs them from
+  `@opena2a/oasb` gets the same new names.
   `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a checkout
   with full history, that each run's `oasb.commit` is an ancestor of
   `HEAD`. `docs/pinned-benchmark.md` and `--help` describe two more refusals:
@@ -123,6 +129,15 @@ stay on record here with the reason they changed.
   attributes. It checks a `#anchor` only in links to `.md` files. Other forms,
   such as an unquoted `href` or a definition inside a list item, are not
   checked.
+- `npm run check:readme` compares every test count the README states with
+  the suite, each for equality: the badge, the Quick Start comment, the Counts
+  note, the `npm run test:*` comments, the scenario counts and each row of the
+  "What Gets Tested" table, per source directory. It read none of them, so a
+  README with stale counts passed it. It collects the suite with vitest
+  (nothing runs), so it needs `npm ci` and compares each passing count with
+  the tests that are not skipped; `--tests <report.json>` compares with a
+  vitest JSON report instead, and `--no-counts` skips the comparison, which
+  the first step of `npm run smoke` uses before it installs.
 - The README's Skills Security Benchmark section now matches the scoring code:
   the nine attack categories in `src/benchmark/types.ts`, controls SS-01 to
   SS-10 and SEC-021 with their compliance levels in
@@ -146,7 +161,7 @@ stay on record here with the reason they changed.
   `npm run test:scripts`.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of seven tests, so committing a run no longer changes the
-  `npm test` total (339 tests, 338 passing). Its check that at least one
+  `npm test` total (340 tests, 339 passing). Its check that at least one
   committed run says what scored its samples no longer needs a run of the
   current record schema: a run of any schema but v1 that records what scored
   its samples is enough, so raising the schema does not fail that check

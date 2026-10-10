@@ -23,7 +23,9 @@ cd "$TMP/oasb"
 
 echo "==> README layout and link check"
 node --test scripts/check-readme.test.mjs scripts/check-test-counts.test.mjs
-node scripts/check-readme.mjs
+# vitest is not installed yet; the drift guard below compares the test counts
+# with the suite's report once it has run.
+node scripts/check-readme.mjs --no-counts
 
 echo "==> npm ci (lockfile install, registry deps only)"
 npm ci --silent

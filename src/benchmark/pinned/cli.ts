@@ -140,10 +140,13 @@ async function observe(
   io.out(JSON.stringify(pins, null, 2));
   const version = (pins.hackmyagent as { version?: string } | undefined)?.version;
   // An instruction for the operator, not a step of this command: --observe
-  // never contacts the registry and runs nothing after printing it.
+  // never contacts the registry and runs nothing after printing it. The
+  // documented command sends stdout to a file, so the hint names stdout, not
+  // a place on the terminal. `version` passed observeHackmyagent's
+  // exact-version check.
   if (version) {
     io.err(
-      `The registry integrity of hackmyagent ${version} must equal hackmyagent.integrity above: npm view hackmyagent@${version} dist.integrity`,
+      `The registry integrity of hackmyagent ${version} must equal hackmyagent.integrity in the pin values printed on stdout: npm view hackmyagent@${version} dist.integrity`,
     );
   }
   for (const p of problems) io.err(`problem: ${p}`);

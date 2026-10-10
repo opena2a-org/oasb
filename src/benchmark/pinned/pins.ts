@@ -52,6 +52,11 @@ const SRI_LENGTH: Record<string, number> = { sha256: 32, sha384: 48, sha512: 64 
 const COMMIT = /^([0-9a-f]{40}|[0-9a-f]{64})$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
+/** True for an exact npm version (x.y.z, with an optional prerelease); ranges and tags are false. */
+export function isExactVersion(version: string): boolean {
+  return EXACT_VERSION.test(version);
+}
+
 function field(obj: unknown, section: string, name: string): string {
   const sec = (obj as Record<string, unknown> | null)?.[section];
   const value = (sec as Record<string, unknown> | null | undefined)?.[name];
@@ -67,7 +72,7 @@ export function parsePins(raw: unknown): BenchmarkPins {
   }
 
   const version = field(raw, 'hackmyagent', 'version');
-  if (!EXACT_VERSION.test(version)) {
+  if (!isExactVersion(version)) {
     throw new PinError(
       `unpinned input: hackmyagent.version "${version}" is not an exact version (x.y.z); ranges and tags are refused`,
     );

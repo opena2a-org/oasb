@@ -6,25 +6,30 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 describe('NanoMind adapter names without a verified model directory', () => {
-  const savedHome = process.env.HOME;
   let home: string;
 
+  // os.homedir() reads HOME on POSIX and USERPROFILE on Windows; stubbing
+  // both keeps the real profile's model directory out of the test, and
+  // unstubAllEnvs restores each one, including one that was unset.
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'oasb-adapter-home-'));
-    process.env.HOME = home;
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     vi.resetModules();
   });
 
   afterEach(() => {
-    process.env.HOME = savedHome;
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
   });
 
   it('leaves the model out of the name when ~/.nanomind/models has no version file', async () => {
+    expect(homedir()).toBe(home);
+    expect(process.env.USERPROFILE).toBe(home);
     const { HMATMEOnlyAdapter, HMAPipelineAdapter } = await import('./hma-pipeline-adapter.js');
     const tme = new HMATMEOnlyAdapter();
     const pipeline = new HMAPipelineAdapter();
