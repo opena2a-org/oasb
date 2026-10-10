@@ -15,8 +15,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RECORD_SCHEMA, SUMMARY_NOTE, type PinnedRunRecord, type PinnedRunSummary } from './harness.js';
+import { RECORD_SCHEMA, RECORD_SCHEMA_V1, SUMMARY_NOTE, type PinnedRunRecord, type PinnedRunSummary } from './harness.js';
 import { SECOND_CLASSIFIER_FILES } from './inputs.js';
+import { addUse, noUse, type NanomindUse } from './nanomind-use.js';
 
 const RESULTS_ROOT = resolve(__dirname, '..', '..', '..', 'results');
 const RUN_FILES = ['corpus-predictions.jsonl', 'dvaa-predictions.jsonl', 'record.json', 'summary.json'];
@@ -28,6 +29,7 @@ interface CorpusPrediction {
   category: string | null;
   source: string;
   verdict: string;
+  nanomind?: NanomindUse;
 }
 
 interface DvaaPrediction {
@@ -35,6 +37,14 @@ interface DvaaPrediction {
   category: string;
   detected: boolean;
   files: Array<{ file: string; detected: boolean }>;
+  nanomind?: NanomindUse;
+}
+
+function sumUse(rows: Array<{ nanomind?: NanomindUse }>, key: string) {
+  const uses = rows.map(r => r.nanomind!);
+  for (const use of uses) expect(Object.keys(use ?? {}).sort()).toEqual(Object.keys(noUse()).sort());
+  const total = uses.reduce((sum, u) => addUse(sum, u), noUse());
+  return { ...total, [key]: uses.filter(u => u.wordListScorings > 0).length };
 }
 
 function runDirectories(): string[] {
@@ -83,7 +93,7 @@ describe('committed pinned runs', () => {
 
     it('names every pinned input in its record', () => {
       const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
-      expect(record.schema).toBe(RECORD_SCHEMA);
+      expect([RECORD_SCHEMA_V1, RECORD_SCHEMA]).toContain(record.schema);
       expect(dirName).toBe(`${record.startedAt.slice(0, 10)}-${record.runId}`);
       expect(record.oasb.commit).toMatch(/^([0-9a-f]{40}|[0-9a-f]{64})$/);
       expect(record.oasb.corpus.sha256).toMatch(/^[0-9a-f]{64}$/);
@@ -151,6 +161,29 @@ describe('committed pinned runs', () => {
       const { perCategory, ...repository } = summary.dvaaRepository;
       expect(repository).toEqual(count(rows.length, rows.filter(r => r.detected).length));
       expect(perCategory).toEqual(tally(rows));
+    });
+
+    // A v1 run does not record what scored its samples, so this applies to v2 runs only.
+    it('says what scored every sample, and no daemon answered', () => {
+      const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
+      if (record.schema === RECORD_SCHEMA_V1) return;
+      const summary: PinnedRunSummary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf-8'));
+      const corpus = readJsonl<CorpusPrediction>(join(dir, record.outputs.corpusPredictions));
+      const dvaa = readJsonl<DvaaPrediction>(join(dir, record.outputs.dvaaPredictions));
+
+      const byAdapter = Object.fromEntries(
+        Object.keys(summary.corpus.adapters).map(id => [
+          id,
+          sumUse(corpus.filter(r => r.adapterId === id), 'samplesWithWordListScoring'),
+        ]),
+      );
+      expect(summary.nanomindUse?.corpus).toEqual(byAdapter);
+      expect(summary.nanomindUse?.dvaaRepository).toEqual(sumUse(dvaa, 'scenariosWithWordListScoring'));
+
+      // The record's run totals are the sums over every prediction line.
+      const all = [...corpus, ...dvaa].reduce((sum, r) => addUse(sum, r.nanomind!), noUse());
+      expect(record.nanomindUse).toEqual(all);
+      expect(record.nanomindUse!.daemonAnswers).toBe(0);
     });
   });
 });

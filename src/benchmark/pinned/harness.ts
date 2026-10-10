@@ -11,12 +11,15 @@
  *
  * The OASB checkout (scoring code and corpus) must be committed and clean,
  * and the scanner's other model sources (a second classifier's files and a
- * NanoMind daemon) must be absent. An unpinned, mismatched or dirty input
- * stops the run before anything is scanned. The scanner's dependencies are
- * not checked; docs/pinned-benchmark.md lists what a run verifies and what it
- * does not. The run writes a new `results/<date>-<runid>/` directory holding
- * per-sample predictions, a summary and a run record, and never writes to an
- * existing file or directory.
+ * NanoMind daemon) must be absent. The scanner must load its classifier model,
+ * and the daemon address must answer no request while the run scans. An
+ * unpinned, mismatched or dirty input stops the run before anything is
+ * scanned. The scanner's dependencies are not checked; docs/pinned-benchmark.md
+ * lists what a run verifies and what it does not. The run writes a new
+ * `results/<date>-<runid>/` directory holding per-sample predictions, a
+ * summary and a run record, and never writes to an existing file or
+ * directory. Each prediction says what scored the sample: the classifier
+ * model, the word list, the neural classifier or the daemon.
  */
 
 import { randomBytes } from 'node:crypto';
@@ -48,6 +51,7 @@ import {
   type OtherModelSources,
   type VerifiedHackmyagent,
 } from './inputs.js';
+import { addUse, NanomindTrace, noUse, type NanomindUse } from './nanomind-use.js';
 import { loadPins, PinError, type BenchmarkPins } from './pins.js';
 
 /** An input changed while the run was scanning. Nothing was written. */
@@ -99,10 +103,16 @@ export interface PinnedRunOutcome {
   summary: PinnedRunSummary;
 }
 
-export const RECORD_SCHEMA = 'oasb-pinned-run/v1';
+/**
+ * v2 adds what scored each sample: `nanomind` on every prediction line,
+ * `nanomindUse` in the summary and run totals in the record. A v1 run does
+ * not say whether its classifier ran the model or the word list.
+ */
+export const RECORD_SCHEMA = 'oasb-pinned-run/v2';
+export const RECORD_SCHEMA_V1 = 'oasb-pinned-run/v1';
 
 export interface PinnedRunRecord {
-  schema: typeof RECORD_SCHEMA;
+  schema: typeof RECORD_SCHEMA | typeof RECORD_SCHEMA_V1;
   runId: string;
   startedAt: string;
   finishedAt: string;
@@ -117,6 +127,11 @@ export interface PinnedRunRecord {
     secondClassifierFiles: string[];
     daemon: string;
   };
+  /**
+   * What scored samples over the whole run (v2). `daemonAnswers` is 0 in
+   * every written run: a run in which the daemon address answered is not written.
+   */
+  nanomindUse?: NanomindUse;
   runtime: { node: string; platform: string; arch: string };
   outputs: { corpusPredictions: string; dvaaPredictions: string; summary: string };
 }
@@ -145,6 +160,11 @@ export interface PinnedRunSummary {
     dvaaSourcedSamples: DetectionCount | null;
   };
   dvaaRepository: DetectionCount & { perCategory: Record<string, DetectionCount> };
+  /** What scored the samples (v2), summed from the predictions files. */
+  nanomindUse?: {
+    corpus: Record<string, NanomindUse & { samplesWithWordListScoring: number }>;
+    dvaaRepository: NanomindUse & { scenariosWithWordListScoring: number };
+  };
 }
 
 export const SUMMARY_NOTE =
@@ -192,13 +212,22 @@ function categorized(dataset: BenchmarkDataset): BenchmarkSample[] {
 async function scanCorpus(
   adapter: ScannerAdapter,
   samples: BenchmarkSample[],
-): Promise<ScannerResult[]> {
-  const results: ScannerResult[] = [];
+  trace: NanomindTrace,
+): Promise<Array<{ result: ScannerResult; use: NanomindUse }>> {
+  const results: Array<{ result: ScannerResult; use: NanomindUse }> = [];
   for (let i = 0; i < samples.length; i += BATCH_SIZE) {
     const batch = samples.slice(i, i + BATCH_SIZE);
-    results.push(...(await Promise.all(batch.map(s => adapter.scan(s.content, s.id, s.artifactType)))));
+    results.push(...(await Promise.all(batch.map(s => trace.track(() => adapter.scan(s.content, s.id, s.artifactType))))));
   }
   return results;
+}
+
+function withWordListCount<K extends string>(
+  uses: NanomindUse[],
+  key: K,
+): NanomindUse & Record<K, number> {
+  const total = uses.reduce((sum, u) => addUse(sum, u), noUse());
+  return { ...total, [key]: uses.filter(u => u.wordListScorings > 0).length } as NanomindUse & Record<K, number>;
 }
 
 /** Create `path` holding `text`; throws ResultsExistError when it exists. */
@@ -264,71 +293,115 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
   const core = await import(hmaCorePath());
   const tme = core.getTMEClassifier();
   verifyLoadedModel(tme, opts.nanomindModelsDir, inputs.nanomind);
+  // The classifier model must load, or every sample would be scored by the
+  // word list. From here the trace counts what scores each sample, including
+  // the requests the scanner sends to the daemon address checked above.
+  const { host: daemonHost, port: daemonPort } = otherModelSources.daemon;
+  const trace = await NanomindTrace.start(core, {
+    version: inputs.hma.version,
+    packageDir: inputs.hma.packageDir,
+    daemonUrl: `http://${daemonHost.includes(':') ? `[${daemonHost}]` : daemonHost}:${daemonPort}`,
+  });
 
-  // 2. Corpus: the three adapters, in the order the v2 runner uses.
-  log(`corpus: ${samples.length} samples, hackmyagent ${inputs.hma.version}`);
-  const adapters: ScannerAdapter[] = [new HMAPipelineStaticAdapter(), new HMATMEOnlyAdapter(), new HMAPipelineAdapter()];
   const corpusLines: string[] = [];
   const adapterSummaries: PinnedRunSummary['corpus']['adapters'] = {};
+  const corpusUse: NonNullable<PinnedRunSummary['nanomindUse']>['corpus'] = {};
   let dvaaSourcedSamples: DetectionCount | null = null;
-  for (const adapter of adapters) {
-    const results = await scanCorpus(adapter, samples);
-    const byId = new Map(results.map(r => [r.sampleId, r]));
-    const perCategory: Record<string, { total: number; detected: number }> = {};
-    for (const cat of ATTACK_CATEGORIES) perCategory[cat] = { total: 0, detected: 0 };
-    let maliciousTotal = 0;
-    let maliciousDetected = 0;
-    let unknown = 0;
-    for (const sample of samples) {
-      const r = byId.get(sample.id);
-      const verdict = r?.verdict ?? 'unknown';
-      if (verdict === 'unknown') unknown++;
-      corpusLines.push(JSON.stringify({
-        adapterId: adapter.id,
-        sampleId: sample.id,
-        label: sample.label,
-        category: sample.category ?? null,
-        source: sample.source,
-        artifactType: sample.artifactType,
-        verdict,
-        predictedCategory: r?.category ?? null,
-        confidence: r?.confidence ?? null,
-      }));
-      if (sample.label === 'malicious' && sample.category) {
-        maliciousTotal++;
-        perCategory[sample.category].total++;
-        if (verdict === 'malicious') {
-          maliciousDetected++;
-          perCategory[sample.category].detected++;
+  const outcomes: Array<DVAAScenarioOutcome & { use: NanomindUse }> = [];
+  let nanomindUse: NanomindUse;
+  try {
+    // 2. Corpus: the three adapters, in the order the v2 runner uses.
+    log(`corpus: ${samples.length} samples, hackmyagent ${inputs.hma.version}`);
+    const adapters: ScannerAdapter[] = [new HMAPipelineStaticAdapter(), new HMATMEOnlyAdapter(), new HMAPipelineAdapter()];
+    for (const adapter of adapters) {
+      const results = await scanCorpus(adapter, samples, trace);
+      const byId = new Map(results.map(r => [r.result.sampleId, r]));
+      const perCategory: Record<string, { total: number; detected: number }> = {};
+      for (const cat of ATTACK_CATEGORIES) perCategory[cat] = { total: 0, detected: 0 };
+      let maliciousTotal = 0;
+      let maliciousDetected = 0;
+      let unknown = 0;
+      const uses: NanomindUse[] = [];
+      for (const sample of samples) {
+        const scan = byId.get(sample.id);
+        const r = scan?.result;
+        const verdict = r?.verdict ?? 'unknown';
+        if (verdict === 'unknown') unknown++;
+        const use = scan?.use ?? noUse();
+        uses.push(use);
+        corpusLines.push(JSON.stringify({
+          adapterId: adapter.id,
+          sampleId: sample.id,
+          label: sample.label,
+          category: sample.category ?? null,
+          source: sample.source,
+          artifactType: sample.artifactType,
+          verdict,
+          predictedCategory: r?.category ?? null,
+          confidence: r?.confidence ?? null,
+          nanomind: use,
+        }));
+        if (sample.label === 'malicious' && sample.category) {
+          maliciousTotal++;
+          perCategory[sample.category].total++;
+          if (verdict === 'malicious') {
+            maliciousDetected++;
+            perCategory[sample.category].detected++;
+          }
         }
       }
+      adapterSummaries[adapter.id] = {
+        name: adapter.name,
+        version: adapter.version,
+        malicious: count(maliciousTotal, maliciousDetected),
+        unknownVerdicts: unknown,
+        perCategory: Object.fromEntries(
+          Object.entries(perCategory).filter(([, c]) => c.total > 0).map(([cat, c]) => [cat, count(c.total, c.detected)]),
+        ),
+      };
+      corpusUse[adapter.id] = withWordListCount(uses, 'samplesWithWordListScoring');
+      if (adapter.id === 'hma-pipeline') {
+        const dvaaSamples = samples.filter(s => s.source === 'dvaa' && s.label === 'malicious' && s.category);
+        dvaaSourcedSamples = count(
+          dvaaSamples.length,
+          dvaaSamples.filter(s => byId.get(s.id)?.result.verdict === 'malicious').length,
+        );
+      }
+      log(`  ${adapter.id}: ${maliciousDetected}/${maliciousTotal} malicious detected`);
     }
-    adapterSummaries[adapter.id] = {
-      name: adapter.name,
-      version: adapter.version,
-      malicious: count(maliciousTotal, maliciousDetected),
-      unknownVerdicts: unknown,
-      perCategory: Object.fromEntries(
-        Object.entries(perCategory).filter(([, c]) => c.total > 0).map(([cat, c]) => [cat, count(c.total, c.detected)]),
-      ),
-    };
-    if (adapter.id === 'hma-pipeline') {
-      const dvaaSamples = samples.filter(s => s.source === 'dvaa' && s.label === 'malicious' && s.category);
-      dvaaSourcedSamples = count(
-        dvaaSamples.length,
-        dvaaSamples.filter(s => byId.get(s.id)?.verdict === 'malicious').length,
-      );
+
+    // 3. DVAA repository: every scenario, full pipeline.
+    log(`dvaa: ${scenarios.length} scenarios at ${inputs.dvaaCommit}`);
+    const compiler = new core.SemanticCompiler({ useNanoMind: true });
+    await tme.ensureModel();
+    await tme.ensureReady();
+    for (const scenario of scenarios) {
+      const { result, use } = await trace.track(() => scanDVAAScenario(core, compiler, tme, scenario));
+      outcomes.push({ ...result, use });
     }
-    log(`  ${adapter.id}: ${maliciousDetected}/${maliciousTotal} malicious detected`);
+    log(`  dvaa: ${outcomes.filter(o => o.result.detected).length}/${outcomes.length} scenarios detected`);
+
+    // 4. The inputs are still the pinned ones. A scanner that fetched a model,
+    //    switched to another model file or changed its own install during the
+    //    run invalidates the run, and so does another model source that
+    //    appeared during it or a daemon that answered while the run scanned.
+    try {
+      verifyHackmyagent(opts.hmaDir, inputs.pins.hackmyagent);
+      verifyLoadedModel(tme, opts.nanomindModelsDir, verifyNanomind(opts.nanomindModelsDir, inputs.pins.nanomind));
+      verifyDvaa(opts.dvaaDir, inputs.pins.dvaa);
+      await verifyNoOtherModelSources(otherModelSources, inputs.hma.packageDir);
+      trace.check();
+    } catch (err) {
+      if (err instanceof PinError) {
+        throw new InputDriftError(`an input changed during the run, so no results were written: ${err.message}`);
+      }
+      throw err;
+    }
+    nanomindUse = trace.totals();
+  } finally {
+    trace.stop();
   }
 
-  // 3. DVAA repository: every scenario, full pipeline.
-  log(`dvaa: ${scenarios.length} scenarios at ${inputs.dvaaCommit}`);
-  const compiler = new core.SemanticCompiler({ useNanoMind: true });
-  await tme.ensureModel();
-  await tme.ensureReady();
-  const outcomes: DVAAScenarioOutcome[] = [];
-  for (const scenario of scenarios) outcomes.push(await scanDVAAScenario(core, compiler, tme, scenario));
   const dvaaPerCategory: Record<string, { total: number; detected: number }> = {};
   for (const { result } of outcomes) {
     const c = (dvaaPerCategory[result.category] ??= { total: 0, detected: 0 });
@@ -336,23 +409,6 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
     if (result.detected) c.detected++;
   }
   const dvaaDetected = outcomes.filter(o => o.result.detected).length;
-  log(`  dvaa: ${dvaaDetected}/${outcomes.length} scenarios detected`);
-
-  // 4. The inputs are still the pinned ones. A scanner that fetched a model,
-  //    switched to another model file or changed its own install during the
-  //    run invalidates the run, and so does another model source that
-  //    appeared during it.
-  try {
-    verifyHackmyagent(opts.hmaDir, inputs.pins.hackmyagent);
-    verifyLoadedModel(tme, opts.nanomindModelsDir, verifyNanomind(opts.nanomindModelsDir, inputs.pins.nanomind));
-    verifyDvaa(opts.dvaaDir, inputs.pins.dvaa);
-    await verifyNoOtherModelSources(otherModelSources, inputs.hma.packageDir);
-  } catch (err) {
-    if (err instanceof PinError) {
-      throw new InputDriftError(`an input changed during the run, so no results were written: ${err.message}`);
-    }
-    throw err;
-  }
 
   const summary: PinnedRunSummary = {
     runId,
@@ -371,6 +427,10 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([cat, c]) => [cat, count(c.total, c.detected)]),
       ),
+    },
+    nanomindUse: {
+      corpus: corpusUse,
+      dvaaRepository: withWordListCount(outcomes.map(o => o.use), 'scenariosWithWordListScoring'),
     },
   };
 
@@ -403,6 +463,7 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
       secondClassifierFiles: [...SECOND_CLASSIFIER_FILES],
       daemon: `${otherModelSources.daemon.host}:${otherModelSources.daemon.port}`,
     },
+    nanomindUse,
     runtime: { node: process.version, platform: platform(), arch: arch() },
     outputs,
   };
@@ -418,13 +479,14 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
     }
     throw err;
   }
-  const dvaaLines = outcomes.map(({ result, files }) => JSON.stringify({
+  const dvaaLines = outcomes.map(({ result, files, use }) => JSON.stringify({
     scenario: result.scenario,
     category: result.category,
     expectedChecks: result.expectedChecks,
     detected: result.detected,
     attackFindings: result.attackFindings,
     files,
+    nanomind: use,
   }));
   writeNew(join(runDir, outputs.corpusPredictions), corpusLines.join('\n') + '\n');
   writeNew(join(runDir, outputs.dvaaPredictions), dvaaLines.join('\n') + (dvaaLines.length ? '\n' : ''));

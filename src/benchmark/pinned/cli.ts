@@ -49,7 +49,9 @@ file that is not in that directory. A run is also refused while
 models-tme-v2 or models-tme in the --hma directory, holds both
 nanomind-tme.bin and tokenizer.json, or while anything accepts a connection
 at 127.0.0.1:47200 (a NanoMind daemon): the scanner can take its results from
-either, and neither is pinned.
+either, and neither is pinned. A run is refused when the scanner's classifier
+model does not load, and writes nothing when that address answers a request
+the scanner sends it during the run.
 
 Keep the pin file and the --hma directory outside the OASB checkout: a run
 is refused while the checkout has uncommitted or untracked files. Results are
@@ -181,9 +183,18 @@ export async function runCli(
     io.out(`DVAA ${record.dvaa.commit}, NanoMind manifest ${record.nanomind.manifestSha256}`);
     for (const [id, a] of Object.entries(summary.corpus.adapters)) {
       const unknown = a.unknownVerdicts > 0 ? `, ${a.unknownVerdicts} unknown verdicts (scan errors)` : '';
-      io.out(`corpus ${id}: ${a.malicious.detected}/${a.malicious.total} malicious detected${unknown}`);
+      const wordList = summary.nanomindUse?.corpus[id]?.samplesWithWordListScoring ?? 0;
+      const scoredByWordList = wordList > 0 ? `, ${wordList} of ${summary.corpus.samplesScanned} samples scored by the word list` : '';
+      io.out(`corpus ${id}: ${a.malicious.detected}/${a.malicious.total} malicious detected${unknown}${scoredByWordList}`);
     }
     io.out(`DVAA repository: ${summary.dvaaRepository.detected}/${summary.dvaaRepository.total} scenarios detected`);
+    const use = record.nanomindUse;
+    if (use) {
+      io.out(
+        `NanoMind: ${use.modelInferences} model inferences, ${use.wordListScorings} word-list scorings, ` +
+          `${use.neuralInferences} neural classifier inferences, ${use.daemonRequests} daemon requests (none answered)`,
+      );
+    }
     io.out(`Wrote ${outcome.runDirectory}/`);
     return 0;
   } catch (err) {

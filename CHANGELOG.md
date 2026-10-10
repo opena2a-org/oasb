@@ -42,6 +42,20 @@ stay on record here with the reason they changed.
   a regression. `src/benchmark/pinned/runs-of-record.test.ts` checks that
   every committed run names its pinned inputs and that its summary is the one
   its per-sample predictions give.
+- A pinned run records what scored each sample. hackmyagent scores a sample
+  with a word list instead of its classifier model when the model did not load
+  or an inference failed, and sends a sample it is unsure about to a NanoMind
+  daemon, so a recorded model manifest did not show that the model produced
+  the verdicts. Each prediction line now counts the classifier inferences that
+  ran the model, the word-list scorings, the neural classifier inferences and
+  the requests sent to the daemon address; `summary.json` sums them per adapter
+  and for DVAA, and `record.json` holds the run totals (record schema
+  `oasb-pinned-run/v2`). A run exits 2 before scanning when the classifier
+  model does not load, and exits 3, writing nothing, when the daemon address
+  answers a request during the scan, including a daemon that came up after the
+  checks before the scan and was gone before the checks after it. On 0.33.2
+  with the run of record's inputs, the verdicts are unchanged and one sample
+  was scored by the word list in each of the two adapters that use NanoMind.
 
 ### Removed
 
