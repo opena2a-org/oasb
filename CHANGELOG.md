@@ -56,6 +56,17 @@ stay on record here with the reason they changed.
   checks before the scan and was gone before the checks after it. On 0.33.2
   with the run of record's inputs, the verdicts are unchanged and one sample
   was scored by the word list in each of the two adapters that use NanoMind.
+- `results/2026-10-10-2a89ce5d/` is a pinned run of record that says what
+  scored each sample (record schema `oasb-pinned-run/v2`): hackmyagent 0.33.2,
+  DVAA commit `57918267d8d5` and the classifier files that release expects,
+  the inputs of `results/2026-10-10-d8306ef8/`. Every verdict is the one the
+  earlier run gave. In each of the two corpus adapters that use NanoMind, the
+  classifier model scored 4244 of the 4245 samples and the word list scored
+  one benign sample; the model scored every DVAA scenario that has a file to
+  scan (84 of 86). No daemon answered any of the 56 requests the scanner sent
+  to the daemon address.
+  `src/benchmark/pinned/runs-of-record.test.ts` now fails when no committed
+  run is a v2 run.
 
 ### Removed
 

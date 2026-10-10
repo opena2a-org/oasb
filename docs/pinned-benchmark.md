@@ -203,7 +203,21 @@ after the scan, every sample was scanned once by every adapter, and every
 count in `summary.json` is the one the two predictions files give. In a
 checkout with full history (not a shallow clone) it checks that the record's
 `oasb.commit` is an ancestor of `HEAD`. For a v2 run it also checks that the `nanomindUse` counts in the summary and the record
-are the sums of the prediction lines, and that no daemon answered.
+are the sums of the prediction lines, and that no daemon answered. The test
+fails when no committed run is a v2 run.
+
+| Run | Schema | hackmyagent | DVAA commit | NanoMind manifest sha256 |
+|---|---|---|---|---|
+| `results/2026-10-10-d8306ef8/` | v1 | 0.33.2 | `57918267d8d5` | `1f0390d275c7...` |
+| `results/2026-10-10-2a89ce5d/` | v2 | 0.33.2 | `57918267d8d5` | `1f0390d275c7...` |
+
+The two runs scanned the same inputs and gave the same verdict for every
+sample. The v2 run shows what scored them. In each of the two corpus adapters
+that use NanoMind, the classifier model scored 4244 of the 4245 samples and
+the word list scored the benign sample `REG-0023E588`. The model scored the
+84 DVAA scenarios that have a vulnerable file to scan; the other two list
+none, so nothing was compiled for them. The scanner sent 56 requests to the
+daemon address and every one was refused.
 
 To repeat a run, check out OASB at the record's `oasb.commit`, write a pin
 file from its `hackmyagent.version`, `hackmyagent.integrity`, `dvaa.commit`

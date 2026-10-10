@@ -111,6 +111,12 @@ describe('committed pinned runs', () => {
     expect(runs.length).toBeGreaterThan(0);
   });
 
+  // A v1 run does not show whether the model or the word list produced its verdicts.
+  it('holds at least one run of record that says what scored each sample', () => {
+    const schemas = runs.map(name => (JSON.parse(readFileSync(join(RESULTS_ROOT, name, 'record.json'), 'utf-8')) as PinnedRunRecord).schema);
+    expect(schemas).toContain(RECORD_SCHEMA);
+  });
+
   describe.each(runs)('results/%s', dirName => {
     const dir = join(RESULTS_ROOT, dirName);
 
