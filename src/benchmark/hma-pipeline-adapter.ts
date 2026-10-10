@@ -54,7 +54,13 @@ let hmaRoot: string = resolve(__dirname, '..', '..', '..', 'hackmyagent');
 // The HMA build version comes from the package.json of the hackmyagent root we load from;
 // the classifier version comes from the cached model manifest every user installs.
 let _hmaBuildVersion: string | null = null;
-let _tmeModelVersion: string | null = null;
+
+/** What identifies the classifier model: its version label, or the manifest sha256 of its directory. */
+interface TmeModelId {
+  version: string | null;
+  manifestSha256: string | null;
+}
+let _tmeModel: TmeModelId | null = null;
 
 /**
  * Load hackmyagent from `root` (a package directory holding package.json and
@@ -65,6 +71,16 @@ export function configureHmaRoot(root: string): void {
   hmaRoot = root;
   hmaLoaded = false;
   _hmaBuildVersion = null;
+}
+
+/**
+ * Name the classifier model by a verified model directory: its version label,
+ * or its manifest sha256 when it has no version label. Without this the
+ * adapters read the version from ~/.nanomind/models/nanomind-version.json.
+ * Call before constructing an adapter.
+ */
+export function configureTmeModel(model: { modelVersion: string | null; manifestSha256: string }): void {
+  _tmeModel = { version: model.modelVersion, manifestSha256: model.manifestSha256 };
 }
 
 /** Absolute path of the nanomind-core entry point the adapters import. */
@@ -84,18 +100,34 @@ function hmaBuildVersion(): string {
   return _hmaBuildVersion;
 }
 
-function tmeModelVersion(): string {
-  if (_tmeModelVersion) return _tmeModelVersion;
+function tmeModel(): TmeModelId {
+  if (_tmeModel) return _tmeModel;
+  let version: string | null = null;
   try {
     const path = require('path');
     const fs = require('fs');
     const os = require('os');
     const verPath = path.join(os.homedir(), '.nanomind', 'models', 'nanomind-version.json');
-    _tmeModelVersion = String(JSON.parse(fs.readFileSync(verPath, 'utf-8')).version || 'unknown');
+    const label = JSON.parse(fs.readFileSync(verPath, 'utf-8')).version;
+    version = label ? String(label) : null;
   } catch {
-    _tmeModelVersion = 'unknown';
+    version = null;
   }
-  return _tmeModelVersion;
+  _tmeModel = { version, manifestSha256: null };
+  return _tmeModel;
+}
+
+/** The classifier model's version label, its manifest sha256, or 'unknown'. */
+function tmeModelVersion(): string {
+  const { version, manifestSha256 } = tmeModel();
+  return version ?? (manifestSha256 ? `manifest-sha256:${manifestSha256}` : 'unknown');
+}
+
+/** The classifier model as named in an adapter name; empty when nothing identifies it. */
+function tmeModelName(): string {
+  const { version, manifestSha256 } = tmeModel();
+  if (version) return ` v${version}`;
+  return manifestSha256 ? ` manifest ${manifestSha256.slice(0, 12)}` : '';
 }
 
 export async function loadHMACore(): Promise<boolean> {
@@ -239,7 +271,7 @@ function disambiguateExfil(content: string, defaultCat: AttackCategory): AttackC
 // ============================================================================
 
 export class HMATMEOnlyAdapter implements ScannerAdapter {
-  name = `NanoMind TME v${tmeModelVersion()} (model only)`;
+  name = `NanoMind TME${tmeModelName()} (model only)`;
   version = tmeModelVersion();
   id = 'hma-tme-only';
 
@@ -293,7 +325,7 @@ export class HMATMEOnlyAdapter implements ScannerAdapter {
 // ============================================================================
 
 export class HMAPipelineAdapter implements ScannerAdapter {
-  name = `HMA Full Pipeline (AST + NanoMind v${tmeModelVersion()})`;
+  name = `HMA Full Pipeline (AST + NanoMind${tmeModelName()})`;
   version = hmaBuildVersion();
   id = 'hma-pipeline';
 

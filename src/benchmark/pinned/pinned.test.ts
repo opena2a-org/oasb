@@ -88,13 +88,14 @@ exports.getTMEClassifier = function () {
           },
         };
         this.onnxReady = true;
+        (g.__oasbFakeMade ??= {}).run = this.onnxSession.run;
       }
       return true;
     },
     async ensureModel() {
       if (g.__oasbFakeMutateModels) fs.writeFileSync(path.join(g.__oasbFakeMutateModels, 'fetched.bin'), 'new');
       if (g.__oasbFakeSwitchModel) g.__oasbFakeClassifier.modelPath = g.__oasbFakeSwitchModel;
-      if (g.__oasbFakeDuringRun) await g.__oasbFakeDuringRun();
+      if (g.__oasbFakeDuringRun) await g.__oasbFakeDuringRun(this);
     },
     async ensureReady() {},
     classify(content) {
@@ -113,6 +114,8 @@ exports.getTMEClassifier = function () {
       return this.classify(content);
     },
   };
+  for (const member of g.__oasbFakeClassifierLacks || []) delete instance[member];
+  Object.assign((g.__oasbFakeMade ??= {}), { tme: instance, classify: instance.classify });
   return instance;
 };
 `;
@@ -136,6 +139,7 @@ class TMENeuralClassifier {
   classify() { return { intentClass: 'benign', attackClass: 'none', confidence: 0.1 }; }
 }
 exports.TMENeuralClassifier = TMENeuralClassifier;
+Object.assign((globalThis.__oasbFakeMade ??= {}), { neural: TMENeuralClassifier, neuralClassify: TMENeuralClassifier.prototype.classify });
 `;
 
 const CORPUS = {
@@ -377,8 +381,11 @@ const g = globalThis as {
   __oasbFakeMutateModels?: string;
   __oasbFakeClassifier?: Fixture['classifier'];
   __oasbFakeSwitchModel?: string;
-  /** Called by the stand-in classifier's ensureModel(), after the corpus scan and before the DVAA scan. */
-  __oasbFakeDuringRun?: () => void | Promise<void>;
+  /**
+   * Called with the classifier by the stand-in classifier's ensureModel(): when
+   * the model-only adapter starts, and after the corpus scan before the DVAA scan.
+   */
+  __oasbFakeDuringRun?: (classifier: any) => unknown;
   /** The daemon address the stand-in compiler sends low-confidence samples to. */
   __oasbFakeDaemonUrl?: string;
   /** Directories the stand-in neural classifier looks for its model in. */
@@ -387,6 +394,16 @@ const g = globalThis as {
   __oasbFakeInferenceFailsOn?: string;
   /** Called by the stand-in compiler before it scores a sample. */
   __oasbFakeDuringCompile?: () => Promise<void>;
+  /** Members the stand-in classifier is created without. */
+  __oasbFakeClassifierLacks?: string[];
+  /** Set by the stand-in scanner: its classifier, and each function the run wraps as the scanner created it. */
+  __oasbFakeMade?: {
+    tme?: any;
+    classify?: unknown;
+    run?: unknown;
+    neural?: { prototype: { classify: unknown } };
+    neuralClassify?: unknown;
+  };
 };
 
 const FAKE_SWITCHES = [
@@ -398,6 +415,8 @@ const FAKE_SWITCHES = [
   '__oasbFakeModelLoadFails',
   '__oasbFakeInferenceFailsOn',
   '__oasbFakeDuringCompile',
+  '__oasbFakeClassifierLacks',
+  '__oasbFakeMade',
 ] as const;
 
 let fx: Fixture;
@@ -473,10 +492,17 @@ describe('pinned run', () => {
       ...use({ modelInferences: 4, daemonRequests: 1 }),
       scenariosWithWordListScoring: 0,
     });
+    // The adapters name the model by the version in the verified model directory.
+    expect(summary.corpus.adapters['hma-tme-only']).toMatchObject({ name: 'NanoMind TME v0.0.1-test (model only)', version: '0.0.1-test' });
+    expect(summary.corpus.adapters['hma-pipeline']).toMatchObject({ name: 'HMA Full Pipeline (AST + NanoMind v0.0.1-test)', version: '9.9.9' });
 
     const record = JSON.parse(readFileSync(join(runDir, 'record.json'), 'utf-8'));
     expect(record.schema).toBe('oasb-pinned-run/v2');
     expect(record.nanomindUse).toEqual(use({ modelInferences: 14, daemonRequests: 4 }));
+    // The run totals line the command prints.
+    expect(r.out).toContain(
+      'NanoMind: 14 model inferences, 0 word-list scorings, 0 neural classifier inferences, 4 daemon requests (none answered)',
+    );
     expect(record.hackmyagent).toEqual({
       version: '9.9.9',
       integrity: fx.pins.hackmyagent.integrity,
@@ -495,6 +521,27 @@ describe('pinned run', () => {
       daemon: `127.0.0.1:${closedPort}`,
     });
     expect(JSON.stringify(record)).not.toContain(fx.root);
+  });
+
+  it('names the NanoMind model by its manifest sha256 when the model directory has no version', async () => {
+    rmSync(join(fx.models, 'nanomind-version.json'));
+    const manifestSha256 = manifestSha(fx.models, ['tme/model.onnx', 'tokenizer.json']);
+    writeFileSync(fx.pinsPath, JSON.stringify({ ...fx.pins, nanomind: { manifestSha256 } }));
+    const r = await run(fx);
+    expect(r.err).toEqual([]);
+    expect(r.code).toBe(0);
+    const runDir = newRunDir(fx);
+
+    const record = JSON.parse(readFileSync(join(runDir, 'record.json'), 'utf-8'));
+    expect(record.nanomind.modelVersion).toBeNull();
+    const summary = JSON.parse(readFileSync(join(runDir, 'summary.json'), 'utf-8'));
+    const short = manifestSha256.slice(0, 12);
+    expect(summary.corpus.adapters['hma-tme-only']).toMatchObject({
+      name: `NanoMind TME manifest ${short} (model only)`,
+      version: `manifest-sha256:${manifestSha256}`,
+    });
+    expect(summary.corpus.adapters['hma-pipeline'].name).toBe(`HMA Full Pipeline (AST + NanoMind manifest ${short})`);
+    expect(JSON.stringify(summary)).not.toMatch(/vunknown|"version":"unknown"/);
   });
 
   it('counts an unknown verdict as not detected', async () => {
@@ -738,10 +785,121 @@ describe('pinned run', () => {
     }
   });
 
+  it('writes nothing and exits 3 when a NanoMind daemon answers every request on its own connection and stops listening before the DVAA scan', async () => {
+    let answered = 0;
+    let connections = 0;
+    const daemon = createHttpServer((_req, res) => {
+      answered++;
+      // No connection is dropped: each response closes its own connection.
+      res.setHeader('Connection', 'close');
+      res.end('{"confidence":0.1}');
+    });
+    daemon.on('connection', () => connections++);
+    // ensureModel() runs when the model-only adapter starts, before the full
+    // pipeline adapter sends its requests, and again before the DVAA scan.
+    let calls = 0;
+    g.__oasbFakeDuringRun = async () => {
+      calls++;
+      if (calls === 1) await new Promise<void>(done => daemon.listen(closedPort, '127.0.0.1', () => done()));
+      if (calls === 2) daemon.close();
+    };
+    try {
+      const r = await run(fx);
+      expect(calls).toBe(2);
+      // The three corpus requests were answered; the DVAA request found nothing listening.
+      expect(answered).toBe(3);
+      expect(connections).toBe(answered);
+      expect(daemon.listening).toBe(false);
+      expect(r.code).toBe(3);
+      expect(r.err.join('\n')).toMatch(
+        new RegExp(
+          `an input changed during the run.*a NanoMind daemon answered 3 of 4 requests at http://127\\.0\\.0\\.1:${closedPort} ` +
+            'while the run was scanning',
+        ),
+      );
+      expect(runDirs(fx)).toEqual(['2026-01-01-00000000']);
+    } finally {
+      if (daemon.listening) await new Promise<void>(done => daemon.close(() => done()));
+    }
+  });
+
+  it('does not count a request to another address as a daemon request', async () => {
+    let otherRequests = 0;
+    const other = createHttpServer((_req, res) => {
+      otherRequests++;
+      res.setHeader('Connection', 'close');
+      res.end('{}');
+    });
+    await new Promise<void>(done => other.listen(0, '127.0.0.1', () => done()));
+    const otherUrl = `http://127.0.0.1:${(other.address() as { port: number }).port}/v1/infer`;
+    // The stand-in scanner sends one request to another local listener while it scans a sample.
+    let sent: Promise<void> | undefined;
+    g.__oasbFakeDuringCompile = () => (sent ??= fetch(otherUrl).then(res => res.text()).then(() => undefined));
+    try {
+      const r = await run(fx);
+      expect(otherRequests).toBe(1);
+      expect(r.err).toEqual([]);
+      expect(r.code).toBe(0);
+      const record = JSON.parse(readFileSync(join(newRunDir(fx), 'record.json'), 'utf-8'));
+      expect(record.nanomindUse).toEqual(use({ modelInferences: 14, daemonRequests: 4 }));
+    } finally {
+      await new Promise<void>(done => other.close(() => done()));
+    }
+  });
+
+  it.each<[string, (classifier: any) => void]>([
+    [
+      'replaces its model session',
+      classifier => {
+        classifier.onnxSession = { run: async (feeds: { text: string }) => ({ evil: feeds.text.includes('EVIL') }) };
+      },
+    ],
+    [
+      'no longer reports its model ready',
+      classifier => {
+        classifier.onnxReady = false;
+      },
+    ],
+  ])('writes nothing and exits 3 when the classifier %s between the corpus and DVAA scans', async (_name, change) => {
+    // The second ensureModel() call is the one after the corpus scan.
+    let calls = 0;
+    g.__oasbFakeDuringRun = classifier => {
+      if (++calls === 2) change(classifier);
+    };
+    const r = await run(fx);
+    expect(calls).toBe(2);
+    expect(r.code).toBe(3);
+    expect(r.err.join('\n')).toMatch(
+      /an input changed during the run.*the NanoMind classifier model the scanner runs is not the one it loaded when the run started/,
+    );
+    expect(g.__oasbFakeScans).toBeGreaterThan(0);
+    expect(runDirs(fx)).toEqual(['2026-01-01-00000000']);
+  });
+
   it('puts back every function it wrapped for the run', async () => {
     const fetchBefore = globalThis.fetch;
+    const originals = () => {
+      const made = g.__oasbFakeMade!;
+      return [
+        made.tme.classify === made.classify,
+        made.tme.onnxSession.run === made.run,
+        made.neural!.prototype.classify === made.neuralClassify,
+        globalThis.fetch === fetchBefore,
+      ];
+    };
+    let duringRun: boolean[] = [];
+    g.__oasbFakeDuringRun = () => {
+      duringRun = originals();
+    };
     expect((await run(fx)).code).toBe(0);
-    expect(globalThis.fetch).toBe(fetchBefore);
+    // The classifier's word-list scorer, the model session's run, the neural
+    // classifier's classify and fetch were wrapped while the run scanned, and
+    // each is the function the scanner created after it.
+    expect(duringRun).toEqual([false, false, false, false]);
+    expect(originals()).toEqual([true, true, true, true]);
+    expect(g.__oasbFakeMade!.classify).toEqual(expect.any(Function));
+    expect(g.__oasbFakeMade!.run).toEqual(expect.any(Function));
+    expect(g.__oasbFakeMade!.neuralClassify).toEqual(expect.any(Function));
   });
 });
 
@@ -960,6 +1118,15 @@ describe('refusals before scanning', () => {
       },
       /hackmyagent 9\.9\.9 did not load the NanoMind classifier model in the pinned model directory, so it would score every sample with its word list/,
     ],
+    ...(['load', 'ensureReady', 'classify', 'onnxSession'] as const).map(
+      (member): [string, () => void, RegExp] => [
+        `the scanner's classifier has no ${member} member, so the harness cannot trace what scores a sample`,
+        () => {
+          g.__oasbFakeClassifierLacks = [member];
+        },
+        /cannot tell whether hackmyagent 9\.9\.9 scores samples with its NanoMind classifier model or with its word list/,
+      ],
+    ),
   ];
 
   it.each(cases)('exits 2 when %s', async (_name, arrange, message) => {

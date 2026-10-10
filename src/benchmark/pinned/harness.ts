@@ -29,6 +29,7 @@ import { join } from 'node:path';
 import { DVAALoadError, loadDVAAScenarios, scanDVAAScenario, type DVAAScenarioOutcome } from '../dvaa-suite.js';
 import {
   configureHmaRoot,
+  configureTmeModel,
   hmaCorePath,
   HMAPipelineAdapter,
   HMAPipelineStaticAdapter,
@@ -284,6 +285,8 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
   const samples = categorized(dataset);
 
   configureHmaRoot(inputs.hma.packageDir);
+  // The adapters name the model of the verified directory, not of ~/.nanomind/models.
+  configureTmeModel(inputs.nanomind);
   if (!(await loadHMACore())) {
     throw new Error(`hackmyagent ${inputs.hma.version} is installed but its nanomind-core entry point did not load`);
   }

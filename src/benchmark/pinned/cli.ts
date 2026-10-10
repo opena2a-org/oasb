@@ -4,9 +4,12 @@
  * Exit codes:
  *   0  the run wrote a new results directory (or --observe found no problem)
  *   1  unexpected failure
- *   2  refused: an input is unpinned, does not match its pin or is dirty, or
- *      the results directory exists; nothing was overwritten
- *   3  an input changed during the run; no results were written
+ *   2  refused: an input is unpinned, does not match its pin or is dirty, the
+ *      scanner's classifier cannot be traced, or the results directory exists;
+ *      nothing was overwritten
+ *   3  an input changed during the run, a daemon answered during the scan, or
+ *      the classifier's model session is not the one it loaded; no results
+ *      were written
  */
 
 import { homedir } from 'node:os';
@@ -51,7 +54,12 @@ nanomind-tme.bin and tokenizer.json, or while anything accepts a connection
 at 127.0.0.1:47200 (a NanoMind daemon): the scanner can take its results from
 either, and neither is pinned. A run is refused when the scanner's classifier
 model does not load, and writes nothing when that address answers a request
-the scanner sends it during the run.
+the scanner sends it during the run. A run is refused when the scanner's
+classifier has no load, ensureReady, classify or onnxSession member: the
+harness then cannot tell whether the model or the word list scores a sample.
+A run writes nothing when, after the scan, the classifier's model session is
+not the one it loaded when the run started, or the classifier no longer
+reports its model ready.
 
 Keep the pin file and the --hma directory outside the OASB checkout: a run
 is refused while the checkout has uncommitted or untracked files. Results are
@@ -59,7 +67,9 @@ written to results/<date>-<runid>/ and never overwrite an existing file. See
 docs/pinned-benchmark.md.
 
 Exit codes: 0 done, 1 unexpected failure, 2 refused (unpinned, mismatched or
-dirty input, or results exist), 3 an input changed during the run.
+dirty input, a classifier the harness cannot trace, or results exist), 3 an
+input changed during the run (including a daemon that answered, or a model
+session that is not the one it loaded).
 `;
 
 export interface CliIo {
