@@ -25,9 +25,9 @@ uncommitted or untracked files, and a pin file written inside it is one.
 |---|---|---|
 | hackmyagent | npm version and tarball integrity | the tarball is missing or its integrity differs from the pin; a file of the installed package was changed, removed or added |
 | DVAA | full commit id | HEAD is another commit; the checkout has modified or untracked files; a file the scenario loader reads is not the committed file (this catches git-ignored files); the commit has no `scenarios/` directory or an `expected-checks.json` that is not valid JSON |
-| NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty; the scanner's classifier reports a model or tokenizer file that is not a file of that directory |
+| NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty; the scanner's classifier reports a model or tokenizer file that is not a file of that directory; the classifier model does not load, so the scanner would score every sample with its word list |
 | OASB scoring code and corpus | the OASB commit | the checkout has uncommitted changes outside `results/`; `corpus/v2.json` is not tracked, or the bytes read from it are not the committed file; a tracked file is marked skip-worktree or assume-unchanged, which hides a change from `git status` |
-| Other model sources of the scanner | not pinned, so they must be absent | `~/.opena2a/nanomind/models`, or `node_modules/nanomind/training/models-tme-v3`, `models-tme-v2` or `models-tme` in the `--hma` directory, holds both `nanomind-tme.bin` and `tokenizer.json`; anything accepts a connection at `127.0.0.1:47200` |
+| Other model sources of the scanner | not pinned, so they must be absent | `~/.opena2a/nanomind/models`, or `node_modules/nanomind/training/models-tme-v3`, `models-tme-v2` or `models-tme` in the `--hma` directory, holds both `nanomind-tme.bin` and `tokenizer.json`; anything accepts a connection at `127.0.0.1:47200` before or after the scan, or answers a request the scanner sends there during the scan |
 
 The last row covers two sources the scanner's compiler can take its intent
 result from, besides the classifier that the NanoMind check covers. In
@@ -48,6 +48,42 @@ scan the hackmyagent check, the NanoMind check (the files the classifier
 reports included), the DVAA commit and status check and the other model
 sources check run again, and a run that fails one of them writes nothing. The
 OASB checkout and the per-file DVAA comparison are not checked a second time.
+
+The daemon address is checked again after the scan, but a daemon can come up
+and go away while the run scans. The harness therefore watches every request
+the scanner sends to the daemon address during the scan. A request that is not
+refused (a response, or a connection that was accepted and then failed) means
+a daemon was there, and the run writes nothing and exits 3.
+
+## What scored each sample
+
+A model file in the pinned directory does not show that the model produced
+the verdicts. hackmyagent 0.33.2 scores a sample with a word list when its
+classifier model did not load or an inference failed, and sends a sample its
+classifier is unsure about to the daemon address. The harness loads the
+classifier model before the first sample and refuses the run when it does not
+load. During the scan it counts, for each sample:
+
+| Field | Counts |
+|---|---|
+| `modelInferences` | classifier inferences that ran the model and returned |
+| `wordListScorings` | classifier scorings that used the word list instead of the model |
+| `neuralInferences` | inferences of the neural classifier tier |
+| `daemonRequests` | requests sent to the daemon address |
+| `daemonAnswers` | requests something at the daemon address answered; 0 in every written run |
+
+A sample with `wordListScorings` above 0 had at least one verdict input that
+did not come from the model. The full pipeline adapter compiles each sample
+once, and the compiler runs the classifier unless the neural classifier tier
+already decided; a DVAA scenario counts every file compiled plus the
+classifier call that labels each file's category. The counts come from the
+loaded release: the harness wraps the classifier's model
+session and word-list scorer, the neural classifier class, and the global
+`fetch` the compiler sends daemon requests with, for the duration of the run.
+The wrappers pass every call and result through unchanged. In hackmyagent
+0.33.2 the neural classifier tier is the second classifier above, and it looks
+for its model only in the directories that check covers, so a written run on
+that release has `neuralInferences` 0.
 
 ## What a run does not verify
 
@@ -84,6 +120,8 @@ checked out at the commit you will pin, with no local changes.
 
 NanoMind: the harness verifies `~/.nanomind/models`, the directory hackmyagent
 downloads its classifier model to. The models must be in place before the run.
+The classifier model runs on `onnxruntime-node`, which the hackmyagent install
+brings in; a run is refused when the model does not load.
 
 The scanner does not load its classifier model from that directory alone. It
 takes the first directory that holds a `tokenizer.json` from a list in which
@@ -132,10 +170,13 @@ creation, so a run never writes over an earlier result.
 
 | File | Content |
 |---|---|
-| `corpus-predictions.jsonl` | one line per corpus sample and adapter: sample id, label, category, source, artifact type, verdict, predicted category |
-| `dvaa-predictions.jsonl` | one line per DVAA scenario: detected or not, attack findings, and the verdict for each vulnerable file |
-| `summary.json` | detection over the malicious class per adapter and per category, the DVAA-sourced corpus samples, and the DVAA scenarios |
-| `record.json` | the hackmyagent version, tarball integrity and tarball sha256, the dependency lockfile sha256, the DVAA commit, the NanoMind manifest sha256 and file list, the OASB commit and corpus sha256, the other model sources checked, and the Node.js version |
+| `corpus-predictions.jsonl` | one line per corpus sample and adapter: sample id, label, category, source, artifact type, verdict, predicted category, and what scored it (`nanomind`) |
+| `dvaa-predictions.jsonl` | one line per DVAA scenario: detected or not, attack findings, the verdict for each vulnerable file, and what scored it (`nanomind`) |
+| `summary.json` | detection over the malicious class per adapter and per category, the DVAA-sourced corpus samples, the DVAA scenarios, and what scored the samples per adapter and for DVAA (`nanomindUse`) |
+| `record.json` | the hackmyagent version, tarball integrity and tarball sha256, the dependency lockfile sha256, the DVAA commit, the NanoMind manifest sha256 and file list, the OASB commit and corpus sha256, the other model sources checked, what scored samples over the whole run (`nanomindUse`), and the Node.js version |
+
+The record schema is `oasb-pinned-run/v2`. A `oasb-pinned-run/v1` run, such as
+`results/2026-10-10-d8306ef8/`, does not record what scored its samples.
 
 The corpus set is the categorized set: malicious samples without an attack
 category are left out. The summary does not compute F1, precision,
@@ -155,7 +196,9 @@ tarball integrity and tarball sha256, the DVAA commit and the NanoMind
 manifest sha256, the manifest sha256 is the hash of the file list in the
 record, the record names the other model sources the run checked before and
 after the scan, every sample was scanned once by every adapter, and every
-count in `summary.json` is the one the two predictions files give.
+count in `summary.json` is the one the two predictions files give. For a v2
+run it also checks that the `nanomindUse` counts in the summary and the record
+are the sums of the prediction lines, and that no daemon answered.
 
 To repeat a run, check out OASB at the record's `oasb.commit`, write a pin
 file from its `hackmyagent.version`, `hackmyagent.integrity`, `dvaa.commit`
@@ -170,7 +213,7 @@ checked before the run.
 | 0 | the run wrote a new results directory (with `--observe`: no problem found) |
 | 1 | unexpected failure |
 | 2 | refused: an input is unpinned, does not match its pin or is dirty, or the results directory exists |
-| 3 | an input changed during the run; no results were written |
+| 3 | an input changed during the run, or a daemon answered a request during the scan; no results were written |
 
 ## Development runners
 
