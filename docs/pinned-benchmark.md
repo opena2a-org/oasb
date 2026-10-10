@@ -25,7 +25,7 @@ uncommitted or untracked files, and a pin file written inside it is one.
 |---|---|---|
 | hackmyagent | npm version and tarball integrity | the tarball is missing or its integrity differs from the pin; a file of the installed package was changed, removed or added |
 | DVAA | full commit id | HEAD is another commit; the checkout has modified or untracked files; a file the scenario loader reads is not the committed file (this catches git-ignored files); the commit has no `scenarios/` directory or an `expected-checks.json` that is not valid JSON |
-| NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty; the scanner's classifier reports a model or tokenizer file that is not a file of that directory; the classifier model does not load, so the scanner would score every sample with its word list |
+| NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty; the scanner's classifier reports a model or tokenizer file that is not a file of that directory; the classifier model does not load, so the scanner would score every sample with its word list; the classifier has no `load`, `ensureReady`, `classify` or `onnxSession` member, so the harness cannot tell whether the model or the word list scores a sample (exit 2); after the scan, the classifier's model session is not the one it loaded when the run started, or the classifier no longer reports its model ready (exit 3, nothing written) |
 | OASB scoring code and corpus | the OASB commit | the checkout has uncommitted changes outside `results/`; `corpus/v2.json` is not tracked, or the bytes read from it are not the committed file; a tracked file is marked skip-worktree or assume-unchanged, which hides a change from `git status` |
 | Other model sources of the scanner | not pinned, so they must be absent | `~/.opena2a/nanomind/models`, or `node_modules/nanomind/training/models-tme-v3`, `models-tme-v2` or `models-tme` in the `--hma` directory, holds both `nanomind-tme.bin` and `tokenizer.json`; anything accepts a connection at `127.0.0.1:47200` before or after the scan, or answers a request the scanner sends there during the scan |
 
@@ -94,7 +94,11 @@ the scanner reads:
   (the other directories under `node_modules` in the `--hma` directory, and a
   `node_modules` directory inside the installed package) are not compared
   with anything. The run records the sha256 of `package-lock.json` in the
-  `--hma` directory when the file exists, and nothing else about them. The
+  `--hma` directory when the file exists, and nothing else about them. npm
+  writes the name of the `--hma` directory into the top-level `name` field of
+  that file, so the sha256 also depends on the directory name: the same
+  tarball installed in a directory with another name gives another value.
+  The steps below name it `hma-<version>`. The
   one check among them is the second classifier check above, which looks in
   three directories of `node_modules/nanomind`.
 - **The runtime.** The Node.js version, platform and architecture are
@@ -172,7 +176,7 @@ creation, so a run never writes over an earlier result.
 |---|---|
 | `corpus-predictions.jsonl` | one line per corpus sample and adapter: sample id, label, category, source, artifact type, verdict, predicted category, and what scored it (`nanomind`) |
 | `dvaa-predictions.jsonl` | one line per DVAA scenario: detected or not, attack findings, the verdict for each vulnerable file, and what scored it (`nanomind`) |
-| `summary.json` | detection over the malicious class per adapter and per category, the DVAA-sourced corpus samples, the DVAA scenarios, and what scored the samples per adapter and for DVAA (`nanomindUse`) |
+| `summary.json` | detection over the malicious class per adapter and per category, the DVAA-sourced corpus samples, the DVAA scenarios, and what scored the samples per adapter and for DVAA (`nanomindUse`). The adapters that use NanoMind name the model by the `version` in `nanomind-version.json` of the verified model directory, or, when the directory has no version, by its manifest sha256 |
 | `record.json` | the hackmyagent version, tarball integrity and tarball sha256, the dependency lockfile sha256, the DVAA commit, the NanoMind manifest sha256 and file list, the OASB commit and corpus sha256, the other model sources checked, what scored samples over the whole run (`nanomindUse`), and the Node.js version |
 
 The record schema is `oasb-pinned-run/v2`. A `oasb-pinned-run/v1` run, such as
@@ -196,8 +200,9 @@ tarball integrity and tarball sha256, the DVAA commit and the NanoMind
 manifest sha256, the manifest sha256 is the hash of the file list in the
 record, the record names the other model sources the run checked before and
 after the scan, every sample was scanned once by every adapter, and every
-count in `summary.json` is the one the two predictions files give. For a v2
-run it also checks that the `nanomindUse` counts in the summary and the record
+count in `summary.json` is the one the two predictions files give. In a
+checkout with full history (not a shallow clone) it checks that the record's
+`oasb.commit` is an ancestor of `HEAD`. For a v2 run it also checks that the `nanomindUse` counts in the summary and the record
 are the sums of the prediction lines, and that no daemon answered.
 
 To repeat a run, check out OASB at the record's `oasb.commit`, write a pin
@@ -212,8 +217,8 @@ checked before the run.
 |---|---|
 | 0 | the run wrote a new results directory (with `--observe`: no problem found) |
 | 1 | unexpected failure |
-| 2 | refused: an input is unpinned, does not match its pin or is dirty, or the results directory exists |
-| 3 | an input changed during the run, or a daemon answered a request during the scan; no results were written |
+| 2 | refused: an input is unpinned, does not match its pin or is dirty, or the results directory exists. This includes a scanner whose classifier has no `load`, `ensureReady`, `classify` or `onnxSession` member: the harness cannot tell whether the model or the word list scores a sample |
+| 3 | an input changed during the run, or a daemon answered a request during the scan; no results were written. This includes a classifier whose model session after the scan is not the one it loaded when the run started, or that no longer reports its model ready |
 
 ## Development runners
 

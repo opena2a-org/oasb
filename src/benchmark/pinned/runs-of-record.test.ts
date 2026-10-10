@@ -11,15 +11,17 @@
  * own predictions is not a figure of record.
  */
 
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RECORD_SCHEMA, RECORD_SCHEMA_V1, SUMMARY_NOTE, type PinnedRunRecord, type PinnedRunSummary } from './harness.js';
-import { SECOND_CLASSIFIER_FILES } from './inputs.js';
+import { gitEnv, SECOND_CLASSIFIER_FILES } from './inputs.js';
 import { addUse, noUse, type NanomindUse } from './nanomind-use.js';
 
-const RESULTS_ROOT = resolve(__dirname, '..', '..', '..', 'results');
+const OASB_ROOT = resolve(__dirname, '..', '..', '..');
+const RESULTS_ROOT = join(OASB_ROOT, 'results');
 const RUN_FILES = ['corpus-predictions.jsonl', 'dvaa-predictions.jsonl', 'record.json', 'summary.json'];
 
 interface CorpusPrediction {
@@ -52,6 +54,31 @@ function runDirectories(): string[] {
   return readdirSync(RESULTS_ROOT)
     .filter(name => statSync(join(RESULTS_ROOT, name)).isDirectory())
     .sort();
+}
+
+function git(...args: string[]) {
+  return spawnSync('git', ['-C', OASB_ROOT, ...args], { encoding: 'utf-8', env: gitEnv() });
+}
+
+/**
+ * True when the OASB checkout has its full history, so a commit missing from
+ * it is not a commit of the repository. A shallow clone, or a copy that is
+ * not a git checkout of its own, cannot show that.
+ */
+function fullHistory(): boolean {
+  const top = git('rev-parse', '--show-toplevel');
+  if (top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(OASB_ROOT)) return false;
+  const shallow = git('rev-parse', '--is-shallow-repository');
+  return shallow.status === 0 && shallow.stdout.trim() === 'false';
+}
+
+/** The record schema of a run, read when the tests are collected; null when unreadable. */
+function recordSchema(dir: string): string | null {
+  try {
+    return JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8')).schema ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function readJsonl<T>(path: string): T[] {
@@ -96,6 +123,11 @@ describe('committed pinned runs', () => {
       expect([RECORD_SCHEMA_V1, RECORD_SCHEMA]).toContain(record.schema);
       expect(dirName).toBe(`${record.startedAt.slice(0, 10)}-${record.runId}`);
       expect(record.oasb.commit).toMatch(/^([0-9a-f]{40}|[0-9a-f]{64})$/);
+      // The scoring code the run used is a commit of this repository's history.
+      if (fullHistory()) {
+        const ancestor = git('merge-base', '--is-ancestor', record.oasb.commit, 'HEAD');
+        expect(ancestor.status, `oasb.commit ${record.oasb.commit} is an ancestor of HEAD ${ancestor.stderr}`).toBe(0);
+      }
       expect(record.oasb.corpus.sha256).toMatch(/^[0-9a-f]{64}$/);
 
       expect(record.hackmyagent.version).toMatch(/^\d+\.\d+\.\d+$/);
@@ -163,10 +195,12 @@ describe('committed pinned runs', () => {
       expect(perCategory).toEqual(tally(rows));
     });
 
-    // A v1 run does not record what scored its samples, so this applies to v2 runs only.
+    // A v1 run does not record what scored its samples, so this test is
+    // registered for other runs only and is not reported as passed for one.
+    if (recordSchema(dir) === RECORD_SCHEMA_V1) return;
+
     it('says what scored every sample, and no daemon answered', () => {
       const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
-      if (record.schema === RECORD_SCHEMA_V1) return;
       const summary: PinnedRunSummary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf-8'));
       const corpus = readJsonl<CorpusPrediction>(join(dir, record.outputs.corpusPredictions));
       const dvaa = readJsonl<DvaaPrediction>(join(dir, record.outputs.dvaaPredictions));

@@ -72,6 +72,19 @@ stay on record here with the reason they changed.
 
 ### Changed
 
+- A pinned run's `summary.json` names the NanoMind model of the two adapters
+  that use it by the `version` in `nanomind-version.json` of the verified
+  model directory, or by the directory's manifest sha256 when it has no
+  version. It read the version from `~/.nanomind/models` whichever directory
+  was verified, and wrote `vunknown` and `"version": "unknown"` when there was
+  no version file; `results/2026-10-10-d8306ef8/` keeps the labels it was
+  written with. `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a
+  checkout with full history, that each run's `oasb.commit` is an ancestor of
+  `HEAD`. `docs/pinned-benchmark.md` and `--help` describe two more refusals:
+  a scanner whose classifier the harness cannot trace (exit 2), and a
+  classifier whose model session after the scan is not the one it loaded
+  (exit 3). The docs also say that the recorded lockfile sha256 depends on the
+  name of the `--hma` directory, which npm writes into the lockfile.
 - `scripts/run-benchmark-v2.ts` and `scripts/run-dvaa-benchmark.ts` load the
   sibling hackmyagent and DVAA checkouts unpinned, so they now refuse to run
   (exit 2) without `--unpinned`. They no longer overwrite
