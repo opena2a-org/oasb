@@ -1,0 +1,63 @@
+{
+  "schema": "oasb-pinned-run/v1",
+  "runId": "d8306ef8",
+  "startedAt": "2026-10-10T15:39:33.894Z",
+  "finishedAt": "2026-10-10T15:39:42.596Z",
+  "oasb": {
+    "commit": "b9519c65d40978fb2a06fc0581acefb50163729d",
+    "corpus": {
+      "path": "corpus/v2.json",
+      "sha256": "3ca866a0e637fa198bae17cd3a8f31fb02ad20f50fedcac1caa290e6dceba14e",
+      "datasetVersion": "v2.0",
+      "samplesScanned": 4245
+    }
+  },
+  "hackmyagent": {
+    "version": "0.33.2",
+    "integrity": "sha512-9DeR/g4pruOW1yzF/nlTIvpPEN1HTcIgSKf9cUHi2nXgSYfhmbH0McpJeFzZJFaXy1KEY34jVXltyhvc7WiiQQ==",
+    "tarballSha256": "45427bc8c28121ff64a2f3fffc6ae1313efef0ba75a47f8a79b7cc4ad42dd78c",
+    "dependencyLockSha256": "2adc62250c59562f90afff723f1a53d08f44f8656efdb5837cd57cc767b9bf67"
+  },
+  "dvaa": {
+    "commit": "57918267d8d529ceec6d40fc9836ab09d128eee4",
+    "scenarios": 86,
+    "filesVerified": 279
+  },
+  "nanomind": {
+    "manifestSha256": "1f0390d275c734103b002e20912ce86dfa3177a3a9d6808045590d6f909e7808",
+    "modelVersion": null,
+    "files": [
+      {
+        "path": "nanomind-tme.onnx",
+        "sha256": "1c9c6db00385e0e871ee6d2508d90a3210eddd4abf45365151fb859d8abab9eb"
+      },
+      {
+        "path": "nanomind-tme.onnx.data",
+        "sha256": "1367c0d3086b8d5c698dc37ae309c3afdb41ffa4d35ecac9b8f1882ffeb1d018"
+      },
+      {
+        "path": "tokenizer.json",
+        "sha256": "5ace7e6441505cf24dfb84d10b237c66edccaece075b3c5b0736c007d65355ce"
+      }
+    ]
+  },
+  "otherModelSources": {
+    "handling": "refused-when-present",
+    "checked": "before-and-after-scan",
+    "secondClassifierFiles": [
+      "nanomind-tme.bin",
+      "tokenizer.json"
+    ],
+    "daemon": "127.0.0.1:47200"
+  },
+  "runtime": {
+    "node": "v26.7.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "outputs": {
+    "corpusPredictions": "corpus-predictions.jsonl",
+    "dvaaPredictions": "dvaa-predictions.jsonl",
+    "summary": "summary.json"
+  }
+}

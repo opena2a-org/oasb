@@ -146,6 +146,23 @@ A pinned run is a first measurement on recorded inputs. Earlier figures came
 from unpinned runs on unrecorded inputs, so they are not a baseline for it,
 and a difference from them is not a regression.
 
+## Runs of record
+
+A run directory committed under `results/` is a run of record.
+`src/benchmark/pinned/runs-of-record.test.ts` checks each one: the directory
+holds the four files a run writes, the record names the hackmyagent version,
+tarball integrity and tarball sha256, the DVAA commit and the NanoMind
+manifest sha256, the manifest sha256 is the hash of the file list in the
+record, the record names the other model sources the run checked before and
+after the scan, every sample was scanned once by every adapter, and every
+count in `summary.json` is the one the two predictions files give.
+
+To repeat a run, check out OASB at the record's `oasb.commit`, write a pin
+file from its `hackmyagent.version`, `hackmyagent.integrity`, `dvaa.commit`
+and `nanomind.manifestSha256`, and prepare the inputs as above. The record
+lists the sha256 of each model file, so model files fetched again can be
+checked before the run.
+
 ## Exit codes
 
 | Code | Meaning |
