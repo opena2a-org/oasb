@@ -146,9 +146,10 @@ stay on record here with the reason they changed.
   `npm run test:scripts`.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of seven tests, so committing a run no longer changes the
-  `npm test` total (336 tests, 335 passing). It no longer needs a committed
-  run of the current record schema: a run of any schema but v1 that records
-  what scored its samples is enough, so raising the schema does not fail it
+  `npm test` total (339 tests, 338 passing). Its check that at least one
+  committed run says what scored its samples no longer needs a run of the
+  current record schema: a run of any schema but v1 that records what scored
+  its samples is enough, so raising the schema does not fail that check
   before a run of the new schema exists.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
