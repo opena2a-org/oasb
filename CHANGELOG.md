@@ -24,7 +24,9 @@ stay on record here with the reason they changed.
 - The README opens with Quick Start (clone, `npm ci`, `npm test`) and is under
   400 lines. The per-test tables moved to `docs/test-catalog.md`; Contributing
   and Updates moved below the reference sections. `npm run check:readme` checks
-  that layout and every relative link and anchor, and `npm run smoke` runs it.
+  that layout and every relative link and anchor, written inline
+  (`[text](path)`), as a reference definition (`[label]: path`) or as an HTML
+  `href`, and `npm run smoke` runs it.
 - The README's Skills Security Benchmark section now matches the scoring code:
   the nine attack categories in `src/benchmark/types.ts`, controls SS-01 to
   SS-10 and SEC-021 with their compliance levels in

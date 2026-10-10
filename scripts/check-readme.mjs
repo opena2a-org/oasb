@@ -7,7 +7,9 @@
 //   2. the first H2 is "Quick Start" and starts before line QUICK_START_BY;
 //   3. a fenced code block with a runnable command starts before line COMMAND_BY;
 //   4. every relative link in the README resolves to a file in the repository,
-//      and every #anchor resolves to a heading in its target file.
+//      and every #anchor resolves to a heading in its target file. Links are
+//      read from inline `[text](target)`, reference definitions
+//      `[label]: target` and HTML `href="target"` attributes.
 //
 // Usage: node scripts/check-readme.mjs [path/to/README.md]
 // Exit code 0 when every check passes, 1 otherwise. Run by npm run smoke.
@@ -118,11 +120,24 @@ function anchorsOf(file) {
   return anchorCache.get(file);
 }
 
+// Link targets on one prose line: inline [text](target), a reference
+// definition [label]: target (footnotes [^1]: are not links), and HTML
+// href="target" / href='target'.
+function linkTargets(prose) {
+  const targets = [...prose.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1]);
+  const def = prose.match(/^ {0,3}\[(?!\^)[^\]]+\]:\s*(?:<([^>\s]+)>|(\S+))/);
+  if (def) targets.push(def[1] || def[2]);
+  for (const m of prose.matchAll(/<[a-z][^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    targets.push(m[1] ?? m[2]);
+  }
+  return targets;
+}
+
 for (const { n, line, inFence } of readme) {
   if (inFence) continue;
   const prose = line.replace(/`[^`]*`/g, '');
-  for (const m of prose.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
-    const target = m[1];
+  for (const target of linkTargets(prose)) {
+    if (!target) continue;
     if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue; // http:, https:, mailto:
     const [pathPart, anchor] = target.split('#');
     const file = pathPart ? resolve(dirname(readmePath), decodeURIComponent(pathPart)) : readmePath;

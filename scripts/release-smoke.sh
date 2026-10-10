@@ -22,6 +22,7 @@ git clone --quiet "$ROOT" "$TMP/oasb"
 cd "$TMP/oasb"
 
 echo "==> README layout and link check"
+node --test scripts/check-readme.test.mjs
 node scripts/check-readme.mjs
 
 echo "==> npm ci (lockfile install, registry deps only)"
