@@ -244,7 +244,8 @@ git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm install
 
 # Pinned run: corpus and DVAA scenarios, writes results/<date>-<runid>/
-npx tsx scripts/run-pinned-benchmark.ts --pins pins.json --hma <dir> --dvaa <dir>
+# (keep the pin file and the --hma directory outside the checkout)
+npx tsx scripts/run-pinned-benchmark.ts --pins ../pins.json --hma <dir> --dvaa <dir>
 ```
 
 The figures in this document came from the earlier runners

@@ -9,10 +9,11 @@
  *   - the DVAA checkout by commit
  *   - the NanoMind model directory by manifest sha256
  *
- * The OASB checkout (scoring code and corpus) must be committed and clean.
- * An unpinned, mismatched or dirty input stops the run before anything is
- * scanned. The scanner's dependencies and its other model sources are not
- * checked; docs/pinned-benchmark.md lists what a run verifies and what it
+ * The OASB checkout (scoring code and corpus) must be committed and clean,
+ * and the scanner's other model sources (a second classifier's files and a
+ * NanoMind daemon) must be absent. An unpinned, mismatched or dirty input
+ * stops the run before anything is scanned. The scanner's dependencies are
+ * not checked; docs/pinned-benchmark.md lists what a run verifies and what it
  * does not. The run writes a new `results/<date>-<runid>/` directory holding
  * per-sample predictions, a summary and a run record, and never writes to an
  * existing file or directory.
@@ -22,7 +23,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { arch, platform } from 'node:os';
 import { join } from 'node:path';
-import { loadDVAAScenarios, scanDVAAScenario, type DVAAScenarioOutcome } from '../dvaa-suite.js';
+import { DVAALoadError, loadDVAAScenarios, scanDVAAScenario, type DVAAScenarioOutcome } from '../dvaa-suite.js';
 import {
   configureHmaRoot,
   hmaCorePath,
@@ -34,13 +35,17 @@ import {
 import type { ScannerAdapter } from '../runner.js';
 import { ATTACK_CATEGORIES, type BenchmarkDataset, type BenchmarkSample, type ScannerResult } from '../types.js';
 import {
+  defaultOtherModelSources,
+  SECOND_CLASSIFIER_FILES,
   verifyCorpus,
   verifyDvaa,
   verifyDvaaFiles,
   verifyHackmyagent,
   verifyLoadedModel,
   verifyNanomind,
+  verifyNoOtherModelSources,
   type NanomindManifest,
+  type OtherModelSources,
   type VerifiedHackmyagent,
 } from './inputs.js';
 import { loadPins, PinError, type BenchmarkPins } from './pins.js';
@@ -72,6 +77,11 @@ export interface PinnedRunOptions {
    * refused when the scanner's classifier reports a file outside it.
    */
   nanomindModelsDir: string;
+  /**
+   * The scanner's other model sources; the run is refused while one is
+   * present. Default: ~/.opena2a/nanomind/models and 127.0.0.1:47200.
+   */
+  otherModelSources?: OtherModelSources;
   /** OASB checkout holding corpus/v2.json; results go to <oasbRoot>/results. */
   oasbRoot: string;
   /** Fixed run id, for tests. Default: 8 random hex characters. */
@@ -98,6 +108,13 @@ export interface PinnedRunRecord {
   hackmyagent: Omit<VerifiedHackmyagent, 'packageDir'>;
   dvaa: { commit: string; scenarios: number; filesVerified: number };
   nanomind: NanomindManifest;
+  /** How the scanner's unpinned model sources were kept out of the run. */
+  otherModelSources: {
+    handling: 'refused-when-present';
+    checked: 'before-and-after-scan';
+    secondClassifierFiles: string[];
+    daemon: string;
+  };
   runtime: { node: string; platform: string; arch: string };
   outputs: { corpusPredictions: string; dvaaPredictions: string; summary: string };
 }
@@ -159,7 +176,7 @@ interface AllInputs {
 
 function verifyAll(opts: PinnedRunOptions): AllInputs {
   const pins = loadPins(opts.pinsPath);
-  const corpus = verifyCorpus(opts.oasbRoot);
+  const corpus = verifyCorpus(opts.oasbRoot, undefined, [opts.pinsPath, opts.hmaDir]);
   const hma = verifyHackmyagent(opts.hmaDir, pins.hackmyagent);
   const nanomind = verifyNanomind(opts.nanomindModelsDir, pins.nanomind);
   const dvaa = verifyDvaa(opts.dvaaDir, pins.dvaa);
@@ -182,7 +199,8 @@ async function scanCorpus(
   return results;
 }
 
-function writeNew(path: string, text: string): void {
+/** Create `path` holding `text`; throws ResultsExistError when it exists. */
+export function writeNew(path: string, text: string): void {
   try {
     writeFileSync(path, text, { flag: 'wx' });
   } catch (err) {
@@ -201,7 +219,18 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
   // 1. Every input is pinned, matches its pin and is clean. Nothing is scanned
   //    and nothing is written until all of these pass.
   const inputs = verifyAll(opts);
-  const { scenarios, readFiles } = loadDVAAScenarios(opts.dvaaDir, inputs.dvaaObjectFormat);
+  const otherModelSources = opts.otherModelSources ?? defaultOtherModelSources();
+  await verifyNoOtherModelSources(otherModelSources);
+  let loaded: ReturnType<typeof loadDVAAScenarios>;
+  try {
+    loaded = loadDVAAScenarios(opts.dvaaDir, inputs.dvaaObjectFormat);
+  } catch (err) {
+    if (err instanceof DVAALoadError) {
+      throw new PinError(`unusable input: ${err.message} at the pinned commit ${inputs.dvaaCommit}`);
+    }
+    throw err;
+  }
+  const { scenarios, readFiles } = loaded;
   verifyDvaaFiles(opts.dvaaDir, inputs.dvaaCommit, readFiles);
 
   const runId = opts.runId ?? randomBytes(4).toString('hex');
@@ -309,11 +338,13 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
 
   // 4. The inputs are still the pinned ones. A scanner that fetched a model,
   //    switched to another model file or changed its own install during the
-  //    run invalidates the run.
+  //    run invalidates the run, and so does another model source that
+  //    appeared during it.
   try {
     verifyHackmyagent(opts.hmaDir, inputs.pins.hackmyagent);
     verifyLoadedModel(tme, opts.nanomindModelsDir, verifyNanomind(opts.nanomindModelsDir, inputs.pins.nanomind));
     verifyDvaa(opts.dvaaDir, inputs.pins.dvaa);
+    await verifyNoOtherModelSources(otherModelSources);
   } catch (err) {
     if (err instanceof PinError) {
       throw new InputDriftError(`an input changed during the run, so no results were written: ${err.message}`);
@@ -364,6 +395,12 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
     hackmyagent,
     dvaa: { commit: inputs.dvaaCommit, scenarios: scenarios.length, filesVerified: readFiles.length },
     nanomind: inputs.nanomind,
+    otherModelSources: {
+      handling: 'refused-when-present',
+      checked: 'before-and-after-scan',
+      secondClassifierFiles: [...SECOND_CLASSIFIER_FILES],
+      daemon: `${otherModelSources.daemon.host}:${otherModelSources.daemon.port}`,
+    },
     runtime: { node: process.version, platform: platform(), arch: arch() },
     outputs,
   };

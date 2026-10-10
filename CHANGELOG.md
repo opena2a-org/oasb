@@ -16,17 +16,22 @@ stay on record here with the reason they changed.
   tarball, a DVAA checkout with local changes or a file the scenario loader
   reads that is not committed, a changed model file, a model or tokenizer file
   that the scanner's classifier would load from outside the verified model
-  directory, or an OASB checkout with uncommitted changes. Each run writes a
+  directory, an OASB checkout with uncommitted changes or with tracked files
+  marked skip-worktree or assume-unchanged, a corpus file whose bytes are not
+  the committed file, a DVAA commit without `scenarios/` or with an
+  `expected-checks.json` that is not valid JSON, or one of the scanner's
+  unpinned model sources present (`nanomind-tme.bin` and `tokenizer.json` in
+  `~/.opena2a/nanomind/models`, or anything accepting a connection at
+  `127.0.0.1:47200`). Each run writes a
   new `results/<date>-<runid>/` holding
   per-sample predictions, a summary of detection over the malicious class and
   a run record naming the versions and hashes of the inputs it checked, and
   never writes to an existing file. A run writes nothing and exits 3 when the
-  hackmyagent install, the model directory or the DVAA checkout fails its
-  check again after the scan. `--observe` prints the pin values of a set of
-  inputs. A pinned run does not verify the scanner's dependencies (it records
-  the sha256 of their lockfile) or the other places the scanner can take a
-  model result from; `docs/pinned-benchmark.md` lists what a run checks and
-  what it does not.
+  hackmyagent install, the model directory, the DVAA checkout or the other
+  model sources check fails again after the scan. `--observe` prints the pin
+  values of a set of inputs. A pinned run does not verify the scanner's
+  dependencies (it records the sha256 of their lockfile);
+  `docs/pinned-benchmark.md` lists what a run checks and what it does not.
 
 ### Removed
 
@@ -48,7 +53,9 @@ stay on record here with the reason they changed.
   (exit 2) without `--unpinned`. They no longer overwrite
   `benchmark-results-v6.json` or `dvaa-benchmark-results.json`: they print
   their results and write a file only to a new path given with
-  `--out=<file>`.
+  `--out=<file>`. The deprecated `scripts/run-benchmark.ts` now points to the
+  pinned harness and to `run-benchmark-v2.ts --unpinned`; it printed a
+  `run-benchmark-v2.ts` command without `--unpinned`, which is refused.
 - The README opens with Quick Start (clone, `npm ci`, `npm test`) and is under
   400 lines. The per-test tables moved to `docs/test-catalog.md`; Contributing
   and Updates moved below the reference sections. `npm run check:readme` checks

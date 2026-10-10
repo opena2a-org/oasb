@@ -14,11 +14,14 @@ import { join, resolve } from 'node:path';
 import { loadDVAAScenarios } from '../dvaa-suite.js';
 import { InputDriftError, ResultsExistError, runPinnedBenchmark, type PinnedRunOptions } from './harness.js';
 import {
+  defaultOtherModelSources,
   nanomindManifest,
   observeDvaa,
   observeHackmyagent,
   verifyDvaaFiles,
   verifyHackmyagent,
+  verifyNoOtherModelSources,
+  type OtherModelSources,
 } from './inputs.js';
 import { PinError } from './pins.js';
 
@@ -40,8 +43,14 @@ Options:
 The NanoMind model directory is ~/.nanomind/models. The scanner looks in
 other places before it (models/ under the working directory comes first), so
 a run is refused when the scanner's classifier reports a model or tokenizer
-file that is not in that directory. Results are written to
-results/<date>-<runid>/ and never overwrite an existing file. See
+file that is not in that directory. A run is also refused while
+~/.opena2a/nanomind/models holds both nanomind-tme.bin and tokenizer.json,
+or while anything accepts a connection at 127.0.0.1:47200 (a NanoMind
+daemon): the scanner can take its results from either, and neither is pinned.
+
+Keep the pin file and the --hma directory outside the OASB checkout: a run
+is refused while the checkout has uncommitted or untracked files. Results are
+written to results/<date>-<runid>/ and never overwrite an existing file. See
 docs/pinned-benchmark.md.
 
 Exit codes: 0 done, 1 unexpected failure, 2 refused (unpinned, mismatched or
@@ -66,7 +75,13 @@ function option(args: string[], name: string): string | undefined {
 }
 
 /** Print the pin values the given inputs have now, and any reason they would be refused. */
-function observe(hmaDir: string, dvaaDir: string, modelsDir: string, io: CliIo): number {
+async function observe(
+  hmaDir: string,
+  dvaaDir: string,
+  modelsDir: string,
+  otherModelSources: OtherModelSources,
+  io: CliIo,
+): Promise<number> {
   const problems: string[] = [];
   const pins: Record<string, unknown> = {};
 
@@ -101,6 +116,12 @@ function observe(hmaDir: string, dvaaDir: string, modelsDir: string, io: CliIo):
     problems.push((err as Error).message);
   }
 
+  try {
+    await verifyNoOtherModelSources(otherModelSources);
+  } catch (err) {
+    problems.push((err as Error).message);
+  }
+
   io.out(JSON.stringify(pins, null, 2));
   const version = (pins.hackmyagent as { version?: string } | undefined)?.version;
   if (version) {
@@ -113,7 +134,9 @@ function observe(hmaDir: string, dvaaDir: string, modelsDir: string, io: CliIo):
 export async function runCli(
   argv: string[],
   io: CliIo = defaultIo,
-  overrides: Partial<Pick<PinnedRunOptions, 'oasbRoot' | 'nanomindModelsDir' | 'runId' | 'now'>> = {},
+  overrides: Partial<
+    Pick<PinnedRunOptions, 'oasbRoot' | 'nanomindModelsDir' | 'otherModelSources' | 'runId' | 'now'>
+  > = {},
 ): Promise<number> {
   const args = argv.filter(a => a !== '--');
   if (args.includes('--help') || args.includes('-h')) {
@@ -125,6 +148,7 @@ export async function runCli(
   const dvaaDir = option(args, '--dvaa');
   const pinsPath = option(args, '--pins');
   const nanomindModelsDir = overrides.nanomindModelsDir ?? join(homedir(), '.nanomind', 'models');
+  const otherModelSources = overrides.otherModelSources ?? defaultOtherModelSources();
   const oasbRoot = overrides.oasbRoot ?? resolve(__dirname, '..', '..', '..');
 
   if (!hmaDir || !dvaaDir || (!pinsPath && !args.includes('--observe'))) {
@@ -134,7 +158,7 @@ export async function runCli(
   }
 
   if (args.includes('--observe')) {
-    return observe(resolve(hmaDir), resolve(dvaaDir), nanomindModelsDir, io);
+    return observe(resolve(hmaDir), resolve(dvaaDir), nanomindModelsDir, otherModelSources, io);
   }
 
   try {
@@ -143,6 +167,7 @@ export async function runCli(
       hmaDir: resolve(hmaDir),
       dvaaDir: resolve(dvaaDir),
       nanomindModelsDir,
+      otherModelSources,
       oasbRoot,
       runId: overrides.runId,
       now: overrides.now,
