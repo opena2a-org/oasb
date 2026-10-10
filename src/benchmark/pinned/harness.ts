@@ -36,6 +36,7 @@ import {
   verifyDvaa,
   verifyDvaaFiles,
   verifyHackmyagent,
+  verifyLoadedModel,
   verifyNanomind,
   type NanomindManifest,
   type VerifiedHackmyagent,
@@ -64,7 +65,10 @@ export interface PinnedRunOptions {
   hmaDir: string;
   /** damn-vulnerable-ai-agent checkout. */
   dvaaDir: string;
-  /** The model directory the scanner loads NanoMind models from. */
+  /**
+   * The NanoMind model directory that is checked against the pin. The run is
+   * refused when the scanner's classifier reports a file outside it.
+   */
   nanomindModelsDir: string;
   /** OASB checkout holding corpus/v2.json; results go to <oasbRoot>/results. */
   oasbRoot: string;
@@ -221,6 +225,12 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
   if (!(await loadHMACore())) {
     throw new Error(`hackmyagent ${inputs.hma.version} is installed but its nanomind-core entry point did not load`);
   }
+  // The scanner chooses where it loads its classifier model from, and it
+  // looks in other places before the verified directory. getTMEClassifier()
+  // returns one shared instance, the one the model-only adapter scans with.
+  const core = await import(hmaCorePath());
+  const tme = core.getTMEClassifier();
+  verifyLoadedModel(tme, opts.nanomindModelsDir, inputs.nanomind);
 
   // 2. Corpus: the three adapters, in the order the v2 runner uses.
   log(`corpus: ${samples.length} samples, hackmyagent ${inputs.hma.version}`);
@@ -281,9 +291,7 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
 
   // 3. DVAA repository: every scenario, full pipeline.
   log(`dvaa: ${scenarios.length} scenarios at ${inputs.dvaaCommit}`);
-  const core = await import(hmaCorePath());
   const compiler = new core.SemanticCompiler({ useNanoMind: true });
-  const tme = core.getTMEClassifier();
   await tme.ensureModel();
   await tme.ensureReady();
   const outcomes: DVAAScenarioOutcome[] = [];
@@ -297,11 +305,12 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
   const dvaaDetected = outcomes.filter(o => o.result.detected).length;
   log(`  dvaa: ${dvaaDetected}/${outcomes.length} scenarios detected`);
 
-  // 4. The inputs are still the pinned ones. A scanner that fetched a model or
-  //    changed its own install during the run invalidates the run.
+  // 4. The inputs are still the pinned ones. A scanner that fetched a model,
+  //    switched to another model file or changed its own install during the
+  //    run invalidates the run.
   try {
     verifyHackmyagent(opts.hmaDir, inputs.pins.hackmyagent);
-    verifyNanomind(opts.nanomindModelsDir, inputs.pins.nanomind);
+    verifyLoadedModel(tme, opts.nanomindModelsDir, verifyNanomind(opts.nanomindModelsDir, inputs.pins.nanomind));
     verifyDvaa(opts.dvaaDir, inputs.pins.dvaa);
   } catch (err) {
     if (err instanceof PinError) {

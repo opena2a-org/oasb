@@ -46,8 +46,11 @@ exports.analyzeCapabilities = function (ast) {
 };
 exports.getTMEClassifier = function () {
   return {
+    get modelPath() { return g.__oasbFakeClassifier.modelPath; },
+    get tokenizerPath() { return g.__oasbFakeClassifier.tokenizerPath; },
     async ensureModel() {
       if (g.__oasbFakeMutateModels) fs.writeFileSync(path.join(g.__oasbFakeMutateModels, 'fetched.bin'), 'new');
+      if (g.__oasbFakeSwitchModel) g.__oasbFakeClassifier.modelPath = g.__oasbFakeSwitchModel;
     },
     async ensureReady() {},
     async classifyAsync(content) {
@@ -139,6 +142,8 @@ interface Fixture {
   tarball: string;
   dvaa: string;
   models: string;
+  /** The model and tokenizer files the stand-in classifier reports for this fixture. */
+  classifier: { modelPath?: string; tokenizerPath?: string };
   pinsPath: string;
   pins: { hackmyagent: { version: string; integrity: string }; dvaa: { commit: string }; nanomind: { manifestSha256: string } };
 }
@@ -182,6 +187,8 @@ function makeFixture(): Fixture {
   const models = join(root, 'models');
   write(join(models, 'nanomind-version.json'), '{"version":"0.0.1-test"}\n');
   write(join(models, 'tme', 'model.onnx'), 'weights-v1');
+  write(join(models, 'tokenizer.json'), '{"evil":1}\n');
+  const classifier = { modelPath: join(models, 'tme', 'model.onnx'), tokenizerPath: join(models, 'tokenizer.json') };
 
   const pins = {
     hackmyagent: {
@@ -189,12 +196,12 @@ function makeFixture(): Fixture {
       integrity: `sha512-${createHash('sha512').update(readFileSync(tarball)).digest('base64')}`,
     },
     dvaa: { commit },
-    nanomind: { manifestSha256: manifestSha(models, ['nanomind-version.json', 'tme/model.onnx']) },
+    nanomind: { manifestSha256: manifestSha(models, ['nanomind-version.json', 'tme/model.onnx', 'tokenizer.json']) },
   };
   const pinsPath = join(root, 'pins.json');
   writeFileSync(pinsPath, JSON.stringify(pins, null, 2));
 
-  return { root, oasb, hma, installed, tarball, dvaa, models, pinsPath, pins };
+  return { root, oasb, hma, installed, tarball, dvaa, models, classifier, pinsPath, pins };
 }
 
 interface Run {
@@ -206,6 +213,7 @@ interface Run {
 async function run(fx: Fixture, extraOverrides: Record<string, unknown> = {}, argv?: string[]): Promise<Run> {
   const out: string[] = [];
   const err: string[] = [];
+  g.__oasbFakeClassifier = fx.classifier;
   const code = await runCli(
     argv ?? ['--pins', fx.pinsPath, '--hma', fx.hma, '--dvaa', fx.dvaa],
     { out: l => out.push(l), err: l => err.push(l) },
@@ -222,7 +230,12 @@ function readJsonl(path: string): any[] {
   return readFileSync(path, 'utf-8').split('\n').filter(Boolean).map(l => JSON.parse(l));
 }
 
-const g = globalThis as { __oasbFakeScans?: number; __oasbFakeMutateModels?: string };
+const g = globalThis as {
+  __oasbFakeScans?: number;
+  __oasbFakeMutateModels?: string;
+  __oasbFakeClassifier?: Fixture['classifier'];
+  __oasbFakeSwitchModel?: string;
+};
 
 let fx: Fixture;
 
@@ -230,10 +243,12 @@ beforeEach(() => {
   fx = makeFixture();
   g.__oasbFakeScans = 0;
   delete g.__oasbFakeMutateModels;
+  delete g.__oasbFakeSwitchModel;
 });
 
 afterEach(() => {
   delete g.__oasbFakeMutateModels;
+  delete g.__oasbFakeSwitchModel;
   rmSync(fx.root, { recursive: true, force: true });
 });
 
@@ -316,6 +331,15 @@ describe('pinned run', () => {
     expect(r.err.join('\n')).toMatch(/an input changed during the run.*NanoMind/);
     expect(runDirs(fx)).toEqual(['2026-01-01-00000000']);
   });
+
+  it('writes nothing and exits 3 when the scanner switches to a model file outside the model directory during the run', async () => {
+    g.__oasbFakeSwitchModel = join(fx.root, 'elsewhere', 'model.onnx');
+    const r = await run(fx);
+    expect(r.code).toBe(3);
+    expect(r.err.join('\n')).toMatch(/an input changed during the run.*classifier reports its model at .*elsewhere/);
+    expect(g.__oasbFakeScans).toBeGreaterThan(0);
+    expect(runDirs(fx)).toEqual(['2026-01-01-00000000']);
+  });
 });
 
 describe('refusals before scanning', () => {
@@ -378,6 +402,30 @@ describe('refusals before scanning', () => {
       'the NanoMind model directory is missing',
       () => ({ nanomindModelsDir: join(fx.root, 'no-models') }),
       /NanoMind model directory does not exist/,
+    ],
+    [
+      'the scanner would load its model from outside the NanoMind model directory',
+      () => {
+        // The scanner looks in models/ under the working directory first.
+        write(join(fx.root, 'cwd', 'models', 'model.onnx'), 'other weights');
+        fx.classifier.modelPath = join(fx.root, 'cwd', 'models', 'model.onnx');
+      },
+      /classifier reports its model at .*cwd.models.model\.onnx, which is not a file of the verified NanoMind model directory/,
+    ],
+    [
+      'the scanner would load its tokenizer from outside the NanoMind model directory',
+      () => {
+        write(join(fx.root, 'cwd', 'models', 'tokenizer.json'), '{"evil":2}\n');
+        fx.classifier.tokenizerPath = join(fx.root, 'cwd', 'models', 'tokenizer.json');
+      },
+      /classifier reports its tokenizer at .*cwd.models.tokenizer\.json, which is not a file of the verified NanoMind model directory/,
+    ],
+    [
+      'the scanner does not report the model file it loads',
+      () => {
+        delete fx.classifier.modelPath;
+      },
+      /classifier reports no model file/,
     ],
     [
       'the OASB corpus was edited',

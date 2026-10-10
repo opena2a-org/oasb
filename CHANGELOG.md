@@ -14,8 +14,10 @@ stay on record here with the reason they changed.
   exits 2 before scanning anything when an input is unpinned, does not match
   its pin or is dirty: an installed hackmyagent file that differs from the
   tarball, a DVAA checkout with local changes or a file the scenario loader
-  reads that is not committed, a changed model file, or an OASB checkout with
-  uncommitted changes. Each run writes a new `results/<date>-<runid>/` holding
+  reads that is not committed, a changed model file, a model or tokenizer file
+  that the scanner's classifier would load from outside the verified model
+  directory, or an OASB checkout with uncommitted changes. Each run writes a
+  new `results/<date>-<runid>/` holding
   per-sample predictions, a summary of detection over the malicious class and
   a run record naming every input, and never writes to an existing file. A
   run whose inputs change while it scans writes nothing and exits 3.
