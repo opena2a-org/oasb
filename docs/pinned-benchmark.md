@@ -15,13 +15,14 @@ npx tsx scripts/run-pinned-benchmark.ts --pins pins.json --hma <hma dir> --dvaa 
 |---|---|---|
 | hackmyagent | npm version and tarball integrity | the tarball is missing or its integrity differs from the pin; a file of the installed package was changed, removed or added |
 | DVAA | full commit id | HEAD is another commit; the checkout has modified or untracked files; a file the scenario loader reads is not the committed file (this catches git-ignored files) |
-| NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty |
+| NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty; the scanner's classifier reports a model or tokenizer file that is not a file of that directory |
 | OASB scoring code and corpus | the OASB commit | the checkout has uncommitted changes outside `results/`; `corpus/v2.json` is not tracked |
 
 A version range, tag, branch name, short commit id or placeholder value in the
 pin file is refused. Every check runs before anything is scanned. The
-hackmyagent, DVAA and NanoMind checks run again after the scan, and a run
-whose inputs changed while it scanned writes nothing.
+hackmyagent, DVAA and NanoMind checks run again after the scan, the files the
+classifier reports included, and a run whose inputs changed while it scanned
+writes nothing.
 
 ## Prepare the inputs
 
@@ -38,13 +39,23 @@ npm install ./hackmyagent-<version>.tgz     # writes node_modules/hackmyagent
 DVAA: a clone of [damn-vulnerable-ai-agent](https://github.com/opena2a-org/damn-vulnerable-ai-agent)
 checked out at the commit you will pin, with no local changes.
 
-NanoMind: the harness reads `~/.nanomind/models`, where the scanner caches its
-models. The models must be in place before the run.
+NanoMind: the harness verifies `~/.nanomind/models`, the directory hackmyagent
+downloads its classifier model to. The models must be in place before the run.
+
+The scanner does not load its classifier model from that directory alone. It
+takes the first directory that holds a `tokenizer.json` from a list in which
+`models/` under the working directory comes before `~/.nanomind/models`, and
+loads the model beside it. The harness asks the classifier that hackmyagent's
+`getTMEClassifier()` returns which model and tokenizer files it loads, and
+refuses the run when either is not a file of `~/.nanomind/models`. Start the
+run from a directory that has no `models/` directory.
 
 ## Write the pin file
 
-`--observe` prints the pin values the inputs have now, and any reason a run
-would refuse them. It scans nothing and writes nothing.
+`--observe` prints the pin values the inputs have now and the problems it
+finds in the hackmyagent install, the DVAA checkout and the model directory.
+It does not load the scanner, so it does not report which model files the
+classifier would load. It scans nothing and writes nothing.
 
 ```bash
 npx tsx scripts/run-pinned-benchmark.ts --observe --hma hma-<version> --dvaa <dvaa checkout> > pins.json

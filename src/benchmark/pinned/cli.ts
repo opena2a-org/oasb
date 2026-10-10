@@ -37,9 +37,12 @@ Options:
   --observe       Print the pin values of the given inputs and stop; scans nothing
   --help          Show this help
 
-The NanoMind model directory is ~/.nanomind/models, where the scanner loads
-models from. Results are written to results/<date>-<runid>/ and never
-overwrite an existing file. See docs/pinned-benchmark.md.
+The NanoMind model directory is ~/.nanomind/models. The scanner looks in
+other places before it (models/ under the working directory comes first), so
+a run is refused when the scanner's classifier reports a model or tokenizer
+file that is not in that directory. Results are written to
+results/<date>-<runid>/ and never overwrite an existing file. See
+docs/pinned-benchmark.md.
 
 Exit codes: 0 done, 1 unexpected failure, 2 refused (unpinned, mismatched or
 dirty input, or results exist), 3 an input changed during the run.

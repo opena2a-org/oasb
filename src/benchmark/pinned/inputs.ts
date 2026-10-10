@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import type { DVAAReadFile } from '../dvaa-suite.js';
 import { PinError, type DvaaPin, type HackmyagentPin, type NanomindPin } from './pins.js';
 
@@ -285,6 +285,35 @@ export function verifyNanomind(modelsDir: string, pin: NanomindPin): NanomindMan
     );
   }
   return manifest;
+}
+
+/**
+ * The classifier returned by the scanner's `getTMEClassifier()` must report a
+ * model file and a tokenizer file that are files of the verified model
+ * directory. The scanner looks for its models in other places before that
+ * directory (`models/` under the working directory comes first), so a
+ * directory that matches its pin does not show which files a scan loads.
+ */
+export function verifyLoadedModel(classifier: unknown, modelsDir: string, manifest: NanomindManifest): void {
+  const pinned = new Set(manifest.files.map(f => f.path));
+  const reported = (classifier ?? {}) as Record<string, unknown>;
+  for (const [field, what] of [['modelPath', 'model'], ['tokenizerPath', 'tokenizer']] as const) {
+    const path = reported[field];
+    if (typeof path !== 'string' || path === '') {
+      throw new PinError(
+        `unpinned input: the scanner's classifier reports no ${what} file, so the run cannot show that ` +
+          'the scan loads it from the verified NanoMind model directory',
+      );
+    }
+    const rel = relative(resolve(modelsDir), resolve(path)).split(sep).join('/');
+    if (!pinned.has(rel)) {
+      throw new PinError(
+        `unpinned input: the scanner's classifier reports its ${what} at ${path}, which is not a file of the ` +
+          'verified NanoMind model directory. The scanner looks in other places before that directory, such ' +
+          'as models/ under the working directory; move that file away or start the run from another directory',
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

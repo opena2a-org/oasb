@@ -4,7 +4,7 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-272%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-276%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
@@ -18,12 +18,12 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 273 tests (272 pass, 1 skip)
+npm test                    # Full suite: 277 tests (276 pass, 1 skip)
 ```
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 222 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **273 tests** (272 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests** and **28 pinned benchmark harness tests**. "222" is the scenario count; "272 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested).
+> **Counts.** `npm test` runs **277 tests** (276 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests** and **32 pinned benchmark harness tests**. "222" is the scenario count; "276 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested).
 
 Run one group at a time:
 
@@ -144,8 +144,8 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Application-level hooks | 14 | `src/e2e` (interceptors) | Pre-execution interception of spawn, connect, read/write |
 | **Attack scenarios** | **222** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 23 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard |
-| Pinned benchmark harness tests | 28 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
-| **`npm test` total** | **273** | (272 pass, 1 environment-skipped) | |
+| Pinned benchmark harness tests | 32 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
+| **`npm test` total** | **277** | (276 pass, 1 environment-skipped) | |
 
 ---
 
