@@ -6,10 +6,14 @@
 //   1. the README stays under MAX_LINES lines;
 //   2. the first H2 is "Quick Start" and starts before line QUICK_START_BY;
 //   3. a fenced code block with a runnable command starts before line COMMAND_BY;
-//   4. every relative link in the README resolves to a file in the repository,
-//      and every #anchor resolves to a heading in its target file. Links are
-//      read from inline `[text](target)`, reference definitions
-//      `[label]: target` and HTML `href="target"` attributes.
+//   4. each relative link the check reads resolves to a file in the
+//      repository, and an #anchor in a link to a .md file resolves to a
+//      heading in that file. The check reads three forms, each written within
+//      one line: inline `[text](target)` with an optional double-quoted title,
+//      a reference definition `[label]: target` at the start of a line
+//      (indented at most three spaces), and a quoted HTML `href="target"` or
+//      `href='target'` attribute. Other forms, such as an unquoted href or a
+//      definition inside a list item, are not read.
 //
 // Usage: node scripts/check-readme.mjs [path/to/README.md]
 // Exit code 0 when every check passes, 1 otherwise. Run by npm run smoke.

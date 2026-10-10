@@ -16,11 +16,14 @@ the claims this repository publishes:
    Before installing, `scripts/check-readme.mjs` (also `npm run check:readme`)
    checks the README layout: under 400 lines, "Quick Start" is the first H2
    and starts before line 25, a shell command appears before line 30, and
-   every relative link and anchor resolves, whether it is written inline
-   (`[text](path)`), as a reference definition (`[label]: path`) or as an
-   HTML `href`. The checker's own tests (`npm run test:scripts`) run first.
-   Reference detail belongs in `docs/` (for example `docs/test-catalog.md`),
-   linked from the README.
+   the relative links it reads resolve. It reads three link forms, each
+   written within one line: inline links (`[text](path)`, with an optional
+   double-quoted title), reference definitions at the start of a line
+   (`[label]: path`) and quoted HTML `href` attributes. It checks a `#anchor`
+   only in links to `.md` files. Other forms, such as an unquoted `href` or a
+   definition inside a list item, are not checked. The checker's own tests
+   (`npm run test:scripts`) run first. Reference detail belongs in `docs/`
+   (for example `docs/test-catalog.md`), linked from the README.
 2. **Build + full suite.** `npm run build` then the complete vitest run,
    including E2E. One test (E2E-003) may skip on machines without `lsof`/`ss`;
    the guard tolerates environment skips but not failures.
