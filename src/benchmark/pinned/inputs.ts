@@ -18,11 +18,34 @@ function sha256Hex(bytes: Buffer | string): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+let repositoryEnvNames: string[] | undefined;
+
+/**
+ * The environment for a git call on a directory given by path: the current
+ * one without the variables that name a repository (GIT_DIR, GIT_WORK_TREE,
+ * GIT_INDEX_FILE and the rest of `git rev-parse --local-env-vars`). Git
+ * exports them to its hooks and gives them precedence over `-C`, so with
+ * them a call here would read the caller's repository instead of the
+ * directory it was given.
+ */
+export function gitEnv(): NodeJS.ProcessEnv {
+  repositoryEnvNames ??= execFileSync('git', ['rev-parse', '--local-env-vars'], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+    .split('\n')
+    .filter(Boolean);
+  const env = { ...process.env };
+  for (const name of repositoryEnvNames) delete env[name];
+  return env;
+}
+
 function git(dir: string, args: string[]): string {
   return execFileSync('git', ['-C', dir, ...args], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
+    env: gitEnv(),
   });
 }
 

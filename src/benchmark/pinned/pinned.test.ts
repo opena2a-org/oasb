@@ -25,6 +25,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli } from './cli.js';
+import { gitEnv } from './inputs.js';
 import { checkUnpinnedRun } from './unpinned-guard.js';
 
 const FAKE_CORE = `'use strict';
@@ -72,11 +73,28 @@ const CORPUS = {
 
 const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 
+/** The variables that point git at a repository, as git itself lists them. */
+const REPOSITORY_ENV = execFileSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf-8' })
+  .split('\n')
+  .filter(Boolean);
+
+/**
+ * The fixture repositories are addressed by path. Git exports GIT_DIR and its
+ * relatives to hooks and gives them precedence over -C, so they are removed
+ * here: a test started from a hook must not commit to the hook's repository.
+ * This does not rely on the harness's own gitEnv().
+ */
+function fixtureGitEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of REPOSITORY_ENV) delete env[name];
+  return env;
+}
+
 function git(dir: string, ...args: string[]): string {
   return execFileSync(
     'git',
     ['-C', dir, '-c', 'user.name=OASB Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args],
-    { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+    { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], env: fixtureGitEnv() },
   );
 }
 
@@ -401,6 +419,82 @@ describe('--observe', () => {
     const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);
     expect(r.code).toBe(2);
     expect(r.err.join('\n')).toMatch(/problem: dirty input tree: installed hackmyagent files differ/);
+  });
+});
+
+describe('git variables in the environment', () => {
+  // Git exports GIT_DIR to a hook started in a linked worktree, and
+  // GIT_INDEX_FILE or GIT_WORK_TREE to some hooks. They name the hook's
+  // repository, which stands in here as `outer`.
+  const saved = new Map<string, string | undefined>();
+  let outer: string;
+
+  const setEnv = (name: string, value: string) => {
+    if (!saved.has(name)) saved.set(name, process.env[name]);
+    process.env[name] = value;
+  };
+
+  beforeEach(() => {
+    outer = mkdtempSync(join(tmpdir(), 'oasb-outer-'));
+    git(outer, 'init', '-q', '-b', 'main');
+    write(join(outer, 'kept.txt'), 'kept\n');
+    commitAll(outer, 'outer');
+  });
+
+  afterEach(() => {
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    saved.clear();
+    rmSync(outer, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['GIT_DIR', ['GIT_DIR']],
+    ['GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE', ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']],
+  ])('with %s naming another repository, a run reads its own inputs and leaves that repository unchanged', async (_label, names) => {
+    const head = git(outer, 'rev-parse', 'HEAD').trim();
+    const gitDirBefore = snapshot(join(outer, '.git'));
+    const treeBefore = snapshot(outer);
+    const values: Record<string, string> = {
+      GIT_DIR: join(outer, '.git'),
+      GIT_WORK_TREE: outer,
+      GIT_INDEX_FILE: join(outer, '.git', 'index'),
+    };
+    for (const name of names) setEnv(name, values[name]);
+
+    // Build the inputs and run with the variables set, as a hook would.
+    const inner = makeFixture();
+    let r: Run;
+    let oasbHead: string;
+    let record: any = null;
+    try {
+      oasbHead = git(inner.oasb, 'rev-parse', 'HEAD').trim();
+      r = await run(inner);
+      const created = runDirs(inner).find(d => d !== '2026-01-01-00000000');
+      if (created) record = JSON.parse(readFileSync(join(inner.oasb, 'results', created, 'record.json'), 'utf-8'));
+    } finally {
+      rmSync(inner.root, { recursive: true, force: true });
+    }
+
+    expect(snapshot(join(outer, '.git'))).toEqual(gitDirBefore);
+    expect(snapshot(outer)).toEqual(treeBefore);
+    expect(git(outer, 'rev-parse', 'HEAD').trim()).toBe(head);
+    expect(r.err).toEqual([]);
+    expect(r.code).toBe(0);
+    expect(record?.oasb.commit).toBe(oasbHead);
+    expect(record?.dvaa.commit).toBe(inner.pins.dvaa.commit);
+  });
+
+  it('gitEnv drops each variable git lists as naming a repository and keeps the others', () => {
+    expect(REPOSITORY_ENV).toContain('GIT_DIR');
+    for (const name of REPOSITORY_ENV) setEnv(name, 'set-by-test');
+    setEnv('OASB_TEST_UNRELATED', 'kept');
+    const env = gitEnv();
+    for (const name of REPOSITORY_ENV) expect(env[name], name).toBeUndefined();
+    expect(env.OASB_TEST_UNRELATED).toBe('kept');
+    expect(env.PATH).toBe(process.env.PATH);
   });
 });
 
