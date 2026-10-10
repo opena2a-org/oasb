@@ -4,8 +4,12 @@
  * Runs real HMA pipeline adapters against the full v2 corpus.
  * Outputs: per-category metrics, flag rates, timing, and comparison data.
  *
+ * This is the unpinned development runner: it loads the sibling hackmyagent
+ * checkout, so its numbers are not figures of record. Figures of record come
+ * from scripts/run-pinned-benchmark.ts.
+ *
  * Usage:
- *   npx tsx scripts/run-benchmark-v2.ts [--limit N] [--adapter ADAPTER]
+ *   npx tsx scripts/run-benchmark-v2.ts --unpinned [--limit=N] [--adapter=ADAPTER] [--out=FILE]
  *
  * Adapters: tme-only, pipeline, static, all (default)
  */
@@ -13,6 +17,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HMATMEOnlyAdapter, HMAPipelineAdapter, HMAPipelineStaticAdapter } from '../src/benchmark/hma-pipeline-adapter.js';
+import { checkUnpinnedRun } from '../src/benchmark/pinned/unpinned-guard.js';
 import { runBenchmark, formatComparisonTable, type ScannerAdapter } from '../src/benchmark/runner.js';
 import type { BenchmarkDataset, BenchmarkSample, AttackCategory, ScannerResult, ATTACK_CATEGORIES } from '../src/benchmark/types.js';
 
@@ -260,18 +265,24 @@ function printDetailedResults(detailed: DetailedResult): void {
 function printUsage(): void {
   console.log(`OASB Benchmark Runner v2
 
-Usage: npx tsx scripts/run-benchmark-v2.ts [options]
+Usage: npx tsx scripts/run-benchmark-v2.ts --unpinned [options]
+
+This development runner loads the unpinned sibling hackmyagent checkout, so its
+numbers are not figures of record. Figures of record come from the pinned
+harness: npx tsx scripts/run-pinned-benchmark.ts (see docs/pinned-benchmark.md).
 
 Options:
+  --unpinned           Required: confirms this is an unpinned development run
   --categorized-only   Exclude 225 registry stubs with no malicious content (recommended)
   --limit=N            Run on N samples (proportionally sampled)
   --adapter=ADAPTER    Run specific adapter: static, tme-only, pipeline, all (default: all)
+  --out=FILE           Also write the results JSON to FILE, which must not exist yet
   --help               Show this help
 
 Examples:
-  npx tsx scripts/run-benchmark-v2.ts --categorized-only              # Full benchmark (recommended)
-  npx tsx scripts/run-benchmark-v2.ts --categorized-only --limit=100  # Quick test
-  npx tsx scripts/run-benchmark-v2.ts --categorized-only --adapter=tme-only  # TME only
+  npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only              # Full benchmark
+  npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only --limit=100  # Quick test
+  npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only --adapter=tme-only  # TME only
 
 Note: Without --categorized-only, the corpus includes 225 registry metadata-flagged
 stubs that contain no malicious content (just package names). These inflate false
@@ -284,6 +295,15 @@ async function main() {
 
   if (args.includes('--help') || args.includes('-h')) {
     printUsage();
+    return;
+  }
+
+  let outPath: string | null;
+  try {
+    ({ outPath } = checkUnpinnedRun(args, process.cwd()));
+  } catch (err) {
+    console.error(`refused: ${(err as Error).message}`);
+    process.exitCode = 2;
     return;
   }
 
@@ -387,9 +407,7 @@ async function main() {
     ? computeDvaa(samples, resultsByAdapter['hma-pipeline'])
     : undefined;
 
-  // Save results (use different filename for partial runs)
-  const suffix = limit ? `-partial-${samples.length}` : '';
-  const outputPath = join(__dirname, '..', `benchmark-results-v6${suffix}.json`);
+  // Save results only to a new file named with --out; never over an existing one.
   const output = {
     version: '2.0',
     date: new Date().toISOString(),
@@ -404,8 +422,12 @@ async function main() {
     ...(dvaa ? { dvaa } : {}),
     paperComparison: EXTERNAL_PAPER_COMPARISON,
   };
-  writeFileSync(outputPath, JSON.stringify(output, null, 2));
-  console.log(`\nResults saved to ${outputPath}`);
+  if (outPath) {
+    writeFileSync(outPath, JSON.stringify(output, null, 2), { flag: 'wx' });
+    console.log(`\nResults saved to ${outPath}`);
+  } else {
+    console.log('\nNo results file written (pass --out=<new file> to write one).');
+  }
 
   // Print comparison summary
   console.log(`\n${'='.repeat(80)}`);

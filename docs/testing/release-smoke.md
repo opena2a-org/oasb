@@ -52,8 +52,10 @@ the claims this repository publishes:
 
 ## Scanner benchmark numbers (separate from this smoke)
 
-The published F1/precision/recall/FPR figures in BENCHMARK-RESULTS.md are
-produced by `scripts/run-benchmark-v2.ts --categorized-only` on the pinned
-hackmyagent version. Re-run that command when bumping the hackmyagent pin and
-update BENCHMARK-RESULTS.md + README in the same change; do not bump the pin
-without re-measuring.
+Scanner figures are measured with a pinned run
+(`scripts/run-pinned-benchmark.ts`, see `docs/pinned-benchmark.md`), not by
+this smoke. A pinned run records the hackmyagent version and tarball
+integrity, the DVAA commit and the NanoMind manifest sha256 in
+`results/<date>-<runid>/record.json`. When BENCHMARK-RESULTS.md or the README
+cites a re-measured figure, update both in the same change and name the run
+directory it came from.
