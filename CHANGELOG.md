@@ -89,7 +89,14 @@ stay on record here with the reason they changed.
   version. It read the version from `~/.nanomind/models` whichever directory
   was verified, and wrote `vunknown` and `"version": "unknown"` when there was
   no version file; `results/2026-10-10-d8306ef8/` keeps the labels it was
-  written with. `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a
+  written with. The same change renames the two adapters in
+  `scripts/run-benchmark-v2.ts`, which verifies no model directory and still
+  reads `~/.nanomind/models`: without a version file there they are now
+  `NanoMind TME (model only)` and `HMA Full Pipeline (AST + NanoMind)`, where
+  they were `NanoMind TME vunknown (model only)` and
+  `HMA Full Pipeline (AST + NanoMind vunknown)`; the model-only adapter's
+  version is still `unknown` (`src/benchmark/hma-pipeline-adapter.test.ts`
+  checks these names). `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a
   checkout with full history, that each run's `oasb.commit` is an ancestor of
   `HEAD`. `docs/pinned-benchmark.md` and `--help` describe two more refusals:
   a scanner whose classifier the harness cannot trace (exit 2), and a
