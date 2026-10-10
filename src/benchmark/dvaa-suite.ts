@@ -163,7 +163,16 @@ export interface DVAAScenarioOutcome {
   files: DVAAFilePrediction[];
 }
 
-function gitBlobId(bytes: Buffer, objectFormat: 'sha1' | 'sha256'): string {
+/** The DVAA checkout has no scenarios/ directory, or a scenario file cannot be parsed. */
+export class DVAALoadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DVAALoadError';
+  }
+}
+
+/** The git blob id of `bytes`: the id git gives a file with this content. */
+export function gitBlobId(bytes: Buffer, objectFormat: 'sha1' | 'sha256'): string {
   return createHash(objectFormat)
     .update(`blob ${bytes.length}\0`)
     .update(bytes)
@@ -173,7 +182,9 @@ function gitBlobId(bytes: Buffer, objectFormat: 'sha1' | 'sha256'): string {
 /**
  * Load every scenario under `<dvaaRoot>/scenarios`. Returns the scenarios and
  * the list of files read, each with the git blob id of the bytes read, so a
- * caller can prove every byte scanned is the committed byte.
+ * caller can prove every byte scanned is the committed byte. Throws
+ * DVAALoadError when there is no scenarios/ directory or an
+ * expected-checks.json is not valid JSON.
  */
 export function loadDVAAScenarios(
   dvaaRoot: string,
@@ -182,6 +193,10 @@ export function loadDVAAScenarios(
   const dvaaDir = join(dvaaRoot, 'scenarios');
   const scenarios: DVAAScenario[] = [];
   const readFiles: DVAAReadFile[] = [];
+
+  if (!existsSync(dvaaDir) || !statSync(dvaaDir).isDirectory()) {
+    throw new DVAALoadError('the DVAA checkout has no scenarios/ directory');
+  }
 
   const dirs = readdirSync(dvaaDir).sort().filter(d => {
     const full = join(dvaaDir, d);
@@ -192,7 +207,12 @@ export function loadDVAAScenarios(
     const scenarioDir = join(dvaaDir, dir);
     const expectedBytes = readFileSync(join(scenarioDir, 'expected-checks.json'));
     readFiles.push({ path: `scenarios/${dir}/expected-checks.json`, blobId: gitBlobId(expectedBytes, objectFormat) });
-    const expectedChecks = JSON.parse(expectedBytes.toString('utf-8'));
+    let expectedChecks: string[];
+    try {
+      expectedChecks = JSON.parse(expectedBytes.toString('utf-8'));
+    } catch {
+      throw new DVAALoadError(`scenarios/${dir}/expected-checks.json in the DVAA checkout is not valid JSON`);
+    }
     const category = SCENARIO_CATEGORY_MAP[dir] || 'unknown';
 
     // Load vulnerable files

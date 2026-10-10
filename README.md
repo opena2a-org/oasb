@@ -4,7 +4,7 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-276%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-303%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
@@ -18,12 +18,12 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 277 tests (276 pass, 1 skip)
+npm test                    # Full suite: 304 tests (303 pass, 1 skip)
 ```
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 222 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **277 tests** (276 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests** and **32 pinned benchmark harness tests**. "222" is the scenario count; "276 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested).
+> **Counts.** `npm test` runs **304 tests** (303 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **23 scoring-engine unit tests** and **59 pinned benchmark harness tests**. "222" is the scenario count; "303 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested).
 
 Run one group at a time:
 
@@ -144,8 +144,8 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Application-level hooks | 14 | `src/e2e` (interceptors) | Pre-execution interception of spawn, connect, read/write |
 | **Attack scenarios** | **222** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 23 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard |
-| Pinned benchmark harness tests | 32 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
-| **`npm test` total** | **277** | (276 pass, 1 environment-skipped) | |
+| Pinned benchmark harness tests | 59 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
+| **`npm test` total** | **304** | (303 pass, 1 environment-skipped) | |
 
 ---
 
@@ -218,9 +218,9 @@ A scoring engine for scanners that judge AI agent skills and configurations, in 
 ### Benchmark Runner
 
 ```bash
-npx tsx scripts/run-pinned-benchmark.ts --pins pins.json --hma <dir> --dvaa <dir>  # Pinned run: corpus and DVAA, writes results/<date>-<runid>/
-npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only --limit=100       # Development run on the sibling hackmyagent checkout
-npx tsx scripts/run-dvaa-benchmark.ts --unpinned                                   # Development run (needs ../damn-vulnerable-ai-agent)
+npx tsx scripts/run-pinned-benchmark.ts --pins ../pins.json --hma <dir> --dvaa <dir>  # Pinned run: corpus and DVAA, writes results/<date>-<runid>/
+npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only --limit=100          # Development run on the sibling hackmyagent checkout
+npx tsx scripts/run-dvaa-benchmark.ts --unpinned                                      # Development run (needs ../damn-vulnerable-ai-agent)
 ```
 
 A pinned run takes hackmyagent by npm version and tarball integrity, DVAA by

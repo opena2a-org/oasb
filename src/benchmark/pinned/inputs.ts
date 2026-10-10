@@ -9,9 +9,10 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, relative, resolve, sep } from 'node:path';
-import type { DVAAReadFile } from '../dvaa-suite.js';
+import { connect } from 'node:net';
+import { homedir, tmpdir } from 'node:os';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { gitBlobId, type DVAAReadFile } from '../dvaa-suite.js';
 import { PinError, type DvaaPin, type HackmyagentPin, type NanomindPin } from './pins.js';
 
 function sha256Hex(bytes: Buffer | string): string {
@@ -90,11 +91,25 @@ export interface VerifiedCorpus {
   corpusText: string;
 }
 
+function isInside(path: string, dir: string): boolean {
+  const rel = relative(dir, path);
+  return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
 /**
- * The OASB checkout must be clean outside results/, and the corpus file must
- * be tracked, so the scoring code and the corpus are both the committed ones.
+ * The OASB checkout must be clean outside results/, no tracked file may
+ * carry an index flag that hides a change from `git status`, and the bytes
+ * read from the corpus file must be the corpus file of the HEAD commit, so
+ * the scoring code and the corpus are both the committed ones.
+ *
+ * `operatorPaths` are the pin file and the --hma directory. When one of them
+ * is what makes the checkout dirty, the refusal says where they belong.
  */
-export function verifyCorpus(oasbRoot: string, corpusPath = 'corpus/v2.json'): VerifiedCorpus {
+export function verifyCorpus(
+  oasbRoot: string,
+  corpusPath = 'corpus/v2.json',
+  operatorPaths: string[] = [],
+): VerifiedCorpus {
   let oasbCommit: string;
   try {
     oasbCommit = git(oasbRoot, ['rev-parse', 'HEAD']).trim();
@@ -103,19 +118,53 @@ export function verifyCorpus(oasbRoot: string, corpusPath = 'corpus/v2.json'): V
   }
   const status = git(oasbRoot, ['status', '--porcelain', '--untracked-files=all', '--', '.', ':(exclude)results'])
     .split('\n')
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(l => l.slice(3));
   if (status.length > 0) {
+    const operatorFiles = status.some(rel => operatorPaths.some(p => isInside(resolve(oasbRoot, rel), p)));
     throw new PinError(
-      `dirty input tree: the OASB checkout has uncommitted changes (${shortList(status.map(l => l.slice(3)))}); ` +
-        'commit or remove them so the scoring code and corpus are the committed ones',
+      `dirty input tree: the OASB checkout has uncommitted changes (${shortList(status)}); ` +
+        'commit or remove them so the scoring code and corpus are the committed ones' +
+        (operatorFiles
+          ? '. The pin file and the --hma directory belong outside the OASB checkout; move them there, ' +
+            'or commit the pin file first'
+          : ''),
     );
   }
-  try {
-    git(oasbRoot, ['ls-files', '--error-unmatch', '--', corpusPath]);
-  } catch {
+
+  // The corpus bytes are compared with the committed blob, as the DVAA files
+  // are, so a change that `git status` does not report is still caught.
+  const entry = git(oasbRoot, ['ls-tree', '-z', 'HEAD', '--', corpusPath]).split('\0')[0] ?? '';
+  const [, type, committedBlob] = entry.slice(0, entry.indexOf('\t')).split(' ');
+  if (type !== 'blob') {
     throw new PinError(`unpinned input: ${corpusPath} is not tracked in the OASB checkout`);
   }
   const bytes = readFileSync(join(oasbRoot, corpusPath));
+  const objectFormat = git(oasbRoot, ['rev-parse', '--show-object-format']).trim() === 'sha256' ? 'sha256' : 'sha1';
+  const readBlob = gitBlobId(bytes, objectFormat);
+  if (readBlob !== committedBlob) {
+    throw new PinError(
+      `dirty input tree: the ${corpusPath} read for the scan (blob ${readBlob}) is not the file committed at ` +
+        `${oasbCommit} (blob ${committedBlob}); git status does not show the change, so check its index ` +
+        `flags with: git ls-files -v -- ${corpusPath}`,
+    );
+  }
+
+  // A file marked skip-worktree or assume-unchanged can differ from the
+  // committed file while `git status` reports nothing. The scoring code is
+  // not compared byte by byte, so these flags are refused.
+  const flagged = git(oasbRoot, ['ls-files', '-v', '-z', '--', '.', ':(exclude)results'])
+    .split('\0')
+    .filter(line => line && (line[0] === 'S' || line[0] !== line[0].toUpperCase()))
+    .map(line => line.slice(2));
+  if (flagged.length > 0) {
+    throw new PinError(
+      'dirty input tree: tracked files in the OASB checkout are marked skip-worktree or assume-unchanged ' +
+        `(${shortList(flagged)}), so git status does not show whether they changed; clear the flags with: ` +
+        'git update-index --no-skip-worktree --no-assume-unchanged -- <file>',
+    );
+  }
+
   return { oasbCommit, corpusPath, corpusSha256: sha256Hex(bytes), corpusText: bytes.toString('utf-8') };
 }
 
@@ -313,6 +362,71 @@ export function verifyLoadedModel(classifier: unknown, modelsDir: string, manife
           'as models/ under the working directory; move that file away or start the run from another directory',
       );
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Other model sources of the scanner
+// ---------------------------------------------------------------------------
+
+/**
+ * Besides the classifier that `getTMEClassifier()` returns, the scanner's
+ * compiler (which the full-pipeline adapter and the DVAA scan use) can take
+ * its intent result from a second classifier, which loads these files from
+ * `modelsDir` when both exist, and from a NanoMind daemon, which it asks
+ * when the classifier's confidence is low. Neither is pinned.
+ */
+export interface OtherModelSources {
+  modelsDir: string;
+  daemon: { host: string; port: number };
+}
+
+export const SECOND_CLASSIFIER_FILES = ['nanomind-tme.bin', 'tokenizer.json'] as const;
+
+export function defaultOtherModelSources(): OtherModelSources {
+  return {
+    modelsDir: join(homedir(), '.opena2a', 'nanomind', 'models'),
+    daemon: { host: '127.0.0.1', port: 47200 },
+  };
+}
+
+/** Resolves null when the connection is refused, or what happened instead. */
+function probe(host: string, port: number, timeoutMs = 2000): Promise<string | null> {
+  return new Promise(done => {
+    const socket = connect({ host, port });
+    const finish = (result: string | null) => {
+      socket.destroy();
+      done(result);
+    };
+    socket.setTimeout(timeoutMs, () => finish('the connection attempt did not finish'));
+    socket.once('connect', () => finish('it accepted a connection'));
+    socket.once('error', err => {
+      const code = (err as NodeJS.ErrnoException).code;
+      finish(code === 'ECONNREFUSED' ? null : `the connection attempt failed with ${code ?? err.message}`);
+    });
+  });
+}
+
+/**
+ * Refuses the run while the second classifier's two files are both present
+ * or while anything accepts a connection at the daemon address, so the scan
+ * takes its intent results from the verified classifier only.
+ */
+export async function verifyNoOtherModelSources(sources: OtherModelSources): Promise<void> {
+  if (SECOND_CLASSIFIER_FILES.every(f => existsSync(join(sources.modelsDir, f)))) {
+    throw new PinError(
+      `unpinned input: ${sources.modelsDir} holds ${SECOND_CLASSIFIER_FILES.join(' and ')}, which the ` +
+        "scanner's compiler loads as a second classifier that the run does not verify; move them out of " +
+        'that directory for the run',
+    );
+  }
+  const { host, port } = sources.daemon;
+  const answer = await probe(host, port);
+  if (answer !== null) {
+    throw new PinError(
+      `unpinned input: the scanner's compiler asks a NanoMind daemon at http://${host}:${port} about ` +
+        `low-confidence samples, and ${answer} there; stop whatever listens on port ${port} for the run`,
+    );
   }
 }
 

@@ -13,6 +13,9 @@ import { PinError } from './pins.js';
 export const PINNED_COMMAND =
   'npx tsx scripts/run-pinned-benchmark.ts --pins <file> --hma <dir> --dvaa <dir> (see docs/pinned-benchmark.md)';
 
+/** A development run of the v2 runner that this guard accepts. */
+export const UNPINNED_V2_COMMAND = 'npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only';
+
 /**
  * Throws PinError unless the runner was started with --unpinned, or when
  * --out names a file that already exists. Returns the --out path, or null.

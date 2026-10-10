@@ -1,14 +1,22 @@
 /**
- * DEPRECATED: Use run-benchmark-v2.ts instead.
+ * DEPRECATED. For figures of record use the pinned harness:
  *
- *   npx tsx scripts/run-benchmark-v2.ts --categorized-only
+ *   npx tsx scripts/run-pinned-benchmark.ts --pins <file> --hma <dir> --dvaa <dir>
+ *
+ * For a development run on the sibling hackmyagent checkout:
+ *
+ *   npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only
  *
  * This v1 runner used heuristic adapters against the v1 corpus (90 samples).
  * It is kept for reference but may not work with current HMA versions.
  */
 
-console.error('This script is deprecated. Use run-benchmark-v2.ts instead:');
-console.error('  npx tsx scripts/run-benchmark-v2.ts --categorized-only');
+import { PINNED_COMMAND, UNPINNED_V2_COMMAND } from '../src/benchmark/pinned/unpinned-guard.js';
+
+console.error('This script is deprecated. For figures of record, run the pinned harness:');
+console.error(`  ${PINNED_COMMAND}`);
+console.error('For a development run on the sibling hackmyagent checkout:');
+console.error(`  ${UNPINNED_V2_COMMAND}`);
 process.exit(1);
 
 import { readFileSync } from 'node:fs';
