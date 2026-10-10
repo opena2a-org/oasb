@@ -224,11 +224,13 @@ npx tsx scripts/run-dvaa-benchmark.ts --unpinned                                
 ```
 
 A pinned run takes hackmyagent by npm version and tarball integrity, DVAA by
-commit and the NanoMind models by manifest sha256. It refuses an unpinned or
-dirty input before it scans anything, and never overwrites a results file. See
-[docs/pinned-benchmark.md](docs/pinned-benchmark.md). The development runners
-load whatever sibling checkouts are present, so their numbers are not figures
-of record.
+commit and the NanoMind models by manifest sha256. It checks those inputs and
+the OASB checkout before it scans anything, refuses the run when one fails its
+check, and never overwrites a results file. It does not verify the scanner's
+dependencies or each place the scanner can take a model result from;
+[docs/pinned-benchmark.md](docs/pinned-benchmark.md) lists what a run checks
+and what it does not. The development runners load whatever sibling checkouts
+are present, so their numbers are not figures of record.
 
 ### Latest Results (2026-06-05, partially withdrawn 2026-08-09)
 

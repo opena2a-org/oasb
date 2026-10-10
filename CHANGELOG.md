@@ -19,10 +19,14 @@ stay on record here with the reason they changed.
   directory, or an OASB checkout with uncommitted changes. Each run writes a
   new `results/<date>-<runid>/` holding
   per-sample predictions, a summary of detection over the malicious class and
-  a run record naming every input, and never writes to an existing file. A
-  run whose inputs change while it scans writes nothing and exits 3.
-  `--observe` prints the pin values of a set of inputs. See
-  `docs/pinned-benchmark.md`.
+  a run record naming the versions and hashes of the inputs it checked, and
+  never writes to an existing file. A run writes nothing and exits 3 when the
+  hackmyagent install, the model directory or the DVAA checkout fails its
+  check again after the scan. `--observe` prints the pin values of a set of
+  inputs. A pinned run does not verify the scanner's dependencies (it records
+  the sha256 of their lockfile) or the other places the scanner can take a
+  model result from; `docs/pinned-benchmark.md` lists what a run checks and
+  what it does not.
 
 ### Removed
 

@@ -2,8 +2,8 @@
  * Pinned benchmark harness.
  *
  * One run scans the OASB v2 corpus (categorized set) with the three HMA
- * adapters and every DVAA scenario with the full pipeline, using only pinned
- * inputs:
+ * adapters and the loaded DVAA scenarios with the full pipeline, after
+ * checking these inputs against a pin file:
  *
  *   - hackmyagent by npm version and tarball integrity
  *   - the DVAA checkout by commit
@@ -11,7 +11,9 @@
  *
  * The OASB checkout (scoring code and corpus) must be committed and clean.
  * An unpinned, mismatched or dirty input stops the run before anything is
- * scanned. The run writes a new `results/<date>-<runid>/` directory holding
+ * scanned. The scanner's dependencies and its other model sources are not
+ * checked; docs/pinned-benchmark.md lists what a run verifies and what it
+ * does not. The run writes a new `results/<date>-<runid>/` directory holding
  * per-sample predictions, a summary and a run record, and never writes to an
  * existing file or directory.
  */
