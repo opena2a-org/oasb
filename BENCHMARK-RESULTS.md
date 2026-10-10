@@ -243,13 +243,20 @@ flagged by all five scanners.
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm install
 
-# Full benchmark (all adapters, ~7 minutes)
-npx tsx scripts/run-benchmark-v2.ts --categorized-only
-
-# DVAA ground-truth comparison
-npx tsx scripts/run-dvaa-benchmark.ts
+# Pinned run: corpus and DVAA scenarios, writes results/<date>-<runid>/
+npx tsx scripts/run-pinned-benchmark.ts --pins pins.json --hma <dir> --dvaa <dir>
 ```
 
+The figures in this document came from the earlier runners
+(`run-benchmark-v2.ts`, `run-dvaa-benchmark.ts`), which loaded unpinned
+sibling checkouts and overwrote their result files. They have not been
+re-measured with a pinned run. A pinned run takes hackmyagent by npm version
+and tarball integrity, DVAA by commit and the NanoMind models by manifest
+sha256, refuses unpinned or dirty inputs, and writes per-sample predictions
+and a run record to a new directory; see
+[docs/pinned-benchmark.md](docs/pinned-benchmark.md). The earlier runners now
+run only with `--unpinned`, for development.
+
 - OASB v2 corpus: `corpus/v2.json`
-- Full machine-readable results: `benchmark-results-v6.json` (the `note` field carries the verdict methodology)
+- Machine-readable results of the earlier runs: `benchmark-results-v6.json` (the `note` field carries the verdict methodology)
 - Paper: arXiv:2603.16572 (Holzbauer et al., March 2026)

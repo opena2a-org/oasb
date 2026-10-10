@@ -6,6 +6,22 @@ stay on record here with the reason they changed.
 
 ## 0.4.1 (unreleased)
 
+### Added
+
+- `scripts/run-pinned-benchmark.ts` runs the corpus and DVAA benchmarks on
+  pinned inputs: hackmyagent by npm version and tarball integrity, the DVAA
+  checkout by commit and the NanoMind model directory by manifest sha256. It
+  exits 2 before scanning anything when an input is unpinned, does not match
+  its pin or is dirty: an installed hackmyagent file that differs from the
+  tarball, a DVAA checkout with local changes or a file the scenario loader
+  reads that is not committed, a changed model file, or an OASB checkout with
+  uncommitted changes. Each run writes a new `results/<date>-<runid>/` holding
+  per-sample predictions, a summary of detection over the malicious class and
+  a run record naming every input, and never writes to an existing file. A
+  run whose inputs change while it scans writes nothing and exits 3.
+  `--observe` prints the pin values of a set of inputs. See
+  `docs/pinned-benchmark.md`.
+
 ### Removed
 
 - `hackmyagent` is removed from `dependencies`. It was pinned at 0.23.8 (now
@@ -21,6 +37,12 @@ stay on record here with the reason they changed.
 
 ### Changed
 
+- `scripts/run-benchmark-v2.ts` and `scripts/run-dvaa-benchmark.ts` load the
+  sibling hackmyagent and DVAA checkouts unpinned, so they now refuse to run
+  (exit 2) without `--unpinned`. They no longer overwrite
+  `benchmark-results-v6.json` or `dvaa-benchmark-results.json`: they print
+  their results and write a file only to a new path given with
+  `--out=<file>`.
 - The README opens with Quick Start (clone, `npm ci`, `npm test`) and is under
   400 lines. The per-test tables moved to `docs/test-catalog.md`; Contributing
   and Updates moved below the reference sections. `npm run check:readme` checks

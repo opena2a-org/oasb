@@ -28,6 +28,7 @@
  *   - HMAPipelineStaticAdapter: Static regex patterns only (no NanoMind)
  */
 
+import { join, resolve } from 'node:path';
 import type { ScannerAdapter } from './runner.js';
 import type { ScannerResult, AttackCategory } from './types.js';
 
@@ -43,19 +44,39 @@ let getTMEClassifier: any;
 
 let hmaLoaded = false;
 
+// Root of the hackmyagent package the adapters load. Defaults to the monorepo
+// sibling checkout, which is unpinned; the pinned harness
+// (src/benchmark/pinned/) points it at a verified install instead.
+let hmaRoot: string = resolve(__dirname, '..', '..', '..', 'hackmyagent');
+
 // Version hygiene: read the REAL loaded build and model versions so the leaderboard is honestly
 // tagged. These were previously hardcoded ("0.12.9" / "0.5.0") and drifted from the actual build.
-// The HMA build version comes from the sibling hackmyagent package.json (the dist we load from);
+// The HMA build version comes from the package.json of the hackmyagent root we load from;
 // the classifier version comes from the cached model manifest every user installs.
 let _hmaBuildVersion: string | null = null;
 let _tmeModelVersion: string | null = null;
 
+/**
+ * Load hackmyagent from `root` (a package directory holding package.json and
+ * dist/). Call before constructing an adapter: adapters read the build version
+ * when they are created.
+ */
+export function configureHmaRoot(root: string): void {
+  hmaRoot = root;
+  hmaLoaded = false;
+  _hmaBuildVersion = null;
+}
+
+/** Absolute path of the nanomind-core entry point the adapters import. */
+export function hmaCorePath(): string {
+  return join(hmaRoot, 'dist', 'nanomind-core', 'index.js');
+}
+
 function hmaBuildVersion(): string {
   if (_hmaBuildVersion) return _hmaBuildVersion;
   try {
-    const path = require('path');
     const fs = require('fs');
-    const pkgPath = path.resolve(__dirname, '..', '..', '..', 'hackmyagent', 'package.json');
+    const pkgPath = join(hmaRoot, 'package.json');
     _hmaBuildVersion = String(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version || 'unknown');
   } catch {
     _hmaBuildVersion = 'unknown';
@@ -77,12 +98,10 @@ function tmeModelVersion(): string {
   return _tmeModelVersion;
 }
 
-async function loadHMACore(): Promise<boolean> {
+export async function loadHMACore(): Promise<boolean> {
   if (hmaLoaded) return true;
   try {
-    const path = require('path');
-    const corePath = path.resolve(__dirname, '..', '..', '..', 'hackmyagent', 'dist', 'nanomind-core', 'index.js');
-    const core = await import(corePath);
+    const core = await import(hmaCorePath());
     SemanticCompiler = core.SemanticCompiler;
     analyzeCapabilities = core.analyzeCapabilities;
     analyzeCredentials = core.analyzeCredentials;

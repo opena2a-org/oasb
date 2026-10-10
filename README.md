@@ -217,10 +217,17 @@ A scoring engine for scanners that judge AI agent skills and configurations, in 
 ### Benchmark Runner
 
 ```bash
-npx tsx scripts/run-benchmark-v2.ts --categorized-only            # Full corpus, all adapters
-npx tsx scripts/run-benchmark-v2.ts --categorized-only --limit=100  # Quick test with 100 samples
-npx tsx scripts/run-dvaa-benchmark.ts                              # DVAA ground-truth comparison (needs ../damn-vulnerable-ai-agent)
+npx tsx scripts/run-pinned-benchmark.ts --pins pins.json --hma <dir> --dvaa <dir>  # Pinned run: corpus and DVAA, writes results/<date>-<runid>/
+npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only --limit=100       # Development run on the sibling hackmyagent checkout
+npx tsx scripts/run-dvaa-benchmark.ts --unpinned                                   # Development run (needs ../damn-vulnerable-ai-agent)
 ```
+
+A pinned run takes hackmyagent by npm version and tarball integrity, DVAA by
+commit and the NanoMind models by manifest sha256. It refuses an unpinned or
+dirty input before it scans anything, and never overwrites a results file. See
+[docs/pinned-benchmark.md](docs/pinned-benchmark.md). The development runners
+load whatever sibling checkouts are present, so their numbers are not figures
+of record.
 
 ### Latest Results (2026-06-05, partially withdrawn 2026-08-09)
 
