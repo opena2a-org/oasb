@@ -21,8 +21,10 @@ stay on record here with the reason they changed.
   the committed file, a DVAA commit without `scenarios/` or with an
   `expected-checks.json` that is not valid JSON, or one of the scanner's
   unpinned model sources present (`nanomind-tme.bin` and `tokenizer.json` in
-  `~/.opena2a/nanomind/models`, or anything accepting a connection at
-  `127.0.0.1:47200`). Each run writes a
+  `~/.opena2a/nanomind/models` or in `models-tme-v3`, `models-tme-v2` or
+  `models-tme` under `node_modules/nanomind/training` in the `--hma`
+  directory, or anything accepting a connection at `127.0.0.1:47200`). Each
+  run writes a
   new `results/<date>-<runid>/` holding
   per-sample predictions, a summary of detection over the malicious class and
   a run record naming the versions and hashes of the inputs it checked, and

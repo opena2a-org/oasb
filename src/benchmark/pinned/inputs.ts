@@ -116,10 +116,17 @@ export function verifyCorpus(
   } catch {
     throw new PinError('unpinned input: the OASB directory is not a git checkout with a commit');
   }
-  const status = git(oasbRoot, ['status', '--porcelain', '--untracked-files=all', '--', '.', ':(exclude)results'])
-    .split('\n')
-    .filter(Boolean)
-    .map(l => l.slice(3));
+  // -z prints each path as it is: without it, git C-quotes a path holding a
+  // space or a non-ASCII character, and the quoted text is not the path.
+  const status: string[] = [];
+  const fields = git(oasbRoot, ['status', '--porcelain', '-z', '--untracked-files=all', '--', '.', ':(exclude)results'])
+    .split('\0');
+  for (let i = 0; i < fields.length; i++) {
+    if (!fields[i]) continue;
+    status.push(fields[i].slice(3));
+    // A rename or copy entry is followed by a field holding its source path.
+    if (/[RC]/.test(fields[i].slice(0, 2))) i++;
+  }
   if (status.length > 0) {
     const operatorFiles = status.some(rel => operatorPaths.some(p => isInside(resolve(oasbRoot, rel), p)));
     throw new PinError(
@@ -186,6 +193,11 @@ export function tarballName(version: string): string {
   return `hackmyagent-${version}.tgz`;
 }
 
+/** The installed package directory in the --hma directory. */
+export function hackmyagentPackageDir(hmaDir: string): string {
+  return join(hmaDir, 'node_modules', 'hackmyagent');
+}
+
 function integrityOf(bytes: Buffer, algorithm: string): string {
   return `${algorithm}-${createHash(algorithm).update(bytes).digest('base64')}`;
 }
@@ -213,7 +225,7 @@ export function verifyHackmyagent(hmaDir: string, pin: HackmyagentPin): Verified
     );
   }
 
-  const packageDir = join(hmaDir, 'node_modules', 'hackmyagent');
+  const packageDir = hackmyagentPackageDir(hmaDir);
   if (!existsSync(join(packageDir, 'package.json'))) {
     throw new PinError(
       'unpinned input: hackmyagent is not installed in the --hma directory; ' +
@@ -373,8 +385,9 @@ export function verifyLoadedModel(classifier: unknown, modelsDir: string, manife
  * Besides the classifier that `getTMEClassifier()` returns, the scanner's
  * compiler (which the full-pipeline adapter and the DVAA scan use) can take
  * its intent result from a second classifier, which loads these files from
- * `modelsDir` when both exist, and from a NanoMind daemon, which it asks
- * when the classifier's confidence is low. Neither is pinned.
+ * `modelsDir`, or from a directory beside the installed package (see
+ * secondClassifierDirs), when both exist, and from a NanoMind daemon, which
+ * it asks when the classifier's confidence is low. Neither is pinned.
  */
 export interface OtherModelSources {
   modelsDir: string;
@@ -382,6 +395,18 @@ export interface OtherModelSources {
 }
 
 export const SECOND_CLASSIFIER_FILES = ['nanomind-tme.bin', 'tokenizer.json'] as const;
+
+/**
+ * The training directories of a `nanomind` package beside the installed
+ * hackmyagent, where the second classifier also looks for its files.
+ */
+export const SECOND_CLASSIFIER_PACKAGE_DIRS = ['models-tme-v3', 'models-tme-v2', 'models-tme'] as const;
+
+/** Every directory the second classifier loads its files from. */
+export function secondClassifierDirs(sources: OtherModelSources, hmaPackageDir: string): string[] {
+  const training = resolve(hmaPackageDir, '..', 'nanomind', 'training');
+  return [sources.modelsDir, ...SECOND_CLASSIFIER_PACKAGE_DIRS.map(dir => join(training, dir))];
+}
 
 export function defaultOtherModelSources(): OtherModelSources {
   return {
@@ -409,16 +434,19 @@ function probe(host: string, port: number, timeoutMs = 2000): Promise<string | n
 
 /**
  * Refuses the run while the second classifier's two files are both present
- * or while anything accepts a connection at the daemon address, so the scan
- * takes its intent results from the verified classifier only.
+ * in one of its directories or while anything accepts a connection at the
+ * daemon address, so the scan takes its intent results from the verified
+ * classifier only.
  */
-export async function verifyNoOtherModelSources(sources: OtherModelSources): Promise<void> {
-  if (SECOND_CLASSIFIER_FILES.every(f => existsSync(join(sources.modelsDir, f)))) {
-    throw new PinError(
-      `unpinned input: ${sources.modelsDir} holds ${SECOND_CLASSIFIER_FILES.join(' and ')}, which the ` +
-        "scanner's compiler loads as a second classifier that the run does not verify; move them out of " +
-        'that directory for the run',
-    );
+export async function verifyNoOtherModelSources(sources: OtherModelSources, hmaPackageDir: string): Promise<void> {
+  for (const dir of secondClassifierDirs(sources, hmaPackageDir)) {
+    if (SECOND_CLASSIFIER_FILES.every(f => existsSync(join(dir, f)))) {
+      throw new PinError(
+        `unpinned input: ${dir} holds ${SECOND_CLASSIFIER_FILES.join(' and ')}, which the ` +
+          "scanner's compiler loads as a second classifier that the run does not verify; move them out of " +
+          'that directory for the run',
+      );
+    }
   }
   const { host, port } = sources.daemon;
   const answer = await probe(host, port);
