@@ -24,9 +24,13 @@ stay on record here with the reason they changed.
 - The README opens with Quick Start (clone, `npm ci`, `npm test`) and is under
   400 lines. The per-test tables moved to `docs/test-catalog.md`; Contributing
   and Updates moved below the reference sections. `npm run check:readme` checks
-  that layout and every relative link and anchor, written inline
-  (`[text](path)`), as a reference definition (`[label]: path`) or as an HTML
-  `href`, and `npm run smoke` runs it.
+  that layout and that the relative links it reads resolve, and `npm run smoke`
+  runs it. It reads three link forms, each written within one line: inline
+  links (`[text](path)`, with an optional double-quoted title), reference
+  definitions at the start of a line (`[label]: path`) and quoted HTML `href`
+  attributes. It checks a `#anchor` only in links to `.md` files. Other forms,
+  such as an unquoted `href` or a definition inside a list item, are not
+  checked.
 - The README's Skills Security Benchmark section now matches the scoring code:
   the nine attack categories in `src/benchmark/types.ts`, controls SS-01 to
   SS-10 and SEC-021 with their compliance levels in
