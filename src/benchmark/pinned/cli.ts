@@ -15,6 +15,7 @@ import { loadDVAAScenarios } from '../dvaa-suite.js';
 import { InputDriftError, ResultsExistError, runPinnedBenchmark, type PinnedRunOptions } from './harness.js';
 import {
   defaultOtherModelSources,
+  hackmyagentPackageDir,
   nanomindManifest,
   observeDvaa,
   observeHackmyagent,
@@ -44,9 +45,11 @@ The NanoMind model directory is ~/.nanomind/models. The scanner looks in
 other places before it (models/ under the working directory comes first), so
 a run is refused when the scanner's classifier reports a model or tokenizer
 file that is not in that directory. A run is also refused while
-~/.opena2a/nanomind/models holds both nanomind-tme.bin and tokenizer.json,
-or while anything accepts a connection at 127.0.0.1:47200 (a NanoMind
-daemon): the scanner can take its results from either, and neither is pinned.
+~/.opena2a/nanomind/models, or node_modules/nanomind/training/models-tme-v3,
+models-tme-v2 or models-tme in the --hma directory, holds both
+nanomind-tme.bin and tokenizer.json, or while anything accepts a connection
+at 127.0.0.1:47200 (a NanoMind daemon): the scanner can take its results from
+either, and neither is pinned.
 
 Keep the pin file and the --hma directory outside the OASB checkout: a run
 is refused while the checkout has uncommitted or untracked files. Results are
@@ -117,7 +120,7 @@ async function observe(
   }
 
   try {
-    await verifyNoOtherModelSources(otherModelSources);
+    await verifyNoOtherModelSources(otherModelSources, hackmyagentPackageDir(hmaDir));
   } catch (err) {
     problems.push((err as Error).message);
   }

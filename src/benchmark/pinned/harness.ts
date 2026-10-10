@@ -79,7 +79,9 @@ export interface PinnedRunOptions {
   nanomindModelsDir: string;
   /**
    * The scanner's other model sources; the run is refused while one is
-   * present. Default: ~/.opena2a/nanomind/models and 127.0.0.1:47200.
+   * present. Default: ~/.opena2a/nanomind/models and 127.0.0.1:47200. The
+   * second classifier's directories beside the installed hackmyagent are
+   * checked as well.
    */
   otherModelSources?: OtherModelSources;
   /** OASB checkout holding corpus/v2.json; results go to <oasbRoot>/results. */
@@ -220,7 +222,7 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
   //    and nothing is written until all of these pass.
   const inputs = verifyAll(opts);
   const otherModelSources = opts.otherModelSources ?? defaultOtherModelSources();
-  await verifyNoOtherModelSources(otherModelSources);
+  await verifyNoOtherModelSources(otherModelSources, inputs.hma.packageDir);
   let loaded: ReturnType<typeof loadDVAAScenarios>;
   try {
     loaded = loadDVAAScenarios(opts.dvaaDir, inputs.dvaaObjectFormat);
@@ -344,7 +346,7 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
     verifyHackmyagent(opts.hmaDir, inputs.pins.hackmyagent);
     verifyLoadedModel(tme, opts.nanomindModelsDir, verifyNanomind(opts.nanomindModelsDir, inputs.pins.nanomind));
     verifyDvaa(opts.dvaaDir, inputs.pins.dvaa);
-    await verifyNoOtherModelSources(otherModelSources);
+    await verifyNoOtherModelSources(otherModelSources, inputs.hma.packageDir);
   } catch (err) {
     if (err instanceof PinError) {
       throw new InputDriftError(`an input changed during the run, so no results were written: ${err.message}`);

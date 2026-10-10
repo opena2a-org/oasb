@@ -27,17 +27,20 @@ uncommitted or untracked files, and a pin file written inside it is one.
 | DVAA | full commit id | HEAD is another commit; the checkout has modified or untracked files; a file the scenario loader reads is not the committed file (this catches git-ignored files); the commit has no `scenarios/` directory or an `expected-checks.json` that is not valid JSON |
 | NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty; the scanner's classifier reports a model or tokenizer file that is not a file of that directory |
 | OASB scoring code and corpus | the OASB commit | the checkout has uncommitted changes outside `results/`; `corpus/v2.json` is not tracked, or the bytes read from it are not the committed file; a tracked file is marked skip-worktree or assume-unchanged, which hides a change from `git status` |
-| Other model sources of the scanner | not pinned, so they must be absent | `~/.opena2a/nanomind/models` holds both `nanomind-tme.bin` and `tokenizer.json`; anything accepts a connection at `127.0.0.1:47200` |
+| Other model sources of the scanner | not pinned, so they must be absent | `~/.opena2a/nanomind/models`, or `node_modules/nanomind/training/models-tme-v3`, `models-tme-v2` or `models-tme` in the `--hma` directory, holds both `nanomind-tme.bin` and `tokenizer.json`; anything accepts a connection at `127.0.0.1:47200` |
 
 The last row covers two sources the scanner's compiler can take its intent
 result from, besides the classifier that the NanoMind check covers. In
 hackmyagent 0.33.2 the compiler, which the full-pipeline adapter and the DVAA
 scan use, loads a second classifier from `nanomind-tme.bin` and
-`tokenizer.json` in `~/.opena2a/nanomind/models` when both files exist, and
-asks a NanoMind daemon at `http://127.0.0.1:47200` when the classifier's
-confidence is 0.6 or lower. Move those files out of that directory and stop
-whatever listens on that port before the run. `record.json` names the files
-and the address the run checked.
+`tokenizer.json` when both files are in `~/.opena2a/nanomind/models` or in
+one of the training directories of a `nanomind` package beside the installed
+hackmyagent (`node_modules/nanomind/training/models-tme-v3`, `models-tme-v2`
+and `models-tme` in the `--hma` directory), and asks a NanoMind daemon at
+`http://127.0.0.1:47200` when the classifier's confidence is 0.6 or lower.
+Move those files out of those directories and stop whatever listens on that
+port before the run. `record.json` names the files and the address the run
+checked.
 
 A version range, tag, branch name, short commit id or placeholder value in the
 pin file is refused. Every check runs before anything is scanned. After the
@@ -55,7 +58,9 @@ the scanner reads:
   (the other directories under `node_modules` in the `--hma` directory, and a
   `node_modules` directory inside the installed package) are not compared
   with anything. The run records the sha256 of `package-lock.json` in the
-  `--hma` directory when the file exists, and nothing else about them.
+  `--hma` directory when the file exists, and nothing else about them. The
+  one check among them is the second classifier check above, which looks in
+  three directories of `node_modules/nanomind`.
 - **The runtime.** The Node.js version, platform and architecture are
   recorded in `record.json`, not pinned.
 

@@ -24,7 +24,7 @@ import {
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli } from './cli.js';
 import { ResultsExistError, writeNew } from './harness.js';
 import { gitEnv } from './inputs.js';
@@ -146,7 +146,7 @@ interface Fixture {
   tarball: string;
   dvaa: string;
   models: string;
-  /** Stands in for ~/.opena2a/nanomind/models, the second classifier's directory. Not created. */
+  /** Stands in for ~/.opena2a/nanomind/models, one of the second classifier's directories. Not created. */
   otherModels: string;
   /** The model and tokenizer files the stand-in classifier reports for this fixture. */
   classifier: { modelPath?: string; tokenizerPath?: string };
@@ -231,10 +231,14 @@ function repinDvaa(fx: Fixture, message: string): void {
   writeFileSync(fx.pinsPath, JSON.stringify(fx.pins, null, 2));
 }
 
-/** A local port that nothing listens on, standing in for the NanoMind daemon's port. */
+/**
+ * A local port that nothing listens on, standing in for the NanoMind daemon's
+ * port. Each test picks its own, so a port another process binds while the
+ * file runs refuses at most the test that is running.
+ */
 let closedPort: number;
 
-beforeAll(async () => {
+beforeEach(async () => {
   const server = createServer();
   await new Promise<void>(done => server.listen(0, '127.0.0.1', () => done()));
   closedPort = (server.address() as { port: number }).port;
@@ -399,6 +403,14 @@ describe('pinned run', () => {
       },
       /holds nanomind-tme\.bin and tokenizer\.json/,
     ],
+    [
+      'a second classifier directory beside the installed scanner',
+      () => {
+        write(join(fx.hma, 'node_modules', 'nanomind', 'training', 'models-tme', 'nanomind-tme.bin'), 'weights');
+        write(join(fx.hma, 'node_modules', 'nanomind', 'training', 'models-tme', 'tokenizer.json'), '{}');
+      },
+      /training.models-tme holds nanomind-tme\.bin and tokenizer\.json/,
+    ],
   ])('writes nothing and exits 3 when %s changes during the run', async (_name, change, message) => {
     g.__oasbFakeDuringRun = change;
     const r = await run(fx);
@@ -456,6 +468,9 @@ describe('pinned run', () => {
     }],
     ['only one of the second classifier files is present', () => {
       write(join(fx.otherModels, 'tokenizer.json'), '{}');
+    }],
+    ['only one of the second classifier files is beside the installed scanner', () => {
+      write(join(fx.hma, 'node_modules', 'nanomind', 'training', 'models-tme-v3', 'nanomind-tme.bin'), 'weights');
     }],
   ])('accepts the run when %s', async (_name, arrange) => {
     arrange();
@@ -682,6 +697,34 @@ describe('refusals before scanning', () => {
       },
       /opena2a-models holds nanomind-tme\.bin and tokenizer\.json, which the scanner's compiler loads as a second classifier/,
     ],
+    ...(['models-tme-v3', 'models-tme-v2', 'models-tme'] as const).map(
+      (dir): [string, () => void, RegExp] => [
+        `the second classifier files are in node_modules/nanomind/training/${dir} beside the installed scanner`,
+        () => {
+          write(join(fx.hma, 'node_modules', 'nanomind', 'training', dir, 'nanomind-tme.bin'), 'weights');
+          write(join(fx.hma, 'node_modules', 'nanomind', 'training', dir, 'tokenizer.json'), '{}');
+        },
+        new RegExp(
+          `hma.node_modules.nanomind.training.${dir} holds nanomind-tme\\.bin and tokenizer\\.json, which the ` +
+            "scanner's compiler loads as a second classifier",
+        ),
+      ],
+    ),
+    [
+      'the pin file is inside the OASB checkout under a name git status quotes',
+      () => {
+        fx.pinsPath = join(fx.oasb, 'pins für run.json');
+        writeFileSync(fx.pinsPath, JSON.stringify(fx.pins, null, 2));
+      },
+      /uncommitted changes \(pins für run\.json\).*The pin file and the --hma directory belong outside the OASB checkout/,
+    ],
+    [
+      'a tracked file was renamed',
+      () => {
+        git(fx.oasb, 'mv', '--', 'benchmark-results-v6.json', 'renamed.json');
+      },
+      /uncommitted changes \(renamed\.json\); commit or remove them/,
+    ],
   ];
 
   it.each(cases)('exits 2 when %s', async (_name, arrange, message) => {
@@ -744,12 +787,46 @@ describe('--observe', () => {
     expect(r.err.join('\n')).toMatch(/problem: unpinned input: .*holds nanomind-tme\.bin and tokenizer\.json/);
   });
 
+  it('reports second classifier files beside the installed scanner and exits 2', async () => {
+    write(join(fx.hma, 'node_modules', 'nanomind', 'training', 'models-tme-v2', 'nanomind-tme.bin'), 'weights');
+    write(join(fx.hma, 'node_modules', 'nanomind', 'training', 'models-tme-v2', 'tokenizer.json'), '{}');
+    const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);
+    expect(r.code).toBe(2);
+    expect(r.err.join('\n')).toMatch(
+      /problem: unpinned input: .*training.models-tme-v2 holds nanomind-tme\.bin and tokenizer\.json/,
+    );
+  });
+
   it('reports a DVAA checkout without scenarios/ as a problem, not a stack trace', async () => {
     git(fx.dvaa, 'rm', '-q', '-r', '--', 'scenarios');
     commitAll(fx.dvaa, 'no scenarios');
     const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);
     expect(r.code).toBe(2);
     expect(r.err.join('\n')).toMatch(/problem: the DVAA checkout has no scenarios\/ directory/);
+  });
+});
+
+describe('the stand-in daemon port', () => {
+  // These two tests run in order: the first binds the port it was given and
+  // keeps it bound, as another process could, and the second still needs a
+  // closed port.
+  let taken: Server | undefined;
+
+  afterAll(async () => {
+    if (taken?.listening) await new Promise<void>(done => taken!.close(() => done()));
+  });
+
+  it('is closed when a test starts', async () => {
+    taken = createServer(socket => socket.destroy());
+    await new Promise<void>(done => taken!.listen(closedPort, '127.0.0.1', () => done()));
+    expect(taken.listening).toBe(true);
+  });
+
+  it('is picked again for each test, so a port bound during the file does not refuse a later run', async () => {
+    expect(taken?.listening).toBe(true);
+    const r = await run(fx);
+    expect(r.err).toEqual([]);
+    expect(r.code).toBe(0);
   });
 });
 
