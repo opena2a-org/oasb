@@ -141,14 +141,15 @@ stay on record here with the reason they changed.
   the first step of `npm run smoke` uses before it installs. A report written
   in another checkout is read by each file's path from its `src/` directory,
   as the drift guard reads it; it was read relative to the checkout running
-  the check, so every count mismatched. A report without `testResults` is
-  reported by that field instead of a JavaScript error, and `--help` prints
-  the usage on stdout and exits 0 in both README checks. The statements both
-  checks compare are one list, `STATEMENTS` in `scripts/readme-counts.mjs`;
-  each check kept its own copy before, and a reworded sentence had to be
-  updated in both. The tests of both checks run after `npm ci` in
-  `npm run smoke`, and include one that changes each count of a README in
-  turn and one that runs `npm run check:readme` on this README.
+  the check, so every count taken from a test file's directory mismatched
+  (the total, passing and skipped counts did not). A report without
+  `testResults` is reported by that field instead of a JavaScript error, and
+  `--help` prints the usage on stdout and exits 0 in both README checks. The
+  statements both checks compare are one list, `STATEMENTS` in
+  `scripts/readme-counts.mjs`; each check kept its own copy before, and a
+  reworded sentence had to be updated in both. The tests of both checks run
+  after `npm ci` in `npm run smoke`, and include one that changes each count
+  of a README in turn and one that runs `npm run check:readme` on this README.
 - Constructing an adapter no longer creates its data directory: the ARP
   adapter creates its ARP instance and the directory on first use, and the
   llm-guard and rebuff adapters create the directory when `dataDir` is first
