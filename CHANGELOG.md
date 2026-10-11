@@ -228,7 +228,8 @@ stay on record here with the reason they changed.
   option for EINVAL, ECONNRESET, ENOTCONN, EBADF, ENOPROTOOPT and an error
   with no errno. Two more tests check that the option is called once, with
   its return value passed through, when it succeeds, and that it stays
-  wrapped while the file runs; no test failed before when either was removed.
+  wrapped while the file runs; on Node 26, no test failed before when either
+  was removed.
 - The README's What Gets Tested table calls the one skipped test "skipped on
   every platform", as its Counts note does. The table said
   "environment-skipped", but the test is skipped unconditionally.
