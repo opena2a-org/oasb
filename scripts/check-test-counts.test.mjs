@@ -290,7 +290,7 @@ test('readFailure drops the path a file-system error repeats and keeps any other
       err = e;
     }
     assert.equal(readFailure(err), 'ENOENT: no such file or directory');
-    assert.equal(readFailure(Object.assign(new Error('EACCES: denied'), { code: 'EACCES', syscall: 'open', path: missing })), 'EACCES');
+    assert.equal(readFailure(Object.assign(new Error('EACCES: denied'), { code: 'EACCES', syscall: 'open', path: missing })), 'EACCES: denied');
     assert.equal(readFailure(new SyntaxError('Unexpected end of JSON input')), 'Unexpected end of JSON input');
   } finally {
     rmSync(dir, { recursive: true, force: true });

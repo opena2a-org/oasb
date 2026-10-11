@@ -150,7 +150,8 @@ stay on record here with the reason they changed.
   instead of a stack trace, and `--help` prints the usage on stdout and exits
   0. A README or test report that cannot be read is named once, followed by
   the reason (`ENOENT: no such file or directory`); the line repeated the path
-  in Node's error message after it. The statements both checks compare are one
+  in Node's error message after it. An error whose message does not end with
+  the path keeps its whole message instead of only its code. The statements both checks compare are one
   list, `STATEMENTS` in
   `scripts/readme-counts.mjs`; each check kept its own copy before, and a
   reworded sentence had to be updated in both. The tests of both checks run

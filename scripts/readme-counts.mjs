@@ -103,5 +103,5 @@ export function reportFiles(report) {
 export function readFailure(err) {
   if (typeof err?.code !== 'string' || typeof err.path !== 'string') return String(err?.message ?? err);
   const suffix = `, ${err.syscall} '${err.path}'`;
-  return err.message.endsWith(suffix) ? err.message.slice(0, -suffix.length) : err.code;
+  return err.message.endsWith(suffix) ? err.message.slice(0, -suffix.length) : err.message;
 }
