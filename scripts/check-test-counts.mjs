@@ -4,8 +4,10 @@
 // Compares every test count the README states with a vitest JSON report of
 // the full suite: the tests badge, the Quick Start comment, the Counts note,
 // the per-group `npm run test:*` comments, the scenario counts in the prose,
-// the scenario-file count in MITRE ATLAS Coverage, and every row of the
-// What Gets Tested table. A table row that names a source directory is the
+// the MITRE ATLAS counts in the introduction and in MITRE ATLAS Coverage, and
+// every row of the What Gets Tested table. The ATLAS counts are read from the
+// scenario files under the README's directory: a file maps to ATLAS when it
+// cites a technique ID. A table row that names a source directory is the
 // number of tests in that directory, less the directories that have a row of
 // their own (the `src/benchmark` row does not count `src/benchmark/pinned`);
 // a `(live monitors)` or `(interceptors)` qualifier keeps the files whose
@@ -21,7 +23,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const LABELS = {
   total: 'tests in total',
@@ -36,6 +38,11 @@ const LABELS = {
   integrationFiles: 'integration scenario files',
   baseline: 'tests under src/baseline',
   e2e: 'tests under src/e2e',
+  mappedScenarios: 'scenario tests in files that cite a MITRE ATLAS technique',
+  mappedScenarioFiles: 'scenario files that cite a MITRE ATLAS technique',
+  unmappedScenarios: 'scenario tests in files that cite no MITRE ATLAS technique',
+  unmappedScenarioFiles: 'scenario files that cite no MITRE ATLAS technique',
+  techniques: 'MITRE ATLAS techniques cited by the scenario files',
 };
 
 // A What Gets Tested row that names its source: | Category | 19 | `src/atomic/process` | or with a qualifier.
@@ -44,8 +51,11 @@ const TABLE_ROW = /^\| ([^|*]+?) \| (\d+) \| `(src\/[^`]+)`(?: \(([^)]+)\))? \|/
 const inDir = (path, dir) => path.startsWith(dir.endsWith('/') ? dir : dir + '/');
 const fileName = path => path.slice(path.lastIndexOf('/') + 1);
 
-/** The counts the README states, from a vitest JSON report. */
-export function liveCounts(results) {
+/**
+ * The counts the README states, from a vitest JSON report and `source`, which
+ * returns the text of a scenario file by its path from src/ on.
+ */
+export function liveCounts(results, source) {
   const files = reportFiles(results).map(t => ({ path: sourcePath(t.name), tests: t.assertionResults.length }));
   for (const field of ['numTotalTests', 'numPassedTests', 'numPendingTests']) {
     if (typeof results[field] !== 'number') throw new Error(`it has no "${field}" count, so it is not a vitest JSON report`);
@@ -67,6 +77,7 @@ export function liveCounts(results) {
     integrationFiles: fileCount(p => inDir(p, 'src/integration')),
     baseline: tests(p => inDir(p, 'src/baseline')),
     e2e: tests(p => inDir(p, 'src/e2e')),
+    ...atlasCounts(files.filter(f => scenario(f.path)), source),
   };
 }
 
@@ -94,9 +105,9 @@ export function readmeStatements(readme) {
   return { statements, rows, missing };
 }
 
-/** Every difference between the README's stated counts and the suite. */
-export function compareCounts(results, readme) {
-  const live = liveCounts(results);
+/** Every difference between the README's stated counts and the suite; `source` as for liveCounts. */
+export function compareCounts(results, readme, source) {
+  const live = liveCounts(results, source);
   const { statements, rows, missing } = readmeStatements(readme);
   const drift = missing.map(m => `could not find the README's ${m}; update STATEMENTS in scripts/readme-counts.mjs if the wording changed`);
 
@@ -151,11 +162,21 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(`cannot read the README ${readmePath}: ${readFailure(err)}`);
     process.exit(1);
   }
+  // The scenario files the report names, read under the README's directory.
+  class SourceError extends Error {}
+  const source = path => {
+    const file = join(dirname(readmePath), path);
+    try {
+      return readFileSync(file, 'utf8');
+    } catch (err) {
+      throw new SourceError(`cannot read ${file}, a scenario file the test report names: ${readFailure(err)}`);
+    }
+  };
   let counted;
   try {
-    counted = compareCounts(JSON.parse(readFileSync(resultsPath, 'utf8')), readme);
+    counted = compareCounts(JSON.parse(readFileSync(resultsPath, 'utf8')), readme, source);
   } catch (err) {
-    console.error(`cannot read the test report ${resultsPath}: ${readFailure(err)}`);
+    console.error(err instanceof SourceError ? err.message : `cannot read the test report ${resultsPath}: ${readFailure(err)}`);
     process.exit(1);
   }
   const { live, compared, drift } = counted;

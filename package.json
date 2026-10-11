@@ -1,7 +1,7 @@
 {
   "name": "@opena2a/oasb",
   "version": "0.4.1",
-  "description": "Open Agent Security Benchmark \u2014 222 attack scenarios mapped to MITRE ATLAS and OWASP Agentic Top 10",
+  "description": "Open Agent Security Benchmark \u2014 222 attack scenarios; those that simulate an adversary map to MITRE ATLAS, and most cite the OWASP Agentic Top 10",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

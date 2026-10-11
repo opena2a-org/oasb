@@ -109,6 +109,15 @@ stay on record here with the reason they changed.
   against llm-guard and rebuff, and fails when a suite runs without every
   capability it needs.
 
+- The README no longer says that every scenario maps to MITRE ATLAS. 165 of
+  the 222 tests, in 33 of the 47 scenario files, cite one of 15 ATLAS
+  techniques; the other 57, in 14 files, test the product's defensive
+  response and its own detection machinery and cite none. The introduction,
+  the MITRE ATLAS Coverage section, `docs/mitre-atlas-mapping.md` and the
+  package description now say so. `npm run check:readme` and the release
+  smoke's drift guard compare each of these README counts with the scenario
+  files, where a file maps to ATLAS when it cites a technique ID such as
+  `AML.T0050`.
 - BL-003 checks that a product keeps its anomaly baselines across a restart.
   It passed only when the baselines were lost, so a product that persists
   them failed it. The `AnomalyScorer` contract gains optional `save(dataDir)`

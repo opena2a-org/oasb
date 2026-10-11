@@ -17,7 +17,9 @@
 //   5. every test count the README states equals the suite: the badge, the
 //      Quick Start comment, the Counts note, the per-group `npm run test:*`
 //      comments, the scenario counts in the prose and in the
-//      `opena2a benchmark run` comment, and each row of the
+//      `opena2a benchmark run` comment, the MITRE ATLAS counts (a scenario
+//      file under the README's directory maps to ATLAS when it cites a
+//      technique ID), and each row of the
 //      "What Gets Tested" table, counted per source directory. Without
 //      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
@@ -35,7 +37,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const MAX_LINES = 400;
 const QUICK_START_BY = 25;
@@ -262,6 +264,24 @@ function checkCounts(text, tests) {
   const inDir = (dir) => [under(dir).length, `tests in ${dir}`];
   const scenarioTests = tests.filter((t) => SCENARIO_DIRS.some((dir) => t.file.startsWith(dir + '/')));
   const scenarioDirs = `${SCENARIO_DIRS.slice(0, -1).join(', ')} and ${SCENARIO_DIRS.at(-1)}`;
+  // The MITRE ATLAS counts, from the scenario files under the README's directory.
+  const scenarioFiles = [...new Set(scenarioTests.map((t) => t.file))].map((path) => ({
+    path,
+    tests: scenarioTests.filter((t) => t.file === path).length,
+  }));
+  let atlas = null;
+  try {
+    atlas = atlasCounts(scenarioFiles, (path) => {
+      const file = join(dirname(readmePath), path);
+      try {
+        return readFileSync(file, 'utf8');
+      } catch (err) {
+        throw new Error(`cannot read ${file}, a scenario file ${source} names: ${readFailure(err)}`);
+      }
+    });
+  } catch (err) {
+    fail(`${err.message}; the MITRE ATLAS counts are not checked.`);
+  }
   const fixed = {
     total: [tests.length, 'tests'],
     passed: ran
@@ -280,6 +300,13 @@ function checkCounts(text, tests) {
     integrationFiles: [files(under('src/integration')), 'test files in src/integration'],
     baseline: inDir('src/baseline'),
     e2e: inDir('src/e2e'),
+    ...(atlas && {
+      mappedScenarios: [atlas.mappedScenarios, 'scenario tests in files that cite a MITRE ATLAS technique ID'],
+      mappedScenarioFiles: [atlas.mappedScenarioFiles, 'scenario files that cite a MITRE ATLAS technique ID'],
+      unmappedScenarios: [atlas.unmappedScenarios, 'scenario tests in files that cite no MITRE ATLAS technique ID'],
+      unmappedScenarioFiles: [atlas.unmappedScenarioFiles, 'scenario files that cite no MITRE ATLAS technique ID'],
+      techniques: [atlas.techniques, 'MITRE ATLAS technique IDs cited by the scenario files'],
+    }),
   };
   const compare = (n, what, stated, [live, label]) => {
     if (stated !== live) fail(`line ${n}: ${what} says ${stated}; ${source} has ${live} ${label}.`);
@@ -291,7 +318,11 @@ function checkCounts(text, tests) {
       fail(`the ${where} (${re}) was not found; if its wording changed, update STATEMENTS in scripts/readme-counts.mjs.`);
     }
     for (const m of matches) {
-      keys.forEach((key, i) => compare(lineOf(text, m.index), `the ${where}`, Number(m[i + 1]), fixed[key]));
+      keys.forEach((key, i) => {
+        // The ATLAS measures are missing when the scenario files could not be read, which is reported above.
+        if (!fixed[key] && !atlas) return;
+        compare(lineOf(text, m.index), `the ${where}`, Number(m[i + 1]), fixed[key]);
+      });
     }
   }
 

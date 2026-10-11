@@ -13,11 +13,23 @@
 //   pinned                  tests in src/benchmark/pinned
 //   atomic, integration, baseline, e2e   tests under src/<name>
 //   integrationFiles        test files under src/integration
+//   mappedScenarios         scenario tests in files that cite a MITRE ATLAS
+//                           technique ID (see atlasCounts)
+//   mappedScenarioFiles     scenario files that cite one
+//   unmappedScenarios       scenario tests in files that cite none
+//   unmappedScenarioFiles   scenario files that cite none
+//   techniques              distinct technique IDs the scenario files cite
 // The rows of the "What Gets Tested" table that name a source directory are
 // not listed here; each check counts them per directory.
 export const STATEMENTS = [
   { where: 'tests badge', re: /tests-(\d+)%20passing/g, keys: ['passed'] },
   { where: 'introduction', re: /^(\d+) standardized attack scenarios/gm, keys: ['scenarios'] },
+  {
+    where: 'introduction',
+    re: /(\d+) of them, in (\d+) files, map to MITRE ATLAS \((\d+) techniques/g,
+    keys: ['mappedScenarios', 'mappedScenarioFiles', 'techniques'],
+  },
+  { where: 'introduction', re: /the other (\d+) test the product's defensive response/g, keys: ['unmappedScenarios'] },
   {
     where: 'Quick Start comment',
     re: /Full suite: (\d+) tests \((\d+) pass, (\d+) skip\)/g,
@@ -43,7 +55,16 @@ export const STATEMENTS = [
   { where: 'test:baseline comment', re: /test:baseline +# (\d+) false-positive \/ baseline tests/g, keys: ['baseline'] },
   { where: 'test:e2e comment', re: /test:e2e +# (\d+) E2E tests/g, keys: ['e2e'] },
   { where: 'benchmark run comment', re: /# all (\d+) scenarios/g, keys: ['scenarios'] },
-  { where: 'MITRE ATLAS Coverage line', re: /across (\d+) scenario files/g, keys: ['scenarioFiles'] },
+  {
+    where: 'MITRE ATLAS Coverage line',
+    re: /Of the (\d+) tests across (\d+) scenario files, (\d+) tests in (\d+) files map to (\d+) unique techniques/g,
+    keys: ['scenarios', 'scenarioFiles', 'mappedScenarios', 'mappedScenarioFiles', 'techniques'],
+  },
+  {
+    where: 'MITRE ATLAS Coverage line',
+    re: /The other (\d+) tests, in (\d+) files, are defensive and capability tests/g,
+    keys: ['unmappedScenarios', 'unmappedScenarioFiles'],
+  },
   {
     where: '"Attack scenarios" row',
     re: /^\| \*\*Attack scenarios\*\* \| \*\*(\d+)\*\* \|/gm,
@@ -58,6 +79,40 @@ export const STATEMENTS = [
 
 // The test directories whose tests are attack scenarios.
 export const SCENARIO_DIRS = ['src/atomic', 'src/integration', 'src/baseline', 'src/e2e'];
+
+// A MITRE ATLAS technique ID as a scenario file cites it in its header, such
+// as AML.T0050 or AML.T0034.002. A tactic ID such as AML.TA0011 is not one.
+const TECHNIQUE_ID = /\bAML\.T\d{4}(?:\.\d{3})?\b/g;
+
+/**
+ * The MITRE ATLAS counts of the scenario files: `files` lists each scenario
+ * file as { path, tests } and `source(path)` returns its text. A file maps to
+ * ATLAS when its text cites a technique ID; the defensive and capability tests
+ * cite none, so they are counted apart.
+ */
+export function atlasCounts(files, source) {
+  const techniques = new Set();
+  let mappedScenarios = 0;
+  let mappedScenarioFiles = 0;
+  let unmappedScenarios = 0;
+  for (const { path, tests } of files) {
+    const cited = source(path).match(TECHNIQUE_ID) ?? [];
+    for (const id of cited) techniques.add(id);
+    if (cited.length > 0) {
+      mappedScenarios += tests;
+      mappedScenarioFiles++;
+    } else {
+      unmappedScenarios += tests;
+    }
+  }
+  return {
+    mappedScenarios,
+    mappedScenarioFiles,
+    unmappedScenarios,
+    unmappedScenarioFiles: files.length - mappedScenarioFiles,
+    techniques: techniques.size,
+  };
+}
 
 // A "What Gets Tested" row whose Source is `src/e2e` (qualifier) counts the
 // files of that directory whose name matches the qualifier's pattern.

@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +28,33 @@ const FILES = {
   'src/benchmark/pinned/pinned.test.ts': 4,
 };
 
+// The headers of the scenario files in FILES: five cite four ATLAS techniques
+// between them (10 tests); INT-002 and BL-001 cite none (3 tests), and the
+// tactic ID BL-001 names is not a technique.
+const SOURCES = {
+  'src/atomic/process/AT-PROC-001.spawn.test.ts': '// ATLAS: AML.T0050 (Command and Scripting Interpreter)\n',
+  'src/atomic/network/AT-NET-001.connect.test.ts': '// ATLAS: AML.T0025 (Exfiltration via Cyber Means)\n',
+  'src/integration/INT-001.exfil.test.ts': '// ATLAS: AML.T0086, AML.T0025\n',
+  'src/integration/INT-002.abuse.test.ts': '// Detection-capability test.\n',
+  'src/baseline/BL-001.profile.test.ts': '// Defensive response test (counters Impact / AML.TA0011).\n',
+  'src/e2e/E2E-001.live-filesystem.test.ts': '// ATLAS: AML.T0055 (Unsecured Credentials)\n',
+  'src/e2e/E2E-004.interceptor-process.test.ts': '// ATLAS: AML.T0050\n',
+};
+
+// The text of a scenario file in SOURCES, by its path from src/ on.
+function source(path, sources = SOURCES) {
+  if (!(path in sources)) throw new Error(`no source for ${path}`);
+  return sources[path];
+}
+
+// Write SOURCES under `dir`, where the command reads them beside the README.
+function writeSources(dir) {
+  for (const [path, text] of Object.entries(SOURCES)) {
+    mkdirSync(join(dir, dirname(path)), { recursive: true });
+    writeFileSync(join(dir, path), text);
+  }
+}
+
 // A vitest JSON report of FILES, as the reporter writes it with absolute paths.
 function suite(files = FILES, skipped = 1) {
   const testResults = Object.entries(files).map(([path, n]) => ({
@@ -42,7 +69,7 @@ function suite(files = FILES, skipped = 1) {
 const README = [
   '[![Tests](https://img.shields.io/badge/tests-18%20passing-brightgreen)](#)',
   '',
-  '13 standardized attack scenarios that evaluate a runtime security tool.',
+  "13 standardized attack scenarios that evaluate a runtime security tool. 10 of them, in 5 files, map to MITRE ATLAS (4 techniques); the other 3 test the product's defensive response.",
   '',
   'npm test                    # Full suite: 19 tests (18 pass, 1 skip)',
   '',
@@ -69,18 +96,18 @@ const README = [
   '| Pinned benchmark harness tests | 4 | `src/benchmark/pinned` | pins |',
   '| **`npm test` total** | **19** | (18 pass, 1 skipped on every platform) | |',
   '',
-  'Techniques across 7 scenario files.',
+  'Of the 13 tests across 7 scenario files, 10 tests in 5 files map to 4 unique techniques. The other 3 tests, in 2 files, are defensive and capability tests.',
   '',
 ].join('\n');
 
 test('a README whose counts match the suite passes', () => {
-  const { drift, compared } = compareCounts(suite(), README);
+  const { drift, compared } = compareCounts(suite(), README, source);
   assert.deepEqual(drift, []);
-  assert.equal(compared, 33);
+  assert.equal(compared, 43);
 });
 
 test('every key of the shared statement list is a count the guard measures', () => {
-  const live = liveCounts(suite());
+  const live = liveCounts(suite(), source);
   for (const { where, keys } of STATEMENTS) {
     for (const key of keys) assert.equal(typeof live[key], 'number', `${where}: ${key}`);
   }
@@ -90,7 +117,7 @@ test('every count the README states is compared with the suite', () => {
   for (const m of README.matchAll(/\b\d+\b/g)) {
     const line = README.slice(0, m.index).split('\n').length;
     const changed = README.slice(0, m.index) + (Number(m[0]) + 1) + README.slice(m.index + m[0].length);
-    const { drift } = compareCounts(suite(), changed);
+    const { drift } = compareCounts(suite(), changed, source);
     assert.ok(
       drift.some(d => d.startsWith(`README line ${line} `)),
       `changing ${m[0]} on line ${line} is not reported: ${JSON.stringify(drift)}`,
@@ -102,7 +129,7 @@ test('a changed pinned row and Quick Start comment are drift', () => {
   const changed = README
     .replace('| Pinned benchmark harness tests | 4 |', '| Pinned benchmark harness tests | 3 |')
     .replace('Full suite: 19 tests (18 pass', 'Full suite: 18 tests (17 pass');
-  const { drift } = compareCounts(suite(), changed);
+  const { drift } = compareCounts(suite(), changed, source);
   assert.deepEqual(drift, [
     'README line 5 (Quick Start comment) states 18 tests in total; the suite has 19',
     'README line 5 (Quick Start comment) states 17 passing tests; the suite has 18',
@@ -111,26 +138,60 @@ test('a changed pinned row and Quick Start comment are drift', () => {
 });
 
 test('a badge lower than the passing count is drift', () => {
-  const { drift } = compareCounts(suite(), README.replace('tests-18%20passing', 'tests-17%20passing'));
+  const { drift } = compareCounts(suite(), README.replace('tests-18%20passing', 'tests-17%20passing'), source);
   assert.deepEqual(drift, ['README line 1 (tests badge) states 17 passing tests; the suite has 18']);
 });
 
 test('a new pinned test without a README edit is drift', () => {
   const files = { ...FILES, 'src/benchmark/pinned/pinned.test.ts': 5 };
-  const { drift } = compareCounts(suite(files), README);
+  const { drift } = compareCounts(suite(files), README, source);
   assert.ok(drift.some(d => /test table, Pinned benchmark harness tests\) states 4 .* has 5$/.test(d)), drift.join('\n'));
   assert.ok(drift.some(d => /Quick Start comment\) states 19 tests in total; the suite has 20$/.test(d)), drift.join('\n'));
 });
 
 test('tests in a directory the table does not name are drift', () => {
-  const { drift } = compareCounts(suite({ ...FILES, 'src/harness/adapter.test.ts': 1 }), README);
+  const { drift } = compareCounts(suite({ ...FILES, 'src/harness/adapter.test.ts': 1 }), README, source);
   assert.ok(drift.includes("the test table's source rows cover 19 of the suite's 20 tests; add a row for the directory they are in"), drift.join('\n'));
 });
 
 test('a statement the guard cannot find is drift', () => {
-  const { drift } = compareCounts(suite(), README.replace('# 2 false-positive / baseline tests', '# baseline tests'));
+  const { drift } = compareCounts(suite(), README.replace('# 2 false-positive / baseline tests', '# baseline tests'), source);
   assert.equal(drift.length, 1);
   assert.match(drift[0], /^could not find the README's test:baseline comment/);
+});
+
+test('the ATLAS counts split the scenario files by whether they cite a technique ID, not a tactic ID', () => {
+  const { mappedScenarios, mappedScenarioFiles, unmappedScenarios, unmappedScenarioFiles, techniques } = liveCounts(suite(), source);
+  assert.deepEqual(
+    { mappedScenarios, mappedScenarioFiles, unmappedScenarios, unmappedScenarioFiles, techniques },
+    { mappedScenarios: 10, mappedScenarioFiles: 5, unmappedScenarios: 3, unmappedScenarioFiles: 2, techniques: 4 },
+  );
+});
+
+test('a README that says every scenario maps to ATLAS is drift while a scenario file cites no technique', () => {
+  const changed = README.replace('10 of them, in 5 files,', '13 of them, in 7 files,').replace('the other 3 test', 'the other 0 test');
+  const { drift } = compareCounts(suite(), changed, source);
+  assert.deepEqual(drift, [
+    'README line 3 (introduction) states 13 scenario tests in files that cite a MITRE ATLAS technique; the suite has 10',
+    'README line 3 (introduction) states 7 scenario files that cite a MITRE ATLAS technique; the suite has 5',
+    'README line 3 (introduction) states 0 scenario tests in files that cite no MITRE ATLAS technique; the suite has 3',
+  ]);
+});
+
+test('a scenario file that stops citing its technique is drift in every ATLAS count', () => {
+  const sources = { ...SOURCES, 'src/e2e/E2E-001.live-filesystem.test.ts': '// Live filesystem watch.\n' };
+  const { drift } = compareCounts(suite(), README, path => source(path, sources));
+  assert.deepEqual(drift, [
+    'README line 3 (introduction) states 10 scenario tests in files that cite a MITRE ATLAS technique; the suite has 8',
+    'README line 3 (introduction) states 5 scenario files that cite a MITRE ATLAS technique; the suite has 4',
+    'README line 3 (introduction) states 4 MITRE ATLAS techniques cited by the scenario files; the suite has 3',
+    'README line 3 (introduction) states 3 scenario tests in files that cite no MITRE ATLAS technique; the suite has 5',
+    'README line 30 (MITRE ATLAS Coverage line) states 10 scenario tests in files that cite a MITRE ATLAS technique; the suite has 8',
+    'README line 30 (MITRE ATLAS Coverage line) states 5 scenario files that cite a MITRE ATLAS technique; the suite has 4',
+    'README line 30 (MITRE ATLAS Coverage line) states 4 MITRE ATLAS techniques cited by the scenario files; the suite has 3',
+    'README line 30 (MITRE ATLAS Coverage line) states 3 scenario tests in files that cite no MITRE ATLAS technique; the suite has 5',
+    'README line 30 (MITRE ATLAS Coverage line) states 2 scenario files that cite no MITRE ATLAS technique; the suite has 3',
+  ]);
 });
 
 test('the repository README carries every statement and states each count once', () => {
@@ -151,9 +212,10 @@ test('the command exits 1 on drift and 0 when every count matches', () => {
     writeFileSync(join(dir, 'results.json'), JSON.stringify(suite()));
     writeFileSync(join(dir, 'README.md'), README);
     writeFileSync(join(dir, 'README-drift.md'), README.replace('**19 tests**', '**20 tests**'));
+    writeSources(dir);
     const ok = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README.md')], { encoding: 'utf8' });
     assert.equal(ok.status, 0, ok.stderr);
-    assert.match(ok.stdout, /33 README counts match the live suite\./);
+    assert.match(ok.stdout, /43 README counts match the live suite\./);
     const bad = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README-drift.md')], { encoding: 'utf8' });
     assert.equal(bad.status, 1);
     assert.match(bad.stderr, /^DRIFT: README line 9 \(Counts note\) states 20 tests in total; the suite has 19$/m);
@@ -179,13 +241,15 @@ test('the command prints the usage for --help and names the field a report lacks
   }
 });
 
-// Run the command on a report and README written to a temporary directory;
-// `args` maps their two paths to the command's arguments.
-function runCommand(report, args = (reportPath, readmePath) => [reportPath, readmePath]) {
+// Run the command on a report and README written to a temporary directory,
+// with SOURCES beside the README unless `sources` is false; `args` maps the
+// report and README paths to the command's arguments.
+function runCommand(report, args = (reportPath, readmePath) => [reportPath, readmePath], sources = true) {
   const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-'));
   try {
     writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
     writeFileSync(join(dir, 'README.md'), README);
+    if (sources) writeSources(dir);
     return spawnSync(process.execPath, [script, ...args(join(dir, 'report.json'), join(dir, 'README.md'))], { encoding: 'utf8' });
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -276,6 +340,16 @@ test('a test report path that does not exist is named once, with no stack trace'
   const r = runCommand(suite(), (report, readme) => [join(dirname(report), 'missing.json'), readme]);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /^cannot read the test report .*missing\.json: ENOENT: no such file or directory\n$/);
+  assert.doesNotMatch(r.stderr, /^\s+at /m);
+});
+
+test('a scenario file the report names and the README directory lacks is named, not blamed on the report', () => {
+  const r = runCommand(suite(), undefined, false);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^cannot read .*src\/atomic\/process\/AT-PROC-001\.spawn\.test\.ts, a scenario file the test report names: ENOENT: no such file or directory\n$/,
+  );
   assert.doesNotMatch(r.stderr, /^\s+at /m);
 });
 

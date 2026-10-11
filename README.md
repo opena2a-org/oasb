@@ -9,7 +9,7 @@
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
 
-222 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. Each scenario is mapped to MITRE ATLAS (15 techniques, including the AI-agent technique family) and the OWASP LLM/Agentic Top 10. Plug in your product, run the suite, get a detection coverage scorecard.
+222 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 165 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](#mitre-atlas-coverage). Most scenarios also cite the OWASP LLM/Agentic Top 10. Plug in your product, run the suite, get a detection coverage scorecard.
 
 [OASB Website](https://oasb.ai) | [MITRE ATLAS Coverage](#mitre-atlas-coverage) | [Contributing](#contributing)
 
@@ -155,7 +155,7 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 
 ## MITRE ATLAS Coverage
 
-15 unique techniques across 47 scenario files, mapped to [MITRE ATLAS](https://atlas.mitre.org/) as of the current matrix (which renamed the ML-attack techniques to AI and added the AI-agent technique family in 2025). Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data). Per-technique detail: [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
+Of the 222 tests across 47 scenario files, 165 tests in 33 files map to 15 unique techniques in [MITRE ATLAS](https://atlas.mitre.org/) as of the current matrix (which renamed the ML-attack techniques to AI and added the AI-agent technique family in 2025). The other 57 tests, in 14 files, are defensive and capability tests, listed below the table. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data). Per-technique detail: [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
 
 | Technique | ID | Tests |
 |-----------|----|-------|

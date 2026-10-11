@@ -47,13 +47,27 @@ const SUITE = {
   'src/benchmark/pinned/pinned.test.ts': [3, 0, 0],
 };
 
+// The headers of the SUITE's scenario files: six cite four ATLAS techniques
+// between them (8 tests); INT-002 and BL-001 cite none (2 tests).
+const SOURCES = {
+  'src/atomic/process/AT-PROC-001.spawn.test.ts': '// ATLAS: AML.T0050 (Command and Scripting Interpreter)\n',
+  'src/atomic/network/AT-NET-001.connect.test.ts': '// ATLAS: AML.T0025 (Exfiltration via Cyber Means)\n',
+  'src/integration/INT-001.exfil.test.ts': '// ATLAS: AML.T0086 (Exfiltration via AI Agent Tool Invocation)\n',
+  'src/integration/INT-002.mcp.test.ts': '// Detection-capability test.\n',
+  'src/baseline/BL-001.profile.test.ts': '// Defensive response test (counters Impact / AML.TA0011).\n',
+  'src/e2e/E2E-001.live-filesystem-detection.test.ts': '// ATLAS: AML.T0055 (Unsecured Credentials)\n',
+  'src/e2e/E2E-003.live-network-detection.test.ts': '// ATLAS: AML.T0025\n',
+  'src/e2e/E2E-004.interceptor-process.test.ts': '// ATLAS: AML.T0050\n',
+};
+const source = (path) => SOURCES[path];
+
 // The count statements of the real README, with the SUITE's numbers.
 const COUNTED = [
   '# OASB',
   '',
   '[![Tests](https://img.shields.io/badge/tests-14%20passing-brightgreen)](https://example.com/oasb)',
   '',
-  '10 standardized attack scenarios that evaluate a security product.',
+  "10 standardized attack scenarios that evaluate a security product. 8 of them, in 6 files, map to MITRE ATLAS (4 techniques); the other 2 test the product's defensive response.",
   '',
   '## Quick Start',
   '',
@@ -89,7 +103,7 @@ const COUNTED = [
   '',
   '## MITRE ATLAS Coverage',
   '',
-  '4 unique techniques across 8 scenario files.',
+  'Of the 10 tests across 8 scenario files, 8 tests in 6 files map to 4 unique techniques. The other 2 tests, in 2 files, are defensive and capability tests.',
   '',
   '## Usage via OpenA2A CLI',
   '',
@@ -99,8 +113,9 @@ const COUNTED = [
   '',
 ].join('\n');
 
-// Numbers in COUNTED that are not test counts: technique counts and a test ID.
-const NOT_COUNTS = /\d+ (?:unique )?techniques|E2E-\d+/g;
+// Numbers in COUNTED that no check compares: the technique count in the
+// "Attack scenarios" row and a test ID.
+const NOT_COUNTS = /\*\*\d+ techniques\*\*|E2E-\d+/g;
 
 const lineOf = (text, index) => text.slice(0, index).split('\n').length;
 
@@ -121,11 +136,16 @@ function report(suite, checkout = repo) {
   };
 }
 
-// Run the check with --tests on `readme` and `testReport`.
-function checkCounts(readme, suite = SUITE, testReport = report(suite)) {
+// Run the check with --tests on `readme` and `testReport`, with `sources`
+// written beside the README, where the check reads the scenario files.
+function checkCounts(readme, suite = SUITE, testReport = report(suite), sources = SOURCES) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-counts-'));
   try {
     writeFileSync(join(dir, 'README.md'), readme);
+    for (const [path, text] of Object.entries(sources)) {
+      mkdirSync(join(dir, dirname(path)), { recursive: true });
+      writeFileSync(join(dir, path), text);
+    }
     writeFileSync(join(dir, 'report.json'), JSON.stringify(testReport));
     const r = spawnSync(process.execPath, [script, '--tests', join(dir, 'report.json'), join(dir, 'README.md')], {
       encoding: 'utf8',
@@ -140,7 +160,36 @@ test('README counts that equal the test report pass', () => {
   const r = checkCounts(COUNTED);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /test counts match the test report: 15 tests, 14 passing, 1 skipped, 10 attack scenarios/);
-  assert.deepEqual(compareCounts(report(SUITE), COUNTED).drift, []);
+  assert.deepEqual(compareCounts(report(SUITE), COUNTED, source).drift, []);
+});
+
+test('a README that says every scenario maps to ATLAS fails while a scenario file cites no technique', () => {
+  const r = checkCounts(COUNTED.replace('8 of them, in 6 files,', '10 of them, in 8 files,').replace('the other 2 test', 'the other 0 test'));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^README: line 5: the introduction says 10; the test report has 8 scenario tests in files that cite a MITRE ATLAS technique ID\.$/m);
+  assert.match(r.stderr, /^README: line 5: the introduction says 8; the test report has 6 scenario files that cite a MITRE ATLAS technique ID\.$/m);
+  assert.match(r.stderr, /^README: line 5: the introduction says 0; the test report has 2 scenario tests in files that cite no MITRE ATLAS technique ID\.$/m);
+});
+
+test('a scenario file that stops citing its technique fails every ATLAS count', () => {
+  const sources = { ...SOURCES, 'src/integration/INT-001.exfil.test.ts': '// Multi-step exfiltration chain.\n' };
+  const r = checkCounts(COUNTED, SUITE, report(SUITE), sources);
+  assert.equal(r.status, 1);
+  for (const line of [5, 41]) {
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: .* says 8; the test report has 6 scenario tests in files that cite a MITRE ATLAS`, 'm'));
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: .* says 4; the test report has 3 MITRE ATLAS technique IDs`, 'm'));
+  }
+});
+
+test('a scenario file the check cannot read is named, and the ATLAS counts are reported unchecked', () => {
+  const { 'src/baseline/BL-001.profile.test.ts': _, ...sources } = SOURCES;
+  const r = checkCounts(COUNTED, SUITE, report(SUITE), sources);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^README: cannot read .*src\/baseline\/BL-001\.profile\.test\.ts, a scenario file the test report names: ENOENT: no such file or directory; the MITRE ATLAS counts are not checked\.$/m,
+  );
+  assert.equal(r.stderr.trim().split('\n').length, 1, r.stderr);
 });
 
 test('every count the README states is compared by this check and by the drift guard', () => {
@@ -148,7 +197,7 @@ test('every count the README states is compared by this check and by the drift g
   const counts = [...COUNTED.matchAll(/\b\d+\b/g)].filter(
     (m) => !notCounts.some(([start, end]) => m.index >= start && m.index < end),
   );
-  assert.equal(counts.length, 33);
+  assert.equal(counts.length, 43);
   for (const m of counts) {
     const line = lineOf(COUNTED, m.index);
     const stated = Number(m[0]) + 1;
@@ -157,7 +206,7 @@ test('every count the README states is compared by this check and by the drift g
     const r = checkCounts(changed);
     assert.equal(r.status, 1, `${why} passes check-readme`);
     assert.match(r.stderr, new RegExp(`^README: line ${line}: .* says ${stated}; `, 'm'), `${why}: ${r.stderr}`);
-    const { drift } = compareCounts(report(SUITE), changed);
+    const { drift } = compareCounts(report(SUITE), changed, source);
     assert.ok(
       drift.some((d) => d.startsWith(`README line ${line} `)),
       `${why} is not drift for check-test-counts: ${JSON.stringify(drift)}`,
