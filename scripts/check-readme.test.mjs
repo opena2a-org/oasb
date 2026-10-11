@@ -241,29 +241,36 @@ test('a page linked from outside the MITRE ATLAS Coverage section is not read fo
   assert.equal(r.status, 0, r.stderr);
 });
 
-test('a STATEMENTS key that names no count fails with the key instead of a TypeError', () => {
-  // A copy of the check beside a readme-counts.mjs whose STATEMENTS has one more entry.
-  const dir = mkdtempSync(join(tmpdir(), 'check-readme-keys-'));
-  try {
-    const counts = pathToFileURL(join(repo, 'scripts', 'readme-counts.mjs')).href;
-    writeFileSync(join(dir, 'check-readme.mjs'), readFileSync(script));
-    writeFileSync(
-      join(dir, 'readme-counts.mjs'),
-      `import { STATEMENTS as REAL } from '${counts}';\n` +
-        `export * from '${counts}';\n` +
-        "export const STATEMENTS = [...REAL, { where: 'x', re: /(\\d+) tests/g, keys: ['nosuchkey'] }];\n",
-    );
-    const r = checkCounts(COUNTED, SUITE, report(SUITE), SOURCES, join(dir, 'check-readme.mjs'));
-    assert.equal(r.status, 1);
-    assert.doesNotMatch(r.stderr, /TypeError/);
-    assert.match(
-      r.stderr,
-      /^README: STATEMENTS in scripts\/readme-counts\.mjs gives the x the key "nosuchkey", which names no count this check measures \(total, passed, .*\)\.$/m,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+// "constructor" and "toString" are inherited by every object, so a lookup
+// that is not limited to the counts' own keys finds a function for them.
+for (const key of ['nosuchkey', 'constructor', 'toString']) {
+  test(`a STATEMENTS key that names no count ("${key}") fails with the key instead of a TypeError`, () => {
+    // A copy of the check beside a readme-counts.mjs whose STATEMENTS has one more entry.
+    const dir = mkdtempSync(join(tmpdir(), 'check-readme-keys-'));
+    try {
+      const counts = pathToFileURL(join(repo, 'scripts', 'readme-counts.mjs')).href;
+      writeFileSync(join(dir, 'check-readme.mjs'), readFileSync(script));
+      writeFileSync(
+        join(dir, 'readme-counts.mjs'),
+        `import { STATEMENTS as REAL } from '${counts}';\n` +
+          `export * from '${counts}';\n` +
+          `export const STATEMENTS = [...REAL, { where: 'x', re: /(\\d+) tests/g, keys: ['${key}'] }];\n`,
+      );
+      const r = checkCounts(COUNTED, SUITE, report(SUITE), SOURCES, join(dir, 'check-readme.mjs'));
+      assert.equal(r.status, 1);
+      assert.doesNotMatch(r.stderr, /TypeError/);
+      assert.match(
+        r.stderr,
+        new RegExp(
+          `^README: STATEMENTS in scripts/readme-counts\\.mjs gives the x the key "${key}", which names no count this check measures \\(total, passed, .*\\)\\.$`,
+          'm',
+        ),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
 
 test('every count the README states is compared by this check and by the drift guard', () => {
   const notCounts = [...COUNTED.matchAll(NOT_COUNTS)].map((m) => [m.index, m.index + m[0].length]);

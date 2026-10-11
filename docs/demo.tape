@@ -38,7 +38,7 @@ Enter
 Sleep 3s
 
 # Step 3: Show MITRE ATLAS coverage summary
-Type "head -30 REPORT.md"
+Type "head -30 REPORT.generated.md"
 Enter
 Sleep 4s
 

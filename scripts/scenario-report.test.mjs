@@ -4,10 +4,19 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateReport, parseAtlas, readScenarios, techniqueSummary } from './scenario-report.mjs';
+import {
+  REPORT_FILE,
+  generateReport,
+  parseAtlas,
+  readScenarios,
+  techniqueSummary,
+  writeReport,
+} from './scenario-report.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 // A checkout with CRLF line endings is read with LF ones.
@@ -143,4 +152,20 @@ test('a results file that is not a vitest JSON report is refused', () => {
     () => generateReport({ scenarios, results: { testResults: [] }, date: '2026-10-11' }),
     /no "numTotalTests" count/,
   );
+});
+
+test('the report is written beside the recorded REPORT.md, to a name git ignores', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
+  try {
+    writeFileSync(join(dir, 'REPORT.md'), 'the run kept as recorded\n');
+    const report = generateReport({ scenarios, date: '2026-10-11' });
+    const written = writeReport(report, dir);
+    assert.equal(written, join(dir, REPORT_FILE));
+    assert.equal(readFileSync(written, 'utf8'), report);
+    assert.equal(readFileSync(join(dir, 'REPORT.md'), 'utf8'), 'the run kept as recorded\n');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const ignored = spawnSync('git', ['check-ignore', '-q', REPORT_FILE], { cwd: repo });
+  assert.equal(ignored.status, 0, `.gitignore does not list ${REPORT_FILE}`);
 });

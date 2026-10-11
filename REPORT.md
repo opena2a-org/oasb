@@ -19,8 +19,8 @@ Generated: 2026-03-23
 >   llm-guard the prompt-output scanning suite (AT-AI-002) is skipped, so the
 >   llm-guard results below no longer describe a current run.
 >
-> `npm run report` writes a new REPORT.md in the current directory, with the
-> mapping read from the `// ATLAS:` header of each scenario file and, when a
+> `npm run report` writes a new report to REPORT.generated.md in the current
+> directory, leaving this file as it is, with the mapping read from the `// ATLAS:` header of each scenario file and, when a
 > vitest JSON report is given, its totals and the status of each file.
 
 ## Comparative Summary

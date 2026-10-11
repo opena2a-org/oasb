@@ -16,8 +16,10 @@ import { fileURLToPath } from 'node:url';
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The key shapes of OL-001: OpenAI, AWS access key ID, GitHub, GitLab, Slack, JWT.
+// An OpenAI key starts a word, so a hyphenated word that has "sk" before a
+// hyphen ("risk-management-framework") is not one.
 const KEY_SHAPES =
-  /sk-[a-zA-Z0-9\-_]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9\-_]{20,}|xox[bpas]-[a-zA-Z0-9\-]{10,}|(?:eyJ[a-zA-Z0-9_-]{20,}\.){2}[a-zA-Z0-9_-]{20,}/g;
+  /(?<!\w)sk-[a-zA-Z0-9\-_]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9\-_]{20,}|xox[bpas]-[a-zA-Z0-9\-]{10,}|(?:eyJ[a-zA-Z0-9_-]{20,}\.){2}[a-zA-Z0-9_-]{20,}/g;
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
@@ -25,16 +27,27 @@ function files(dir) {
   );
 }
 
+// Each API-key-shaped value in `text` that does not spell FAKE, as
+// "<name>:<line>: <first 8 characters>...".
+function unmarked(text, name) {
+  const found = [];
+  text.split('\n').forEach((line, i) => {
+    for (const [value] of line.matchAll(KEY_SHAPES)) {
+      if (!value.includes('FAKE')) found.push(`${name}:${i + 1}: ${value.slice(0, 8)}...`);
+    }
+  });
+  return found;
+}
+
 test('every API-key-shaped value in src/ spells FAKE', () => {
-  const unmarked = [];
-  for (const file of files(join(repo, 'src'))) {
-    readFileSync(file, 'utf8')
-      .split('\n')
-      .forEach((line, i) => {
-        for (const [value] of line.matchAll(KEY_SHAPES)) {
-          if (!value.includes('FAKE')) unmarked.push(`${relative(repo, file)}:${i + 1}: ${value.slice(0, 8)}...`);
-        }
-      });
-  }
-  assert.deepEqual(unmarked, [], 'mark each value with FAKE, or assemble it at run time from parts');
+  const found = files(join(repo, 'src')).flatMap((file) => unmarked(readFileSync(file, 'utf8'), relative(repo, file)));
+  assert.deepEqual(found, [], 'mark each value with FAKE, or assemble it at run time from parts');
+});
+
+test('a hyphenated word with "sk" before a hyphen is not an OpenAI-shaped key', () => {
+  assert.deepEqual(unmarked('// see the risk-management-framework page', 'x'), []);
+  // Joined at run time so that no line of this file holds the whole value.
+  const key = ['sk', 'proj', 'not0a0real0key0value'].join('-');
+  assert.deepEqual(unmarked(key, 'x'), ['x:1: sk-proj-...']);
+  assert.deepEqual(unmarked(`the key is "${key}"`, 'x'), ['x:1: sk-proj-...']);
 });

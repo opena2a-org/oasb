@@ -1,12 +1,12 @@
 // The report that `npm run report` (scripts/generate-report.ts) writes to
-// REPORT.md. The MITRE ATLAS mapping is read from the `// ATLAS:` line in the
+// REPORT.generated.md. The MITRE ATLAS mapping is read from the `// ATLAS:` line in the
 // header comment of each scenario file, so the report cannot drift from the
 // tests; docs/mitre-atlas-mapping.md is the per-technique page those headers
 // must agree with, and scripts/scenario-report.test.mjs checks that they do.
 // The totals and the status of each file come from a vitest JSON report when
 // one is given.
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCENARIO_DIRS, reportFiles, sourcePath } from './readme-counts.mjs';
@@ -189,4 +189,15 @@ export function generateReport({ scenarios, results = null, date }) {
   );
 
   return lines.join('\n');
+}
+
+// The tracked REPORT.md is a dated run kept as recorded, so a generated
+// report takes another name, which .gitignore lists.
+export const REPORT_FILE = 'REPORT.generated.md';
+
+/** Write a report to REPORT_FILE in `dir` and return the path written. */
+export function writeReport(report, dir = process.cwd()) {
+  const path = join(dir, REPORT_FILE);
+  writeFileSync(path, report);
+  return path;
 }

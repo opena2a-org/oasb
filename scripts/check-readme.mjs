@@ -354,7 +354,7 @@ function checkCounts(text, tests) {
     for (const m of matches) {
       keys.forEach((key, i) => {
         // An unknown key and an unread scenario file (null ATLAS measures) are reported above.
-        if (!fixed[key]) return;
+        if (!Object.hasOwn(fixed, key) || !fixed[key]) return;
         compare(lineOf(text, m.index), `the ${where}`, Number(m[i + 1]), fixed[key]);
       });
     }

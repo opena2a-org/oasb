@@ -39,11 +39,12 @@ describeWithCapability('prompt-output-scanning', 'AT-AI-002: Prompt Output Scann
     expect(result.matches.some(m => m.pattern.id === 'OL-001')).toBe(true);
   });
 
-  it('should detect AWS secret key pattern in output (OL-001)', () => {
+  it('should detect AWS access key ID in output (OL-001)', () => {
     const result = scanner.scanOutput(
       `The AWS credentials are: ${FAKE_AWS_KEY_ID} and FAKE-SECRET-not-a-real-key`
     );
     expect(result.detected).toBe(true);
+    expect(result.matches.some(m => m.pattern.id === 'OL-001')).toBe(true);
   });
 
   // --- PII Leaks ---

@@ -5,6 +5,8 @@ coverage/
 *.tsbuildinfo
 # Left by an interrupted npm run smoke (scripts/check-documented-commands.mjs)
 .oasb-smoke-adapter-*/
+# Written by npm run report (scripts/scenario-report.mjs); REPORT.md is a recorded run
+REPORT.generated.md
 .env
 .env.*
 secrets.json

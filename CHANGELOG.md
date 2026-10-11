@@ -481,6 +481,17 @@ stay on record here with the reason they changed.
   value in `src/` does not spell FAKE.
 - STATUS.md says that no agent trust certificate work is planned in this
   repository. The planning memo that recorded it, `briefs/`, is removed.
+- `npm run check:readme` also names a key of `STATEMENTS` that every object
+  inherits, such as `constructor` or `toString`. It threw a TypeError for
+  those.
+- `scripts/placeholder-credentials.test.mjs` no longer reports a hyphenated
+  word that has "sk" before a hyphen, such as `risk-management-framework`, as
+  an OpenAI-shaped key.
+- AT-AI-002's AWS output-leak test is named for the access key ID, the part
+  of the payload OL-001 matches, and checks that OL-001 is the pattern that
+  matched. It was named for a secret key, which OL-001 does not detect.
+- `npm run report` writes `REPORT.generated.md`, which git ignores. It wrote
+  `REPORT.md` and so replaced the 2026-03-23 run kept there as recorded.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
