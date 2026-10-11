@@ -320,12 +320,18 @@ stay on record here with the reason they changed.
   longer fails `npm test` with an unhandled error, and a new test checks the
   option for EINVAL, ECONNRESET, ENOTCONN, EBADF, ENOPROTOOPT and an error
   with no errno. Two more tests check that the option is called once, with
-  its return value passed through, when it succeeds, and that it stays
-  wrapped while the file runs; on Node 26.7.0, no test failed before when the
-  wrapper, or its call to the original option, was removed. The second test
-  checks that the option is the wrapper the file installs: it checked only
-  that the option was not the original before, so a replacement that never
-  calls the original option passed it.
+  its return value passed through, when it succeeds, and that the file
+  installs the wrapper; on Node 26.7.0, no test failed before when the
+  wrapper, or its call to the original option, was removed.
+- The pinned harness tests check at the end of every test that the
+  type-of-service option is still the wrapper the file installed, so a test
+  that replaces the option and leaves the replacement in place fails; the
+  check was made once before, when one test ran. That test now also calls
+  the option through `Socket.prototype` on a socket that is not connected:
+  the value it sets reads back, and a value the original option refuses
+  raises no error. On Node 26.7.0 every test passed before when the
+  installed wrapper was a function that never calls the original option, or
+  when a later test replaced the wrapper with one.
 - The README's What Gets Tested table calls the one skipped test "skipped on
   every platform", as its Counts note does. The table said
   "environment-skipped", but the test is skipped unconditionally.

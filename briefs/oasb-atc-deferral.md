@@ -5,7 +5,7 @@
 
 ## Context
 
-The list of open and deferred items kept for the Secretless v2 rollout carried an entry: _"OASB ATC verification (deferred from Phase 7 originally)"_. The entry was ambiguous — readable as either a deferred feature inside OASB or a deferred piece of the Secretless v2 rollout. There was no corresponding deferred flag, TODO, or unfinished code path in this repository.
+OASB ATC verification was recorded as deferred work without saying what was deferred — readable as either a deferred feature inside OASB or deferred work elsewhere that mentions OASB. There was no corresponding deferred flag, TODO, or unfinished code path in this repository.
 
 This brief closes that ambiguity.
 
@@ -20,7 +20,7 @@ This brief closes that ambiguity.
 We implement **none of the three** in OASB at this time.
 
 **Why 1 (runtime verifier) is out of scope:**
-OASB evaluates security _products_ against attack scenarios. It does not run as an agent and does not transit requests that carry real ATCs. A verifier here would have no production call site. The canonical ATC verifier already lives in aim-cloud (PR #100, Phase 6 of AIM Secrets), with CBOR-COSE signature validation, CRL caching, dual-signature, and capability scoping. Re-implementing it in a benchmark repo is duplication with a worse update cadence.
+OASB evaluates security _products_ against attack scenarios. It does not run as an agent and does not transit requests that carry real ATCs. A verifier here would have no production call site. The canonical ATC verifier already lives in aim-cloud, with CBOR-COSE signature validation, CRL caching, dual-signature, and capability scoping. Re-implementing it in a benchmark repo is duplication with a worse update cadence.
 
 **Why 2 (fixture generator) is premature:**
 The single scenario that needs ATC-shaped payloads today is `atc-forgery-attack` (see `scripts/run-dvaa-benchmark.ts:76` and `dvaa-benchmark-results.json`). It is currently mapped to the `social_engineering` category and tests whether defenders catch identity spoofing at the narrative level — not at the CBOR/COSE byte level. Until a defender-under-test actually ingests ATCs, a crypto-grade forgery generator is build-for-its-own-sake.
@@ -44,8 +44,8 @@ At that point:
 ## Alternatives considered
 
 - **Implement now as a forward-compatible stub.** Rejected — a stub with no production call site accrues drift cost and makes the repo harder to audit.
-- **Leave the ambiguous entry in place.** Rejected — drift flags rot quickly; "don't leave undocumented deferred flags" is a standing rule.
-- **Move the entry to an OASB-specific TODO.** Rejected — the entry was never OASB's; it was a leftover from the Secretless v2 rollout. Correct resolution is to close it here and remove it from the rollout's list.
+- **Leave the ambiguous entry in place.** Rejected — an undocumented deferred entry rots quickly: later, nobody can tell what it deferred or why.
+- **Move the entry to an OASB-specific TODO.** Rejected — the entry was never OASB's work. Correct resolution is to close it here.
 
 ## Escalation
 

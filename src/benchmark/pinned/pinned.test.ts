@@ -343,7 +343,11 @@ async function listen(): Promise<{ server: Server; port: number }> {
  * request it dropped instead of the whole test run.
  */
 type SetTypeOfService = (this: Socket, tos: number) => Socket;
-const socketPrototype = Socket.prototype as Socket & { setTypeOfService?: SetTypeOfService };
+type TypeOfServiceSocket = Socket & {
+  setTypeOfService?: SetTypeOfService;
+  getTypeOfService?: (this: Socket) => number;
+};
+const socketPrototype = Socket.prototype as TypeOfServiceSocket;
 const setTypeOfService = socketPrototype.setTypeOfService;
 
 function bestEffort(set: SetTypeOfService): SetTypeOfService {
@@ -356,15 +360,28 @@ function bestEffort(set: SetTypeOfService): SetTypeOfService {
   };
 }
 
-// The wrapper this file installs, kept so a test can check that it is the
-// one in place, not merely something other than the original.
-let installed: SetTypeOfService | undefined;
+// What this file installed: the option it wrapped and the wrapper bestEffort
+// returned for it, kept so the tests can check that the wrapper is the one in
+// place, not merely something other than the original.
+let installed: { option: SetTypeOfService; wrapper: SetTypeOfService } | undefined;
+
+function install(option: SetTypeOfService): void {
+  const wrapper = bestEffort(option);
+  installed = { option, wrapper };
+  socketPrototype.setTypeOfService = wrapper;
+}
 
 beforeAll(() => {
-  if (setTypeOfService) {
-    installed = bestEffort(setTypeOfService);
-    socketPrototype.setTypeOfService = installed;
-  }
+  if (setTypeOfService) install(setTypeOfService);
+});
+
+// Checked at the end of every test, so a test that replaces the option and
+// leaves the replacement in place fails. The wrapper is put back first, so the
+// tests after it run with it. A Node release without the option gains none.
+afterEach(() => {
+  const option = socketPrototype.setTypeOfService;
+  if (installed) socketPrototype.setTypeOfService = installed.wrapper;
+  expect(option, 'the type-of-service option at the end of the test').toBe(installed?.wrapper);
 });
 
 afterAll(() => {
@@ -1364,15 +1381,24 @@ describe('a stand-in daemon that resets a connection before the request is writt
     expect(calls[0].tos).toBe(0x10);
   });
 
-  it('keeps the type-of-service option wrapped while this file runs', () => {
+  it('installs the best-effort wrapper of the type-of-service option for this file', () => {
     // A Node release without the option has nothing to wrap, and gains none.
     if (!setTypeOfService) {
       expect(socketPrototype.setTypeOfService).toBeUndefined();
       expect(installed).toBeUndefined();
       return;
     }
-    expect(installed).toBeDefined();
-    expect(socketPrototype.setTypeOfService).toBe(installed);
+    expect(installed?.option).toBe(setTypeOfService);
+    expect(socketPrototype.setTypeOfService).toBe(installed?.wrapper);
+    // Called through Socket.prototype on a socket that is not connected yet,
+    // the option keeps the value it is given, which reads back...
+    const socket: TypeOfServiceSocket = new Socket();
+    expect(socket.setTypeOfService?.(0x10)).toBe(socket);
+    expect(socket.getTypeOfService?.()).toBe(0x10);
+    // ...and a value the original option refuses raises no error and changes nothing.
+    expect(() => setTypeOfService.call(socket, 0x100)).toThrow(RangeError);
+    expect(socket.setTypeOfService?.(0x100)).toBe(socket);
+    expect(socket.getTypeOfService?.()).toBe(0x10);
   });
 });
 
