@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compareCounts, liveCounts, readmeStatements } from './check-test-counts.mjs';
-import { STATEMENTS } from './readme-counts.mjs';
+import { STATEMENTS, readFailure } from './readme-counts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'check-test-counts.mjs');
@@ -258,6 +258,31 @@ test('an assertionResults entry that is not a test result with a status is repor
 test('a README path that does not exist is named, with no stack trace', () => {
   const r = runCommand(suite(), (report, readme) => [report, join(dirname(readme), 'missing.md')]);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /^cannot read the README .*missing\.md: ENOENT: no such file or directory, open '.*missing\.md'\n$/);
+  assert.match(r.stderr, /^cannot read the README .*missing\.md: ENOENT: no such file or directory\n$/);
   assert.doesNotMatch(r.stderr, /^\s+at /m);
+});
+
+test('a test report path that does not exist is named once, with no stack trace', () => {
+  const r = runCommand(suite(), (report, readme) => [join(dirname(report), 'missing.json'), readme]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^cannot read the test report .*missing\.json: ENOENT: no such file or directory\n$/);
+  assert.doesNotMatch(r.stderr, /^\s+at /m);
+});
+
+test('readFailure drops the path a file-system error repeats and keeps any other message', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-'));
+  try {
+    const missing = join(dir, 'missing.md');
+    let err;
+    try {
+      readFileSync(missing, 'utf8');
+    } catch (e) {
+      err = e;
+    }
+    assert.equal(readFailure(err), 'ENOENT: no such file or directory');
+    assert.equal(readFailure(Object.assign(new Error('EACCES: denied'), { code: 'EACCES', syscall: 'open', path: missing })), 'EACCES');
+    assert.equal(readFailure(new SyntaxError('Unexpected end of JSON input')), 'Unexpected end of JSON input');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

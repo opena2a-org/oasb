@@ -94,3 +94,14 @@ export function reportFiles(report) {
   });
   return report.testResults;
 }
+
+/**
+ * Why a file could not be read, without the path the caller already names:
+ * Node's "ENOENT: no such file or directory, open '<path>'" becomes
+ * "ENOENT: no such file or directory". Any other error keeps its message.
+ */
+export function readFailure(err) {
+  if (typeof err?.code !== 'string' || typeof err.path !== 'string') return String(err?.message ?? err);
+  const suffix = `, ${err.syscall} '${err.path}'`;
+  return err.message.endsWith(suffix) ? err.message.slice(0, -suffix.length) : err.code;
+}

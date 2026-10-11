@@ -201,8 +201,22 @@ test('a README path that does not exist is named, with no stack trace', () => {
     for (const args of [['--no-counts', missing], [missing]]) {
       const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
       assert.equal(r.status, 1, args.join(' '));
-      assert.equal(r.stderr, `README: cannot read the README ${missing}: ENOENT: no such file or directory, open '${missing}'\n`);
+      assert.equal(r.stderr, `README: cannot read the README ${missing}: ENOENT: no such file or directory\n`);
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a test report path that does not exist is named once', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-missing-'));
+  try {
+    const missing = join(dir, 'missing.json');
+    writeFileSync(join(dir, 'README.md'), COUNTED);
+    const r = spawnSync(process.execPath, [script, '--tests', missing, join(dir, 'README.md')], { encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /^README: cannot read the test report .*missing\.json: ENOENT: no such file or directory$/m);
+    assert.equal(r.stderr.split(missing).length, 2, r.stderr);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

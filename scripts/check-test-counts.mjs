@@ -21,7 +21,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const LABELS = {
   total: 'tests in total',
@@ -148,14 +148,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     readme = readFileSync(readmePath, 'utf8');
   } catch (err) {
-    console.error(`cannot read the README ${readmePath}: ${err.message}`);
+    console.error(`cannot read the README ${readmePath}: ${readFailure(err)}`);
     process.exit(1);
   }
   let counted;
   try {
     counted = compareCounts(JSON.parse(readFileSync(resultsPath, 'utf8')), readme);
   } catch (err) {
-    console.error(`cannot read the test report ${resultsPath}: ${err.message}`);
+    console.error(`cannot read the test report ${resultsPath}: ${readFailure(err)}`);
     process.exit(1);
   }
   const { live, compared, drift } = counted;

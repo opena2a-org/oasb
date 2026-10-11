@@ -35,7 +35,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const MAX_LINES = 400;
 const QUICK_START_BY = 25;
@@ -119,7 +119,7 @@ let readmeText;
 try {
   readmeText = readFileSync(readmePath, 'utf8');
 } catch (err) {
-  console.error(`README: cannot read the README ${readmePath}: ${err.message}`);
+  console.error(`README: cannot read the README ${readmePath}: ${readFailure(err)}`);
   process.exit(1);
 }
 const readme = parse(readmeText);
@@ -358,7 +358,7 @@ if (!noCounts) {
   try {
     tests = await suiteTests();
   } catch (err) {
-    fail(reportPath ? `cannot read the test report ${reportPath}: ${err.message}` : err.message);
+    fail(reportPath ? `cannot read the test report ${reportPath}: ${readFailure(err)}` : err.message);
   }
   if (tests) counted = checkCounts(readmeText, tests);
 }
