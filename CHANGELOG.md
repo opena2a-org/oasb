@@ -84,12 +84,13 @@ stay on record here with the reason they changed.
   with the headers. `scripts/generate-report.ts` listed four IDs (A01, A04,
   A06, A07) under "OWASP Agentic Top 10 Coverage" that are on neither list;
   it now lists the Agentic IDs the scenarios name.
-- `npm run smoke` runs the commands the README documents, with
+- `npm run smoke` runs three of the commands the README documents, with
   `scripts/check-documented-commands.mjs`: `OASB_ADAPTER=llm-guard` on a
   scenario file gated by capability and on an OS-level one, which must both
   report N/A (skipped); `OASB_ADAPTER` set to a relative path, run from the
   checkout, with an adapter that declares no capabilities; and the "Use as a
-  library" example in a new project with only the packed tarball installed.
+  library" example in a new project, after running the section's `npm install`
+  lines there with `@opena2a/oasb` replaced by the packed tarball.
   In 0.4.0 the smoke ran none of these commands, and all three failed: the
   OS-level file ran its 4 tests under llm-guard, a relative path was not
   found, and the library example stopped on `Cannot find module 'arp-guard'`.
