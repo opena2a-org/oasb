@@ -5,13 +5,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compareCounts } from './check-test-counts.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'check-readme.mjs');
 const repo = join(dirname(script), '..');
+const USAGE = /^usage: node scripts\/check-readme\.mjs \[--tests <report\.json> \| --no-counts\] \[path\/to\/README\.md\]$/m;
 
 const HEAD = '# Title\n\n## Quick Start\n\n```bash\nnpm test\n```\n\n## Guide\n\n';
 
@@ -97,24 +99,34 @@ const COUNTED = [
   '',
 ].join('\n');
 
-// A vitest JSON report of `suite`, with paths under this repository as
-// vitest writes them.
-function report(suite) {
+// Numbers in COUNTED that are not test counts: technique counts and a test ID.
+const NOT_COUNTS = /\d+ (?:unique )?techniques|E2E-\d+/g;
+
+const lineOf = (text, index) => text.slice(0, index).split('\n').length;
+
+// A vitest JSON report of `suite`, with paths under `checkout` (this
+// repository by default) as vitest writes them.
+function report(suite, checkout = repo) {
   const status = (n, s) => Array.from({ length: n }, () => ({ status: s }));
+  const tally = (i) => Object.values(suite).reduce((sum, counts) => sum + counts[i], 0);
   return {
+    numTotalTests: tally(0) + tally(1) + tally(2),
+    numPassedTests: tally(0),
+    numFailedTests: tally(1),
+    numPendingTests: tally(2),
     testResults: Object.entries(suite).map(([file, [passed, failed, skipped]]) => ({
-      name: join(repo, file),
+      name: join(checkout, file),
       assertionResults: [...status(passed, 'passed'), ...status(failed, 'failed'), ...status(skipped, 'skipped')],
     })),
   };
 }
 
-// Run the check with --tests on `readme` and a report of `suite`.
-function checkCounts(readme, suite = SUITE) {
+// Run the check with --tests on `readme` and `testReport`.
+function checkCounts(readme, suite = SUITE, testReport = report(suite)) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-counts-'));
   try {
     writeFileSync(join(dir, 'README.md'), readme);
-    writeFileSync(join(dir, 'report.json'), JSON.stringify(report(suite)));
+    writeFileSync(join(dir, 'report.json'), JSON.stringify(testReport));
     const r = spawnSync(process.execPath, [script, '--tests', join(dir, 'report.json'), join(dir, 'README.md')], {
       encoding: 'utf8',
     });
@@ -128,9 +140,92 @@ test('README counts that equal the test report pass', () => {
   const r = checkCounts(COUNTED);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /test counts match the test report: 15 tests, 14 passing, 1 skipped, 10 attack scenarios/);
+  assert.deepEqual(compareCounts(report(SUITE), COUNTED).drift, []);
 });
 
-test('a badge below the passing count, the "Full suite" comment and the scoring-engine and pinned counts are each checked', () => {
+test('every count the README states is compared by this check and by the drift guard', () => {
+  const notCounts = [...COUNTED.matchAll(NOT_COUNTS)].map((m) => [m.index, m.index + m[0].length]);
+  const counts = [...COUNTED.matchAll(/\b\d+\b/g)].filter(
+    (m) => !notCounts.some(([start, end]) => m.index >= start && m.index < end),
+  );
+  assert.equal(counts.length, 33);
+  for (const m of counts) {
+    const line = lineOf(COUNTED, m.index);
+    const stated = Number(m[0]) + 1;
+    const changed = COUNTED.slice(0, m.index) + stated + COUNTED.slice(m.index + m[0].length);
+    const why = `changing ${m[0]} to ${stated} on line ${line}`;
+    const r = checkCounts(changed);
+    assert.equal(r.status, 1, `${why} passes check-readme`);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: .* says ${stated}; `, 'm'), `${why}: ${r.stderr}`);
+    const { drift } = compareCounts(report(SUITE), changed);
+    assert.ok(
+      drift.some((d) => d.startsWith(`README line ${line} `)),
+      `${why} is not drift for check-test-counts: ${JSON.stringify(drift)}`,
+    );
+  }
+});
+
+test('a report written in another checkout is read by each file\'s path from src/', () => {
+  const r = checkCounts(COUNTED, SUITE, report(SUITE, '/elsewhere/oasb-clone'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /test counts match the test report: 15 tests, 14 passing, 1 skipped, 10 attack scenarios/);
+});
+
+test('a report without testResults is reported by the field it lacks', () => {
+  const r = checkCounts(COUNTED, SUITE, { numTotalTests: 1 });
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^README: cannot read the test report .*report\.json: it has no "testResults" list, so it is not a vitest JSON report; write the report with: npx vitest run --reporter=json --outputFile=<report\.json>$/m,
+  );
+  assert.doesNotMatch(r.stderr, /Cannot read properties/);
+});
+
+test('--help prints the usage on stdout and exits 0', () => {
+  for (const flag of ['--help', '-h']) {
+    const r = spawnSync(process.execPath, [script, flag], { encoding: 'utf8' });
+    assert.equal(r.status, 0, `${flag}: ${r.stderr}`);
+    assert.match(r.stdout, USAGE, flag);
+    assert.equal(r.stderr, '', flag);
+  }
+});
+
+test('arguments the check does not take print the usage on stderr and exit 1', () => {
+  for (const args of [['--tests'], ['--verbose'], ['a.md', 'b.md'], ['--no-counts', '--tests', 'report.json']]) {
+    const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+    assert.equal(r.status, 1, args.join(' '));
+    assert.match(r.stderr, USAGE, args.join(' '));
+  }
+});
+
+// Collecting the suite needs vitest, which the release smoke installs after
+// its first step.
+const vitestInstalled = existsSync(join(repo, 'node_modules', 'vitest', 'package.json'));
+
+test(
+  'without --tests the check collects the suite, matches the repository README and leaves no adapter directory',
+  { skip: !vitestInstalled && 'vitest is not installed; run npm ci', timeout: 300_000 },
+  () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'check-readme-collect-'));
+    try {
+      const r = spawnSync(process.execPath, [script], {
+        encoding: 'utf8',
+        env: { ...process.env, TMPDIR: tmp, TMP: tmp, TEMP: tmp },
+      });
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /README test counts match the collected suite: \d+ tests, \d+ not skipped/);
+      assert.deepEqual(
+        readdirSync(tmp).filter((name) => /^(arp|llmg|rbuf)-lab-/.test(name)),
+        [],
+        'collecting the suite left adapter data directories in the temp directory',
+      );
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  },
+);
+
+test('a badge below the passing count, the Quick Start comment and the scoring-engine and pinned counts are each checked', () => {
   const r = checkCounts(
     COUNTED.replace('tests-14%20passing', 'tests-12%20passing')
       .replace('Full suite: 15 tests (14 pass', 'Full suite: 13 tests (12 pass')
@@ -139,8 +234,8 @@ test('a badge below the passing count, the "Full suite" comment and the scoring-
   );
   assert.equal(r.status, 1);
   assert.match(r.stderr, /line 3: the tests badge says 12; the test report has 14 passing tests\./);
-  assert.match(r.stderr, /line 10: the "Full suite" comment says 13; the test report has 15 tests\./);
-  assert.match(r.stderr, /line 10: the "Full suite" comment says 12; the test report has 14 passing tests\./);
+  assert.match(r.stderr, /line 10: the Quick Start comment says 13; the test report has 15 tests\./);
+  assert.match(r.stderr, /line 10: the Quick Start comment says 12; the test report has 14 passing tests\./);
   assert.match(r.stderr, /line 15: the Counts note says 1; the test report has 2 scoring-engine tests/);
   assert.match(
     r.stderr,
@@ -170,7 +265,7 @@ test('the scenario count in the benchmark run comment is checked', () => {
   assert.equal(r.status, 1);
   assert.match(
     r.stderr,
-    /line 46: the benchmark run comment says 11; the test report has 10 attack-scenario tests \(outside src\/benchmark\)\./,
+    /line 46: the benchmark run comment says 11; the test report has 10 attack-scenario tests \(src\/atomic, src\/integration, src\/baseline and src\/e2e\)\./,
   );
 });
 
@@ -190,7 +285,10 @@ test('a test file that no table row counts is reported', () => {
 test('a count whose wording changed is reported as not found, not skipped', () => {
   const r = checkCounts(COUNTED.replace('# 3 atomic detection tests', '# 3 atomic tests'));
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /the test:atomic comment .* was not found; if its wording changed, update CLAIMS/);
+  assert.match(
+    r.stderr,
+    /the test:atomic comment .* was not found; if its wording changed, update STATEMENTS in scripts\/readme-counts\.mjs\./,
+  );
 });
 
 test('a README without the stated counts fails unless --no-counts is given', () => {

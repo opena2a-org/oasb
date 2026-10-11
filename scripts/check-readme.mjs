@@ -22,15 +22,20 @@
 //      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
 //      --tests it reads a vitest JSON report (`vitest run --reporter=json`)
-//      and compares it with the tests that passed. A stated count the check
-//      cannot find fails, so a reworded claim is never silently unchecked.
+//      and compares it with the tests that passed. A report written in
+//      another checkout is read by each file's path from its src/ directory.
+//      A stated count the check cannot find fails, so a reworded claim is
+//      never silently unchecked. The statements are listed in
+//      scripts/readme-counts.mjs, which the release smoke's drift guard reads
+//      too.
 //
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
-// Exit code 0 when every check passes, 1 otherwise. Run by npm run smoke.
+// Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const MAX_LINES = 400;
 const QUICK_START_BY = 25;
@@ -38,11 +43,16 @@ const COMMAND_BY = 30;
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
+const USAGE = 'usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]';
 let noCounts = false;
 let reportPath;
 let readmeArg;
 let badArgs = false;
 const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(USAGE);
+  process.exit(0);
+}
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--no-counts') noCounts = true;
   else if (args[i] === '--tests' && i + 1 < args.length) reportPath = args[++i];
@@ -50,7 +60,7 @@ for (let i = 0; i < args.length; i++) {
   else badArgs = true;
 }
 if (badArgs || (noCounts && reportPath)) {
-  console.error('usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]');
+  console.error(USAGE);
   process.exit(1);
 }
 const readmePath = resolve(readmeArg || join(root, 'README.md'));
@@ -182,59 +192,22 @@ for (const { n, line, inFence } of readme) {
   }
 }
 
-// 5. Every stated test count equals the suite.
+// 5. Every stated test count equals the suite. The statements, and the
+// measure each number must equal, are listed in scripts/readme-counts.mjs.
 
-// Each claim: where it is, the expression that finds it (every match is
-// checked, and at least one must exist) and, per capture group, the measure
-// the number must equal.
-const CLAIMS = [
-  { what: 'the tests badge', re: /tests-(\d+)%20passing/g, measures: ['passed'] },
-  {
-    what: 'the "Full suite" comment',
-    re: /Full suite: (\d+) tests \((\d+) pass, (\d+) skip\)/g,
-    measures: ['total', 'passed', 'skipped'],
-  },
-  {
-    what: 'the Counts note',
-    re: /runs \*\*(\d+) tests\*\* \((\d+) passing, (\d+) skipped/g,
-    measures: ['total', 'passed', 'skipped'],
-  },
-  { what: 'the Counts note', re: /\*\*(\d+) attack scenarios\*\*/g, measures: ['scenarios'] },
-  { what: 'the Counts note', re: /\*\*(\d+) scoring-engine unit tests\*\*/g, measures: ['scoring'] },
-  { what: 'the Counts note', re: /\*\*(\d+) pinned benchmark harness tests\*\*/g, measures: ['pinned'] },
-  { what: 'the Counts note', re: /"(\d+)" is the scenario count/g, measures: ['scenarios'] },
-  { what: 'the Counts note', re: /"(\d+) passing" is the full `npm test` total/g, measures: ['passed'] },
-  { what: 'the introduction', re: /^(\d+) standardized attack scenarios/gm, measures: ['scenarios'] },
-  { what: 'the adapter sentence', re: /run the same (\d+) attack scenarios/g, measures: ['scenarios'] },
-  { what: 'the test:atomic comment', re: /test:atomic +# (\d+) atomic detection tests/g, measures: ['dir:src/atomic'] },
-  {
-    what: 'the test:integration comment',
-    re: /test:integration +# (\d+) tests across (\d+) integration scenarios/g,
-    measures: ['dir:src/integration', 'files:src/integration'],
-  },
-  { what: 'the test:baseline comment', re: /test:baseline +# (\d+) false-positive/g, measures: ['dir:src/baseline'] },
-  { what: 'the test:e2e comment', re: /test:e2e +# (\d+) E2E tests/g, measures: ['dir:src/e2e'] },
-  { what: 'the benchmark run comment', re: /# all (\d+) scenarios/g, measures: ['scenarios'] },
-  { what: 'the MITRE ATLAS coverage line', re: /across (\d+) scenario files/g, measures: ['scenarioFiles'] },
-];
-
-// A table row whose Source is `src/e2e` (qualifier) counts the files of that
-// directory whose name matches the qualifier's pattern.
-const QUALIFIERS = {
-  'live monitors': /^E2E-\d+\.live-/,
-  interceptors: /^E2E-\d+\.interceptor-/,
-};
-
+// A test file's path in this checkout. A report written in another checkout
+// names files outside it; those are read from their src/ directory on.
 function repoPath(file) {
+  const outside = (rel) => rel.startsWith('..') || isAbsolute(rel);
   let rel = relative(root, file);
-  if (rel.startsWith('..') || isAbsolute(rel)) {
+  if (outside(rel)) {
     try {
       rel = relative(realpathSync(root), realpathSync(file));
     } catch {
-      // keep the path as given; it is reported as counted by no table row
+      // the file is not in this checkout
     }
   }
-  return rel.split(sep).join('/');
+  return outside(rel) ? sourcePath(file) : rel.split(sep).join('/');
 }
 
 // The suite as a list of { file, state }: state is 'passed', 'failed' or
@@ -242,7 +215,7 @@ function repoPath(file) {
 async function suiteTests() {
   if (reportPath) {
     const report = JSON.parse(readFileSync(reportPath, 'utf8'));
-    return report.testResults.flatMap((file) =>
+    return reportFiles(report).flatMap((file) =>
       file.assertionResults.map((t) => ({
         file: repoPath(file.name),
         state: t.status === 'passed' || t.status === 'failed' ? t.status : 'skipped',
@@ -280,43 +253,46 @@ function checkCounts(text, tests) {
   const source = ran ? 'the test report' : 'the suite';
   const under = (dir) => tests.filter((t) => t.file.startsWith(dir + '/'));
   const files = (list) => new Set(list.map((t) => t.file)).size;
-  const scenarioTests = tests.filter((t) => !t.file.startsWith('src/benchmark/'));
+  const inDir = (dir) => [under(dir).length, `tests in ${dir}`];
+  const scenarioTests = tests.filter((t) => SCENARIO_DIRS.some((dir) => t.file.startsWith(dir + '/')));
+  const scenarioDirs = `${SCENARIO_DIRS.slice(0, -1).join(', ')} and ${SCENARIO_DIRS.at(-1)}`;
   const fixed = {
     total: [tests.length, 'tests'],
     passed: ran
       ? [tests.filter((t) => t.state === 'passed').length, 'passing tests']
       : [tests.filter((t) => t.state !== 'skipped').length, 'tests that are not skipped (collected, not run)'],
     skipped: [tests.filter((t) => t.state === 'skipped').length, 'skipped tests'],
-    scenarios: [scenarioTests.length, 'attack-scenario tests (outside src/benchmark)'],
-    scenarioFiles: [files(scenarioTests), 'scenario test files (outside src/benchmark)'],
-    scoring: [
+    scenarios: [scenarioTests.length, `attack-scenario tests (${scenarioDirs})`],
+    scenarioFiles: [files(scenarioTests), `scenario test files (${scenarioDirs})`],
+    scoringEngine: [
       under('src/benchmark').length - under('src/benchmark/pinned').length,
       'scoring-engine tests (src/benchmark outside src/benchmark/pinned)',
     ],
-    pinned: [under('src/benchmark/pinned').length, 'tests in src/benchmark/pinned'],
-  };
-  const measure = (key) => {
-    if (key.startsWith('dir:')) return [under(key.slice(4)).length, `tests in ${key.slice(4)}`];
-    if (key.startsWith('files:')) return [files(under(key.slice(6))), `test files in ${key.slice(6)}`];
-    return fixed[key];
+    pinned: inDir('src/benchmark/pinned'),
+    atomic: inDir('src/atomic'),
+    integration: inDir('src/integration'),
+    integrationFiles: [files(under('src/integration')), 'test files in src/integration'],
+    baseline: inDir('src/baseline'),
+    e2e: inDir('src/e2e'),
   };
   const compare = (n, what, stated, [live, label]) => {
     if (stated !== live) fail(`line ${n}: ${what} says ${stated}; ${source} has ${live} ${label}.`);
   };
 
-  for (const claim of CLAIMS) {
-    const matches = [...text.matchAll(claim.re)];
+  for (const { where, re, keys } of STATEMENTS) {
+    const matches = [...text.matchAll(re)];
     if (matches.length === 0) {
-      fail(`${claim.what} (${claim.re}) was not found; if its wording changed, update CLAIMS in scripts/check-readme.mjs.`);
+      fail(`the ${where} (${re}) was not found; if its wording changed, update STATEMENTS in scripts/readme-counts.mjs.`);
     }
     for (const m of matches) {
-      claim.measures.forEach((key, i) => compare(lineOf(text, m.index), claim.what, Number(m[i + 1]), measure(key)));
+      keys.forEach((key, i) => compare(lineOf(text, m.index), `the ${where}`, Number(m[i + 1]), fixed[key]));
     }
   }
 
   // The "What Gets Tested" table: each test file belongs to the row with the
   // longest Source directory that holds it (and whose qualifier matches), and
-  // every test file must belong to a row.
+  // every test file must belong to a row. The "Attack scenarios" and
+  // "npm test total" rows are statements, compared above.
   const start = readme.findIndex((l) => !l.inFence && /^##\s+What Gets Tested\s*$/.test(l.line));
   const rows = [];
   for (let i = start + 1; start >= 0 && i < readme.length && !/^##\s/.test(readme[i].line); i++) {
@@ -332,31 +308,19 @@ function checkCounts(text, tests) {
   const dirRows = [];
   for (const { n, cells } of rows.slice(1)) {
     const category = plain(cells[0]);
+    if (category === 'Attack scenarios' || category === 'npm test total') continue;
     const what = `the "${category}" row`;
     const stated = plain(cells[1]);
     if (!/^\d+$/.test(stated)) {
       fail(`line ${n}: ${what} has no test count.`);
       continue;
     }
-    if (category === 'Attack scenarios') {
-      compare(n, what, Number(stated), fixed.scenarios);
-    } else if (category === 'npm test total') {
-      compare(n, what, Number(stated), fixed.total);
-      const split = plain(cells[2]).match(/^\((\d+) pass, (\d+) [a-z-]*skipped\)$/);
-      if (!split) {
-        fail(`line ${n}: ${what} does not state "(<n> pass, <n> skipped)" in its Source column.`);
-      } else {
-        compare(n, what, Number(split[1]), fixed.passed);
-        compare(n, what, Number(split[2]), fixed.skipped);
-      }
-    } else {
-      const src = (cells[2] || '').match(/^`([^`]+)`(?:\s+\(([^)]+)\))?$/);
-      if (!src || (src[2] && !QUALIFIERS[src[2]])) {
-        fail(`line ${n}: cannot tell which tests ${what} counts; its Source must be a \`directory\`, optionally followed by one of: ${Object.keys(QUALIFIERS).map((q) => `(${q})`).join(', ')}.`);
-        continue;
-      }
-      dirRows.push({ n, what, stated: Number(stated), dir: src[1].replace(/\/$/, ''), qualifier: src[2], count: 0 });
+    const src = (cells[2] || '').match(/^`([^`]+)`(?:\s+\(([^)]+)\))?$/);
+    if (!src || (src[2] && !QUALIFIERS[src[2]])) {
+      fail(`line ${n}: cannot tell which tests ${what} counts; its Source must be a \`directory\`, optionally followed by one of: ${Object.keys(QUALIFIERS).map((q) => `(${q})`).join(', ')}.`);
+      continue;
     }
+    dirRows.push({ n, what, stated: Number(stated), dir: src[1].replace(/\/$/, ''), qualifier: src[2], count: 0 });
   }
   const unowned = new Set();
   for (const t of tests) {
@@ -403,6 +367,6 @@ if (counted) {
     `   README test counts match ${reportPath ? 'the test report' : 'the collected suite'}: ` +
       `${counted.total[0]} tests, ${counted.passed[0]} ${reportPath ? 'passing' : 'not skipped'}, ` +
       `${counted.skipped[0]} skipped, ${counted.scenarios[0]} attack scenarios, ` +
-      `${counted.scoring[0]} scoring-engine, ${counted.pinned[0]} pinned.`,
+      `${counted.scoringEngine[0]} scoring-engine, ${counted.pinned[0]} pinned.`,
   );
 }

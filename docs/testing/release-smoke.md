@@ -22,11 +22,13 @@ the claims this repository publishes:
    double-quoted title), reference definitions at the start of a line
    (`[label]: path`) and quoted HTML `href` attributes. It checks a `#anchor`
    only in links to `.md` files. Other forms, such as an unquoted `href` or a
-   definition inside a list item, are not checked. The checker's own tests
-   (`npm run test:scripts`) run first. Reference detail belongs in `docs/`
-   (for example `docs/test-catalog.md`), linked from the README. This step
-   runs the checker with `--no-counts`: vitest is not installed yet, and
-   step 3 compares the test counts with the suite's report.
+   definition inside a list item, are not checked. Reference detail belongs
+   in `docs/` (for example `docs/test-catalog.md`), linked from the README.
+   This step runs the checker with `--no-counts`: vitest is not installed
+   yet, and step 3 compares the test counts with the suite's report. After
+   `npm ci`, the tests of both README checks (`npm run test:scripts`) run;
+   one of them runs `npm run check:readme` on this README, which collects
+   the suite with vitest.
 2. **Build + full suite.** `npm run build` then the complete vitest run,
    including E2E. E2E-003 is skipped on every platform (`it.skip`); any
    failure fails the smoke.
@@ -38,8 +40,9 @@ the claims this repository publishes:
    scenario counts in the prose, the scenario-file count under MITRE ATLAS
    Coverage, and every row of the What Gets Tested table, whose source rows
    must add up to the suite total. A statement it cannot find fails too, so a
-   wording change has to update the guard. Its own tests
-   (`npm run test:scripts`) run first. Any mismatch fails the smoke. If you
+   wording change has to update `STATEMENTS` in `scripts/readme-counts.mjs`,
+   the one list both README checks read. Its own tests
+   (`npm run test:scripts`) run after `npm ci`. Any mismatch fails the smoke. If you
    add or remove tests, update the README in the same change or this gate
    blocks the release - that is the point. Committing a run under `results/`
    does not change the totals: the run-of-record checks are a fixed set of
@@ -49,7 +52,9 @@ the claims this repository publishes:
    skipped, so it catches a stale count before a release without running the
    suite. It cannot tell a failing test from a passing one; this step can.
    With `--tests <report>` it reads a JSON report instead and compares the
-   passing counts with the tests that passed.
+   passing counts with the tests that passed; a report written in another
+   checkout is read by each file's path from its `src/` directory, as the
+   drift guard reads it.
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.

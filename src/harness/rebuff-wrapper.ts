@@ -183,14 +183,16 @@ class SimpleEnforcementEngine implements EnforcementEngine {
 }
 
 export class RebuffWrapper implements SecurityProductAdapter {
-  private _dataDir: string;
+  // Created on first read of dataDir, so an adapter that is only constructed
+  // leaves nothing in the temp directory.
+  private _dataDir: string | null;
   private engine: SimpleEventEngine;
   private enforcement: SimpleEnforcementEngine;
   private rules: AlertRule[];
   readonly collector: EventCollector;
 
   constructor(labConfig?: LabConfig) {
-    this._dataDir = labConfig?.dataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'rbuf-lab-'));
+    this._dataDir = labConfig?.dataDir ?? null;
     this.engine = new SimpleEventEngine();
     this.enforcement = new SimpleEnforcementEngine();
     this.rules = labConfig?.rules ?? [];
@@ -230,6 +232,7 @@ export class RebuffWrapper implements SecurityProductAdapter {
 
   async stop(): Promise<void> {
     this.collector.reset();
+    if (this._dataDir === null) return;
     try {
       fs.rmSync(this._dataDir, { recursive: true, force: true });
     } catch {}
@@ -252,7 +255,10 @@ export class RebuffWrapper implements SecurityProductAdapter {
   getEventEngine(): EventEngine { return this.engine; }
   getEnforcementEngine(): EnforcementEngine { return this.enforcement; }
 
-  get dataDir(): string { return this._dataDir; }
+  get dataDir(): string {
+    if (this._dataDir === null) this._dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rbuf-lab-'));
+    return this._dataDir;
+  }
 
   // ---- Factory Methods ----
 

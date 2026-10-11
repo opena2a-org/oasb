@@ -40,20 +40,35 @@ function arp(): any {
 }
 
 export class ArpWrapper implements SecurityProductAdapter {
-  private _arpInstance: any;
-  private _dataDir: string;
+  private _arpInstance: any = null;
+  private _dataDir: string | null;
+  private readonly _labConfig?: LabConfig;
   readonly collector: EventCollector;
 
+  // The ARP instance and its data directory are created on first use, not
+  // here: test files construct adapters at describe level, and collecting
+  // them (vitest list, npm run check:readme) runs no hook that would stop
+  // the adapter and remove the directory.
   constructor(labConfig?: LabConfig) {
-    this._dataDir = labConfig?.dataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'arp-lab-'));
+    this._labConfig = labConfig;
+    this._dataDir = labConfig?.dataDir ?? null;
+    this.collector = new EventCollector();
+  }
 
+  private get arpInstance(): any {
+    if (!this._arpInstance) this._arpInstance = this.createInstance();
+    return this._arpInstance;
+  }
+
+  private createInstance(): any {
+    const labConfig = this._labConfig;
     const { AgentRuntimeProtection } = arp();
 
     const config = {
       agentName: 'arp-lab-target',
       agentDescription: 'Test target for ARP security lab',
       declaredCapabilities: ['file read/write', 'HTTP requests'],
-      dataDir: this._dataDir,
+      dataDir: this.dataDir,
       monitors: {
         process: {
           enabled: labConfig?.monitors?.process ?? false,
@@ -88,11 +103,10 @@ export class ArpWrapper implements SecurityProductAdapter {
       },
     };
 
-    this._arpInstance = new AgentRuntimeProtection(config);
-    this.collector = new EventCollector();
-
-    this._arpInstance.onEvent(this.collector.eventHandler);
-    this._arpInstance.onEnforcement(this.collector.enforcementHandler);
+    const instance = new AgentRuntimeProtection(config);
+    instance.onEvent(this.collector.eventHandler);
+    instance.onEnforcement(this.collector.enforcementHandler);
+    return instance;
   }
 
   getCapabilities(): CapabilityMatrix {
@@ -120,12 +134,13 @@ export class ArpWrapper implements SecurityProductAdapter {
   }
 
   async start(): Promise<void> {
-    await this._arpInstance.start();
+    await this.arpInstance.start();
   }
 
   async stop(): Promise<void> {
-    await this._arpInstance.stop();
+    if (this._arpInstance) await this._arpInstance.stop();
     this.collector.reset();
+    if (this._dataDir === null) return;
     try {
       fs.rmSync(this._dataDir, { recursive: true, force: true });
     } catch {
@@ -162,26 +177,27 @@ export class ArpWrapper implements SecurityProductAdapter {
   }
 
   getInstance(): any {
-    return this._arpInstance;
+    return this.arpInstance;
   }
 
   getEventEngine(): EventEngine {
-    return this._arpInstance.getEngine() as unknown as EventEngine;
+    return this.arpInstance.getEngine() as unknown as EventEngine;
   }
 
   getEnforcementEngine(): EnforcementEngineInterface {
-    return this._arpInstance.getEnforcement() as unknown as EnforcementEngineInterface;
+    return this.arpInstance.getEnforcement() as unknown as EnforcementEngineInterface;
   }
 
   getEngine(): any {
-    return this._arpInstance.getEngine();
+    return this.arpInstance.getEngine();
   }
 
   getEnforcement(): any {
-    return this._arpInstance.getEnforcement();
+    return this.arpInstance.getEnforcement();
   }
 
   get dataDir(): string {
+    if (this._dataDir === null) this._dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arp-lab-'));
     return this._dataDir;
   }
 

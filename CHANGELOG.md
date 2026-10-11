@@ -138,7 +138,23 @@ stay on record here with the reason they changed.
   (no test runs), so it needs `npm ci` and compares each passing count with
   the tests that are not skipped; `--tests <report.json>` compares with a
   vitest JSON report instead, and `--no-counts` skips the comparison, which
-  the first step of `npm run smoke` uses before it installs.
+  the first step of `npm run smoke` uses before it installs. A report written
+  in another checkout is read by each file's path from its `src/` directory,
+  as the drift guard reads it; it was read relative to the checkout running
+  the check, so every count mismatched. A report without `testResults` is
+  reported by that field instead of a JavaScript error, and `--help` prints
+  the usage on stdout and exits 0 in both README checks. The statements both
+  checks compare are one list, `STATEMENTS` in `scripts/readme-counts.mjs`;
+  each check kept its own copy before, and a reworded sentence had to be
+  updated in both. The tests of both checks run after `npm ci` in
+  `npm run smoke`, and include one that changes each count of a README in
+  turn and one that runs `npm run check:readme` on this README.
+- Constructing an adapter no longer creates its data directory: the ARP
+  adapter creates its ARP instance and the directory on first use, and the
+  llm-guard and rebuff adapters create the directory when `dataDir` is first
+  read. Collecting the suite (`npm run check:readme`, `vitest list`) left ten
+  empty `arp-lab-*` directories in the temp directory on every run, and
+  `npm test` left one for each adapter it constructed and never stopped.
 - The README's Skills Security Benchmark section now matches the scoring code:
   the nine attack categories in `src/benchmark/types.ts`, controls SS-01 to
   SS-10 and SEC-021 with their compliance levels in
@@ -162,7 +178,7 @@ stay on record here with the reason they changed.
   `npm run test:scripts`.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of seven tests, so committing a run no longer changes the
-  `npm test` total (340 tests, 339 passing). Its check that at least one
+  `npm test` total. Its check that at least one
   committed run says what scored its samples no longer needs a run of the
   current record schema: a run of any schema but v1 that records what scored
   its samples is enough, so raising the schema does not fail that check

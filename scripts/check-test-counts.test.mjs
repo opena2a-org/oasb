@@ -9,7 +9,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compareCounts, readmeStatements } from './check-test-counts.mjs';
+import { compareCounts, liveCounts, readmeStatements } from './check-test-counts.mjs';
+import { STATEMENTS } from './readme-counts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'check-test-counts.mjs');
@@ -76,6 +77,13 @@ test('a README whose counts match the suite passes', () => {
   const { drift, compared } = compareCounts(suite(), README);
   assert.deepEqual(drift, []);
   assert.equal(compared, 33);
+});
+
+test('every key of the shared statement list is a count the guard measures', () => {
+  const live = liveCounts(suite());
+  for (const { where, keys } of STATEMENTS) {
+    for (const key of keys) assert.equal(typeof live[key], 'number', `${where}: ${key}`);
+  }
 });
 
 test('every count the README states is compared with the suite', () => {
@@ -149,6 +157,23 @@ test('the command exits 1 on drift and 0 when every count matches', () => {
     const bad = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README-drift.md')], { encoding: 'utf8' });
     assert.equal(bad.status, 1);
     assert.match(bad.stderr, /^DRIFT: README line 9 \(Counts note\) states 20 tests in total; the suite has 19$/m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the command prints the usage for --help and names the field a report lacks', () => {
+  const help = spawnSync(process.execPath, [script, '--help'], { encoding: 'utf8' });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /^usage: node scripts\/check-test-counts\.mjs <vitest-results\.json> \[path\/to\/README\.md\]$/m);
+  const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-'));
+  try {
+    writeFileSync(join(dir, 'report.json'), JSON.stringify({ numTotalTests: 1 }));
+    writeFileSync(join(dir, 'README.md'), README);
+    const bad = spawnSync(process.execPath, [script, join(dir, 'report.json'), join(dir, 'README.md')], { encoding: 'utf8' });
+    assert.equal(bad.status, 1);
+    assert.match(bad.stderr, /^cannot read the test report .*report\.json: it has no "testResults" list, so it is not a vitest JSON report; /m);
+    assert.doesNotMatch(bad.stderr, /Cannot read properties/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
