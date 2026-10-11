@@ -175,15 +175,16 @@ export function generateReport({ scenarios, results = null, date }) {
   for (const [id, name] of Object.entries(OWASP_MAP)) lines.push(`| ${id} | ${name} | See mapping docs |`);
   lines.push('');
 
+  // The gaps of the README's Known Detection Gaps table, worded as it words them.
   lines.push(
     '## Known Gaps (Documented)',
     '',
     '| # | Gap | Severity | Test Coverage |',
     '|---|-----|----------|--------------|',
-    '| 6 | Anomaly baselines not persisted across restarts | Medium | BL-003 |',
+    '| 6 | Anomaly baselines not reloaded when the runtime restarts | Medium | BL-003 |',
     '| 7 | No connection rate anomaly detection | Medium | AT-NET-003 |',
-    '| 8 | No HTTP response/output monitoring | Arch | INT-003 |',
-    '| 9 | No event correlation across monitors | Arch | INT-006 |',
+    '| 8 | No HTTP response body monitoring | Low | INT-003 |',
+    '| 9 | No cross-monitor event correlation | Architectural | INT-006 |',
     '',
   );
 

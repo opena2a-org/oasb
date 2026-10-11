@@ -112,7 +112,8 @@ stay on record here with the reason they changed.
 
 ### Changed
 
-- `OASB_ADAPTER` selects the product for all 222 scenario tests. 37 atomic,
+- `OASB_ADAPTER` selects the product for all 222 scenario tests, the count
+  at the time of this change (223 since the INT-005 entry below). 37 atomic,
   integration, baseline and E2E test files (159 tests) built the reference
   adapter directly, and 5 more (23 tests) ran on the selected adapter without
   a capability gate, so a scorecard for llm-guard, rebuff or your own adapter
@@ -160,10 +161,11 @@ stay on record here with the reason they changed.
   5 minutes was only the window of an event buffer query, and the entry now
   describes the 60-minute baseline. The suite has 223 attack scenarios, 166
   of them mapped to MITRE ATLAS.
-- The README no longer says that every scenario maps to MITRE ATLAS. 165 of
-  the 222 tests, in 33 of the 47 scenario files, cite one of 15 ATLAS
-  techniques; the other 57, in 14 files, test the product's defensive
-  response and its own detection machinery and cite none. The introduction,
+- The README no longer says that every scenario maps to MITRE ATLAS. At the
+  time of this change, 165 of the 222 tests, in 33 of the 47 scenario files,
+  cited one of 15 ATLAS techniques (166 of 223 since the INT-005 entry
+  above); the other 57, in 14 files, test the product's defensive response
+  and its own detection machinery and cite none. The introduction,
   the MITRE ATLAS Coverage section, `docs/mitre-atlas-mapping.md` and the
   package description now say so. `npm run check:readme` and the release
   smoke's drift guard compare each of these README counts with the scenario
@@ -458,6 +460,22 @@ stay on record here with the reason they changed.
   list or lists under another name, and, while `src/maturity` has no test
   file, when the page is not marked as a proposal or states Shield coverage
   without "not measured".
+- The Known Gaps table of `npm run report` words each gap and its severity
+  as the README's Known Detection Gaps table does. It said that anomaly
+  baselines are not persisted across restarts while the same report listed
+  BL-003, which checks that they are saved and loaded, as passing; the gap
+  is that the runtime does not reload them when it restarts.
+  `scripts/scenario-report.test.mjs` fails when the two tables differ.
+- `npm run check:readme` names a key of `STATEMENTS` in
+  `scripts/readme-counts.mjs` that is not one of its counts. It threw a
+  TypeError instead.
+- The OpenAI-shaped and AWS-shaped keys in AT-AI-002's output-leak payloads
+  spell FAKE and are joined at run time, so a credential scan of a push that
+  touches them does not refuse it; OL-001 still matches both.
+  `scripts/placeholder-credentials.test.mjs` fails when an API-key-shaped
+  value in `src/` does not spell FAKE.
+- STATUS.md says that no agent trust certificate work is planned in this
+  repository. The planning memo that recorded it, `briefs/`, is removed.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

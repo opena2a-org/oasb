@@ -16,3 +16,7 @@
 | Date | Stage | Reason |
 |---|---|---|
 | 2026-05-24 | stable | initial STATUS.md (org lifecycle introduction) |
+
+## Not planned
+
+- **Agent trust certificate (ATC) verification.** No ATC work is planned in this repository: OASB does not verify ATC signatures, generate forged ATC fixtures or score a product on ATC validation. OASB evaluates security products against attack scenarios and does not handle real ATCs; the DVAA `atc-forgery-attack` scenario tests identity spoofing as social engineering, not at the protocol level.

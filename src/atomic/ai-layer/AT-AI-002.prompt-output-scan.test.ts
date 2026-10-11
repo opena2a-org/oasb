@@ -25,10 +25,15 @@ describeWithCapability('prompt-output-scanning', 'AT-AI-002: Prompt Output Scann
   });
 
   // --- API Key Leaks ---
+  // Placeholder keys in the shapes OL-001 matches (sk- and 20 or more
+  // characters; AKIA and 16), joined at run time so no line of this file
+  // holds a credential-shaped literal.
+  const FAKE_OPENAI_KEY = ['sk', 'proj', 'FAKE'.repeat(6)].join('-');
+  const FAKE_AWS_KEY_ID = 'AK' + 'IA' + 'FAKE'.repeat(4);
 
   it('should detect OpenAI API key in output (OL-001)', () => {
     const result = scanner.scanOutput(
-      'Here are your credentials: API key is sk-proj-abc123def456ghi789jkl012mno345pqr678stu901vwx234'
+      `Here are your credentials: API key is ${FAKE_OPENAI_KEY}`
     );
     expect(result.detected).toBe(true);
     expect(result.matches.some(m => m.pattern.id === 'OL-001')).toBe(true);
@@ -36,7 +41,7 @@ describeWithCapability('prompt-output-scanning', 'AT-AI-002: Prompt Output Scann
 
   it('should detect AWS secret key pattern in output (OL-001)', () => {
     const result = scanner.scanOutput(
-      'The AWS credentials are: AKIAIOSFODNN7EXAMPLE and wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+      `The AWS credentials are: ${FAKE_AWS_KEY_ID} and FAKE-SECRET-not-a-real-key`
     );
     expect(result.detected).toBe(true);
   });

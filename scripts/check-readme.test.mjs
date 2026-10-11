@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compareCounts } from './check-test-counts.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'check-readme.mjs');
@@ -138,9 +138,10 @@ function report(suite, checkout = repo) {
   };
 }
 
-// Run the check with --tests on `readme` and `testReport`, with `sources`
-// written beside the README, where the check reads the scenario files.
-function checkCounts(readme, suite = SUITE, testReport = report(suite), sources = SOURCES) {
+// Run the check (`checkScript`, this repository's by default) with --tests on
+// `readme` and `testReport`, with `sources` written beside the README, where
+// the check reads the scenario files.
+function checkCounts(readme, suite = SUITE, testReport = report(suite), sources = SOURCES, checkScript = script) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-counts-'));
   try {
     writeFileSync(join(dir, 'README.md'), readme);
@@ -149,7 +150,7 @@ function checkCounts(readme, suite = SUITE, testReport = report(suite), sources 
       writeFileSync(join(dir, path), text);
     }
     writeFileSync(join(dir, 'report.json'), JSON.stringify(testReport));
-    const r = spawnSync(process.execPath, [script, '--tests', join(dir, 'report.json'), join(dir, 'README.md')], {
+    const r = spawnSync(process.execPath, [checkScript, '--tests', join(dir, 'report.json'), join(dir, 'README.md')], {
       encoding: 'utf8',
     });
     return { status: r.status, stdout: r.stdout, stderr: r.stderr };
@@ -238,6 +239,30 @@ test('a page linked from outside the MITRE ATLAS Coverage section is not read fo
   );
   const r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
   assert.equal(r.status, 0, r.stderr);
+});
+
+test('a STATEMENTS key that names no count fails with the key instead of a TypeError', () => {
+  // A copy of the check beside a readme-counts.mjs whose STATEMENTS has one more entry.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-keys-'));
+  try {
+    const counts = pathToFileURL(join(repo, 'scripts', 'readme-counts.mjs')).href;
+    writeFileSync(join(dir, 'check-readme.mjs'), readFileSync(script));
+    writeFileSync(
+      join(dir, 'readme-counts.mjs'),
+      `import { STATEMENTS as REAL } from '${counts}';\n` +
+        `export * from '${counts}';\n` +
+        "export const STATEMENTS = [...REAL, { where: 'x', re: /(\\d+) tests/g, keys: ['nosuchkey'] }];\n",
+    );
+    const r = checkCounts(COUNTED, SUITE, report(SUITE), SOURCES, join(dir, 'check-readme.mjs'));
+    assert.equal(r.status, 1);
+    assert.doesNotMatch(r.stderr, /TypeError/);
+    assert.match(
+      r.stderr,
+      /^README: STATEMENTS in scripts\/readme-counts\.mjs gives the x the key "nosuchkey", which names no count this check measures \(total, passed, .*\)\.$/m,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('every count the README states is compared by this check and by the drift guard', () => {

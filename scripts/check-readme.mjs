@@ -330,27 +330,31 @@ function checkCounts(text, tests) {
     integrationFiles: [files(under('src/integration')), 'test files in src/integration'],
     baseline: inDir('src/baseline'),
     e2e: inDir('src/e2e'),
-    ...(atlas && {
-      mappedScenarios: [atlas.mappedScenarios, 'scenario tests in files that cite a MITRE ATLAS technique ID'],
-      mappedScenarioFiles: [atlas.mappedScenarioFiles, 'scenario files that cite a MITRE ATLAS technique ID'],
-      unmappedScenarios: [atlas.unmappedScenarios, 'scenario tests in files that cite no MITRE ATLAS technique ID'],
-      unmappedScenarioFiles: [atlas.unmappedScenarioFiles, 'scenario files that cite no MITRE ATLAS technique ID'],
-      techniques: [atlas.techniques, 'MITRE ATLAS technique IDs cited by the scenario files'],
-    }),
+    // The ATLAS measures are null when the scenario files could not be read, which is reported above.
+    mappedScenarios: atlas && [atlas.mappedScenarios, 'scenario tests in files that cite a MITRE ATLAS technique ID'],
+    mappedScenarioFiles: atlas && [atlas.mappedScenarioFiles, 'scenario files that cite a MITRE ATLAS technique ID'],
+    unmappedScenarios: atlas && [atlas.unmappedScenarios, 'scenario tests in files that cite no MITRE ATLAS technique ID'],
+    unmappedScenarioFiles: atlas && [atlas.unmappedScenarioFiles, 'scenario files that cite no MITRE ATLAS technique ID'],
+    techniques: atlas && [atlas.techniques, 'MITRE ATLAS technique IDs cited by the scenario files'],
   };
   const compare = (n, what, stated, [live, label]) => {
     if (stated !== live) fail(`line ${n}: ${what} says ${stated}; ${source} has ${live} ${label}.`);
   };
 
   for (const { where, re, keys } of STATEMENTS) {
+    for (const key of keys.filter((k) => !Object.hasOwn(fixed, k))) {
+      fail(
+        `STATEMENTS in scripts/readme-counts.mjs gives the ${where} the key "${key}", which names no count this check measures (${Object.keys(fixed).join(', ')}).`,
+      );
+    }
     const matches = [...text.matchAll(re)];
     if (matches.length === 0) {
       fail(`the ${where} (${re}) was not found; if its wording changed, update STATEMENTS in scripts/readme-counts.mjs.`);
     }
     for (const m of matches) {
       keys.forEach((key, i) => {
-        // The ATLAS measures are missing when the scenario files could not be read, which is reported above.
-        if (!fixed[key] && !atlas) return;
+        // An unknown key and an unread scenario file (null ATLAS measures) are reported above.
+        if (!fixed[key]) return;
         compare(lineOf(text, m.index), `the ${where}`, Number(m[i + 1]), fixed[key]);
       });
     }

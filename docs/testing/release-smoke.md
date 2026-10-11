@@ -38,8 +38,9 @@ the claims this repository publishes:
    which holds `docs/shield-maturity-extension.md` to the ATLAS technique
    names of `docs/mitre-atlas-mapping.md` and to stating its Shield coverage
    as not measured while `src/maturity` has no test), of the
-   documented-command check (step 5), of the changelog's line width and of
-   the scenario tests' capability gating. One of them runs
+   documented-command check (step 5), of the changelog's line width, of
+   the scenario tests' capability gating and of the placeholder marking of
+   API-key-shaped values in `src/`. One of them runs
    `npm run check:readme` on this README, which collects the suite with
    vitest. The gating tests run the scenario tests with vitest against an
    adapter that declares no capabilities and against the llm-guard and rebuff

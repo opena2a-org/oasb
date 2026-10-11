@@ -86,6 +86,27 @@ test('the report without results shows the current mapping and no withdrawn tech
   assert.equal(report.match(/^\| (?:AT-[A-Z]+|INT|BL|E2E)-\d+ \|/gm).length, scenarios.length);
 });
 
+test('the Known Gaps of the report are the gaps the README documents', () => {
+  const readme = readFileSync(join(repo, 'README.md'), 'utf8').replace(/\r\n/g, '\n');
+  const rows = (text, heading) => {
+    const start = text.indexOf(`\n${heading}\n`);
+    assert.ok(start >= 0, `no "${heading}" heading`);
+    return text
+      .slice(start + heading.length + 2)
+      .split(/\n## /)[0]
+      .split('\n')
+      .filter((line) => line.startsWith('|') && !/^\|[-| ]+\|$/.test(line))
+      .slice(1)
+      .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
+  };
+  const documented = rows(readme, '## Known Detection Gaps').map(([gap, severity, test]) => [gap, severity, test]);
+  const reported = rows(generateReport({ scenarios, date: '2026-10-11' }), '## Known Gaps (Documented)').map(
+    ([, gap, severity, test]) => [gap, severity, test],
+  );
+  assert.ok(documented.length > 0, 'the README documents no gap');
+  assert.deepEqual(reported, documented);
+});
+
 test('the report with a vitest JSON report shows its totals and the status of each file', () => {
   const file = (path, ...statuses) => ({
     name: join(repo, path),
