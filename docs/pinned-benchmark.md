@@ -205,7 +205,11 @@ checkout with full history (not a shallow clone) it checks that the record's
 `oasb.commit` is an ancestor of `HEAD`. For a v2 run it also checks that the `nanomindUse` counts in the summary and the record
 are the sums of the prediction lines, and that no daemon answered. The test
 fails when no committed run says what scored its samples: a run whose schema
-is not v1 and whose record holds `nanomindUse`. The checks loop over the runs
+is not v1 and whose record holds `nanomindUse`. It also fails when `README.md`
+or `BENCHMARK-RESULTS.md` does not name the newest run of record (the latest
+`startedAt`) or does not state its count for each corpus adapter and for the
+DVAA scenarios, written `192/270` or `192 of 270`, so committing a run means
+reporting it where the scanner figures are read. The checks loop over the runs
 inside a fixed set of tests, so committing a run does not change the test
 totals the README states.
 

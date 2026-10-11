@@ -23,6 +23,8 @@ import { addUse, noUse, type NanomindUse } from './nanomind-use.js';
 const OASB_ROOT = resolve(__dirname, '..', '..', '..');
 const RESULTS_ROOT = join(OASB_ROOT, 'results');
 const RUN_FILES = ['corpus-predictions.jsonl', 'dvaa-predictions.jsonl', 'record.json', 'summary.json'];
+/** The documents that lead with the scanner's detection figures. */
+const FIGURE_DOCUMENTS = ['README.md', 'BENCHMARK-RESULTS.md'];
 
 interface CorpusPrediction {
   adapterId: string;
@@ -131,6 +133,30 @@ describe('committed pinned runs', () => {
       return record.schema !== RECORD_SCHEMA_V1 && record.nanomindUse !== undefined;
     });
     expect(saying).not.toEqual([]);
+  });
+
+  // A reader of the README or BENCHMARK-RESULTS.md must find the most recent
+  // measurement of record: the newest run's directory and, for every corpus
+  // adapter and for the DVAA scenarios, its count written "192/270" or
+  // "192 of 270".
+  it('the documents that report scanner figures state the newest run of record', () => {
+    expect(runs.length).toBeGreaterThan(0);
+    const startedAt = (name: string) => readRecord(join(RESULTS_ROOT, name)).startedAt;
+    const newest = runs.reduce((a, b) => (startedAt(b) > startedAt(a) ? b : a));
+    const summary: PinnedRunSummary = JSON.parse(readFileSync(join(RESULTS_ROOT, newest, 'summary.json'), 'utf-8'));
+    const figures: Array<[string, { total: number; detected: number }]> = [
+      ...Object.entries(summary.corpus.adapters).map(([id, a]): [string, { total: number; detected: number }] => [id, a.malicious]),
+      ['the DVAA scenarios', summary.dvaaRepository],
+    ];
+    for (const doc of FIGURE_DOCUMENTS) {
+      const text = readFileSync(join(OASB_ROOT, doc), 'utf-8');
+      // Booleans, so a failure names what is missing instead of printing the document.
+      expect(text.includes(`results/${newest}/`), `${doc} names results/${newest}/`).toBe(true);
+      for (const [what, { detected, total }] of figures) {
+        const stated = new RegExp(`(?<![\\d.])${detected}(?:/| of )${total}(?!\\d|\\.\\d)`).test(text);
+        expect(stated, `${doc} states ${detected}/${total} for ${what} in results/${newest}/`).toBe(true);
+      }
+    }
   });
 
   describe('every run', () => {

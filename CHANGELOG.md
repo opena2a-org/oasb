@@ -258,7 +258,7 @@ stay on record here with the reason they changed.
   which named two of the three test files in `scripts/` and left the
   changelog width test out.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
-  inside a fixed set of seven tests, so committing a run no longer changes the
+  inside a fixed set of eight tests, so committing a run no longer changes the
   `npm test` total. Its check that at least one
   committed run says what scored its samples no longer needs a run of the
   current record schema: a run of any schema but v1 that records what scored
@@ -324,6 +324,18 @@ stay on record here with the reason they changed.
   fails when a README line shows `opena2a benchmark run` or an `opena2a`
   command with `--technique`, and no longer looks for the
   `# all <n> scenarios` comment.
+- The README and BENCHMARK-RESULTS.md report the pinned run of record in
+  `results/2026-10-10-2a89ce5d/` beside the 2026-06-05 figures:
+  hackmyagent 0.33.2 detects 192/270 (71.1%) with the full pipeline,
+  138/270 (51.1%) with static patterns and 251/270 (93.0%) with the model
+  alone, and 17 of 86 DVAA scenarios (19.8%). Both pages said the 2026-06-05
+  figures of hackmyagent 0.23.8 had not been re-measured and led with them,
+  82.6% (223/270) and 25 of 86, although two pinned runs of record were
+  committed. The inputs of the 2026-06-05 run were not recorded, so it is not
+  a baseline for the pinned run and the difference is not traced to a cause.
+  `src/benchmark/pinned/runs-of-record.test.ts` now fails when either page
+  does not name the newest run of record or does not state its count for
+  each corpus adapter and for the DVAA scenarios.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

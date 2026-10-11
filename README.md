@@ -4,7 +4,7 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-352%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-353%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
@@ -18,12 +18,12 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 353 tests (352 pass, 1 skip)
+npm test                    # Full suite: 354 tests (353 pass, 1 skip)
 ```
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **353 tests** (352 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **97 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "352 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
+> **Counts.** `npm test` runs **354 tests** (353 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **98 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "353 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
 
 Run one group at a time:
 
@@ -147,10 +147,10 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Application-level hooks | 14 | `src/e2e` (interceptors) | Pre-execution interception of spawn, connect, read/write |
 | **Attack scenarios** | **223** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 25 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names |
-| Pinned benchmark harness tests | 97 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
+| Pinned benchmark harness tests | 98 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
 | Adapter loading | 3 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory |
 | Adapter tests | 5 | `src/harness` | The rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded |
-| **`npm test` total** | **353** | (352 pass, 1 skipped on every platform) | |
+| **`npm test` total** | **354** | (353 pass, 1 skipped on every platform) | |
 
 ---
 
@@ -237,7 +237,7 @@ dependencies or each place the scanner can take a model result from;
 and what it does not. The development runners load whatever sibling checkouts
 are present, so their numbers are not figures of record.
 
-### Latest Results (2026-06-05, partially withdrawn 2026-08-09)
+### Latest Results (pinned run 2026-10-10; 2026-06-05 run partially withdrawn 2026-08-09)
 
 **F1, precision, false-positive rate and flag rate are withdrawn.** The benign class of this corpus
 was labeled by the scanner under test: the labeling rule in `scripts/export-registry-corpus.mjs`
@@ -247,27 +247,33 @@ HackMyAgent would have flagged was excluded from the benign class by constructio
 false-positive rate was guaranteed before a single scan ran. Those figures are not restated here,
 and no replacement figure is offered.
 
-**Recall is retained**, because it reads only the malicious class, and the published run excludes the
-225 registry samples labeled malicious by that same rule (`--categorized-only`). Measured on
-hackmyagent 0.23.8 (the build under test on 2026-06-05; these figures have not been re-run against
-later releases), full pipeline:
+**Recall is retained**, because it reads only the malicious class, and both runs below exclude the
+225 registry samples labeled malicious by that same rule (`--categorized-only`). The most recent
+measurement of record is the pinned run in `results/2026-10-10-2a89ce5d/`: hackmyagent 0.33.2, the
+npm release current on 2026-10-10, on inputs the run checked and recorded (see
+[Runs of record](docs/pinned-benchmark.md#runs-of-record)). The 2026-06-05 run measured hackmyagent
+0.23.8 with the earlier runners, which loaded unpinned sibling checkouts and did not record their
+inputs, so it is not a baseline for the pinned run and the difference between the two is not traced
+to a cause.
 
-| Scanner | Recall | F1 / Precision / FPR / Flag rate |
-|---------|--------|----------------------------------|
-| HMA Full Pipeline | **82.6%** (223/270) | withdrawn |
-| HMA Static (regex) | 51.1% | withdrawn |
-| NanoMind TME v0.5.0 (ablation) | 93.0% | withdrawn |
+| Scanner | Recall, pinned run 2026-10-10 (hackmyagent 0.33.2) | Recall, 2026-06-05 (hackmyagent 0.23.8) | F1 / Precision / FPR / Flag rate |
+|---------|----------------------------------------------------|-----------------------------------------|----------------------------------|
+| HMA Full Pipeline | **71.1%** (192/270) | 82.6% (223/270) | withdrawn |
+| HMA Static (regex) | 51.1% (138/270) | 51.1% | withdrawn |
+| NanoMind TME, model only (ablation) | 93.0% (251/270) | 93.0% (classifier v0.5.0) | withdrawn |
 
-Read that 82.6% with its denominator: all 270 attack fixtures are ones we wrote. Excluding
-HackMyAgent's own payloads it is 82.2% (148/180). Scored over all 495 samples the corpus calls
-malicious, including the 225 self-labeled ones, it is 47.3% (234/495). This is detection against a
-fixed fixture set we authored, not a measure of detection in the wild, and not comparable to another
-scanner's number on another corpus. On the full DVAA scenario repository, which includes behavioral
-and natural-language attacks, the structural pipeline detects 25 of 86 scenarios.
+Read these figures with their denominator: all 270 attack fixtures are ones we wrote. Excluding
+HackMyAgent's own payloads, the full pipeline detects 70.6% (127/180) in the pinned run and detected
+82.2% (148/180) on 2026-06-05. Scored over all 495 samples the corpus calls malicious, including the
+225 self-labeled ones, the 2026-06-05 run gives 47.3% (234/495); the pinned run scans only the
+categorized set. This is detection against a fixed fixture set we authored, not a measure of
+detection in the wild, and not comparable to another scanner's number on another corpus. On the full
+DVAA scenario repository, which includes behavioral and natural-language attacks, the full pipeline
+detects 17 of 86 scenarios in the pinned run; it detected 25 of 86 on 2026-06-05.
 
 [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) has the per-category counts, the posture-vs-attack verdict
 methodology and its 2026-08-27 correction, the DVAA breakdown, and the comparison with Holzbauer et al.
-(arXiv:2603.16572).
+(arXiv:2603.16572). The pinned run's per-category counts are in its `summary.json`.
 
 ---
 
@@ -288,6 +294,7 @@ OASB documents what the reference product (ARP) does and doesn't catch. Other pr
 
 | Date | Change |
 |------|--------|
+| 2026-10-10 | **Pinned run of record**, `results/2026-10-10-2a89ce5d/`: hackmyagent 0.33.2 on recorded inputs detects 192/270 attack fixtures with the full pipeline and 17 of 86 DVAA scenarios. Reported beside the 2026-06-05 figures under Latest Results. |
 | 2026-08-09 | **Comparative scanner scores withdrawn.** The benign class of this corpus was labeled by the scanner under test, so F1, precision, FPR and flag rate were determined by the labeling rule rather than measured. Recall is retained with disclosure - see [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md) § 1. |
 | 2026-07-13 | **v0.4.0** - working package entry point (`import '@opena2a/oasb'`), reproducible installs, committed release smoke gate, [CONTRIBUTING.md](CONTRIBUTING.md). First release via npm Trusted Publishing (SLSA provenance). |
 | 2026-06-05 | ~~Scanner benchmark re-measured with a posture-vs-attack verdict: **F1 82.9%, FPR 1.16%**.~~ **Withdrawn 2026-08-09** (see above); the row is kept so the record of what was published stays visible. Earlier 82.1% and 89.2% figures also withdrawn - see [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md). |

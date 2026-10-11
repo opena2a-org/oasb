@@ -6,6 +6,10 @@
 **3,704 of the 3,881 benign samples were labeled by the scanner under test** — see the withdrawal
 notice in Section 1 before quoting anything from this document.
 **DVAA:** 86 full-repo scenarios (29.1% detected) / 91 corpus config-subset samples (81.3%) - see Section 4
+**Most recent run of record:** the pinned run of 2026-10-10 in `results/2026-10-10-2a89ce5d/`,
+hackmyagent 0.33.2 on the same categorized set: recall 71.1% (192/270) full pipeline, 51.1% (138/270)
+static, 93.0% (251/270) model-only ablation, and 17/86 DVAA scenarios (19.8%). Sections 1, 1a and 4
+give it beside the 2026-06-05 figures; everything else in this document is the 2026-06-05 run.
 **Paper comparison:** Holzbauer et al., "Malicious Or Not" (arXiv:2603.16572), 238K skills
 
 ---
@@ -47,6 +51,21 @@ and skill text, so it flags most of what it is shown. Its high recall is the ari
 over-flagging, and the metric that would have exposed that -- its false-positive rate -- is one of the
 withdrawn ones.
 
+The table above is the 2026-06-05 run of hackmyagent 0.23.8. The most recent measurement of record is
+the pinned run in `results/2026-10-10-2a89ce5d/`: hackmyagent 0.33.2, the npm release current on
+2026-10-10, on inputs the run checked and recorded (see
+[docs/pinned-benchmark.md](docs/pinned-benchmark.md#runs-of-record)). The 2026-06-05 run loaded
+unpinned sibling checkouts and did not record its inputs, so it is not a baseline for the pinned run
+and the difference between the two is not traced to a cause.
+
+| Scanner | Recall, pinned run 2026-10-10 (hackmyagent 0.33.2) | Recall, 2026-06-05 (hackmyagent 0.23.8) |
+|---------|----------------------------------------------------|-----------------------------------------|
+| HMA Full Pipeline | **71.1%** (192/270) | 82.6% (223/270) |
+| HMA Static | 51.1% (138/270) | 51.1% |
+| NanoMind TME, model only (ablation) | 93.0% (251/270) | 93.0% (classifier v0.5.0) |
+
+The pinned run's per-category counts are in its `summary.json`; Section 2 is the 2026-06-05 run.
+
 ### 1a. What the recall number is measured on
 
 The 270-sample malicious class is authored entirely by us:
@@ -68,6 +87,11 @@ Two things this table is here to let a reader check rather than take on trust:
   225 carry no attack content -- they are registry entries HackMyAgent happened to block -- and
   scoring against them would be the same circularity in the other direction. A reader who disagrees
   with that exclusion should use 47.3%.
+
+The table is the 2026-06-05 run. In the pinned run of 2026-10-10 (`results/2026-10-10-2a89ce5d/`),
+the full pipeline detects `aria` 58/89 (65.2%), `dvaa` 69/91 (75.8%) and `hma_payload` 65/90
+(72.2%), 192/270 (71.1%) in total and 127/180 (70.6%) excluding `hma_payload`. A pinned run scans
+only the categorized set, so it gives no figure over the 495 samples.
 
 This measures detection against a known, fixed fixture set that we wrote. It is not a measure of
 detection in the wild, and it is not comparable to a figure another scanner reports on another corpus.
@@ -161,15 +185,20 @@ DVAA appears two ways and they measure different things; both are reported.
 
 | Source | Scenarios | Detected | Rate | What it measures |
 |--------|-----------|----------|------|------------------|
-| Full DVAA scenario repo (`run-dvaa-benchmark.ts`) | 86 | 25 | **29.1%** | Every DVAA scenario, incl. behavioral / code / natural-language attacks. |
-| Corpus DVAA subset (`source: dvaa` in v2.json) | 91 | 74 | 81.3% | The config-structural DVAA samples carried in the corpus. |
+| Full DVAA scenario repo, 2026-06-05 (`run-dvaa-benchmark.ts`) | 86 | 25 | **29.1%** | Every DVAA scenario, incl. behavioral / code / natural-language attacks. |
+| Full DVAA scenario repo, pinned run 2026-10-10 | 86 | 17 | **19.8%** | Every DVAA scenario at DVAA commit `57918267d8d5`, scanned with hackmyagent 0.33.2. |
+| Corpus DVAA subset, 2026-06-05 (`source: dvaa` in v2.json) | 91 | 74 | 81.3% | The config-structural DVAA samples carried in the corpus. |
+| Corpus DVAA subset, pinned run 2026-10-10 | 91 | 69 | 75.8% | The same samples, scanned with hackmyagent 0.33.2. |
+
+The pinned run is the one in `results/2026-10-10-2a89ce5d/`; its `dvaa-predictions.jsonl` has the
+result for each scenario. The rest of this section explains the 2026-06-05 run.
 
 The full-repo loader reads each scenario's `vulnerable/` tree recursively, mirroring what HMA reads on
 a real repository: every subdirectory (e.g. `knowledge-base/`, `public/`) and every dot-directory or
 dot-file that carries a payload (`.well-known/`, `.github/`, `.streamlit/`, an exposed `.env`), skipping
 only true noise (`.git`, `.DS_Store`, `node_modules`). The earlier top-level-only read scanned nothing
 for scenarios whose entire payload sat below the top level, scoring them as misses. The honest number
-was 23.3% (20/86) and is now **29.1% (25/86), +5, with zero regressions** (every scenario detected
+was 23.3% (20/86) and became **29.1% (25/86), +5, with zero regressions** (every scenario detected
 before is still detected).
 
 Where the +5 come from, so the number is auditable:
@@ -192,8 +221,9 @@ exposed `.env` produced no finding, confirming the loader fix does not inflate t
 
 The gap is the honest characterization: the structural pipeline detects config-encoded attacks well but
 misses most behavioral / natural-language attacks (prompt injection, social engineering, code-level RCE),
-whose signal is instruction text rather than structure. Lead with the 29.1% full-repo number when
-characterizing DVAA detection.
+whose signal is instruction text rather than structure. Lead with the full-repo number of the most
+recent run of record when characterizing DVAA detection: 19.8% (17/86) in the pinned run of
+2026-10-10.
 
 ---
 
@@ -248,10 +278,12 @@ cd oasb && npm install
 npx tsx scripts/run-pinned-benchmark.ts --pins ../pins.json --hma <dir> --dvaa <dir>
 ```
 
-The figures in this document came from the earlier runners
+The 2026-06-05 figures in this document came from the earlier runners
 (`run-benchmark-v2.ts`, `run-dvaa-benchmark.ts`), which loaded unpinned
-sibling checkouts and overwrote their result files. They have not been
-re-measured with a pinned run. A pinned run takes hackmyagent by npm version
+sibling checkouts and overwrote their result files. The pinned run of
+2026-10-10 in `results/2026-10-10-2a89ce5d/` measured hackmyagent 0.33.2,
+not the 0.23.8 build those runners measured, so no pinned run repeats the
+2026-06-05 measurement. A pinned run takes hackmyagent by npm version
 and tarball integrity, DVAA by commit and the NanoMind models by manifest
 sha256, refuses unpinned or dirty inputs, and writes per-sample predictions
 and a run record to a new directory; see
@@ -259,5 +291,6 @@ and a run record to a new directory; see
 run only with `--unpinned`, for development.
 
 - OASB v2 corpus: `corpus/v2.json`
+- Pinned run of record: `results/2026-10-10-2a89ce5d/` (`summary.json`, per-sample predictions and `record.json`)
 - Machine-readable results of the earlier runs: `benchmark-results-v6.json` (the `note` field carries the verdict methodology)
 - Paper: arXiv:2603.16572 (Holzbauer et al., March 2026)
