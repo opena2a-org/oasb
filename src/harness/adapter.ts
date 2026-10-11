@@ -126,6 +126,17 @@ export interface AnomalyScorer {
   record(event: SecurityEvent): void;
   getBaseline(source: string): { mean: number; stddev: number; count: number } | null;
   reset(): void;
+  /**
+   * Write the learned baselines to dataDir, as the product does before it
+   * stops. Required when the adapter declares 'baseline-persistence'.
+   */
+  save?(dataDir: string): void;
+  /**
+   * Replace this scorer's baselines with the ones saved in dataDir, as the
+   * product does when it starts again with the same data directory.
+   * Required when the adapter declares 'baseline-persistence'.
+   */
+  load?(dataDir: string): void;
 }
 
 // ─── LLM Adapter (for mock testing) ────────────────────────────────
@@ -175,6 +186,8 @@ export type Capability =
   | 'mcp-scanning'
   | 'a2a-scanning'
   | 'anomaly-detection'
+  /** The anomaly scorer saves its baselines and loads them after a restart */
+  | 'baseline-persistence'
   | 'budget-management'
   | 'enforcement-log'
   | 'enforcement-alert'

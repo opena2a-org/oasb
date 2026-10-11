@@ -113,7 +113,7 @@ Every security product must avoid false positives. These tests verify the produc
 |------|----------------|
 | BL-001 | Zero false positives from normal agent activity |
 | BL-002 | Controlled anomaly injection triggers detection (not silent) |
-| BL-003 | Baseline persistence across product restarts |
+| BL-003 | Baseline persistence across product restarts: baselines saved before a restart load into the restarted scorer unchanged (N/A for a product without `baseline-persistence`) |
 
 ## E2E Tests (`src/e2e/`)
 

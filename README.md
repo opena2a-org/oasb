@@ -276,7 +276,7 @@ OASB documents what the reference product (ARP) does and doesn't catch. Other pr
 
 | Gap | Severity | Test | Notes |
 |-----|----------|------|-------|
-| Anomaly baselines not persisted across restarts | Medium | BL-003 | In-memory only; restarts lose learned behavior |
+| Anomaly baselines not reloaded when the runtime restarts | Medium | BL-003 | BL-003 checks the anomaly detector's `save`/`load`, which ARP passes; the runtime creates a new detector at start and does not load saved baselines, so a restarted runtime relearns from zero |
 | No connection rate anomaly detection | Medium | AT-NET-003 | Network monitor tracks hosts, not burst rates |
 | No HTTP response body monitoring | Low | INT-003 | AI-layer output scanning (PromptInterceptor.scanOutput) covers LLM responses; raw HTTP responses not inspected |
 | No cross-monitor event correlation | Architectural | INT-006 | EventEngine is a flat bus; no attack-chain aggregation |

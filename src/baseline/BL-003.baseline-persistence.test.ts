@@ -1,14 +1,21 @@
 // BL-003: Baseline Persistence Across Restarts
-// Documents gap: baselines are NOT persisted
 //
-// The AnomalyDetector holds all baseline data in memory. When a new instance
-// is created (simulating an agent restart), all learned baselines are lost.
-// This test verifies and documents this known gap. A production deployment
-// would need to serialize baselines to disk or a database to survive restarts.
+// A product that learns behavioral baselines should keep them across a
+// restart: until it has relearned them, it scores every event as normal.
+// These tests save the baselines of one anomaly scorer to a data directory,
+// load them into a new scorer from a new adapter (the restarted product), and
+// check that the restarted scorer holds the same baselines, scores events the
+// same way and keeps learning from where it stopped.
+//
+// Requires the 'baseline-persistence' capability. A product whose baselines
+// live in memory only reports N/A for this suite, not FAIL.
 
-import { it, expect, beforeEach } from 'vitest';
-import { describeWithCapability } from '../harness/capabilities';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { createAdapter } from '../harness/create-adapter';
+import { describeWithCapability } from '../harness/capabilities';
 import type { SecurityEvent, AnomalyScorer } from '../harness/adapter';
 
 /** Helper: create a minimal SecurityEvent for a given source */
@@ -25,11 +32,31 @@ function makeEvent(source: 'process' | 'network' | 'filesystem', index: number):
   };
 }
 
-describeWithCapability('anomaly-detection', 'BL-003: Baseline Persistence Across Restarts', () => {
+/** Save a scorer's baselines, as the product does before it stops. */
+function save(scorer: AnomalyScorer, dataDir: string): void {
+  expect(scorer.save, 'the adapter declares baseline-persistence but its scorer has no save()').toBeTypeOf('function');
+  scorer.save!(dataDir);
+}
+
+/** Simulate a restart: a new scorer from a new adapter, loaded from dataDir. */
+function restart(dataDir: string): AnomalyScorer {
+  const restarted = createAdapter().createAnomalyScorer();
+  expect(restarted.load, 'the adapter declares baseline-persistence but its scorer has no load()').toBeTypeOf('function');
+  restarted.load!(dataDir);
+  return restarted;
+}
+
+describeWithCapability('baseline-persistence', 'BL-003: Baseline Persistence Across Restarts', () => {
   let detector: AnomalyScorer;
+  let dataDir: string;
 
   beforeEach(() => {
     detector = createAdapter().createAnomalyScorer();
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oasb-bl003-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
   it('should accumulate baseline data during a session', () => {
@@ -44,8 +71,7 @@ describeWithCapability('anomaly-detection', 'BL-003: Baseline Persistence Across
     expect(baseline!.mean).toBeGreaterThan(0);
   });
 
-  it('should lose all baselines when a new detector is created (simulated restart)', () => {
-    // Build baseline on first detector
+  it('should keep the baseline after a restart', () => {
     for (let i = 0; i < 50; i++) {
       detector.record(makeEvent('process', i));
     }
@@ -53,79 +79,57 @@ describeWithCapability('anomaly-detection', 'BL-003: Baseline Persistence Across
     const baselineBefore = detector.getBaseline('process');
     expect(baselineBefore).not.toBeNull();
 
-    // Simulate restart: create a new AnomalyDetector instance
-    const restartedDetector = createAdapter().createAnomalyScorer();
+    save(detector, dataDir);
+    const restartedDetector = restart(dataDir);
 
-    // KNOWN GAP: baseline is lost after restart
-    const baselineAfter = restartedDetector.getBaseline('process');
-    expect(baselineAfter).toBeNull();
+    expect(restartedDetector.getBaseline('process')).toEqual(baselineBefore);
 
-    // Score returns 0 on the restarted detector (no baseline data)
+    // The restarted scorer scores an event as the original one does
     const testEvent = makeEvent('process', 999);
-    const scoreAfterRestart = restartedDetector.score(testEvent);
-    expect(scoreAfterRestart).toBe(0);
-
-    // Original detector still has its baseline (in-memory only)
-    const scoreOriginal = detector.score(testEvent);
-    // Even the original returns 0 because it needs 30+ minute buckets,
-    // but the baseline object itself still exists
-    expect(scoreOriginal).toBe(0);
-    expect(detector.getBaseline('process')).not.toBeNull();
+    expect(restartedDetector.score(testEvent)).toBe(detector.score(testEvent));
   });
 
-  it('should lose baselines for all sources on restart', () => {
+  it('should keep the baselines of every source after a restart', () => {
     const sources = ['process', 'network', 'filesystem'] as const;
 
-    // Build baselines for all sources
     for (const source of sources) {
       for (let i = 0; i < 20; i++) {
         detector.record(makeEvent(source, i));
       }
     }
 
-    // Verify all baselines exist
     for (const source of sources) {
       expect(detector.getBaseline(source)).not.toBeNull();
     }
 
-    // Simulate restart
-    const restartedDetector = createAdapter().createAnomalyScorer();
+    save(detector, dataDir);
+    const restartedDetector = restart(dataDir);
 
-    // KNOWN GAP: all baselines lost
     for (const source of sources) {
-      expect(restartedDetector.getBaseline(source)).toBeNull();
+      expect(restartedDetector.getBaseline(source)).toEqual(detector.getBaseline(source));
     }
   });
 
-  it('should require full re-learning after restart (cold start problem)', () => {
-    // Build baseline
+  it('should keep learning from the restored baseline, not from zero', () => {
     for (let i = 0; i < 50; i++) {
       detector.record(makeEvent('network', i));
     }
 
-    const originalBaseline = detector.getBaseline('network');
-    expect(originalBaseline).not.toBeNull();
-    const originalMean = originalBaseline!.mean;
+    save(detector, dataDir);
+    const restartedDetector = restart(dataDir);
 
-    // Simulate restart
-    const restartedDetector = createAdapter().createAnomalyScorer();
-
-    // Feed the same number of events to the restarted detector
-    for (let i = 0; i < 50; i++) {
-      restartedDetector.record(makeEvent('network', i));
+    // Feed the same events to the restarted scorer and to the original one,
+    // which never restarted. Recording them side by side keeps both in the
+    // same minute for products that bucket events by time.
+    for (let i = 50; i < 100; i++) {
+      const event = makeEvent('network', i);
+      detector.record(event);
+      restartedDetector.record(event);
     }
 
-    const rebuiltBaseline = restartedDetector.getBaseline('network');
-    expect(rebuiltBaseline).not.toBeNull();
-
-    // The rebuilt baseline should match the original since we fed identical data
-    // (all events land in the same minute, so stats should be equivalent)
-    expect(rebuiltBaseline!.mean).toBe(originalMean);
-    expect(rebuiltBaseline!.count).toBe(originalBaseline!.count);
-
-    // KNOWN GAP DOCUMENTED: In production, the agent would have no anomaly
-    // detection capability between restart and baseline re-establishment.
-    // During this cold start window (minimum 30 unique minutes of data),
-    // all anomaly scores return 0 regardless of actual behavior.
+    // A restarted scorer that relearned from zero would hold the statistics
+    // of the last 50 events only, not of all 100.
+    expect(restartedDetector.getBaseline('network')).not.toBeNull();
+    expect(restartedDetector.getBaseline('network')).toEqual(detector.getBaseline('network'));
   });
 });

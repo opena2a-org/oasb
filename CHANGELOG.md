@@ -109,6 +109,15 @@ stay on record here with the reason they changed.
   against llm-guard and rebuff, and fails when a suite runs without every
   capability it needs.
 
+- BL-003 checks that a product keeps its anomaly baselines across a restart.
+  It passed only when the baselines were lost, so a product that persists
+  them failed it. The `AnomalyScorer` contract gains optional `save(dataDir)`
+  and `load(dataDir)`, and an adapter whose scorer has them declares the new
+  `baseline-persistence` capability; BL-003 reports N/A for a product without
+  it. The ARP adapter declares it when the installed hackmyagent's
+  `AnomalyDetector` has `save` and `load`, and passes BL-003. The llm-guard
+  and rebuff adapters keep baselines in memory only and now report BL-003 as
+  N/A where they passed it.
 - A pinned run's `summary.json` names the NanoMind model of the two adapters
   that use it by the `version` in `nanomind-version.json` of the verified
   model directory, or by the directory's manifest sha256 when it has no

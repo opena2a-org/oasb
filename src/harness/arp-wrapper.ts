@@ -28,6 +28,7 @@ import type {
   ScanResult,
   ThreatPattern,
   CapabilityMatrix,
+  Capability,
 } from './adapter';
 
 // Lazy-loaded arp-guard module
@@ -37,6 +38,17 @@ function arp(): any {
     _arp = require('arp-guard');
   }
   return _arp;
+}
+
+/**
+ * True when the installed AnomalyDetector can save its baselines to a data
+ * directory and load them back. arp-guard accepts any hackmyagent from
+ * 0.11.0, so the installed version may predate these methods.
+ */
+function anomalyPersistenceSupported(): boolean {
+  const { AnomalyDetector } = arp();
+  return typeof AnomalyDetector?.load === 'function'
+    && typeof AnomalyDetector.prototype?.save === 'function';
 }
 
 export class ArpWrapper implements SecurityProductAdapter {
@@ -110,26 +122,28 @@ export class ArpWrapper implements SecurityProductAdapter {
   }
 
   getCapabilities(): CapabilityMatrix {
+    const capabilities = new Set<Capability>([
+      'process-monitoring',
+      'network-monitoring',
+      'filesystem-monitoring',
+      'prompt-input-scanning',
+      'prompt-output-scanning',
+      'mcp-scanning',
+      'a2a-scanning',
+      'anomaly-detection',
+      'budget-management',
+      'enforcement-log',
+      'enforcement-alert',
+      'enforcement-pause',
+      'enforcement-kill',
+      'enforcement-resume',
+      'pattern-scanning',
+    ]);
+    if (anomalyPersistenceSupported()) capabilities.add('baseline-persistence');
     return {
       product: 'arp-guard',
       version: arp().VERSION || '0.3.0',
-      capabilities: new Set([
-        'process-monitoring',
-        'network-monitoring',
-        'filesystem-monitoring',
-        'prompt-input-scanning',
-        'prompt-output-scanning',
-        'mcp-scanning',
-        'a2a-scanning',
-        'anomaly-detection',
-        'budget-management',
-        'enforcement-log',
-        'enforcement-alert',
-        'enforcement-pause',
-        'enforcement-kill',
-        'enforcement-resume',
-        'pattern-scanning',
-      ]),
+      capabilities,
     };
   }
 
@@ -259,12 +273,18 @@ export class ArpWrapper implements SecurityProductAdapter {
 
   createAnomalyScorer(): AnomalyScorer {
     const { AnomalyDetector } = arp();
-    const detector = new AnomalyDetector();
-    return {
+    let detector = new AnomalyDetector();
+    const scorer: AnomalyScorer = {
       score: (event: SecurityEvent) => detector.score(event),
       record: (event: SecurityEvent) => detector.record(event),
       getBaseline: (source: string) => detector.getBaseline(source),
       reset: () => detector.reset(),
     };
+    if (anomalyPersistenceSupported()) {
+      scorer.save = (dataDir: string) => detector.save(dataDir);
+      // AnomalyDetector.load returns a new detector holding the saved baselines
+      scorer.load = (dataDir: string) => { detector = AnomalyDetector.load(dataDir); };
+    }
+    return scorer;
   }
 }
