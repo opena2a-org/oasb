@@ -500,7 +500,10 @@ stay on record here with the reason they changed.
   not only the last commit. gitleaks is pinned to 8.30.1 and its archive is
   checked against the release's sha256 before it is unpacked; it was the
   latest release, unchecked. The job's token can only read the repository.
-  `scripts/secret-scan-workflow.test.mjs` fails when any of these regress.
+  `scripts/secret-scan-workflow.test.mjs` checks the job's steps for these:
+  the push range and its fallback, the scheduled run's full history, the
+  pinned version, the checksum step and the read-only token. It does not
+  check the workflow's triggers or the checksum's value.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
