@@ -90,13 +90,11 @@ stay on record here with the reason they changed.
   report N/A (skipped); `OASB_ADAPTER` set to a relative path, run from the
   checkout, with an adapter that declares no capabilities; and the "Use as a
   library" example in a new project with only the packed tarball installed.
-  The smoke said it guards the claims this repository publishes but checked
-  only test counts, the README layout and links, and the pack file list, so
-  it passed while all three failed. When the check was added, each of them
-  failed: the OS-level file ran its 4 tests under llm-guard, the relative path
-  was not found, and the library example stopped on
-  `Cannot find module 'arp-guard'`, so the smoke fails until the code or the
-  README is corrected. Its tests run with `npm run test:scripts`.
+  In 0.4.0 the smoke ran none of these commands, and all three failed: the
+  OS-level file ran its 4 tests under llm-guard, a relative path was not
+  found, and the library example stopped on `Cannot find module 'arp-guard'`.
+  The entries under Changed below correct them, and the smoke now fails if
+  any of them fails again. Its tests run with `npm run test:scripts`.
 
 ### Removed
 
