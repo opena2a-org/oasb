@@ -547,6 +547,53 @@ test('links inside inline code and fenced blocks are ignored', () => {
   assert.equal(r.status, 0, r.stderr);
 });
 
+const RECALL_ONLY_FAILURE = /the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison/;
+
+test('a paragraph that offers the Scanner Benchmark for comparing products fails until it says recall-only', () => {
+  const offer =
+    '> For a detection comparison across products,\n' +
+    '> use the [benchmark](#skills-security-benchmark) below.\n\n' +
+    '## Skills Security Benchmark\n';
+  const r = check(offer);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, new RegExp(`line 11: ${RECALL_ONLY_FAILURE.source}`));
+  const fixed = check(offer.replace('a detection comparison', 'a recall-only comparison'));
+  assert.equal(fixed.status, 0, fixed.stderr);
+});
+
+test('each wording of a comparison between products is read', () => {
+  for (const offer of [
+    'The Scanner Benchmark gives cross-product detection numbers.\n',
+    'For an apples-to-apples comparison, use the Skills Security Benchmark.\n',
+    'The Scanner Benchmark compares results between scanners.\n',
+    '| Comparing results across products | Scanner Benchmark |\n',
+    '### Comparing products across scanners with the Scanner Benchmark\n',
+  ]) {
+    const r = check(offer);
+    assert.equal(r.status, 1, `not read: ${offer}`);
+    assert.match(r.stderr, RECALL_ONLY_FAILURE);
+  }
+});
+
+test('the Scanner Benchmark and a product comparison in different blocks pass', () => {
+  const r = check(
+    'The Scanner Benchmark scores scanners.\n\n' +
+      'Compare results across products elsewhere.\n\n' +
+      '| Scanner Benchmark | 270 samples |\n' +
+      '| Across products | n/a |\n\n' +
+      '> The Scanner Benchmark is below.\n>\n> Compare across products with care.\n\n' +
+      '```md\nThe Scanner Benchmark compares results across products.\n```\n\n' +
+      'Write `Scanner Benchmark across products` in code.\n',
+  );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("this repository's README offers the Scanner Benchmark only as a recall-only comparison", () => {
+  const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
+  assert.doesNotMatch(r.stderr, RECALL_ONLY_FAILURE);
+  assert.equal(r.status, 0, r.stderr);
+});
+
 // The tests in scripts/ are not vitest tests, so `npm test` reaches them
 // through its pretest script, and the CI job reaches them through `npm test`.
 const npmScripts = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).scripts;

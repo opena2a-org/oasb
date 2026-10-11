@@ -40,6 +40,12 @@
 //      (AT-NET-001/002); a skipped one must be written out in full and
 //      followed by "(skipped", as in "E2E-003 (skipped)". Like the counts,
 //      this reads the suite, so --no-counts skips it.
+//   7. a paragraph, table row or heading that offers the Scanner Benchmark
+//      for comparing products calls it a recall-only comparison. Its benign
+//      class was labeled by HackMyAgent, one of the scanners it compares, so
+//      only recall on the malicious samples is comparable across products.
+//      Retire this check when the benchmark has a benign set that no scanner
+//      under test labeled.
 //
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
@@ -455,6 +461,45 @@ function checkSkippedCoverage(tests) {
         );
       }
     }
+  }
+}
+
+// 7. The Scanner Benchmark is offered for comparing products only as a
+// recall-only comparison.
+const NAMES_BENCHMARK = /\]\(#skills-security-benchmark\)|\b(?:Scanner|Skills Security) Benchmark\b/;
+const COMPARES_PRODUCTS = /\bcross-product\b|\bapples-to-apples\b|\b(?:across|between) (?:products|scanners)\b/i;
+const RECALL_ONLY = /\brecall-only\b/i;
+
+// The prose blocks of a parsed file, each with the line it starts on: a
+// paragraph (a blank line, or a blank ">" line, ends it), a table row or a
+// heading. Fenced code is not read.
+function blocks(lines) {
+  const out = [];
+  let open = null;
+  for (const { n, line, inFence, fenceOpen, fenceClose } of lines) {
+    if (inFence || fenceOpen || fenceClose || /^[\s>]*$/.test(line)) {
+      open = null;
+      continue;
+    }
+    if (/^[\s>]*(?:\||#{1,6}\s)/.test(line)) {
+      out.push({ n, text: line });
+      open = null;
+      continue;
+    }
+    if (open) open.text += ' ' + line;
+    else out.push((open = { n, text: line }));
+  }
+  return out;
+}
+
+for (const { n, text } of blocks(readme)) {
+  const prose = text.replace(/`[^`]*`/g, '');
+  if (NAMES_BENCHMARK.test(prose) && COMPARES_PRODUCTS.test(prose) && !RECALL_ONLY.test(prose)) {
+    fail(
+      `line ${n}: the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison. ` +
+        'Its benign class was labeled by HackMyAgent, one of the scanners it compares, so false-positive rate, precision, ' +
+        'F1, flag rate and tier favor that scanner; say "recall-only comparison".',
+    );
   }
 }
 

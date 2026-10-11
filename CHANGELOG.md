@@ -109,6 +109,14 @@ stay on record here with the reason they changed.
   against llm-guard and rebuff, and fails when a suite runs without every
   capability it needs.
 
+- The README offers the Scanner Benchmark as a recall-only comparison across
+  products. It recommended the benchmark "for an apples-to-apples detection
+  comparison across products", but HackMyAgent labeled 3,704 of the 3,881
+  benign samples, so false-positive rate, precision, F1, flag rate and tier on
+  the corpus favor that scanner by construction; only recall on the 270
+  malicious samples is comparable. `npm run check:readme` now fails when a
+  paragraph, table row or heading of the README offers the Scanner Benchmark
+  for comparing products without calling it a recall-only comparison.
 - The MITRE ATLAS coverage tables mark E2E-003 as skipped. Its one test is
   skipped on every platform, but the README's MITRE ATLAS Coverage table and
   `docs/mitre-atlas-mapping.md` listed it under AML.T0025 as if it ran.
