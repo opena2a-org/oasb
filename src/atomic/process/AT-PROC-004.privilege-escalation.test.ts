@@ -1,6 +1,7 @@
 // AT-PROC-004: Privilege Escalation Detection
 // ATLAS: AML.T0105 (Escape to Host)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI03 (Identity & Privilege Abuse)
 //
 // Verifies that ARP detects child processes running as a different user
 // (e.g., root) when the agent itself is running as a non-root user.

@@ -1,6 +1,7 @@
 // AT-FS-002: Access Outside Allowed Paths
 // ATLAS: AML.T0037 (Data from Local System)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI02 (Tool Misuse & Exploitation)
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';

@@ -1,4 +1,5 @@
 // BL-003: Baseline Persistence Across Restarts
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // A product that learns behavioral baselines should keep them across a
 // restart: until it has relearned them, it scores every event as normal.

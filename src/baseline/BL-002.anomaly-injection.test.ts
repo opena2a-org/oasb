@@ -1,5 +1,6 @@
 // BL-002: Controlled Anomaly Injection
 // Scenario: Establish baseline, then inject known anomalies, verify detection
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // Uses the AnomalyDetector (L1 statistical layer) directly to validate
 // z-score based deviation detection. Feeds normal observations to build

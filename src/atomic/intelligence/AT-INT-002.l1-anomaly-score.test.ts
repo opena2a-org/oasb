@@ -2,6 +2,7 @@
 // Detection-capability test: statistical anomaly scoring (surfaces AML.T0015 Evade AI Model among others).
 // ATLAS: AML.T0015 (Evade AI Model)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // Verifies that the AnomalyDetector builds a statistical baseline from
 // normal event frequency and returns elevated z-scores when anomalous

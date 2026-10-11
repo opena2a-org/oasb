@@ -23,7 +23,7 @@ We especially welcome:
 
 - Open an issue or pull request on this repository.
 - Or email info@opena2a.org with "co-author" in the subject line.
-- Run your detector against the benchmark and contribute attack scenarios. New scenarios should be mapped to MITRE ATLAS and the OWASP LLM/Agentic Top 10, and include the ground-truth label and reproduction steps.
+- Run your detector against the benchmark and contribute attack scenarios. New scenarios should be mapped to MITRE ATLAS and the OWASP Top 10 for Agentic Applications (2026), and to the OWASP Top 10 for LLM Applications (2025) where an ID applies, and include the ground-truth label and reproduction steps. A scenario file names its Agentic risk in an `// OWASP Agentic:` header line and is listed under it in [docs/owasp-agentic-mapping.md](docs/owasp-agentic-mapping.md); `npm run test:scripts` checks both.
 - To be listed as an adopter, open an issue describing how you run OASB and against which product.
 - For new attack techniques or coordinated disclosure, email info@opena2a.org with "disclosure" in the subject line.
 

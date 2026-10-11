@@ -2,6 +2,7 @@
 // Detection-capability test: budget handling under AML.T0034.002 (Agentic Resource Consumption).
 // ATLAS: AML.T0034.002 (Agentic Resource Consumption)
 // OWASP: LLM10 (Unbounded Consumption)
+// OWASP Agentic: ASI08 (Cascading Failures)
 //
 // Verifies that the BudgetController enforces hard spending limits and
 // hourly rate limits. Once the budget or hourly call cap is exhausted,

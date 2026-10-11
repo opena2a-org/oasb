@@ -1,6 +1,7 @@
 // AT-PROC-001: Spawn Child Process Detection
 // ATLAS: AML.T0050 (Command and Scripting Interpreter)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI05 (Unexpected Code Execution (RCE))
 //
 // Verifies that ARP's process monitor detects real child processes
 // spawned by the agent. Uses a live process monitor with OS-level polling.

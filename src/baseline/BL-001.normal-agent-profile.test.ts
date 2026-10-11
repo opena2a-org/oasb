@@ -1,5 +1,6 @@
 // BL-001: Normal Agent Profile - Zero False Positives
 // Scenario: Run a normal agent workload and verify no false positives
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // Injects 50 benign events across all 3 monitor sources (process, network,
 // filesystem) simulating typical agent behavior. Asserts that none are

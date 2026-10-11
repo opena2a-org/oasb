@@ -1,6 +1,7 @@
 // AT-INT-001: L0 Rule-Based Classification
 // Detection-capability test: rule engine. Validates product machinery, not a single adversary technique.
 // OWASP: LLM01 (Prompt Injection)
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // Verifies that the event engine evaluates custom AlertRules and dispatches
 // the correct enforcement actions (kill, alert) based on category and severity.

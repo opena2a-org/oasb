@@ -1,6 +1,7 @@
 // AT-INT-003: L2 LLM Escalation
 // Detection-capability test: LLM-assisted escalation for ambiguous events.
 // OWASP: LLM01 (Prompt Injection)
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // Verifies SEC-021 fail-closed semantics: rules with requireLlmConfirmation=true
 // still execute enforcement immediately. The LLM review flag is telemetry-only —

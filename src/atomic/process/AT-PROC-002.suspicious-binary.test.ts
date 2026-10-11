@@ -1,6 +1,7 @@
 // AT-PROC-002: Suspicious Binary Detection
 // ATLAS: AML.T0050 (Command and Scripting Interpreter)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI05 (Unexpected Code Execution (RCE))
 //
 // Verifies that ARP flags events for suspicious binaries commonly used
 // for exfiltration, lateral movement, or exploitation (curl, wget, nc).

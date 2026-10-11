@@ -1,6 +1,7 @@
 // AT-NET-004: Allowed Host Bypass (subdomain attack)
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI02 (Tool Misuse & Exploitation)
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';

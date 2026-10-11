@@ -18,11 +18,16 @@ const SCENARIO_FILE = /^((?:AT-[A-Z]+|INT|BL|E2E)-\d+)\..*\.test\.ts$/;
 // AML.T0050, AML.T0034.002, or T0054 after a slash in AML.T0051/T0054.
 const TECHNIQUE = /^(?:AML\.)?(T\d{4}(?:\.\d{3})?)$/;
 
+// OWASP Top 10 for Agentic Applications (2026) IDs the scenario headers name.
+// docs/owasp-agentic-mapping.md lists the scenarios under each.
 const OWASP_MAP = {
-  A01: 'Prompt Injection',
-  A04: 'Excessive Agency',
-  A06: 'Excessive Consumption',
-  A07: 'System Prompt Leakage',
+  'ASI01': 'Agent Goal Hijack',
+  'ASI02': 'Tool Misuse & Exploitation',
+  'ASI03': 'Identity & Privilege Abuse',
+  'ASI05': 'Unexpected Code Execution (RCE)',
+  'ASI07': 'Insecure Inter-Agent Communication',
+  'ASI08': 'Cascading Failures',
+  'ASI10': 'Rogue Agents',
 };
 
 /**

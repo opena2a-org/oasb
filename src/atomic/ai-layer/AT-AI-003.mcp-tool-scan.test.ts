@@ -1,6 +1,7 @@
 // AT-AI-003: MCP Tool Call Scanning
 // ATLAS: AML.T0053 (AI Agent Tool Invocation)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI02 (Tool Misuse & Exploitation)
 //
 // Verifies that MCPProtocolInterceptor.scanToolCall() detects path traversal,
 // command injection, and SSRF in MCP tool call parameters.

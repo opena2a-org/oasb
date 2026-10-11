@@ -1,6 +1,7 @@
 // AT-AI-004: A2A Message Scanning
 // ATLAS: AML.T0073 (Impersonation)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI07 (Insecure Inter-Agent Communication)
 //
 // Verifies that A2AProtocolInterceptor.scanMessage() detects identity
 // spoofing, delegation abuse, and embedded prompt injection in

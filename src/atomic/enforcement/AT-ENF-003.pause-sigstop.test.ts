@@ -1,5 +1,6 @@
 // AT-ENF-003: Process Pause via SIGSTOP
 // Defensive response test: validates the product's reaction (counters Impact / AML.TA0011). Not an adversary technique.
+// OWASP Agentic: ASI10 (Rogue Agents)
 // Tests enforcement engine's ability to pause a running process.
 // Spawns a real child process and uses SIGSTOP to suspend it,
 // then verifies the process appears in the paused PID list.

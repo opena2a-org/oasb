@@ -4,6 +4,7 @@
 //
 // ATLAS: AML.T0055 (Unsecured Credentials), AML.T0081 (Modify AI Agent Configuration)
 // OWASP: LLM02, LLM06
+// OWASP Agentic: ASI03 (Identity & Privilege Abuse), ASI05 (Unexpected Code Execution (RCE))
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';

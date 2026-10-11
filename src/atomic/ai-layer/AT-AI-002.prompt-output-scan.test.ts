@@ -1,6 +1,7 @@
 // AT-AI-002: Prompt Output Scanning
 // ATLAS: AML.T0057 (LLM Data Leakage)
 // OWASP: LLM02 (Sensitive Information Disclosure)
+// OWASP Agentic: ASI01 (Agent Goal Hijack)
 //
 // Verifies that PromptInterceptor.scanOutput() detects leaked secrets,
 // PII, and system prompts in LLM responses before they reach the user.

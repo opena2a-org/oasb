@@ -1,5 +1,6 @@
 // AT-ENF-005: Process Resume via SIGCONT
 // Defensive response test: validates the product's reaction (counters Impact / AML.TA0011). Not an adversary technique.
+// OWASP Agentic: ASI10 (Rogue Agents)
 // Tests enforcement engine's ability to resume a previously paused process.
 // Pauses a real child process, then resumes it via SIGCONT,
 // verifying it is removed from the paused PID tracking list.

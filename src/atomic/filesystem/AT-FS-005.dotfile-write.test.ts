@@ -1,6 +1,7 @@
 // AT-FS-005: Shell Config Dotfile Write Detection
 // ATLAS: AML.T0081 (Modify AI Agent Configuration)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI05 (Unexpected Code Execution (RCE))
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';

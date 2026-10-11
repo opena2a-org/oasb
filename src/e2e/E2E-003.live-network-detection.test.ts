@@ -7,6 +7,7 @@
 //
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM06
+// OWASP Agentic: ASI02 (Tool Misuse & Exploitation)
 
 import { it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { execSync } from 'child_process';

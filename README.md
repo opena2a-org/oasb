@@ -9,7 +9,7 @@
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
 
-223 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 166 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](#mitre-atlas-coverage). Most scenarios also cite the OWASP LLM/Agentic Top 10. Plug in your product, run the suite, get a detection coverage scorecard.
+223 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 166 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](#mitre-atlas-coverage). Each scenario is mapped to the [OWASP Top 10 for Agentic Applications (2026)](docs/owasp-agentic-mapping.md), and most also to the OWASP Top 10 for LLM Applications (2025). Plug in your product, run the suite, get a detection coverage scorecard.
 
 [OASB Website](https://oasb.ai) | [MITRE ATLAS Coverage](#mitre-atlas-coverage) | [Contributing](#contributing)
 
@@ -23,7 +23,7 @@ npm test                    # Full suite: 354 tests (353 pass, 1 skip)
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **354 tests** (353 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **98 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "353 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
+> **Counts.** `npm test` runs **354 tests** (353 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **98 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "353 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the OWASP mapping check, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
 
 Run one group at a time:
 

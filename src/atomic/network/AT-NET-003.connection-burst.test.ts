@@ -1,6 +1,7 @@
 // AT-NET-003: Connection Burst Detection
 // ATLAS: AML.T0034.002 (Agentic Resource Consumption)
 // OWASP: LLM10 (Unbounded Consumption)
+// OWASP Agentic: ASI10 (Rogue Agents)
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';

@@ -1,6 +1,7 @@
 // AT-INT-005: Baseline Learning
 // Detection-capability test: behavioral baseline learning and reset.
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // Verifies that the AnomalyDetector learns a statistical baseline from
 // observed events and can distinguish normal frequency patterns from

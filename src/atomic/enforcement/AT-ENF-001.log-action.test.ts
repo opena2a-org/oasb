@@ -1,5 +1,6 @@
 // AT-ENF-001: Log Enforcement Action
 // Defensive response test: validates the product's reaction (counters Impact / AML.TA0011). Not an adversary technique.
+// OWASP Agentic: ASI10 (Rogue Agents)
 // Tests that 'log' action records event without process manipulation.
 // Verifies the simplest enforcement path: event in, log result out.
 

@@ -1,6 +1,7 @@
 // AT-AI-001: Prompt Input Scanning
 // ATLAS: AML.T0051 (LLM Prompt Injection), AML.T0054 (LLM Jailbreak)
 // OWASP: LLM01 (Prompt Injection)
+// OWASP Agentic: ASI01 (Agent Goal Hijack)
 //
 // Verifies that PromptInterceptor.scanInput() detects prompt injection,
 // jailbreak, data exfiltration, and context manipulation patterns in

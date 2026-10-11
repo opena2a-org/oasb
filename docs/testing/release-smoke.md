@@ -31,8 +31,11 @@ the claims this repository publishes:
    This step runs the checker with `--no-counts`: vitest is not installed
    yet, and step 3 compares the test counts with the suite's report. After
    `npm ci`, the tests in `scripts/` (`npm run test:scripts`) run: the tests
-   of both README checks, of the changelog's line width and of the scenario
-   tests' capability gating. One of them runs `npm run check:readme` on this
+   of both README checks, of the OWASP mapping check
+   (`scripts/check-owasp-mapping.mjs`, which holds every scenario file's
+   `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each
+   other), of the changelog's line width and of the scenario tests'
+   capability gating. One of them runs `npm run check:readme` on this
    README, which collects the suite with vitest. The gating tests run the
    scenario tests with vitest against an adapter that declares no
    capabilities and against the llm-guard and rebuff adapters, and check that
@@ -71,11 +74,14 @@ the claims this repository publishes:
 
 `npm test` runs `npm run test:scripts` first (its `pretest` script), so the CI
 job, which runs `npm test`, runs the tests of both README checks, of the
-changelog's line width and of the scenario tests' capability gating before
-the suite. One of them runs
+OWASP mapping check, of the changelog's line width and of the scenario tests'
+capability gating before the suite. One of them runs
 `npm run check:readme` on this README, so a pull request that adds or removes
 a test without updating the README's counts fails CI, not only the next
-release smoke. To run the suite without them, use `npx vitest run` or one of
+release smoke. Another runs the OWASP mapping check on this repository, so a
+scenario file without an `// OWASP Agentic:` header, or one the mapping page
+lists under another ID, fails CI too. To run the suite without them, use
+`npx vitest run` or one of
 the `npm run test:*` groups.
 
 ## Why these guards exist

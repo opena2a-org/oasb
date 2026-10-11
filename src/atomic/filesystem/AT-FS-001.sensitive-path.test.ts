@@ -1,6 +1,7 @@
 // AT-FS-001: Sensitive Path Access Detection
 // ATLAS: AML.T0055 (Unsecured Credentials)
 // OWASP: LLM02 (Sensitive Information Disclosure)
+// OWASP Agentic: ASI03 (Identity & Privilege Abuse)
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';

@@ -1,6 +1,7 @@
 // INT-008: Kill Switch and Recovery
 // Defensive response test: kill-switch and recovery (counters Impact / AML.TA0011).
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI10 (Rogue Agents)
 // Scenario: Critical threat triggers kill, verify process stops, then recovery
 //
 // This test spawns a real child process, uses ARP's enforcement engine

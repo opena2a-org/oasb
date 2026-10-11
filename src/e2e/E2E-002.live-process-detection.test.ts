@@ -4,6 +4,7 @@
 //
 // ATLAS: AML.T0050 (Command and Scripting Interpreter)
 // OWASP: LLM06
+// OWASP Agentic: ASI05 (Unexpected Code Execution (RCE))
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';

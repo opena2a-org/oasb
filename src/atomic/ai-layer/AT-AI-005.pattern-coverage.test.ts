@@ -1,5 +1,6 @@
 // AT-AI-005: AI-Layer Pattern Coverage
 // ATLAS: AML.T0051/T0054/T0057/T0053/T0073 (pattern coverage across AI-layer techniques)
+// OWASP Agentic: ASI01 (Agent Goal Hijack), ASI02 (Tool Misuse & Exploitation), ASI07 (Insecure Inter-Agent Communication)
 //
 // Verifies that all AI-layer threat patterns in ARP have at least
 // one known attack payload that triggers them. This is a coverage

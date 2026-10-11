@@ -1,6 +1,7 @@
 // INT-006: Multi-Monitor Event Correlation
 // Detection-capability test: multi-monitor correlation over a multi-surface attack chain.
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI10 (Rogue Agents)
 // Scenario: Single attack triggers events across process, network, and filesystem monitors
 //
 // This test injects events from all 3 monitor types within a tight window

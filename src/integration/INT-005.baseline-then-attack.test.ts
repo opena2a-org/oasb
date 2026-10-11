@@ -1,6 +1,7 @@
 // INT-005: Baseline Learning Then Attack Burst
 // ATLAS: AML.T0015 (Evade AI Model)
 // OWASP: LLM06 (Excessive Agency)
+// OWASP Agentic: ASI10 (Rogue Agents)
 // Scenario: an hour of normal traffic, then a sudden burst
 //
 // The anomaly test spreads normal process events over 60 simulated minutes,

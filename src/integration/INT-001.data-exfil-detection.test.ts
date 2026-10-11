@@ -1,6 +1,7 @@
 // INT-001: Data Exfiltration Detection Chain
 // ATLAS: AML.T0086 (Exfiltration via AI Agent Tool Invocation)
 // OWASP: LLM02 (Sensitive Information Disclosure)
+// OWASP Agentic: ASI02 (Tool Misuse & Exploitation)
 // Scenario: Agent contacts LegacyBot for credentials, then exfiltrates to external host
 //
 // This test simulates a two-step data exfiltration attack:

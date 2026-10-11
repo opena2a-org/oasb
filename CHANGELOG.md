@@ -70,6 +70,20 @@ stay on record here with the reason they changed.
   to the daemon address.
   `src/benchmark/pinned/runs-of-record.test.ts` now fails when no committed
   run says what scored its samples.
+- Each of the 47 scenario files now names its OWASP Top 10 for Agentic
+  Applications (2026) risk in an `// OWASP Agentic:` header line, and
+  `docs/owasp-agentic-mapping.md` lists the scenarios under each ID. The
+  package description and the README said each scenario was mapped to the
+  OWASP Agentic Top 10, but the headers named only OWASP Top 10 for LLM
+  Applications (2025) IDs, ten files named no OWASP ID, and the mapping page
+  covered only the LLM list. Seven of the ten Agentic risks have scenarios;
+  the page lists ASI04, ASI06 and ASI09 as gaps. The LLM Top 10 IDs are
+  unchanged, and the package description names both lists.
+  `scripts/check-owasp-mapping.mjs`, run by `npm run test:scripts`, fails when
+  a scenario file names no published Agentic ID or when the page disagrees
+  with the headers. `scripts/generate-report.ts` listed four IDs (A01, A04,
+  A06, A07) under "OWASP Agentic Top 10 Coverage" that are on neither list;
+  it now lists the Agentic IDs the scenarios name.
 
 ### Removed
 

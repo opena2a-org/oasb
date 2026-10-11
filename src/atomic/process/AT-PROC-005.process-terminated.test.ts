@@ -1,5 +1,6 @@
 // AT-PROC-005: Process Terminated Detection
 // Defensive response test: validates the product's reaction (counters Impact / AML.TA0011). Not an adversary technique.
+// OWASP Agentic: ASI10 (Rogue Agents)
 //
 // Verifies that ARP captures process termination events and can detect
 // rapid respawn patterns (terminated followed by immediate new child),
