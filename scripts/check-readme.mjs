@@ -16,7 +16,8 @@
 //      definition inside a list item, are not read.
 //   5. every test count the README states equals the suite: the badge, the
 //      Quick Start comment, the Counts note, the per-group `npm run test:*`
-//      comments, the scenario counts in the prose and each row of the
+//      comments, the scenario counts in the prose and in the
+//      `opena2a benchmark run` comment, and each row of the
 //      "What Gets Tested" table, counted per source directory. Without
 //      --tests the check collects the suite with vitest (nothing runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
@@ -213,6 +214,7 @@ const CLAIMS = [
   },
   { what: 'the test:baseline comment', re: /test:baseline +# (\d+) false-positive/g, measures: ['dir:src/baseline'] },
   { what: 'the test:e2e comment', re: /test:e2e +# (\d+) E2E tests/g, measures: ['dir:src/e2e'] },
+  { what: 'the benchmark run comment', re: /# all (\d+) scenarios/g, measures: ['scenarios'] },
   { what: 'the MITRE ATLAS coverage line', re: /across (\d+) scenario files/g, measures: ['scenarioFiles'] },
 ];
 

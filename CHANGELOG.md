@@ -131,7 +131,8 @@ stay on record here with the reason they changed.
   checked.
 - `npm run check:readme` compares every test count the README states with
   the suite, each for equality: the badge, the Quick Start comment, the Counts
-  note, the `npm run test:*` comments, the scenario counts and each row of the
+  note, the `npm run test:*` comments, the scenario counts, including the one
+  in the `opena2a benchmark run` comment, and each row of the
   "What Gets Tested" table, per source directory. It read none of them, so a
   README with stale counts passed it. It collects the suite with vitest
   (nothing runs), so it needs `npm ci` and compares each passing count with

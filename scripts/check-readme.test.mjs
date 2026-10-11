@@ -89,6 +89,12 @@ const COUNTED = [
   '',
   '4 unique techniques across 8 scenario files.',
   '',
+  '## Usage via OpenA2A CLI',
+  '',
+  '```bash',
+  'opena2a benchmark run       # all 10 scenarios',
+  '```',
+  '',
 ].join('\n');
 
 // A vitest JSON report of `suite`, with paths under this repository as
@@ -156,6 +162,15 @@ test('the per-group comments and table rows are counted per source directory', (
   assert.match(
     r.stderr,
     /the "Scoring-engine unit tests" row says 5; the test report has 2 tests in src\/benchmark outside src\/benchmark\/pinned\./,
+  );
+});
+
+test('the scenario count in the benchmark run comment is checked', () => {
+  const r = checkCounts(COUNTED.replace('# all 10 scenarios', '# all 11 scenarios'));
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /line 46: the benchmark run comment says 11; the test report has 10 attack-scenario tests \(outside src\/benchmark\)\./,
   );
 });
 
