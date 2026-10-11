@@ -1,5 +1,6 @@
 // AT-INT-002: L1 Statistical Anomaly Scoring
 // Detection-capability test: statistical anomaly scoring (surfaces AML.T0015 Evade AI Model among others).
+// ATLAS: AML.T0015 (Evade AI Model)
 // OWASP: LLM06 (Excessive Agency)
 //
 // Verifies that the AnomalyDetector builds a statistical baseline from

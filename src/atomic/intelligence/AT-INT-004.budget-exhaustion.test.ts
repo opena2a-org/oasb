@@ -1,5 +1,6 @@
 // AT-INT-004: Budget Exhaustion
 // Detection-capability test: budget handling under AML.T0034.002 (Agentic Resource Consumption).
+// ATLAS: AML.T0034.002 (Agentic Resource Consumption)
 // OWASP: LLM10 (Unbounded Consumption)
 //
 // Verifies that the BudgetController enforces hard spending limits and

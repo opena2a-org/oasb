@@ -336,6 +336,22 @@ stay on record here with the reason they changed.
   `src/benchmark/pinned/runs-of-record.test.ts` now fails when either page
   does not name the newest run of record or does not state its count for
   each corpus adapter and for the DVAA scenarios.
+- `npm run report` (`scripts/generate-report.ts`) reads the MITRE ATLAS
+  mapping from the `// ATLAS:` header of each scenario file and reports 15
+  techniques. It printed a fixed table of the mapping withdrawn on
+  2026-06-03, 10 techniques, with AT-PROC-001 under AML.T0046 (now
+  "Spamming AI System with Chaff Data") and INT-002 under AML.T0056 (now
+  "Extract LLM System Prompt"), and it left out the E2E scenarios. Given a
+  vitest JSON report it takes each file's status from its tests, so a file
+  whose tests were all skipped shows SKIP where vitest marks the file passed,
+  and it exits 1 on a file that is not a vitest JSON report.
+  AT-INT-002 and AT-INT-004 gain the `// ATLAS:` header their mapping in
+  `docs/mitre-atlas-mapping.md` already gave them, and
+  `scripts/scenario-report.test.mjs` fails when the headers and that page's
+  Coverage Summary disagree. REPORT.md is marked as the 2026-03-23 snapshot it
+  is: its mapping, its integration and E2E counts, its "all 16 capability
+  categories" for arp-guard and its llm-guard results no longer hold. The
+  demo GIF in the README still shows the 222-test run and is not re-recorded.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

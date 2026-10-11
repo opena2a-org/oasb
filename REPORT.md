@@ -2,6 +2,27 @@
 
 Generated: 2026-03-23
 
+> **Snapshot of the 2026-03-23 run, kept as recorded. It is not current.**
+> Since it was written:
+>
+> - The MITRE ATLAS mapping below (10 techniques, among them AML.T0024,
+>   AML.T0029, AML.T0018, AML.T0056 and AML.TA0006) was withdrawn on
+>   2026-06-03. The current mapping covers 15 techniques; see
+>   [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
+> - The 222 tests of this run are the attack scenarios alone. The integration
+>   group now has 43 tests and the E2E group 23, one of them skipped. The
+>   README's Counts note has the current `npm test` totals.
+> - The arp-guard adapter declares 15 of the 16 capabilities; it does not
+>   declare event correlation.
+> - Since 2026-06-03 an AI-layer suite (AT-AI-001 to AT-AI-005) for a
+>   capability the adapter does not declare is skipped, not failed. Under
+>   llm-guard the prompt-output scanning suite (AT-AI-002) is skipped, so the
+>   llm-guard results below no longer describe a current run.
+>
+> `npm run report` writes a new REPORT.md in the current directory, with the
+> mapping read from the `// ATLAS:` header of each scenario file and, when a
+> vitest JSON report is given, its totals and the status of each file.
+
 ## Comparative Summary
 
 | Product | Version | Pass | Fail | Score | Duration |
