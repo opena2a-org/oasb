@@ -84,6 +84,19 @@ stay on record here with the reason they changed.
   with the headers. `scripts/generate-report.ts` listed four IDs (A01, A04,
   A06, A07) under "OWASP Agentic Top 10 Coverage" that are on neither list;
   it now lists the Agentic IDs the scenarios name.
+- `npm run smoke` runs the commands the README documents, with
+  `scripts/check-documented-commands.mjs`: `OASB_ADAPTER=llm-guard` on a
+  scenario file gated by capability and on an OS-level one, which must both
+  report N/A (skipped); `OASB_ADAPTER` set to a relative path, run from the
+  checkout, with an adapter that declares no capabilities; and the "Use as a
+  library" example in a new project with only the packed tarball installed.
+  The smoke said it guards the claims this repository publishes but checked
+  only test counts, the README layout and links, and the pack file list, so
+  it passed while all three failed. When the check was added, each of them
+  failed: the OS-level file ran its 4 tests under llm-guard, the relative path
+  was not found, and the library example stopped on
+  `Cannot find module 'arp-guard'`, so the smoke fails until the code or the
+  README is corrected. Its tests run with `npm run test:scripts`.
 
 ### Removed
 

@@ -6,7 +6,9 @@
 # and compares every test count the README states with the live suite.
 # Checks the README layout (Quick Start first, under 400 lines) and its links.
 # Also inspects the npm pack file list so a publish never ships without the
-# README, LICENSE, or the harness sources.
+# README, LICENSE, or the harness sources. Last, runs the commands the README
+# documents and holds them to what it says: OASB_ADAPTER by name and by a
+# relative path, and the library example in a fresh install of the tarball.
 #
 # Run before every release: npm run smoke
 # Documented in docs/testing/release-smoke.md
@@ -56,5 +58,8 @@ if (forbidden.length) { console.error('PACK: forbidden files: ' + forbidden.join
 if (!ok) process.exit(1);
 console.log('   ' + files.length + ' files, required entries present, no forbidden files.');
 EOF
+
+echo "==> Documented commands: OASB_ADAPTER=llm-guard, OASB_ADAPTER=<relative path>, the README library example in a fresh install"
+node scripts/check-documented-commands.mjs
 
 echo "==> Release smoke PASSED"

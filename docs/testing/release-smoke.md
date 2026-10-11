@@ -37,8 +37,9 @@ the claims this repository publishes:
    other), of the maturity page check (`scripts/check-maturity-page.mjs`,
    which holds `docs/shield-maturity-extension.md` to the ATLAS technique
    names of `docs/mitre-atlas-mapping.md` and to stating its Shield coverage
-   as not measured while `src/maturity` has no test), of the changelog's
-   line width and of the scenario tests' capability gating. One of them runs
+   as not measured while `src/maturity` has no test), of the
+   documented-command check (step 5), of the changelog's line width and of
+   the scenario tests' capability gating. One of them runs
    `npm run check:readme` on this README, which collects the suite with
    vitest. The gating tests run the scenario tests with vitest against an
    adapter that declares no capabilities and against the llm-guard and rebuff
@@ -73,19 +74,47 @@ the claims this repository publishes:
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.
+5. **Documented commands.** `scripts/check-documented-commands.mjs` runs
+   what the README tells a user to run and holds each result to what the
+   README says:
+   - `OASB_ADAPTER=llm-guard` on a scenario file gated by capability
+     (`AT-AI-002`, prompt output scanning) and an OS-level one
+     (`AT-PROC-003`, process monitoring). llm-guard declares neither
+     surface, and "Evaluating Other Products" says those tests are N/A
+     (skipped), not FAIL, so every test in both files must be skipped. The
+     reference adapter runs the gated file, so its skip shows that the name
+     chose llm-guard.
+   - `OASB_ADAPTER=./<dir>/my-adapter.js`, a relative path run from the
+     checkout, with an adapter that declares no capabilities, on the gated
+     file. Every test in it must be skipped.
+   - The "Use as a library" example in a fresh install: it packs the
+     checkout, runs the section's `npm install` lines in a new, empty
+     project with `@opena2a/oasb` replaced by the tarball, and runs the
+     section's TypeScript block there without `OASB_ADAPTER` set. A call
+     whose argument list is only a comment, such as
+     `benchmark.determineTier(/* aggregate metrics */)`, is a placeholder:
+     the check asserts it names a function instead of calling it.
+
+   It runs every command and lists every failure, naming the command, the
+   file and what ran. When one fails, fix the code or correct the README in
+   the same change. Run it on its own, after `npm ci` and `npm run build`,
+   with `node scripts/check-documented-commands.mjs`. Its tests
+   (`npm run test:scripts`) cover how it reads a report and the README, and
+   that the smoke runs it after the build.
 
 ## The README checks on every pull request
 
 `npm test` runs `npm run test:scripts` first (its `pretest` script), so the CI
 job, which runs `npm test`, runs the tests of both README checks, of the
-OWASP mapping check, of the maturity page check, of the changelog's line
-width and of the scenario tests' capability gating before the suite. One of
-them runs `npm run check:readme` on this README, so a pull request that adds
-or removes a test without updating the README's counts fails CI, not only the
-next release smoke. Another runs the OWASP mapping check on this repository,
-so a scenario file without an `// OWASP Agentic:` header, or one the mapping
-page lists under another ID, fails CI too. A third runs the maturity page
-check on this repository, so an ATLAS technique ID on
+OWASP mapping check, of the maturity page check, of the documented-command
+check, of the changelog's line width and of the scenario tests' capability
+gating before the suite. The documented commands themselves run only in the
+smoke. One of them runs `npm run check:readme` on this README, so a pull
+request that adds or removes a test without updating the README's counts
+fails CI, not only the next release smoke. Another runs the OWASP mapping
+check on this repository, so a scenario file without an `// OWASP Agentic:`
+header, or one the mapping page lists under another ID, fails CI too. A third
+runs the maturity page check on this repository, so an ATLAS technique ID on
 `docs/shield-maturity-extension.md` that `docs/mitre-atlas-mapping.md` does
 not list, or lists under another name, fails CI as well. To run the suite
 without them, use `npx vitest run` or one of
