@@ -5,12 +5,14 @@
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM06
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import * as net from 'net';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityProductAdapter } from '../harness/adapter';
 
-describe('E2E-005: Network Interceptor', () => {
-  let arp: ArpWrapper;
+describeWithCapability('network-monitoring', 'E2E-005: Network Interceptor', () => {
+  let arp: SecurityProductAdapter;
   let server: net.Server;
   let serverPort: number;
   let clientSocket: net.Socket | null = null;
@@ -31,7 +33,7 @@ describe('E2E-005: Network Interceptor', () => {
       });
     });
 
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: {
         process: false,
         network: false, // Disable polling monitor
@@ -61,7 +63,7 @@ describe('E2E-005: Network Interceptor', () => {
     // Wait for connection event (should be nearly instant)
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const connEvent = events.find(
       (e) =>
         e.source === 'network' &&
@@ -77,7 +79,7 @@ describe('E2E-005: Network Interceptor', () => {
   it('should classify connections to allowed hosts as normal', async () => {
     // Restart with allowed hosts
     await arp.stop();
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       interceptors: { network: true },
       interceptorNetworkAllowedHosts: ['127.0.0.1'],
@@ -87,7 +89,7 @@ describe('E2E-005: Network Interceptor', () => {
     clientSocket = net.connect({ host: '127.0.0.1', port: serverPort });
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const connEvent = events.find(
       (e) => e.source === 'network' && e.data.remotePort === serverPort,
     );
@@ -100,7 +102,7 @@ describe('E2E-005: Network Interceptor', () => {
   it('should classify connections to non-allowed hosts as anomaly', async () => {
     // Restart with restricted allowed hosts (not including 127.0.0.1)
     await arp.stop();
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       interceptors: { network: true },
       interceptorNetworkAllowedHosts: ['api.example.com'],
@@ -110,7 +112,7 @@ describe('E2E-005: Network Interceptor', () => {
     clientSocket = net.connect({ host: '127.0.0.1', port: serverPort });
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const connEvent = events.find(
       (e) => e.source === 'network' && e.data.remotePort === serverPort,
     );
@@ -128,7 +130,7 @@ describe('E2E-005: Network Interceptor', () => {
     clientSocket = net.connect({ host: '127.0.0.1', port: serverPort });
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     expect(events.length).toBe(0);
   });
 });

@@ -24,22 +24,27 @@ export { hasCapability, requireCapability, getCapabilityMatrix } from './capabil
 
 /**
  * A describe() wrapper that skips the entire suite if the adapter
- * lacks the required capability. Produces N/A in the scorecard.
+ * lacks a required capability. Produces N/A in the scorecard.
+ *
+ * A suite that spans several surfaces (an integration chain that injects
+ * process and network events and asserts a kill) passes them all; it runs
+ * only when the adapter has every one.
  *
  * @example
  *   describeWithCapability('mcp-scanning', 'MCP Tool Scanning', () => {
  *     it('should detect path traversal', () => { ... });
  *   });
+ *   describeWithCapability(['network-monitoring', 'enforcement-kill'], 'Exfil chain', () => { ... });
  */
 export const describeWithCapability = (
-  cap: Capability,
+  caps: Capability | readonly Capability[],
   name: string,
   fn: () => void,
 ) => {
-  const has = hasCapability(cap);
-  if (has) {
+  const missing = (typeof caps === 'string' ? [caps] : caps).filter((cap) => !hasCapability(cap));
+  if (missing.length === 0) {
     describe(name, fn);
   } else {
-    describe.skip(`${name} [requires: ${cap}]`, fn);
+    describe.skip(`${name} [requires: ${missing.join(', ')}]`, fn);
   }
 };

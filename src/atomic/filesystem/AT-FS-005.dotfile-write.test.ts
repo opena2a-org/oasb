@@ -2,14 +2,16 @@
 // ATLAS: AML.T0081 (Modify AI Agent Configuration)
 // OWASP: LLM06 (Excessive Agency)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-FS-005: Shell Config Dotfile Write Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('filesystem-monitoring', 'AT-FS-005: Shell Config Dotfile Write Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { filesystem: false },
     });
     await arp.start();
@@ -42,7 +44,7 @@ describe('AT-FS-005: Shell Config Dotfile Write Detection', () => {
         },
       });
 
-      const violations = arp.collector.eventsByCategory('violation');
+      const violations = arp.getEventsByCategory('violation');
       expect(violations.length).toBe(1);
       expect(violations[0].severity).toBe('high');
       expect(violations[0].data.path).toBe(path);
@@ -67,7 +69,7 @@ describe('AT-FS-005: Shell Config Dotfile Write Detection', () => {
       });
     }
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(shellConfigFiles.length);
 
     for (const violation of violations) {
@@ -104,14 +106,14 @@ describe('AT-FS-005: Shell Config Dotfile Write Detection', () => {
       },
     });
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(2);
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].data.operation).toBe('write');
 
-    const highSeverity = arp.collector.eventsBySeverity('high');
+    const highSeverity = arp.getEvents().filter((e) => e.severity === 'high');
     expect(highSeverity.length).toBe(1);
     expect(highSeverity[0].data.operation).toBe('write');
   });
@@ -138,17 +140,17 @@ describe('AT-FS-005: Shell Config Dotfile Write Detection', () => {
       });
     }
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(3);
 
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.bash_profile'))
+      arp.getEvents().some((e) => e.data.path.includes('.bash_profile'))
     ).toBe(true);
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.profile') && !e.data.path.includes('.bash_profile'))
+      arp.getEvents().some((e) => e.data.path.includes('.profile') && !e.data.path.includes('.bash_profile'))
     ).toBe(true);
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.gitconfig'))
+      arp.getEvents().some((e) => e.data.path.includes('.gitconfig'))
     ).toBe(true);
   });
 });

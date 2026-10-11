@@ -6,14 +6,15 @@
 // hourly rate limits. Once the budget or hourly call cap is exhausted,
 // canAfford() must return false to prevent runaway LLM spending.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { BudgetManager } from '../../harness/adapter';
 
-describe('AT-INT-004: Budget Exhaustion', () => {
+describeWithCapability('budget-management', 'AT-INT-004: Budget Exhaustion', () => {
   let dataDir: string;
   const adapter = createAdapter();
 

@@ -9,12 +9,13 @@
 // This is the fail-closed invariant: the enforcement engine must never defer a
 // critical-severity action pending any external signal.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { AlertRule } from '../../harness/adapter';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import type { AlertRule, SecurityProductAdapter } from '../../harness/adapter';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
 
-describe('AT-INT-003: L2 LLM Escalation (fail-closed)', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['enforcement-alert', 'enforcement-kill'], 'AT-INT-003: L2 LLM Escalation (fail-closed)', () => {
+  let arp: SecurityProductAdapter;
 
   const escalationRules: AlertRule[] = [
     {
@@ -26,7 +27,7 @@ describe('AT-INT-003: L2 LLM Escalation (fail-closed)', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: escalationRules,
     });
@@ -66,12 +67,12 @@ describe('AT-INT-003: L2 LLM Escalation (fail-closed)', () => {
     });
 
     // SEC-021: enforcement must fire regardless of requireLlmConfirmation
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(1);
     expect(enforcements[0].action).toBe('kill');
 
     // And the event is still captured
-    const events = arp.collector.eventsByCategory('threat');
+    const events = arp.getEventsByCategory('threat');
     expect(events.length).toBe(1);
   });
 
@@ -92,7 +93,7 @@ describe('AT-INT-003: L2 LLM Escalation (fail-closed)', () => {
       },
     ];
 
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: mixedRules,
     });
@@ -106,7 +107,7 @@ describe('AT-INT-003: L2 LLM Escalation (fail-closed)', () => {
       data: { path: '/etc/passwd' },
     });
 
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(1);
     expect(alertActions[0].reason).toContain('immediate-alert');
 
@@ -122,7 +123,7 @@ describe('AT-INT-003: L2 LLM Escalation (fail-closed)', () => {
     expect(reviewed.data._llmReviewRequested).toBe(true);
     expect(reviewed.data._pendingConfirmation).toBeUndefined();
 
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBeGreaterThanOrEqual(1);
     expect(killActions.some((k) => k.reason.includes('llm-reviewed-kill'))).toBe(true);
   });

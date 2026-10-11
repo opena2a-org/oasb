@@ -15,18 +15,21 @@
 // separately verify child process detection via direct engine injection
 // alongside the real monitor.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
 import { ArpWrapper } from '../../harness/arp-wrapper';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-PROC-001: Spawn Child Process Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('process-monitoring', 'AT-PROC-001: Spawn Child Process Detection', () => {
+  let arp: SecurityProductAdapter;
   let child: ChildProcess | null = null;
 
   beforeEach(async () => {
     // Enable the real process monitor so it polls OS-level child processes.
     // The default intervalMs is 5000ms.
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: true },
     });
     await arp.start();
@@ -121,9 +124,12 @@ describe('AT-PROC-001: Spawn Child Process Detection', () => {
     expect((event.data.command as string)).toContain('node');
   });
 
-  it('should verify the process monitor is actively running', async () => {
+  // Monitor status is not part of SecurityProductAdapter. Only the reference
+  // adapter reports it, through its arp-guard instance, so for any other
+  // adapter this check is N/A.
+  it.skipIf(!(createAdapter() instanceof ArpWrapper))('should verify the process monitor is actively running', async () => {
     // The process monitor should be running after start()
-    const status = arp.getInstance().getStatus();
+    const status = (arp as ArpWrapper).getInstance().getStatus();
     const processMonitor = status.monitors.find((m) => m.type === 'process');
 
     expect(processMonitor).toBeDefined();

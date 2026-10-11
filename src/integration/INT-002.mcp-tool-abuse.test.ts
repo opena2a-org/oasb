@@ -8,16 +8,17 @@
 // 2. Execute arbitrary commands via command injection through a shell tool
 // ARP should detect both violations and trigger enforcement for each.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
 import { DVAAClient } from '../harness/dvaa-client';
-import type { AlertRule } from '../harness/adapter';
+import type { AlertRule, SecurityProductAdapter } from '../harness/adapter';
 
 // DVAA ToolBot port
 const TOOL_BOT_PORT = 3002;
 
-describe('INT-002: MCP Tool Abuse Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['process-monitoring', 'filesystem-monitoring', 'enforcement-alert', 'enforcement-kill'], 'INT-002: MCP Tool Abuse Detection', () => {
+  let arp: SecurityProductAdapter;
   const dvaa = new DVAAClient();
 
   const abuseRules: AlertRule[] = [
@@ -39,7 +40,7 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: abuseRules,
     });
@@ -65,7 +66,7 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
       },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].source).toBe('filesystem');
     expect(violations[0].severity).toBe('high');
@@ -89,7 +90,7 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
       },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].source).toBe('process');
     expect(violations[0].severity).toBe('high');
@@ -126,10 +127,10 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
       },
     });
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(3);
 
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(2);
 
     // Verify each enforcement references the correct rule
@@ -137,7 +138,7 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
     expect(alertActions[1].reason).toContain('process-violation');
 
     // Cross-monitor correlation generates a kill enforcement
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
   });
 
@@ -177,17 +178,17 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
       await arp.injectEvent(event);
     }
 
-    const allViolations = arp.collector.eventsByCategory('violation');
+    const allViolations = arp.getEventsByCategory('violation');
     expect(allViolations.length).toBe(4);
 
-    const fsViolations = arp.collector.eventsBySource('filesystem');
+    const fsViolations = arp.getEvents().filter((e) => e.source === 'filesystem');
     expect(fsViolations.length).toBe(2);
 
-    const procViolations = arp.collector.eventsBySource('process');
+    const procViolations = arp.getEvents().filter((e) => e.source === 'process');
     expect(procViolations.length).toBe(3); // 2 injected + 1 cross-monitor correlation
 
     // All violations should trigger alert enforcement
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(4);
   });
 
@@ -210,7 +211,7 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
         data: { path: '/etc/passwd', operation: 'read', tool: 'read_file', dvaaAvailable: false },
       });
 
-      const violations = arp.collector.eventsByCategory('violation');
+      const violations = arp.getEventsByCategory('violation');
       expect(violations.length).toBe(1);
       return;
     }
@@ -231,10 +232,10 @@ describe('INT-002: MCP Tool Abuse Detection', () => {
       data: { path: '/etc/passwd', operation: 'read', tool: 'read_file', dvaaAvailable: true },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
 
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(1);
   });
 });

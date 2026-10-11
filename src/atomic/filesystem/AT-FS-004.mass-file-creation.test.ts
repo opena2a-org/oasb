@@ -2,14 +2,16 @@
 // ATLAS: AML.T0034.002 (Agentic Resource Consumption)
 // OWASP: LLM10 (Unbounded Consumption)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-FS-004: Mass File Creation Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('filesystem-monitoring', 'AT-FS-004: Mass File Creation Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { filesystem: false },
     });
     await arp.start();
@@ -36,7 +38,7 @@ describe('AT-FS-004: Mass File Creation Detection', () => {
       });
     }
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(fileCount);
   });
 
@@ -57,7 +59,7 @@ describe('AT-FS-004: Mass File Creation Detection', () => {
       });
     }
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(fileCount);
 
     for (let i = 0; i < fileCount; i++) {
@@ -83,16 +85,16 @@ describe('AT-FS-004: Mass File Creation Detection', () => {
       });
     }
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(fileCount);
 
-    const infoEvents = arp.collector.eventsBySeverity('info');
+    const infoEvents = arp.getEvents().filter((e) => e.severity === 'info');
     expect(infoEvents.length).toBe(fileCount);
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(0);
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(0);
   });
 
@@ -125,13 +127,13 @@ describe('AT-FS-004: Mass File Creation Detection', () => {
       },
     });
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(fileCount + 1);
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(fileCount);
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
   });
 });

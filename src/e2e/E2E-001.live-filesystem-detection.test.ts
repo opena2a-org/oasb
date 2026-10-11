@@ -5,21 +5,23 @@
 // ATLAS: AML.T0055 (Unsecured Credentials), AML.T0081 (Modify AI Agent Configuration)
 // OWASP: LLM02, LLM06
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityProductAdapter } from '../harness/adapter';
 
-describe('E2E-001: Live Filesystem Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detection', () => {
+  let arp: SecurityProductAdapter;
   let watchDir: string;
 
   beforeEach(async () => {
     // Create a temp directory to watch
     watchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arp-e2e-fs-'));
 
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: {
         process: false,
         network: false,
@@ -116,11 +118,11 @@ describe('E2E-001: Live Filesystem Detection', () => {
     await new Promise((r) => setTimeout(r, 1500));
 
     // Should NOT have any violations
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(0);
 
     // Might have a normal 'rename' event from fs.watch
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     for (const event of allEvents) {
       expect(event.category).not.toBe('violation');
       expect(event.category).not.toBe('threat');

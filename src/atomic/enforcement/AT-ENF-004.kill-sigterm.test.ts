@@ -4,10 +4,11 @@
 // Spawns a real child process, sends SIGTERM via the enforcement engine,
 // then verifies the process is no longer alive.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
-import { ArpWrapper } from '../../harness/arp-wrapper';
-import type { SecurityEvent } from '../../harness/adapter';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
 /** Wait for a specified number of milliseconds */
 function sleep(ms: number): Promise<void> {
@@ -24,12 +25,12 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-describe('AT-ENF-004: Process Kill via SIGTERM', () => {
-  let arp: ArpWrapper;
+describeWithCapability('enforcement-kill', 'AT-ENF-004: Process Kill via SIGTERM', () => {
+  let arp: SecurityProductAdapter;
   let child: ChildProcess | null = null;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
     });
     await arp.start();
@@ -65,7 +66,7 @@ describe('AT-ENF-004: Process Kill via SIGTERM', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('kill', mockEvent, pid);
 
     expect(result.action).toBe('kill');
@@ -90,7 +91,7 @@ describe('AT-ENF-004: Process Kill via SIGTERM', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('kill', mockEvent);
 
     expect(result.action).toBe('kill');
@@ -111,7 +112,7 @@ describe('AT-ENF-004: Process Kill via SIGTERM', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('kill', mockEvent, fakePid);
 
     expect(result.action).toBe('kill');
@@ -137,7 +138,7 @@ describe('AT-ENF-004: Process Kill via SIGTERM', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
 
     // First pause it
     await enforcement.execute('pause', mockEvent, pid);

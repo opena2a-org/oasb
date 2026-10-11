@@ -7,7 +7,8 @@
 // anomalous ones. Also verifies that reset() clears learned baselines
 // so the detector returns to its initial state.
 
-import { describe, it, expect } from 'vitest';
+import { it, expect } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { SecurityEvent, AnomalyScorer } from '../../harness/adapter';
 
@@ -25,7 +26,7 @@ function makeEvent(source: SecurityEvent['source']): SecurityEvent {
   };
 }
 
-describe('AT-INT-005: Baseline Learning', () => {
+describeWithCapability('anomaly-detection', 'AT-INT-005: Baseline Learning', () => {
   it('should establish a baseline after recording many events', () => {
     const detector = createAdapter().createAnomalyScorer();
 

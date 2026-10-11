@@ -8,12 +8,13 @@
 // burst of 5 high-severity violation events. The event engine's buffer
 // should retain both phases, allowing detection of the severity shift.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../harness/arp-wrapper';
-import type { AlertRule } from '../harness/adapter';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { AlertRule, SecurityProductAdapter } from '../harness/adapter';
 
-describe('INT-005: Baseline Learning Then Attack Burst', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-monitoring', 'enforcement-alert'], 'INT-005: Baseline Learning Then Attack Burst', () => {
+  let arp: SecurityProductAdapter;
 
   const burstRules: AlertRule[] = [
     {
@@ -29,7 +30,7 @@ describe('INT-005: Baseline Learning Then Attack Burst', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: burstRules,
     });
@@ -58,10 +59,10 @@ describe('INT-005: Baseline Learning Then Attack Burst', () => {
       });
     }
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(30);
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(0);
   });
 
@@ -93,14 +94,14 @@ describe('INT-005: Baseline Learning Then Attack Burst', () => {
       });
     }
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(30);
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(5);
 
     // All violations should trigger alert enforcement
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(5);
   });
 
@@ -127,8 +128,9 @@ describe('INT-005: Baseline Learning Then Attack Burst', () => {
       });
     }
 
-    // Use getRecentEvents to verify the engine buffer contains all events
-    const recentEvents = arp.getEngine().getRecentEvents(300000); // 5 minute window
+    // Verify the adapter kept every event from the last 5 minutes
+    const since = Date.now() - 300000;
+    const recentEvents = arp.getEvents().filter((e) => !e.timestamp || Date.parse(e.timestamp) >= since);
     expect(recentEvents.length).toBe(35);
 
     // Verify event ordering: baseline first, then attack
@@ -167,7 +169,7 @@ describe('INT-005: Baseline Learning Then Attack Burst', () => {
       });
     }
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     const baselineEvents = allEvents.filter((e) => e.data.phase === 'baseline');
     const attackEvents = allEvents.filter((e) => e.data.phase === 'attack');
 
@@ -224,16 +226,17 @@ describe('INT-005: Baseline Learning Then Attack Burst', () => {
     }
 
     // Verify multi-source detection
-    const processViolations = arp.collector.eventsBySource('process').filter((e) => e.category === 'violation');
-    const filesystemViolations = arp.collector.eventsBySource('filesystem').filter((e) => e.category === 'violation');
-    const networkViolations = arp.collector.eventsBySource('network').filter((e) => e.category === 'violation');
+    const violations = arp.getEventsByCategory('violation');
+    const processViolations = violations.filter((e) => e.source === 'process');
+    const filesystemViolations = violations.filter((e) => e.source === 'filesystem');
+    const networkViolations = violations.filter((e) => e.source === 'network');
 
     expect(processViolations.length).toBe(2);
     expect(filesystemViolations.length).toBe(2);
     expect(networkViolations.length).toBe(1);
 
     // All attack violations should trigger enforcement
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(5);
   });
 });

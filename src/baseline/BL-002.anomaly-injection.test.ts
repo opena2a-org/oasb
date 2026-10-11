@@ -6,7 +6,8 @@
 // a baseline, then injects an anomalous burst and verifies the score exceeds
 // the detection threshold.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { it, expect, beforeEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
 import type { SecurityEvent, AnomalyScorer } from '../harness/adapter';
 
@@ -24,7 +25,7 @@ function makeEvent(source: 'process' | 'network' | 'filesystem', index: number):
   };
 }
 
-describe('BL-002: Controlled Anomaly Injection', () => {
+describeWithCapability('anomaly-detection', 'BL-002: Controlled Anomaly Injection', () => {
   let detector: AnomalyScorer;
 
   beforeEach(() => {

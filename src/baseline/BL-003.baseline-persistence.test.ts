@@ -6,7 +6,8 @@
 // This test verifies and documents this known gap. A production deployment
 // would need to serialize baselines to disk or a database to survive restarts.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { it, expect, beforeEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
 import type { SecurityEvent, AnomalyScorer } from '../harness/adapter';
 
@@ -24,7 +25,7 @@ function makeEvent(source: 'process' | 'network' | 'filesystem', index: number):
   };
 }
 
-describe('BL-003: Baseline Persistence Across Restarts', () => {
+describeWithCapability('anomaly-detection', 'BL-003: Baseline Persistence Across Restarts', () => {
   let detector: AnomalyScorer;
 
   beforeEach(() => {

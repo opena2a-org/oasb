@@ -4,17 +4,18 @@
 // Pauses a real child process, then resumes it via SIGCONT,
 // verifying it is removed from the paused PID tracking list.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
-import { ArpWrapper } from '../../harness/arp-wrapper';
-import type { SecurityEvent } from '../../harness/adapter';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-ENF-005: Process Resume via SIGCONT', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['enforcement-pause', 'enforcement-resume'], 'AT-ENF-005: Process Resume via SIGCONT', () => {
+  let arp: SecurityProductAdapter;
   let child: ChildProcess | null = null;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
     });
     await arp.start();
@@ -24,7 +25,7 @@ describe('AT-ENF-005: Process Resume via SIGCONT', () => {
     if (child && child.pid) {
       // Ensure the process is resumed before killing, to avoid orphaned stopped processes
       try {
-        arp.getEnforcement().resume(child.pid);
+        arp.getEnforcementEngine().resume(child.pid);
       } catch { /* already resumed or dead */ }
       try {
         process.kill(child.pid, 'SIGKILL');
@@ -53,7 +54,7 @@ describe('AT-ENF-005: Process Resume via SIGCONT', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
 
     // Pause the process first
     const pauseResult = await enforcement.execute('pause', mockEvent, pid);
@@ -68,7 +69,7 @@ describe('AT-ENF-005: Process Resume via SIGCONT', () => {
   }, 10000);
 
   it('should return false when resuming a PID that was never paused', () => {
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = enforcement.resume(999999);
 
     expect(result).toBe(false);
@@ -94,7 +95,7 @@ describe('AT-ENF-005: Process Resume via SIGCONT', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
 
     // Pause, then resume twice
     await enforcement.execute('pause', mockEvent, pid);
@@ -126,7 +127,7 @@ describe('AT-ENF-005: Process Resume via SIGCONT', () => {
     expect(pid1).toBeDefined();
     expect(pid2).toBeDefined();
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
 
     const makeEvent = (id: string, pid: number): SecurityEvent => ({
       id,

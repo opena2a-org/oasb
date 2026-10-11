@@ -2,14 +2,16 @@
 // ATLAS: AML.T0037 (Data from Local System)
 // OWASP: LLM06 (Excessive Agency)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-FS-002: Access Outside Allowed Paths', () => {
-  let arp: ArpWrapper;
+describeWithCapability('filesystem-monitoring', 'AT-FS-002: Access Outside Allowed Paths', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { filesystem: false },
     });
     await arp.start();
@@ -32,7 +34,7 @@ describe('AT-FS-002: Access Outside Allowed Paths', () => {
       },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].severity).toBe('medium');
     expect(anomalies[0].data.path).toBe('/etc/passwd');
@@ -52,7 +54,7 @@ describe('AT-FS-002: Access Outside Allowed Paths', () => {
       },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].severity).toBe('medium');
     expect(anomalies[0].data.path).toBe('/etc/shadow');
@@ -72,10 +74,10 @@ describe('AT-FS-002: Access Outside Allowed Paths', () => {
       },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(0);
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(1);
     expect(allEvents[0].data.allowed).toBe(true);
   });
@@ -105,18 +107,18 @@ describe('AT-FS-002: Access Outside Allowed Paths', () => {
       },
     });
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(2);
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].data.path).toBe('/etc/passwd');
 
     expect(
-      arp.collector.hasEvent((e) => e.data.allowed === false)
+      arp.getEvents().some((e) => e.data.allowed === false)
     ).toBe(true);
     expect(
-      arp.collector.hasEvent((e) => e.data.allowed === true)
+      arp.getEvents().some((e) => e.data.allowed === true)
     ).toBe(true);
   });
 });

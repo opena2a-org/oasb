@@ -5,14 +5,16 @@
 // Verifies that ARP flags processes exceeding CPU thresholds as anomalies.
 // The process monitor treats CPU > 90% as an anomaly condition.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-PROC-003: High CPU Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('process-monitoring', 'AT-PROC-003: High CPU Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false },
     });
     await arp.start();
@@ -35,7 +37,7 @@ describe('AT-PROC-003: High CPU Detection', () => {
       },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].severity).toBe('medium');
     expect(anomalies[0].data.cpu).toBe(95);
@@ -55,7 +57,7 @@ describe('AT-PROC-003: High CPU Detection', () => {
       },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].data.cpu).toBe(100);
   });
@@ -74,10 +76,10 @@ describe('AT-PROC-003: High CPU Detection', () => {
       },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(0);
 
-    const normals = arp.collector.eventsByCategory('normal');
+    const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(1);
     expect(normals[0].data.cpu).toBe(25);
   });
@@ -110,11 +112,11 @@ describe('AT-PROC-003: High CPU Detection', () => {
       data: { pid: 30006, cpu: 91, command: 'node stress.js' },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].data.pid).toBe(30006);
 
-    const normals = arp.collector.eventsByCategory('normal');
+    const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(2);
   });
 });

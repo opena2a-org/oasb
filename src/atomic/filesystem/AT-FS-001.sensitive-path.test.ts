@@ -2,14 +2,16 @@
 // ATLAS: AML.T0055 (Unsecured Credentials)
 // OWASP: LLM02 (Sensitive Information Disclosure)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-FS-001: Sensitive Path Access Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('filesystem-monitoring', 'AT-FS-001: Sensitive Path Access Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { filesystem: false },
     });
     await arp.start();
@@ -32,7 +34,7 @@ describe('AT-FS-001: Sensitive Path Access Detection', () => {
       },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
     expect(violations[0].data.path).toContain('.ssh/id_rsa');
@@ -51,7 +53,7 @@ describe('AT-FS-001: Sensitive Path Access Detection', () => {
       },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
     expect(violations[0].data.path).toContain('.aws/credentials');
@@ -70,7 +72,7 @@ describe('AT-FS-001: Sensitive Path Access Detection', () => {
       },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
     expect(violations[0].data.path).toContain('.gnupg/secring.gpg');
@@ -97,7 +99,7 @@ describe('AT-FS-001: Sensitive Path Access Detection', () => {
       });
     }
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(3);
 
     for (const violation of violations) {
@@ -106,13 +108,13 @@ describe('AT-FS-001: Sensitive Path Access Detection', () => {
     }
 
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.ssh/id_rsa'))
+      arp.getEvents().some((e) => e.data.path.includes('.ssh/id_rsa'))
     ).toBe(true);
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.aws/credentials'))
+      arp.getEvents().some((e) => e.data.path.includes('.aws/credentials'))
     ).toBe(true);
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.gnupg/secring.gpg'))
+      arp.getEvents().some((e) => e.data.path.includes('.gnupg/secring.gpg'))
     ).toBe(true);
   });
 });

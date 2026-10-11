@@ -5,16 +5,18 @@
 // ATLAS: AML.T0050 (Command and Scripting Interpreter)
 // OWASP: LLM06
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityProductAdapter } from '../harness/adapter';
 
-describe('E2E-002: Live Process Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('process-monitoring', 'E2E-002: Live Process Detection', () => {
+  let arp: SecurityProductAdapter;
   const children: ChildProcess[] = [];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: {
         process: true,
         network: false,

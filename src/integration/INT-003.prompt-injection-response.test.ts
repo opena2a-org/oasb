@@ -8,16 +8,17 @@
 // after a prompt injection. The anomaly burst should be detectable
 // by L0 rules and scored higher by L1 statistical analysis.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
 import { DVAAClient } from '../harness/dvaa-client';
-import type { AlertRule } from '../harness/adapter';
+import type { AlertRule, SecurityProductAdapter } from '../harness/adapter';
 
 // DVAA SecureBot port
 const SECURE_BOT_PORT = 3001;
 
-describe('INT-003: Prompt Injection with Anomaly Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['process-monitoring', 'network-monitoring', 'enforcement-alert'], 'INT-003: Prompt Injection with Anomaly Detection', () => {
+  let arp: SecurityProductAdapter;
   const dvaa = new DVAAClient();
 
   const injectionRules: AlertRule[] = [
@@ -42,7 +43,7 @@ describe('INT-003: Prompt Injection with Anomaly Detection', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: injectionRules,
     });
@@ -70,10 +71,10 @@ describe('INT-003: Prompt Injection with Anomaly Detection', () => {
       });
     }
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(10);
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(0);
   });
 
@@ -104,15 +105,15 @@ describe('INT-003: Prompt Injection with Anomaly Detection', () => {
       });
     }
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(10);
 
-    const anomalyEvents = arp.collector.eventsByCategory('anomaly');
+    const anomalyEvents = arp.getEventsByCategory('anomaly');
     expect(anomalyEvents.length).toBe(6);
 
     // The anomaly-burst rule triggers once threshold is reached (5 anomalies in 60s)
     // The 5th anomaly and beyond should trigger alert enforcement
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -140,8 +141,8 @@ describe('INT-003: Prompt Injection with Anomaly Detection', () => {
       });
     }
 
-    const baselineEvents = arp.collector.eventsByCategory('normal');
-    const anomalyEvents = arp.collector.eventsByCategory('anomaly');
+    const baselineEvents = arp.getEventsByCategory('normal');
+    const anomalyEvents = arp.getEventsByCategory('anomaly');
 
     expect(baselineEvents.length).toBe(5);
     expect(anomalyEvents.length).toBe(5);
@@ -173,12 +174,12 @@ describe('INT-003: Prompt Injection with Anomaly Detection', () => {
       },
     });
 
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].severity).toBe('high');
     expect(threats[0].data.detectionMethod).toBe('pattern-match');
 
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(1);
     expect(alertActions[0].reason).toContain('threat-detection');
   });
@@ -213,7 +214,7 @@ describe('INT-003: Prompt Injection with Anomaly Detection', () => {
         },
       });
 
-      const threats = arp.collector.eventsByCategory('threat');
+      const threats = arp.getEventsByCategory('threat');
       expect(threats.length).toBe(1);
       return;
     }
@@ -233,7 +234,7 @@ describe('INT-003: Prompt Injection with Anomaly Detection', () => {
       },
     });
 
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].data.dvaaAvailable).toBe(true);
   });

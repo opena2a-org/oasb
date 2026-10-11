@@ -86,6 +86,29 @@ stay on record here with the reason they changed.
 
 ### Changed
 
+- `OASB_ADAPTER` selects the product for all 222 scenario tests. 37 atomic,
+  integration, baseline and E2E test files (159 tests) built the reference
+  adapter directly, and 5 more (23 tests) ran on the selected adapter without
+  a capability gate, so a scorecard for llm-guard, rebuff or your own adapter
+  counted the reference adapter's passes, and stub results, as that
+  product's own. Each scenario file now builds its adapter with
+  `createAdapter()`, reads events and enforcements through the
+  `SecurityProductAdapter` contract and wraps its suite in
+  `describeWithCapability`, which now also takes a list: a suite that spans
+  several surfaces runs only when the adapter declares every one. With
+  llm-guard or rebuff selected, 16 tests run (AT-AI-001 and AT-AI-005) and
+  206 are N/A, where 197 ran and 25 were skipped before; with the reference
+  adapter every result is unchanged. Two checks read reference-adapter state
+  that the contract does not expose and run only on the reference adapter:
+  the process monitor's status in AT-PROC-001 (N/A on any other adapter) and
+  the instance's running state in INT-008. AT-AI-005 builds its pattern
+  scanner before its tests run instead of while the suite is collected, so
+  it no longer calls an adapter that lacks pattern scanning.
+  `scripts/adapter-gating.test.mjs`, run by `npm run test:scripts`, runs the
+  scenario tests against an adapter that declares no capabilities and
+  against llm-guard and rebuff, and fails when a suite runs without every
+  capability it needs.
+
 - A pinned run's `summary.json` names the NanoMind model of the two adapters
   that use it by the `version` in `nanomind-version.json` of the verified
   model directory, or by the directory's manifest sha256 when it has no

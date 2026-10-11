@@ -5,21 +5,23 @@
 // ATLAS: AML.T0050 (Command and Scripting Interpreter)
 // OWASP: LLM06
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import type { ChildProcess } from 'child_process';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityProductAdapter } from '../harness/adapter';
 
 // Use require() to get the same CJS module the interceptor patches
 // (ESM imports are snapshots and won't reflect interceptor patches)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const cp = require('child_process');
 
-describe('E2E-004: Process Interceptor', () => {
-  let arp: ArpWrapper;
+describeWithCapability('process-monitoring', 'E2E-004: Process Interceptor', () => {
+  let arp: SecurityProductAdapter;
   const children: ChildProcess[] = [];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: {
         process: false,
         network: false,
@@ -46,7 +48,7 @@ describe('E2E-004: Process Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const echoEvent = events.find(
       (e: { source: string; data: Record<string, unknown> }) =>
         e.source === 'process' && e.data.binary === 'echo',
@@ -63,7 +65,7 @@ describe('E2E-004: Process Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const curlEvent = events.find(
       (e: { source: string; category: string; data: Record<string, unknown> }) =>
         e.source === 'process' && e.data.binary === 'curl',
@@ -82,7 +84,7 @@ describe('E2E-004: Process Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const execEvent = events.find(
       (e: { source: string; data: Record<string, unknown> }) =>
         e.source === 'process' &&
@@ -100,7 +102,7 @@ describe('E2E-004: Process Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const curlEvent = events.find(
       (e: { source: string; data: Record<string, unknown> }) =>
         e.source === 'process' && e.data.binary === 'curl',
@@ -119,7 +121,7 @@ describe('E2E-004: Process Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     expect(events.length).toBe(0);
   });
 });

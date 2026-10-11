@@ -8,16 +8,17 @@
 // 2. Agent connects to webhook.site to exfiltrate stolen data — critical threat
 // ARP should detect the exfiltration step and trigger enforcement.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
 import { DVAAClient } from '../harness/dvaa-client';
-import type { AlertRule } from '../harness/adapter';
+import type { AlertRule, SecurityProductAdapter } from '../harness/adapter';
 
 // DVAA ports
 const LEGACY_BOT_PORT = 3003;
 
-describe('INT-001: Data Exfiltration Detection Chain', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['network-monitoring', 'enforcement-kill'], 'INT-001: Data Exfiltration Detection Chain', () => {
+  let arp: SecurityProductAdapter;
   const dvaa = new DVAAClient();
 
   const exfilRules: AlertRule[] = [
@@ -34,7 +35,7 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: exfilRules,
     });
@@ -59,12 +60,12 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
       },
     });
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(1);
     expect(normalEvents[0].severity).toBe('info');
 
     // No enforcement triggered for normal traffic
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(0);
   });
 
@@ -84,7 +85,7 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
       },
     });
 
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].severity).toBe('critical');
     expect(threats[0].data.remoteAddr).toBe('webhook.site');
@@ -106,10 +107,10 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
       },
     });
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBeGreaterThanOrEqual(1);
 
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
     expect(killActions[0].reason).toContain('exfil-threat');
   });
@@ -146,7 +147,7 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
       },
     });
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(2);
 
     // First event is normal
@@ -158,7 +159,7 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
     expect(allEvents[1].severity).toBe('critical');
 
     // Enforcement triggered only for the exfiltration
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
     expect(killActions[0].event.data.step).toBe('data-exfil');
   });
@@ -190,7 +191,7 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
         },
       });
 
-      const threats = arp.collector.eventsByCategory('threat');
+      const threats = arp.getEventsByCategory('threat');
       expect(threats.length).toBe(1);
       expect(threats[0].data.dvaaAvailable).toBe(false);
       return;
@@ -218,11 +219,11 @@ describe('INT-001: Data Exfiltration Detection Chain', () => {
       },
     });
 
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].data.dvaaAvailable).toBe(true);
 
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
   });
 });

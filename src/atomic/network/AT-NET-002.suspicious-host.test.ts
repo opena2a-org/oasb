@@ -2,11 +2,13 @@
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM02 (Sensitive Information Disclosure)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-NET-002: Suspicious Host Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detection', () => {
+  let arp: SecurityProductAdapter;
 
   const suspiciousHosts = [
     { host: 'webhook.site', description: 'webhook exfiltration endpoint' },
@@ -15,7 +17,7 @@ describe('AT-NET-002: Suspicious Host Detection', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { network: false },
     });
     await arp.start();
@@ -41,7 +43,7 @@ describe('AT-NET-002: Suspicious Host Detection', () => {
         },
       });
 
-      const threats = arp.collector.eventsByCategory('threat');
+      const threats = arp.getEventsByCategory('threat');
       expect(threats.length).toBeGreaterThanOrEqual(1);
 
       const hostThreat = threats.find((e) => e.data.remoteAddr === host);
@@ -67,15 +69,15 @@ describe('AT-NET-002: Suspicious Host Detection', () => {
       });
     }
 
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(suspiciousHosts.length);
 
-    const criticalEvents = arp.collector.eventsBySeverity('critical');
+    const criticalEvents = arp.getEvents().filter((e) => e.severity === 'critical');
     expect(criticalEvents.length).toBe(suspiciousHosts.length);
 
     for (const { host } of suspiciousHosts) {
       expect(
-        arp.collector.hasEvent((e) => e.data.remoteAddr === host)
+        arp.getEvents().some((e) => e.data.remoteAddr === host)
       ).toBe(true);
     }
   });

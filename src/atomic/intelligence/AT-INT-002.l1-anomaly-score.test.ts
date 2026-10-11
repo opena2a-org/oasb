@@ -7,7 +7,8 @@
 // bursts are observed. Uses the detector directly (unit-level) to avoid
 // timing sensitivity in integration tests.
 
-import { describe, it, expect } from 'vitest';
+import { it, expect } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { SecurityEvent, AnomalyScorer } from '../../harness/adapter';
 
@@ -26,7 +27,7 @@ function makeEvent(source: SecurityEvent['source'], overrides?: Partial<Security
   };
 }
 
-describe('AT-INT-002: L1 Statistical Anomaly Scoring', () => {
+describeWithCapability('anomaly-detection', 'AT-INT-002: L1 Statistical Anomaly Scoring', () => {
   const adapter = createAdapter();
 
   it('should return 0 when insufficient data points exist', () => {

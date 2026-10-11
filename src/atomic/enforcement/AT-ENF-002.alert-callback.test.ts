@@ -4,15 +4,16 @@
 // Verifies that registered callbacks fire on alert actions and
 // that alerts succeed even without a callback registered.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
-import type { SecurityEvent, EnforcementResult } from '../../harness/adapter';
+import { it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityEvent, EnforcementResult, SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-ENF-002: Alert Callback Execution', () => {
-  let arp: ArpWrapper;
+describeWithCapability('enforcement-alert', 'AT-ENF-002: Alert Callback Execution', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
     });
     await arp.start();
@@ -24,7 +25,7 @@ describe('AT-ENF-002: Alert Callback Execution', () => {
 
   it('should invoke the alert callback with event and result', async () => {
     const callbackFn = vi.fn();
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     enforcement.setAlertCallback(callbackFn);
 
     const mockEvent: SecurityEvent = {
@@ -50,7 +51,7 @@ describe('AT-ENF-002: Alert Callback Execution', () => {
   });
 
   it('should succeed without a callback registered', async () => {
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     // No callback set
 
     const mockEvent: SecurityEvent = {
@@ -71,7 +72,7 @@ describe('AT-ENF-002: Alert Callback Execution', () => {
   });
 
   it('should succeed even if the callback throws an error', async () => {
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     enforcement.setAlertCallback(() => {
       throw new Error('Callback failure');
     });
@@ -97,7 +98,7 @@ describe('AT-ENF-002: Alert Callback Execution', () => {
   it('should replace a previous callback when setAlertCallback is called again', async () => {
     const firstCallback = vi.fn();
     const secondCallback = vi.fn();
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
 
     enforcement.setAlertCallback(firstCallback);
     enforcement.setAlertCallback(secondCallback);

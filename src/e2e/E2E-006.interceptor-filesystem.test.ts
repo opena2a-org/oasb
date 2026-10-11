@@ -5,23 +5,25 @@
 // ATLAS: AML.T0055 (Unsecured Credentials), AML.T0081 (Modify AI Agent Configuration)
 // OWASP: LLM02
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
 import * as os from 'os';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityProductAdapter } from '../harness/adapter';
 
 // Use require() to get the same CJS module the interceptor patches
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require('fs');
 
-describe('E2E-006: Filesystem Interceptor', () => {
-  let arp: ArpWrapper;
+describeWithCapability('filesystem-monitoring', 'E2E-006: Filesystem Interceptor', () => {
+  let arp: SecurityProductAdapter;
   let tmpDir: string;
 
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arp-e2e-fsi-'));
 
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: {
         process: false,
         network: false,
@@ -49,7 +51,7 @@ describe('E2E-006: Filesystem Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const writeEvent = events.find(
       (e: { source: string; data: Record<string, unknown> }) =>
         e.source === 'filesystem' &&
@@ -75,7 +77,7 @@ describe('E2E-006: Filesystem Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const readEvent = events.find(
       (e: { source: string; data: Record<string, unknown> }) =>
         e.source === 'filesystem' &&
@@ -95,7 +97,7 @@ describe('E2E-006: Filesystem Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const writeEvent = events.find(
       (e: { source: string; data: Record<string, unknown> }) =>
         e.source === 'filesystem' &&
@@ -114,7 +116,7 @@ describe('E2E-006: Filesystem Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     const bashrcEvent = events.find(
       (e: { source: string; data: Record<string, unknown> }) =>
         e.source === 'filesystem' &&
@@ -134,7 +136,7 @@ describe('E2E-006: Filesystem Interceptor', () => {
 
     await new Promise((r) => setTimeout(r, 50));
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     expect(events.length).toBe(0);
   });
 });

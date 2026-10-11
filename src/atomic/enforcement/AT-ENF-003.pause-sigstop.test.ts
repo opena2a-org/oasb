@@ -4,17 +4,18 @@
 // Spawns a real child process and uses SIGSTOP to suspend it,
 // then verifies the process appears in the paused PID list.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
-import { ArpWrapper } from '../../harness/arp-wrapper';
-import type { SecurityEvent } from '../../harness/adapter';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-ENF-003: Process Pause via SIGSTOP', () => {
-  let arp: ArpWrapper;
+describeWithCapability('enforcement-pause', 'AT-ENF-003: Process Pause via SIGSTOP', () => {
+  let arp: SecurityProductAdapter;
   let child: ChildProcess | null = null;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
     });
     await arp.start();
@@ -24,7 +25,7 @@ describe('AT-ENF-003: Process Pause via SIGSTOP', () => {
     if (child && child.pid) {
       // Resume if paused, then kill
       try {
-        arp.getEnforcement().resume(child.pid);
+        arp.getEnforcementEngine().resume(child.pid);
       } catch { /* already resumed or dead */ }
       try {
         process.kill(child.pid, 'SIGKILL');
@@ -53,7 +54,7 @@ describe('AT-ENF-003: Process Pause via SIGSTOP', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('pause', mockEvent, pid);
 
     expect(result.action).toBe('pause');
@@ -74,7 +75,7 @@ describe('AT-ENF-003: Process Pause via SIGSTOP', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('pause', mockEvent);
 
     expect(result.action).toBe('pause');
@@ -95,7 +96,7 @@ describe('AT-ENF-003: Process Pause via SIGSTOP', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('pause', mockEvent, fakePid);
 
     expect(result.action).toBe('pause');

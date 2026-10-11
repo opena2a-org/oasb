@@ -5,14 +5,16 @@
 // filesystem) simulating typical agent behavior. Asserts that none are
 // misclassified as violations or threats and no enforcement actions fire.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityProductAdapter } from '../harness/adapter';
 
-describe('BL-001: Normal Agent Profile - Zero False Positives', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-monitoring'], 'BL-001: Normal Agent Profile - Zero False Positives', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
     });
     await arp.start();
@@ -66,20 +68,20 @@ describe('BL-001: Normal Agent Profile - Zero False Positives', () => {
       });
     }
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(52);
 
     // No violations
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations).toHaveLength(0);
 
     // Cross-monitor correlation generates low-severity threat events
     // when events from multiple sources arrive within the correlation window
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats).toHaveLength(2);
 
     // No enforcement actions triggered
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements).toHaveLength(0);
 
     // All events have severity 'info' or 'low'
@@ -105,16 +107,16 @@ describe('BL-001: Normal Agent Profile - Zero False Positives', () => {
 
     // Each source should have at least 5 injected events
     // (network and filesystem may have additional cross-monitor correlation events)
-    const processEvents = arp.collector.eventsBySource('process');
-    const networkEvents = arp.collector.eventsBySource('network');
-    const filesystemEvents = arp.collector.eventsBySource('filesystem');
+    const processEvents = arp.getEvents().filter((e) => e.source === 'process');
+    const networkEvents = arp.getEvents().filter((e) => e.source === 'network');
+    const filesystemEvents = arp.getEvents().filter((e) => e.source === 'filesystem');
 
     expect(processEvents).toHaveLength(5);
     expect(networkEvents).toHaveLength(6);
     expect(filesystemEvents).toHaveLength(6);
 
     // Total includes cross-monitor correlation events
-    expect(arp.collector.getEvents()).toHaveLength(17);
+    expect(arp.getEvents()).toHaveLength(17);
   });
 
   it('should handle mixed info and low severity without escalation', async () => {
@@ -130,7 +132,7 @@ describe('BL-001: Normal Agent Profile - Zero False Positives', () => {
       });
     }
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents).toHaveLength(20);
 
     // No event should have been escalated beyond low
@@ -140,6 +142,6 @@ describe('BL-001: Normal Agent Profile - Zero False Positives', () => {
     expect(escalated).toHaveLength(0);
 
     // No enforcement actions
-    expect(arp.collector.getEnforcements()).toHaveLength(0);
+    expect(arp.getEnforcements()).toHaveLength(0);
   });
 });

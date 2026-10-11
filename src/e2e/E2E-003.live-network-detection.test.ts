@@ -8,11 +8,13 @@
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM06
 
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { execSync } from 'child_process';
 import * as net from 'net';
 import * as os from 'os';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityProductAdapter } from '../harness/adapter';
 
 function hasNetworkTool(): boolean {
   try {
@@ -27,14 +29,14 @@ function hasNetworkTool(): boolean {
   }
 }
 
-describe('E2E-003: Live Network Detection', () => {
+describeWithCapability('network-monitoring', 'E2E-003: Live Network Detection', () => {
   let networkAvailable: boolean;
 
   beforeAll(() => {
     networkAvailable = hasNetworkTool();
   });
 
-  let arp: ArpWrapper;
+  let arp: SecurityProductAdapter;
   let server: net.Server;
   let serverPort: number;
   let clientSocket: net.Socket | null = null;
@@ -57,7 +59,7 @@ describe('E2E-003: Live Network Detection', () => {
       });
     });
 
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: {
         process: false,
         network: true,

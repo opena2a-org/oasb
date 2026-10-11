@@ -2,14 +2,16 @@
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM02 (Sensitive Information Disclosure)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-NET-001: New Outbound Connection Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('network-monitoring', 'AT-NET-001: New Outbound Connection Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { network: false },
     });
     await arp.start();
@@ -33,7 +35,7 @@ describe('AT-NET-001: New Outbound Connection Detection', () => {
       },
     });
 
-    const events = arp.collector.eventsByCategory('connection');
+    const events = arp.getEventsByCategory('connection');
     expect(events.length).toBe(1);
     expect(events[0].severity).toBe('info');
     expect(events[0].data.remoteAddr).toBe('localhost');
@@ -53,7 +55,7 @@ describe('AT-NET-001: New Outbound Connection Detection', () => {
       },
     });
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].severity).toBe('warning');
     expect(anomalies[0].data.remoteAddr).toBe('unknown-host');
@@ -87,17 +89,17 @@ describe('AT-NET-001: New Outbound Connection Detection', () => {
       },
     });
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(2);
 
-    const normalEvents = arp.collector.eventsByCategory('connection');
+    const normalEvents = arp.getEventsByCategory('connection');
     expect(normalEvents.length).toBe(1);
 
-    const anomalyEvents = arp.collector.eventsByCategory('anomaly');
+    const anomalyEvents = arp.getEventsByCategory('anomaly');
     expect(anomalyEvents.length).toBe(1);
 
     expect(
-      arp.collector.hasEvent((e) => e.data.remoteAddr === 'unknown-host')
+      arp.getEvents().some((e) => e.data.remoteAddr === 'unknown-host')
     ).toBe(true);
   });
 });

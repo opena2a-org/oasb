@@ -5,14 +5,16 @@
 // rapid respawn patterns (terminated followed by immediate new child),
 // which may indicate restart loops or persistent exploitation attempts.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-PROC-005: Process Terminated Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('process-monitoring', 'AT-PROC-005: Process Terminated Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false },
     });
     await arp.start();
@@ -34,7 +36,7 @@ describe('AT-PROC-005: Process Terminated Detection', () => {
       },
     });
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     expect(events.length).toBe(1);
     expect(events[0].source).toBe('process');
     expect(events[0].category).toBe('normal');
@@ -70,7 +72,7 @@ describe('AT-PROC-005: Process Terminated Detection', () => {
       },
     });
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     expect(events.length).toBe(2);
 
     // First event: termination
@@ -107,7 +109,7 @@ describe('AT-PROC-005: Process Terminated Detection', () => {
       });
     }
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     expect(events.length).toBe(4);
 
     // Verify the alternating terminate/spawn pattern

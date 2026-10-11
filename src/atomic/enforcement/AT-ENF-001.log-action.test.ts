@@ -3,15 +3,16 @@
 // Tests that 'log' action records event without process manipulation.
 // Verifies the simplest enforcement path: event in, log result out.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
-import type { SecurityEvent } from '../../harness/adapter';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-ENF-001: Log Enforcement Action', () => {
-  let arp: ArpWrapper;
+describeWithCapability('enforcement-log', 'AT-ENF-001: Log Enforcement Action', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: [
         {
@@ -40,7 +41,7 @@ describe('AT-ENF-001: Log Enforcement Action', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('log', mockEvent);
 
     expect(result.action).toBe('log');
@@ -60,7 +61,7 @@ describe('AT-ENF-001: Log Enforcement Action', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('log', mockEvent);
 
     expect(result.action).toBe('log');
@@ -80,7 +81,7 @@ describe('AT-ENF-001: Log Enforcement Action', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('log', mockEvent);
 
     expect(result.reason).toBeDefined();

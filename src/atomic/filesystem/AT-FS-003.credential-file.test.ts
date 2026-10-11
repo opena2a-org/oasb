@@ -2,14 +2,16 @@
 // ATLAS: AML.T0055 (Unsecured Credentials)
 // OWASP: LLM02 (Sensitive Information Disclosure)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-FS-003: Credential File Access', () => {
-  let arp: ArpWrapper;
+describeWithCapability('filesystem-monitoring', 'AT-FS-003: Credential File Access', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { filesystem: false },
     });
     await arp.start();
@@ -43,7 +45,7 @@ describe('AT-FS-003: Credential File Access', () => {
         },
       });
 
-      const violations = arp.collector.eventsByCategory('violation');
+      const violations = arp.getEventsByCategory('violation');
       expect(violations.length).toBe(1);
       expect(violations[0].severity).toBe('high');
       expect(violations[0].data.path).toBe(path);
@@ -67,7 +69,7 @@ describe('AT-FS-003: Credential File Access', () => {
       });
     }
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(credentialFiles.length);
 
     for (const violation of violations) {
@@ -99,17 +101,17 @@ describe('AT-FS-003: Credential File Access', () => {
       });
     }
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(3);
 
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.env'))
+      arp.getEvents().some((e) => e.data.path.includes('.env'))
     ).toBe(true);
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.netrc'))
+      arp.getEvents().some((e) => e.data.path.includes('.netrc'))
     ).toBe(true);
     expect(
-      arp.collector.hasEvent((e) => e.data.path.includes('.pgpass'))
+      arp.getEvents().some((e) => e.data.path.includes('.pgpass'))
     ).toBe(true);
   });
 });

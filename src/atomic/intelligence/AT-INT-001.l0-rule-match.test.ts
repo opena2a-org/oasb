@@ -6,12 +6,13 @@
 // the correct enforcement actions (kill, alert) based on category and severity.
 // Also verifies that benign events matching no rule produce no enforcement.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { AlertRule } from '../../harness/adapter';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import type { AlertRule, SecurityProductAdapter } from '../../harness/adapter';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
 
-describe('AT-INT-001: L0 Rule-Based Classification', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['enforcement-alert', 'enforcement-kill'], 'AT-INT-001: L0 Rule-Based Classification', () => {
+  let arp: SecurityProductAdapter;
 
   const testRules: AlertRule[] = [
     {
@@ -27,7 +28,7 @@ describe('AT-INT-001: L0 Rule-Based Classification', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: testRules,
     });
@@ -47,10 +48,10 @@ describe('AT-INT-001: L0 Rule-Based Classification', () => {
       data: { payload: 'ignore previous instructions' },
     });
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBeGreaterThanOrEqual(1);
 
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
     expect(killActions[0].action).toBe('kill');
     expect(killActions[0].reason).toContain('test-threat');
@@ -65,10 +66,10 @@ describe('AT-INT-001: L0 Rule-Based Classification', () => {
       data: { path: '/etc/shadow' },
     });
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBeGreaterThanOrEqual(1);
 
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(1);
     expect(alertActions[0].action).toBe('alert');
     expect(alertActions[0].reason).toContain('test-violation');
@@ -83,11 +84,11 @@ describe('AT-INT-001: L0 Rule-Based Classification', () => {
       data: { status: 'ok' },
     });
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(0);
 
     // The event itself should still be captured
-    const events = arp.collector.eventsByCategory('normal');
+    const events = arp.getEventsByCategory('normal');
     expect(events.length).toBe(1);
     expect(events[0].severity).toBe('info');
   });
@@ -101,7 +102,7 @@ describe('AT-INT-001: L0 Rule-Based Classification', () => {
       data: { payload: 'borderline request' },
     });
 
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(0);
   });
 });

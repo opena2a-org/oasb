@@ -6,15 +6,17 @@
 // (e.g., root) when the agent itself is running as a non-root user.
 // Privilege escalation in agent child processes indicates potential exploitation.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import * as os from 'os';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-PROC-004: Privilege Escalation Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('process-monitoring', 'AT-PROC-004: Privilege Escalation Detection', () => {
+  let arp: SecurityProductAdapter;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false },
     });
     await arp.start();
@@ -37,7 +39,7 @@ describe('AT-PROC-004: Privilege Escalation Detection', () => {
       },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
     expect(violations[0].data.user).toBe('root');
@@ -59,14 +61,14 @@ describe('AT-PROC-004: Privilege Escalation Detection', () => {
       },
     });
 
-    const normals = arp.collector.eventsByCategory('normal');
+    const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(1);
     expect(normals[0].data.user).toBe(currentUser);
     expect(normals[0].severity).toBe('info');
     expect(normals[0].category).toBe('normal');
 
     // No violations should exist
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(0);
   });
 
@@ -100,12 +102,12 @@ describe('AT-PROC-004: Privilege Escalation Detection', () => {
       data: { pid: 40005, user: currentUser, command: 'node api.js' },
     });
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].data.user).toBe('root');
     expect(violations[0].data.pid).toBe(40004);
 
-    const normals = arp.collector.eventsByCategory('normal');
+    const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(2);
     for (const event of normals) {
       expect(event.data.user).toBe(currentUser);

@@ -9,12 +9,21 @@
 // This test documents the gap and verifies that multi-source events are
 // at least individually captured and enforced.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../harness/arp-wrapper';
-import type { AlertRule } from '../harness/adapter';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { AlertRule, SecurityEvent, SecurityProductAdapter } from '../harness/adapter';
 
-describe('INT-006: Multi-Monitor Event Correlation', () => {
-  let arp: ArpWrapper;
+/** Events the adapter collected in the last windowMs, from one source or from all. */
+function recentEvents(adapter: SecurityProductAdapter, windowMs: number, source?: string): SecurityEvent[] {
+  const since = Date.now() - windowMs;
+  return adapter
+    .getEvents()
+    .filter((e) => (!e.timestamp || Date.parse(e.timestamp) >= since) && (!source || e.source === source));
+}
+
+describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-monitoring', 'enforcement-alert', 'enforcement-kill'], 'INT-006: Multi-Monitor Event Correlation', () => {
+  let arp: SecurityProductAdapter;
 
   const correlationRules: AlertRule[] = [
     {
@@ -35,7 +44,7 @@ describe('INT-006: Multi-Monitor Event Correlation', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: correlationRules,
     });
@@ -93,16 +102,16 @@ describe('INT-006: Multi-Monitor Event Correlation', () => {
     });
 
     // Verify events from all 3 sources
-    const processEvents = arp.collector.eventsBySource('process');
-    const networkEvents = arp.collector.eventsBySource('network');
-    const filesystemEvents = arp.collector.eventsBySource('filesystem');
+    const processEvents = arp.getEvents().filter((e) => e.source === 'process');
+    const networkEvents = arp.getEvents().filter((e) => e.source === 'network');
+    const filesystemEvents = arp.getEvents().filter((e) => e.source === 'filesystem');
 
     expect(processEvents.length).toBe(1);
     expect(networkEvents.length).toBe(2); // 1 injected + 1 cross-monitor correlation
     expect(filesystemEvents.length).toBe(2); // 1 injected + 1 cross-monitor correlation
 
     // All injected events share the same attackId (correlation events may not)
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(5); // 3 injected + 2 cross-monitor correlation
     const injectedEvents = allEvents.filter((e) => e.data.attackId === 'coordinated-001');
     expect(injectedEvents.length).toBe(3);
@@ -136,15 +145,15 @@ describe('INT-006: Multi-Monitor Event Correlation', () => {
       data: { path: '/app/.env', attackId: 'coordinated-002' },
     });
 
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(4); // 3 rule matches + 1 cross-monitor correlation
 
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(2);
     expect(alertActions[0].reason).toContain('process-violation');
     expect(alertActions[1].reason).toContain('filesystem-violation');
 
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(2); // 1 injected network threat + 1 correlation
     expect(killActions[0].reason).toContain('network-threat');
   });
@@ -165,7 +174,7 @@ describe('INT-006: Multi-Monitor Event Correlation', () => {
     }
 
     // Events should be in order by timestamp
-    const collectedEvents = arp.collector.getEvents();
+    const collectedEvents = arp.getEvents();
     expect(collectedEvents.length).toBe(5); // 3 injected + 2 cross-monitor correlation
 
     for (let i = 0; i < collectedEvents.length - 1; i++) {
@@ -199,14 +208,14 @@ describe('INT-006: Multi-Monitor Event Correlation', () => {
       data: { path: '/app/.env', attackId: 'buffer-001' },
     });
 
-    // Query the engine buffer for recent events
-    const recentAll = arp.getEngine().getRecentEvents(60000); // 1 minute window
+    // Query the adapter for recent events
+    const recentAll = recentEvents(arp, 60000); // 1 minute window
     expect(recentAll.length).toBe(5); // 3 injected + 2 cross-monitor correlation
 
     // Query by source (network and filesystem each get an extra correlation event)
-    const recentProcess = arp.getEngine().getRecentEvents(60000, 'process');
-    const recentNetwork = arp.getEngine().getRecentEvents(60000, 'network');
-    const recentFilesystem = arp.getEngine().getRecentEvents(60000, 'filesystem');
+    const recentProcess = recentEvents(arp, 60000, 'process');
+    const recentNetwork = recentEvents(arp, 60000, 'network');
+    const recentFilesystem = recentEvents(arp, 60000, 'filesystem');
 
     expect(recentProcess.length).toBe(1);
     expect(recentNetwork.length).toBe(2);
@@ -246,7 +255,7 @@ describe('INT-006: Multi-Monitor Event Correlation', () => {
 
     // All events share the same attackId, but ARP processes them independently
     // Cross-monitor correlation adds 2 synthetic events
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(5); // 3 injected + 2 cross-monitor correlation
 
     // Injected events retain their severity; correlation events are critical
@@ -256,7 +265,7 @@ describe('INT-006: Multi-Monitor Event Correlation', () => {
     expect(criticalEvents.length).toBe(3); // 1 injected network threat + 2 correlation
 
     // Each event triggers its own enforcement independently
-    const enforcements = arp.collector.getEnforcements();
+    const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(4); // 3 from injected + 1 from correlation matching rules
   });
 });

@@ -2,11 +2,13 @@
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM02 (Sensitive Information Disclosure)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-NET-005: Exfiltration Destination Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('network-monitoring', 'AT-NET-005: Exfiltration Destination Detection', () => {
+  let arp: SecurityProductAdapter;
 
   const exfilDestinations = [
     { host: 'transfer.sh', description: 'file transfer service' },
@@ -15,7 +17,7 @@ describe('AT-NET-005: Exfiltration Destination Detection', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { network: false },
     });
     await arp.start();
@@ -42,7 +44,7 @@ describe('AT-NET-005: Exfiltration Destination Detection', () => {
         },
       });
 
-      const threats = arp.collector.eventsByCategory('threat');
+      const threats = arp.getEventsByCategory('threat');
       expect(threats.length).toBeGreaterThanOrEqual(1);
 
       const exfilThreat = threats.find((e) => e.data.remoteAddr === host);
@@ -70,15 +72,15 @@ describe('AT-NET-005: Exfiltration Destination Detection', () => {
       });
     }
 
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(exfilDestinations.length);
 
-    const criticalEvents = arp.collector.eventsBySeverity('critical');
+    const criticalEvents = arp.getEvents().filter((e) => e.severity === 'critical');
     expect(criticalEvents.length).toBe(exfilDestinations.length);
 
     for (const { host } of exfilDestinations) {
       expect(
-        arp.collector.hasEvent(
+        arp.getEvents().some(
           (e) =>
             e.data.remoteAddr === host && e.data.threatType === 'exfiltration'
         )
@@ -103,7 +105,7 @@ describe('AT-NET-005: Exfiltration Destination Detection', () => {
       });
     }
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     const exfilEvents = allEvents.filter(
       (e) => e.data.threatType === 'exfiltration'
     );

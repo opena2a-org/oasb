@@ -7,16 +7,16 @@
 // still function correctly and capture threat events. The L2 intelligence
 // layer becomes unavailable, but the deterministic rule engine continues.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { ArpWrapper } from '../harness/arp-wrapper';
+import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
-import type { AlertRule, BudgetManager } from '../harness/adapter';
+import type { AlertRule, BudgetManager, SecurityProductAdapter } from '../harness/adapter';
 
-describe('INT-007: Budget Exhaustion Attack', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['budget-management', 'process-monitoring', 'network-monitoring', 'enforcement-alert', 'enforcement-kill'], 'INT-007: Budget Exhaustion Attack', () => {
+  let arp: SecurityProductAdapter;
   let budgetDir: string;
 
   const threatRules: AlertRule[] = [
@@ -34,7 +34,7 @@ describe('INT-007: Budget Exhaustion Attack', () => {
 
   beforeEach(async () => {
     budgetDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arp-budget-test-'));
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: threatRules,
     });
@@ -133,13 +133,13 @@ describe('INT-007: Budget Exhaustion Attack', () => {
     });
 
     // L0 rules still capture the event
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].severity).toBe('critical');
     expect(threats[0].data.budgetExhausted).toBe(true);
 
     // L0 kill rule still triggers enforcement
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
     expect(killActions[0].reason).toContain('critical-threat');
   });
@@ -197,17 +197,17 @@ describe('INT-007: Budget Exhaustion Attack', () => {
     });
 
     // L0 rules still detect the real attack
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
 
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(2); // 1 injected + 1 cross-monitor correlation
 
     // Enforcement still fires
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(1);
 
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(2); // 1 injected threat + 1 correlation
 
     // Document: L2 assessment cannot run because budget is exhausted.

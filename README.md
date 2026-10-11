@@ -23,7 +23,7 @@ npm test                    # Full suite: 344 tests (343 pass, 1 skip)
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 222 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **344 tests** (343 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests** and **97 pinned benchmark harness tests**. "222" is the scenario count; "343 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks and the changelog's line width (`npm run test:scripts`), which these counts do not include.
+> **Counts.** `npm test` runs **344 tests** (343 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests** and **97 pinned benchmark harness tests**. "222" is the scenario count; "343 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
 
 Run one group at a time:
 
@@ -66,7 +66,7 @@ OASB_ADAPTER=rebuff npm test          # the rebuff npm package
 OASB_ADAPTER=./my-adapter.js npm test # your own adapter module
 ```
 
-Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL - a prompt-only scanner is not penalized for lacking filesystem monitoring. This keeps scorecards honest and comparable.
+Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL - a prompt-only scanner is not penalized for lacking filesystem monitoring. This keeps scorecards honest and comparable. A suite that spans several surfaces, such as an integration chain that injects process and network events and expects a kill, runs only when the product declares every one of them.
 
 | Surface | ARP (reference) | llm-guard | rebuff |
 |---------|:---:|:---:|:---:|

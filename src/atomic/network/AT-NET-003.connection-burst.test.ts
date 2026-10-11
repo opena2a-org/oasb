@@ -2,16 +2,18 @@
 // ATLAS: AML.T0034.002 (Agentic Resource Consumption)
 // OWASP: LLM10 (Unbounded Consumption)
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArpWrapper } from '../../harness/arp-wrapper';
+import { it, expect, beforeEach, afterEach } from 'vitest';
+import { describeWithCapability } from '../../harness/capabilities';
+import { createAdapter } from '../../harness/create-adapter';
+import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describe('AT-NET-003: Connection Burst Detection', () => {
-  let arp: ArpWrapper;
+describeWithCapability('network-monitoring', 'AT-NET-003: Connection Burst Detection', () => {
+  let arp: SecurityProductAdapter;
 
   const BURST_COUNT = 15;
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { network: false },
     });
     await arp.start();
@@ -38,7 +40,7 @@ describe('AT-NET-003: Connection Burst Detection', () => {
       });
     }
 
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(BURST_COUNT);
   });
 
@@ -59,10 +61,10 @@ describe('AT-NET-003: Connection Burst Detection', () => {
       });
     }
 
-    const anomalies = arp.collector.eventsByCategory('anomaly');
+    const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(BURST_COUNT);
 
-    const warnings = arp.collector.eventsBySeverity('warning');
+    const warnings = arp.getEvents().filter((e) => e.severity === 'warning');
     expect(warnings.length).toBe(BURST_COUNT);
   });
 
@@ -83,7 +85,7 @@ describe('AT-NET-003: Connection Burst Detection', () => {
       });
     }
 
-    const events = arp.collector.getEvents();
+    const events = arp.getEvents();
     for (let i = 0; i < BURST_COUNT; i++) {
       expect(events[i].data.burstIndex).toBe(i);
     }

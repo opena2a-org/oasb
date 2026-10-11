@@ -9,13 +9,15 @@
 // 2. ARP itself remains running and can process new events after the kill
 // 3. The enforcement result contains correct metadata
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
 import { ArpWrapper } from '../harness/arp-wrapper';
-import type { SecurityEvent, AlertRule } from '../harness/adapter';
+import { describeWithCapability } from '../harness/capabilities';
+import { createAdapter } from '../harness/create-adapter';
+import type { SecurityEvent, AlertRule, SecurityProductAdapter } from '../harness/adapter';
 
-describe('INT-008: Kill Switch and Recovery', () => {
-  let arp: ArpWrapper;
+describeWithCapability(['process-monitoring', 'network-monitoring', 'enforcement-alert', 'enforcement-kill'], 'INT-008: Kill Switch and Recovery', () => {
+  let arp: SecurityProductAdapter;
   let childProcess: ChildProcess | null = null;
 
   const killRules: AlertRule[] = [
@@ -32,7 +34,7 @@ describe('INT-008: Kill Switch and Recovery', () => {
   ];
 
   beforeEach(async () => {
-    arp = new ArpWrapper({
+    arp = createAdapter({
       monitors: { process: false, network: false, filesystem: false },
       rules: killRules,
     });
@@ -119,7 +121,7 @@ describe('INT-008: Kill Switch and Recovery', () => {
     };
 
     // Execute kill action via enforcement engine
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('kill', mockEvent, pid);
 
     expect(result.action).toBe('kill');
@@ -150,7 +152,7 @@ describe('INT-008: Kill Switch and Recovery', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('kill', mockEvent, fakePid);
 
     expect(result.action).toBe('kill');
@@ -171,7 +173,7 @@ describe('INT-008: Kill Switch and Recovery', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const result = await enforcement.execute('kill', mockEvent);
 
     expect(result.action).toBe('kill');
@@ -195,7 +197,7 @@ describe('INT-008: Kill Switch and Recovery', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     const killResult = await enforcement.execute('kill', mockEvent, pid);
     expect(killResult.success).toBe(true);
 
@@ -221,19 +223,19 @@ describe('INT-008: Kill Switch and Recovery', () => {
 
     // Verify events were captured after the kill
     // (includes 1 cross-monitor correlation event from network + process sources)
-    const allEvents = arp.collector.getEvents();
+    const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(3);
 
-    const normalEvents = arp.collector.eventsByCategory('normal');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(1);
     expect(normalEvents[0].data.eventAfterKill).toBe(true);
 
-    const violations = arp.collector.eventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].data.newThreat).toBe(true);
 
     // Enforcement still works after kill
-    const alertActions = arp.collector.enforcementsByAction('alert');
+    const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(1);
   });
 
@@ -255,11 +257,11 @@ describe('INT-008: Kill Switch and Recovery', () => {
     });
 
     // Verify the threat was captured
-    const threats = arp.collector.eventsByCategory('threat');
+    const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
 
     // Verify kill enforcement was triggered by the rule
-    const killActions = arp.collector.enforcementsByAction('kill');
+    const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
     expect(killActions[0].reason).toContain('critical-threat-kill');
 
@@ -284,17 +286,21 @@ describe('INT-008: Kill Switch and Recovery', () => {
       classifiedBy: 'L0-rules',
     };
 
-    const enforcement = arp.getEnforcement();
+    const enforcement = arp.getEnforcementEngine();
     await enforcement.execute('kill', mockEvent, pid);
     await waitForProcessExit(pid);
 
-    // ARP's underlying instance should still be accessible
-    const instance = arp.getInstance();
-    expect(instance).toBeDefined();
-    expect(instance.isRunning()).toBe(true);
+    // ARP's underlying instance should still be accessible. Instance status is
+    // not part of SecurityProductAdapter, so only the reference adapter is
+    // checked here; for every adapter, the engine below must accept events.
+    if (arp instanceof ArpWrapper) {
+      const instance = arp.getInstance();
+      expect(instance).toBeDefined();
+      expect(instance.isRunning()).toBe(true);
+    }
 
     // Engine should still accept events
-    const engine = arp.getEngine();
+    const engine = arp.getEventEngine();
     const newEvent = await engine.emit({
       source: 'heartbeat',
       category: 'normal',
@@ -308,7 +314,7 @@ describe('INT-008: Kill Switch and Recovery', () => {
     expect(newEvent.classifiedBy).toBe('L0-rules');
 
     // Collector should capture the heartbeat
-    const heartbeats = arp.collector.eventsBySource('heartbeat');
+    const heartbeats = arp.getEvents().filter((e) => e.source === 'heartbeat');
     expect(heartbeats.length).toBe(1);
     expect(heartbeats[0].data.systemCheck).toBe(true);
   });
