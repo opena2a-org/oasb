@@ -138,7 +138,7 @@ Adapter: `arp-guard` v0.3.0 (re-exports `hackmyagent/arp`)
 | AT-AI-002 | Prompt output scanning (OL patterns, data leak prevention) | 6 | PASS |
 | AT-AI-003 | MCP tool call scanning (path traversal, cmd injection, SSRF) | 11 | PASS |
 | AT-AI-004 | A2A message scanning (identity spoofing, delegation abuse) | 7 | PASS |
-| AT-AI-005 | Pattern coverage (all 19 patterns detect known payloads) | 5 | PASS |
+| AT-AI-005 | Pattern coverage (all 20 patterns detect known payloads) | 5 | PASS |
 
 ### Integration Tests (38 tests)
 

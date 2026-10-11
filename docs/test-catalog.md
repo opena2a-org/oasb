@@ -17,7 +17,7 @@ Discrete tests that exercise individual detection capabilities. Each test inject
 | AT-AI-002 | Prompt output scanning - OL pattern detection, data leak prevention (6 tests) |
 | AT-AI-003 | MCP tool call scanning - path traversal, command injection, SSRF, allowlist (11 tests) |
 | AT-AI-004 | A2A message scanning - identity spoofing, delegation abuse, trust validation (7 tests) |
-| AT-AI-005 | Pattern coverage - all 19 patterns detect known payloads, no false positives (5 tests) |
+| AT-AI-005 | Pattern coverage - every pattern the scanner exposes has a known payload that triggers it, no false positives (5 tests) |
 
 </details>
 

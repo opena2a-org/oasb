@@ -414,6 +414,13 @@ stay on record here with the reason they changed.
   The `allowedTools: ['*']` line in `scripts/export-registry-corpus.mjs` is
   243, not 233. `scripts/doc-facts.test.mjs` reads the corpus and the script
   and fails when the last three statements no longer match them.
+- AT-AI-005 now fails when a pattern the scanner exposes has no known
+  payload, and it has payloads for JB-003 (hypothetical bypass) and MCP-004
+  (runtime MCP tool registration or override), the two of the reference
+  build's 20 patterns it never exercised. Its first test checked only that
+  there were at least 18 patterns. The test count is unchanged.
+  `docs/test-catalog.md` and REPORT.md's AT-AI-005 row no longer say the test
+  covers 19 patterns.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
