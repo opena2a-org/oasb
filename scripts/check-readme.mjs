@@ -40,18 +40,22 @@
 //      (AT-NET-001/002); a skipped one must be written out in full and
 //      followed by "(skipped", as in "E2E-003 (skipped)". Like the counts,
 //      this reads the suite, so --no-counts skips it.
-//   7. a paragraph, table row or heading that offers the Scanner Benchmark
+//   8. a paragraph, table row or heading that offers the Scanner Benchmark
 //      for comparing products calls it a recall-only comparison. Its benign
 //      class was labeled by HackMyAgent, one of the scanners it compares, so
 //      only recall on the malicious samples is comparable across products.
 //      Retire this check when the benchmark has a benign set that no scanner
 //      under test labeled.
+//   9. a linked .md page whose file name carries a date (YYYY-MM-DD) says
+//      "as of <that date>" and links to the README above its first H2. Its
+//      counts are those of that day and are not compared with the suite, so
+//      the page itself sends the reader to the README for the current ones.
 //
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
@@ -198,12 +202,19 @@ function linkTargets(prose) {
   return targets;
 }
 
+const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
+
+// The linked .md pages whose file name carries a date, each with the first
+// README line that links it. Read by check 7.
+const DATE_IN_NAME = /\d{4}-\d{2}-\d{2}/;
+const datedPages = new Map();
+
 for (const { n, line, inFence } of readme) {
   if (inFence) continue;
   const prose = line.replace(/`[^`]*`/g, '');
   for (const target of linkTargets(prose)) {
     if (!target) continue;
-    if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue; // http:, https:, mailto:
+    if (ABSOLUTE.test(target)) continue;
     const [pathPart, anchor] = target.split('#');
     const file = pathPart ? resolve(dirname(readmePath), decodeURIComponent(pathPart)) : readmePath;
     if (!existsSync(file)) {
@@ -212,6 +223,9 @@ for (const { n, line, inFence } of readme) {
     }
     if (anchor && /\.md$/i.test(file) && !anchorsOf(file).has(decodeURIComponent(anchor).toLowerCase())) {
       fail(`line ${n}: anchor "#${anchor}" has no matching heading in ${pathPart || 'README.md'}.`);
+    }
+    if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file)) {
+      datedPages.set(file, { n, shown: pathPart });
     }
   }
 }
@@ -534,6 +548,41 @@ for (const { n, line } of readme) {
           'check the OASB-1 controls; the attack scenarios run with npm test).',
       );
     }
+  }
+}
+
+// 7. A dated page the README links says it is one. Nothing compares its
+// counts with the suite, so above its first H2 it says "as of <the date in
+// its file name>" and links to the README. The note may be wrapped and may
+// sit in a blockquote; text in a code block or inline code is not the note.
+for (const [file, { n, shown }] of datedPages) {
+  const date = basename(file).match(DATE_IN_NAME)[0];
+  const page = parse(readFileSync(file, 'utf8'));
+  const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
+  const intro = (h2 === -1 ? page : page.slice(0, h2))
+    .filter((l) => !l.inFence && !l.fenceOpen && !l.fenceClose)
+    .map((l) => l.line.replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
+  const toReadme = (target) => {
+    const pathPart = target.split('#')[0];
+    if (!pathPart || ABSOLUTE.test(target)) return false;
+    try {
+      return resolve(dirname(file), decodeURIComponent(pathPart)) === readmePath;
+    } catch {
+      return false; // a malformed %-escape names no file
+    }
+  };
+  const missing = [];
+  if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {
+    missing.push(`say "as of ${date}"`);
+  }
+  if (!intro.some((line) => linkTargets(line).some(toReadme))) {
+    missing.push('link to the README for the current figures');
+  }
+  if (missing.length) {
+    fail(
+      `line ${n}: "${shown}" is a dated page, so above its first H2 it must ${missing.join(' and ')}; ` +
+        `its counts are those of ${date} and are not compared with the suite.`,
+    );
   }
 }
 

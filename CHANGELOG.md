@@ -374,6 +374,19 @@ stay on record here with the reason they changed.
   npm does not install it. The example now installs arp-guard too.
   `scripts/library-entry.test.mjs` builds the package and loads it where
   arp-guard cannot be resolved.
+- `docs/AUDIT-2026-06-03.md` is marked as of 2026-06-03 and sends the reader
+  to the README for the current test counts. Its table gives 23
+  scoring-engine tests and an `npm test` total of 245, the counts of that
+  day, under a first paragraph that said every count is measured from
+  `npm test`. Two statements that did not hold when it was written are
+  corrected and dated. The one skipped E2E test is disabled on every
+  platform; the page said it is skipped when `lsof` or `ss` is unavailable.
+  Under `OASB_ADAPTER=llm-guard` the process, network, filesystem and
+  enforcement suites pass, because they construct the arp-guard adapter
+  directly whichever adapter is selected; follow-up 1 said they report
+  failures. `npm run check:readme` now fails when a page the README links
+  under a dated file name does not say "as of" that date and link to the
+  README above its first H2.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

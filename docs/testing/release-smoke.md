@@ -22,8 +22,12 @@ the claims this repository publishes:
    double-quoted title), reference definitions at the start of a line
    (`[label]: path`) and quoted HTML `href` attributes. It checks a `#anchor`
    only in links to `.md` files. Other forms, such as an unquoted `href` or a
-   definition inside a list item, are not checked. Reference detail belongs
-   in `docs/` (for example `docs/test-catalog.md`), linked from the README.
+   definition inside a list item, are not checked. A linked `.md` page whose
+   file name carries a date (`docs/AUDIT-2026-06-03.md`) must say "as of"
+   that date and link to the README above its first H2: its counts are those
+   of that day and nothing compares them with the suite. Reference detail
+   belongs in `docs/` (for example `docs/test-catalog.md`), linked from the
+   README.
    This step runs the checker with `--no-counts`: vitest is not installed
    yet, and step 3 compares the test counts with the suite's report. After
    `npm ci`, the tests in `scripts/` (`npm run test:scripts`) run: the tests

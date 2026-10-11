@@ -17,13 +17,15 @@ const USAGE = /^usage: node scripts\/check-readme\.mjs \[--tests <report\.json> 
 
 const HEAD = '# Title\n\n## Quick Start\n\n```bash\nnpm test\n```\n\n## Guide\n\n';
 
-// Write a README (layout checks pass) plus docs/guide.md, run the check on it
+// Write a README (layout checks pass) plus docs/guide.md and any other pages
+// given by their path from the README's directory, run the check on it
 // without the test count check.
-function check(body) {
+function check(body, pages = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
   try {
     mkdirSync(join(dir, 'docs'));
     writeFileSync(join(dir, 'docs', 'guide.md'), '# Guide\n\n## Setup steps\n');
+    for (const [path, text] of Object.entries(pages)) writeFileSync(join(dir, path), text);
     writeFileSync(join(dir, 'README.md'), HEAD + body);
     const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
     return { status: r.status, stderr: r.stderr };
@@ -547,7 +549,7 @@ test('links inside inline code and fenced blocks are ignored', () => {
   assert.equal(r.status, 0, r.stderr);
 });
 
-const RECALL_ONLY_FAILURE = /the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison/;
+const RECALL_ONLY_FAILURE =/the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison/;
 
 test('a paragraph that offers the Scanner Benchmark for comparing products fails until it says recall-only', () => {
   const offer =
@@ -591,6 +593,81 @@ test('the Scanner Benchmark and a product comparison in different blocks pass', 
 test("this repository's README offers the Scanner Benchmark only as a recall-only comparison", () => {
   const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
   assert.doesNotMatch(r.stderr, RECALL_ONLY_FAILURE);
+  assert.equal(r.status, 0, r.stderr);
+});
+
+// A page whose file name carries a date, linked from line 11 of the README,
+// with the given text above its first H2 and a count of that day below it.
+const DATED_LINK = 'For the audit, see [docs/AUDIT-2026-06-03.md](docs/AUDIT-2026-06-03.md).\n';
+const datedPage = (intro) => ({
+  'docs/AUDIT-2026-06-03.md': `# Audit\n\n${intro}\n## Counts\n\n| npm test total | 245 |\n`,
+});
+const DATED = /^README: line 11: "docs\/AUDIT-2026-06-03\.md" is a dated page, so above its first H2 it must /m;
+
+test('a dated page the README links fails until it says "as of" its date and links to the README', () => {
+  const bare = check(DATED_LINK, datedPage('Every count in this document is measured from `npm test`.\n'));
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, DATED);
+  assert.match(
+    bare.stderr,
+    /it must say "as of 2026-06-03" and link to the README for the current figures; its counts are those of 2026-06-03 and are not compared with the suite\./,
+  );
+
+  const noLink = check(DATED_LINK, datedPage('> **As of 2026-06-03.** See the README for current counts.\n'));
+  assert.equal(noLink.status, 1);
+  assert.match(noLink.stderr, /it must link to the README for the current figures; /);
+
+  const otherDate = check(DATED_LINK, datedPage('> As of 2026-06-05, see the [README](../README.md).\n'));
+  assert.equal(otherDate.status, 1);
+  assert.match(otherDate.stderr, /it must say "as of 2026-06-03"; /);
+
+  const otherPage = check(DATED_LINK, datedPage('> As of 2026-06-03. See the [guide](guide.md) for current counts.\n'));
+  assert.equal(otherPage.status, 1);
+  assert.match(otherPage.stderr, /it must link to the README for the current figures; /);
+
+  const belowTheCounts = check(DATED_LINK, {
+    'docs/AUDIT-2026-06-03.md':
+      '# Audit\n\n## Counts\n\n| npm test total | 245 |\n\nAs of 2026-06-03; see the [README](../README.md).\n',
+  });
+  assert.equal(belowTheCounts.status, 1);
+  assert.match(belowTheCounts.stderr, DATED);
+});
+
+test('a dated page is reported once, at the first line that links it', () => {
+  const r = check(DATED_LINK + '\n' + DATED_LINK, datedPage('Measured from `npm test`.\n'));
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.match(/is a dated page/g).length, 1, r.stderr);
+  assert.match(r.stderr, DATED);
+});
+
+test('a dated page that says "as of" its date and links to the README passes, on one line or wrapped', () => {
+  const oneLine = check(
+    DATED_LINK,
+    datedPage('> **As of 2026-06-03.** For current counts see the [README](../README.md#quick-start).\n'),
+  );
+  assert.equal(oneLine.status, 0, oneLine.stderr);
+
+  const wrapped = check(
+    DATED_LINK,
+    datedPage('> The counts below are as of\n> 2026-06-03 and are kept as recorded; the\n> [README](../README.md) has the current ones.\n'),
+  );
+  assert.equal(wrapped.status, 0, wrapped.stderr);
+});
+
+test('a note inside a code block or inline code does not mark a dated page', () => {
+  const r = check(
+    DATED_LINK,
+    datedPage('```md\n> As of 2026-06-03, see the [README](../README.md).\n```\n\nWrite `as of 2026-06-03` and `[README](../README.md)`.\n'),
+  );
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /it must say "as of 2026-06-03" and link to the README for the current figures; /);
+});
+
+test('the dated pages this repository\'s README links say "as of" their date and link to the README', () => {
+  const readme = readFileSync(join(repo, 'README.md'), 'utf8');
+  assert.match(readme, /\]\(docs\/AUDIT-2026-06-03\.md\)/, 'the README no longer links the 2026-06-03 audit');
+  const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
+  assert.doesNotMatch(r.stderr, /is a dated page/);
   assert.equal(r.status, 0, r.stderr);
 });
 
