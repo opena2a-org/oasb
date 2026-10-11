@@ -178,3 +178,86 @@ test('the command prints the usage for --help and names the field a report lacks
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Run the command on a report and README written to a temporary directory;
+// `args` maps their two paths to the command's arguments.
+function runCommand(report, args = (reportPath, readmePath) => [reportPath, readmePath]) {
+  const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-'));
+  try {
+    writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+    writeFileSync(join(dir, 'README.md'), README);
+    return spawnSync(process.execPath, [script, ...args(join(dir, 'report.json'), join(dir, 'README.md'))], { encoding: 'utf8' });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('arguments the command does not take print the usage on stderr and exit 1', () => {
+  const usage = /^usage: node scripts\/check-test-counts\.mjs <vitest-results\.json> \[path\/to\/README\.md\]$/m;
+  for (const [what, args] of [
+    ['no arguments', () => []],
+    ['a third argument', (report, readme) => [report, readme, readme]],
+    ['an unknown flag first', (report, readme) => ['--verbose', report, readme]],
+    ['an unknown flag after the paths', (report, readme) => [report, readme, '--ci']],
+    ['an unknown flag in place of the README', report => [report, '--ci']],
+  ]) {
+    const r = runCommand(suite(), args);
+    assert.equal(r.status, 1, what);
+    assert.match(r.stderr, usage, what);
+    assert.equal(r.stdout, '', what);
+  }
+});
+
+test('a report without one of the suite counts is reported by the field it lacks', () => {
+  for (const field of ['numTotalTests', 'numPassedTests', 'numPendingTests']) {
+    const report = suite();
+    delete report[field];
+    const r = runCommand(report);
+    assert.equal(r.status, 1, field);
+    assert.match(
+      r.stderr,
+      new RegExp(`^cannot read the test report .*report\\.json: it has no "${field}" count, so it is not a vitest JSON report$`, 'm'),
+    );
+    assert.doesNotMatch(r.stderr, /DRIFT/, field);
+  }
+});
+
+test('a testResults entry without a name or assertionResults list is reported by the entry', () => {
+  for (const [what, change] of [
+    ['no assertionResults', file => ({ name: file.name })],
+    ['no name', file => ({ assertionResults: file.assertionResults })],
+    ['a null entry', () => null],
+  ]) {
+    const report = suite();
+    report.testResults[2] = change(report.testResults[2]);
+    const r = runCommand(report);
+    assert.equal(r.status, 1, what);
+    assert.match(
+      r.stderr,
+      /^cannot read the test report .*report\.json: testResults\[2\] has no "name" or no "assertionResults" list; write the report with: /m,
+      what,
+    );
+    assert.doesNotMatch(r.stderr, /Cannot read properties/, what);
+  }
+});
+
+test('an assertionResults entry that is not a test result with a status is reported by the entry', () => {
+  for (const entry of [null, 'passed', {}, { status: 1 }]) {
+    const report = suite();
+    report.testResults[1].assertionResults[1] = entry;
+    const r = runCommand(report);
+    assert.equal(r.status, 1, JSON.stringify(entry));
+    assert.match(
+      r.stderr,
+      /^cannot read the test report .*report\.json: testResults\[1\]\.assertionResults\[1\] is not a test result with a "status"; write the report with: /m,
+      JSON.stringify(entry),
+    );
+  }
+});
+
+test('a README path that does not exist is named, with no stack trace', () => {
+  const r = runCommand(suite(), (report, readme) => [report, join(dirname(readme), 'missing.md')]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^cannot read the README .*missing\.md: ENOENT: no such file or directory, open '.*missing\.md'\n$/);
+  assert.doesNotMatch(r.stderr, /^\s+at /m);
+});

@@ -181,6 +181,33 @@ test('a report without testResults is reported by the field it lacks', () => {
   assert.doesNotMatch(r.stderr, /Cannot read properties/);
 });
 
+test('a report entry that is not a file or test result is reported by the entry', () => {
+  for (const [testResults, entry] of [
+    [[{ name: '/x/src/atomic/a.test.ts' }], 'testResults\\[0\\] has no "name" or no "assertionResults" list'],
+    [[{ name: '/x/src/atomic/a.test.ts', assertionResults: [null] }], 'testResults\\[0\\]\\.assertionResults\\[0\\] is not a test result with a "status"'],
+    [[{ name: '/x/src/atomic/a.test.ts', assertionResults: [{ status: 'passed' }, {}] }], 'testResults\\[0\\]\\.assertionResults\\[1\\] is not a test result with a "status"'],
+  ]) {
+    const r = checkCounts(COUNTED, SUITE, { testResults });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, new RegExp(`^README: cannot read the test report .*report\\.json: ${entry}; write the report with: `, 'm'));
+    assert.doesNotMatch(r.stderr, /Cannot read properties/);
+  }
+});
+
+test('a README path that does not exist is named, with no stack trace', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-missing-'));
+  try {
+    const missing = join(dir, 'missing.md');
+    for (const args of [['--no-counts', missing], [missing]]) {
+      const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+      assert.equal(r.status, 1, args.join(' '));
+      assert.equal(r.stderr, `README: cannot read the README ${missing}: ENOENT: no such file or directory, open '${missing}'\n`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('--help prints the usage on stdout and exits 0', () => {
   for (const flag of ['--help', '-h']) {
     const r = spawnSync(process.execPath, [script, flag], { encoding: 'utf8' });
@@ -221,6 +248,37 @@ test(
       );
     } finally {
       rmSync(tmp, { recursive: true, force: true });
+    }
+  },
+);
+
+// The adapters src/harness/create-adapter.ts selects by OASB_ADAPTER besides
+// the default. The README counts are those of the default adapter, so these
+// are collected with `vitest list`, which collects as the check does.
+const OTHER_ADAPTERS = ['llm-guard', 'rebuff'];
+
+test(
+  'collecting the suite with each other adapter leaves no adapter directory',
+  { skip: !vitestInstalled && 'vitest is not installed; run npm ci', timeout: 300_000 },
+  () => {
+    for (const adapter of OTHER_ADAPTERS) {
+      const tmp = mkdtempSync(join(tmpdir(), 'check-readme-collect-'));
+      try {
+        const r = spawnSync(process.execPath, [join(repo, 'node_modules', 'vitest', 'vitest.mjs'), 'list'], {
+          cwd: repo,
+          encoding: 'utf8',
+          env: { ...process.env, OASB_ADAPTER: adapter, TMPDIR: tmp, TMP: tmp, TEMP: tmp },
+        });
+        assert.equal(r.status, 0, `${adapter}: ${r.stderr}`);
+        assert.match(r.stdout, /^src\/atomic\/ai-layer\/AT-AI-001\.prompt-input-scan\.test\.ts > /m, adapter);
+        assert.deepEqual(
+          readdirSync(tmp).filter((name) => /^(arp|llmg|rbuf)-lab-/.test(name)),
+          [],
+          `collecting the suite with OASB_ADAPTER=${adapter} left adapter data directories in the temp directory`,
+        );
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
     }
   },
 );

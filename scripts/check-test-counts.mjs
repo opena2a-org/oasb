@@ -143,7 +143,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(usage);
     process.exit(1);
   }
-  const readme = readFileSync(resolve(readmeArg || join(root, 'README.md')), 'utf8');
+  const readmePath = resolve(readmeArg || join(root, 'README.md'));
+  let readme;
+  try {
+    readme = readFileSync(readmePath, 'utf8');
+  } catch (err) {
+    console.error(`cannot read the README ${readmePath}: ${err.message}`);
+    process.exit(1);
+  }
   let counted;
   try {
     counted = compareCounts(JSON.parse(readFileSync(resultsPath, 'utf8')), readme);

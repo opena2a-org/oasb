@@ -115,7 +115,13 @@ function anchors(lines) {
   return out;
 }
 
-const readmeText = readFileSync(readmePath, 'utf8');
+let readmeText;
+try {
+  readmeText = readFileSync(readmePath, 'utf8');
+} catch (err) {
+  console.error(`README: cannot read the README ${readmePath}: ${err.message}`);
+  process.exit(1);
+}
 const readme = parse(readmeText);
 
 // 1. Length budget.

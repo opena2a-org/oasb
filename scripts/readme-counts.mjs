@@ -75,7 +75,7 @@ export function sourcePath(name) {
 
 /**
  * The per-file results of a vitest JSON report (`vitest run --reporter=json`),
- * or an error that names the field the report lacks.
+ * or an error that names the field or the entry the report lacks.
  */
 export function reportFiles(report) {
   const write = 'write the report with: npx vitest run --reporter=json --outputFile=<report.json>';
@@ -86,6 +86,11 @@ export function reportFiles(report) {
     if (typeof file?.name !== 'string' || !Array.isArray(file.assertionResults)) {
       throw new Error(`testResults[${i}] has no "name" or no "assertionResults" list; ${write}`);
     }
+    file.assertionResults.forEach((test, j) => {
+      if (typeof test?.status !== 'string') {
+        throw new Error(`testResults[${i}].assertionResults[${j}] is not a test result with a "status"; ${write}`);
+      }
+    });
   });
   return report.testResults;
 }

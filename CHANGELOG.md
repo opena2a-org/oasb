@@ -142,14 +142,19 @@ stay on record here with the reason they changed.
   in another checkout is read by each file's path from its `src/` directory,
   as the drift guard reads it; it was read relative to the checkout running
   the check, so every count taken from a test file's directory mismatched
-  (the total, passing and skipped counts did not). A report without
-  `testResults` is reported by that field instead of a JavaScript error, and
-  `--help` prints the usage on stdout and exits 0 in both README checks. The
+  (the total, passing and skipped counts did not). In both README checks, a
+  report without `testResults`, a `testResults` entry without a `name` or an
+  `assertionResults` list, and a test result that is not an object with a
+  `status` are each reported by that field or entry instead of a JavaScript
+  error, a README path that does not exist is reported by its path instead of
+  a stack trace, and `--help` prints the usage on stdout and exits 0. The
   statements both checks compare are one list, `STATEMENTS` in
   `scripts/readme-counts.mjs`; each check kept its own copy before, and a
   reworded sentence had to be updated in both. The tests of both checks run
   after `npm ci` in `npm run smoke`, and include one that changes each count
-  of a README in turn and one that runs `npm run check:readme` on this README.
+  of a README in turn, one that runs `npm run check:readme` on this README,
+  and one that collects the suite with the llm-guard and rebuff adapters; the
+  last two fail when collecting leaves an adapter data directory.
 - Constructing an adapter no longer creates its data directory: the ARP
   adapter creates its ARP instance and the directory on first use, and the
   llm-guard and rebuff adapters create the directory when `dataDir` is first
