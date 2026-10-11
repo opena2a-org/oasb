@@ -249,9 +249,19 @@ test('an assertionResults entry that is not a test result with a status is repor
     assert.equal(r.status, 1, JSON.stringify(entry));
     assert.match(
       r.stderr,
-      /^cannot read the test report .*report\.json: testResults\[1\]\.assertionResults\[1\] is not a test result with a "status"; write the report with: /m,
+      /^cannot read the test report .*report\.json: testResults\[1\]\.assertionResults\[1\] is not a test result with a string "status"; write the report with: /m,
       JSON.stringify(entry),
     );
+  }
+});
+
+test('a test result whose status is not a string is reported as one, not as a result without a status', () => {
+  for (const entry of [{ status: 1 }, { status: null }, { status: true }, { status: ['passed'] }]) {
+    const report = suite();
+    report.testResults[0].assertionResults[0] = entry;
+    const r = runCommand(report);
+    assert.equal(r.status, 1, JSON.stringify(entry));
+    assert.match(r.stderr, /testResults\[0\]\.assertionResults\[0\] is not a test result with a string "status"; /, JSON.stringify(entry));
   }
 });
 

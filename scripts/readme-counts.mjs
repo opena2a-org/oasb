@@ -88,7 +88,7 @@ export function reportFiles(report) {
     }
     file.assertionResults.forEach((test, j) => {
       if (typeof test?.status !== 'string') {
-        throw new Error(`testResults[${i}].assertionResults[${j}] is not a test result with a "status"; ${write}`);
+        throw new Error(`testResults[${i}].assertionResults[${j}] is not a test result with a string "status"; ${write}`);
       }
     });
   });
