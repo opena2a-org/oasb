@@ -41,6 +41,7 @@
     "@types/node": "^20.0.0",
     "arp-guard": "^0.3.0",
     "llm-guard": "^0.1.8",
+    "rebuff": "^0.1.0",
     "typescript": "^5.3.3",
     "vitest": "^3.0.0"
   },

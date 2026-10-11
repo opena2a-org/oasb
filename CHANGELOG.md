@@ -266,6 +266,24 @@ stay on record here with the reason they changed.
   `src/harness/create-adapter.test.ts` load an adapter from a temporary
   directory by a `./` path, a `../` path and an absolute path, and the README
   counts them in a new Adapter loading row of What Gets Tested.
+- `OASB_ADAPTER=rebuff` now runs the heuristic detection of the rebuff npm
+  package, as the README says. rebuff was not a dev dependency, so `npm ci`
+  did not install it, and its published package holds TypeScript sources
+  only, which Node cannot require: the adapter caught the failed load, scored
+  every input 0 and scanned with its own `RBUF-*` patterns alone, with no
+  message. rebuff 0.1.0 is now a dev dependency, and
+  `src/harness/rebuff-loader.ts` compiles the sources the heuristic needs in
+  memory with the `typescript` dev dependency. An input that only the
+  heuristic catches ("Pay no attention to prior messages") is reported as
+  `RBUF-HEUR-001`; it was not detected before. When rebuff or typescript is
+  not installed, each scan throws an error that names the package and how to
+  install it, instead of returning a result; when the install does not hold
+  the heuristic, the error names the source file and the reason. Constructing
+  the adapter still needs neither package. Five tests in
+  `src/harness/rebuff-wrapper.test.ts` cover the loading, a missing or
+  incomplete rebuff install and the failed scan; none covers a missing
+  typescript. The rebuff figures in `REPORT.md` were measured before this
+  change and have not been re-measured.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

@@ -22,6 +22,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { EventCollector } from './event-collector';
+import { loadRebuffHeuristic } from './rebuff-loader';
+import type { RebuffHeuristic } from './rebuff-loader';
 import type {
   SecurityProductAdapter,
   SecurityEvent,
@@ -42,34 +44,14 @@ import type {
   CapabilityMatrix,
 } from './adapter';
 
-// Lazy-loaded rebuff heuristic detection
-let _detectHeuristic: ((input: string) => number) | null = null;
-let _normalizeString: ((str: string) => string) | null = null;
+// Lazy-loaded rebuff heuristic detection. A scan throws when rebuff cannot be
+// loaded: scanning with the patterns below alone would report results under
+// rebuff's name that rebuff did not produce.
+let _detectHeuristic: RebuffHeuristic | null = null;
 
-function getHeuristicDetector(): (input: string) => number {
-  if (!_detectHeuristic) {
-    try {
-      const detect = require('rebuff/src/lib/detect');
-      _detectHeuristic = detect.detectPromptInjectionUsingHeuristicOnInput;
-    } catch {
-      // Fallback: rebuff not available, use built-in patterns only
-      _detectHeuristic = () => 0;
-    }
-  }
-  return _detectHeuristic!;
-}
-
-function getNormalizeString(): (str: string) => string {
-  if (!_normalizeString) {
-    try {
-      const prompts = require('rebuff/src/lib/prompts');
-      _normalizeString = prompts.normalizeString;
-    } catch {
-      _normalizeString = (str: string) =>
-        str.toLowerCase().replace(/[^\w\s]|_/g, '').replace(/\s+/g, ' ').trim();
-    }
-  }
-  return _normalizeString!;
+function getHeuristicDetector(): RebuffHeuristic {
+  if (!_detectHeuristic) _detectHeuristic = loadRebuffHeuristic();
+  return _detectHeuristic;
 }
 
 // ---- Rebuff-derived patterns for pattern scanner ----

@@ -4,7 +4,7 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-346%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-351%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
@@ -18,12 +18,12 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 347 tests (346 pass, 1 skip)
+npm test                    # Full suite: 352 tests (351 pass, 1 skip)
 ```
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 222 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **347 tests** (346 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **97 pinned benchmark harness tests** and the adapter-loading tests in `src/harness`. "222" is the scenario count; "346 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
+> **Counts.** `npm test` runs **352 tests** (351 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **97 pinned benchmark harness tests** and the adapter tests in `src/harness`. "222" is the scenario count; "351 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
 
 Run one group at a time:
 
@@ -65,6 +65,8 @@ OASB_ADAPTER=llm-guard npm test       # the llm-guard npm package
 OASB_ADAPTER=rebuff npm test          # the rebuff npm package
 OASB_ADAPTER=./my-adapter.js npm test # your own adapter module
 ```
+
+The rebuff adapter runs the package's heuristic detection. rebuff publishes TypeScript sources only, so the adapter compiles them with the `typescript` dev dependency; when either package is missing, each scan fails with an error that names it.
 
 Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL - a prompt-only scanner is not penalized for lacking filesystem monitoring. This keeps scorecards honest and comparable. A suite that spans several surfaces, such as an integration chain that injects process and network events and expects a kill, runs only when the product declares every one of them.
 
@@ -146,7 +148,8 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Scoring-engine unit tests | 25 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names |
 | Pinned benchmark harness tests | 97 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
 | Adapter loading | 3 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory |
-| **`npm test` total** | **347** | (346 pass, 1 skipped on every platform) | |
+| Adapter tests | 5 | `src/harness` | The rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded |
+| **`npm test` total** | **352** | (351 pass, 1 skipped on every platform) | |
 
 ---
 
