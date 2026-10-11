@@ -15,8 +15,10 @@
  * Without an argument it reads test-results.json in the current directory, and
  * reports the mapping alone (every status N/A) when that file does not exist.
  * A results file named as the argument must exist: when it does not, no report
- * is written and the command exits 1 naming the path. The report itself is built by scripts/scenario-report.mjs. REPORT.md, which
- * is tracked, is the 2026-03-23 run kept as recorded and is not overwritten.
+ * is written and the command exits 1 naming the path and the command above
+ * that writes it. The report itself is built by scripts/scenario-report.mjs.
+ * REPORT.md, which is tracked, is the 2026-03-23 run kept as recorded and is
+ * not overwritten.
  */
 
 import * as path from 'path';

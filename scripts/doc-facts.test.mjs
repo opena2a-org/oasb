@@ -41,6 +41,18 @@ test('BENCHMARK-RESULTS.md states the source of each hand-authored benign sample
   }
 });
 
+// A number of tests or scenarios, with at most one word between them.
+const COUNT = /\b\d+\s+(?:\w+\s+)?(?:tests?|scenarios?)\b/i;
+
+test('the count pattern finds a count with or without a word before "tests" or "scenarios"', () => {
+  for (const line of ['# 222 attack scenarios', '# 222 tests', 'Type "Run all 223 Scenarios"', '1 benchmark test']) {
+    assert.ok(COUNT.test(line), `${line} is not found as a count`);
+  }
+  for (const line of ['# Step 1: Run the full benchmark (README.md states the test counts)', 'Type "npm test"', 'Sleep 8s']) {
+    assert.ok(!COUNT.test(line), `${line} is found as a count`);
+  }
+});
+
 test('docs/demo.tape states no test or scenario count', () => {
   // The tape is recorded once and kept, so a count in it goes stale as tests
   // are added; README.md states the counts, and scripts/check-readme.mjs
@@ -48,7 +60,7 @@ test('docs/demo.tape states no test or scenario count', () => {
   const counted = read('docs/demo.tape')
     .split('\n')
     .map((line, i) => `docs/demo.tape:${i + 1}: ${line.trim()}`)
-    .filter((line) => /\b\d+\s+(?:\w+\s+)?(?:tests?|scenarios?)\b/i.test(line.replace(/^[^ ]+ /, '')));
+    .filter((line) => COUNT.test(line.replace(/^[^ ]+ /, '')));
   assert.deepEqual(counted, [], 'refer to the counts README.md states instead');
 });
 

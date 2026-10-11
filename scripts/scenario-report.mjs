@@ -196,7 +196,8 @@ export function generateReport({ scenarios, results = null, date }) {
  * that does not exist gives null, so that the report holds the mapping alone;
  * that is for the default test-results.json, which a run may not have written.
  * A file named on the command line is required: one that does not exist, or
- * cannot be read or parsed, throws an error that names `path`.
+ * cannot be read or parsed, throws an error that names `path`. For one that
+ * does not exist it also gives the command that writes it.
  */
 export function readResults(path, required) {
   if (!required && !existsSync(path)) return null;
@@ -204,7 +205,11 @@ export function readResults(path, required) {
   try {
     text = readFileSync(path, 'utf8');
   } catch (err) {
-    throw new Error(err.code === 'ENOENT' ? `${path} does not exist` : `${path} cannot be read: ${err.message}`);
+    throw new Error(
+      err.code === 'ENOENT'
+        ? `${path} does not exist; write it with npx vitest run --reporter=json --outputFile=${path}`
+        : `${path} cannot be read: ${err.message}`,
+    );
   }
   try {
     return JSON.parse(text);

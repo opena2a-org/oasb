@@ -27,7 +27,7 @@
     "test:baseline": "vitest run src/baseline/",
     "test:e2e": "vitest run src/e2e/",
     "test:watch": "vitest",
-    "report": "npx tsx scripts/generate-report.ts"
+    "report": "tsx scripts/generate-report.ts"
   },
   "peerDependencies": {
     "arp-guard": ">=0.3.0"
@@ -42,6 +42,7 @@
     "arp-guard": "^0.3.0",
     "llm-guard": "^0.1.8",
     "rebuff": "^0.1.0",
+    "tsx": "4.23.15",
     "typescript": "^5.3.3",
     "vitest": "^3.0.0"
   },

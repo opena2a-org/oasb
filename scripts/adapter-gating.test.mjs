@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 const vitest = join(repo, 'node_modules', 'vitest', 'vitest.mjs');
 
-// The 222 attack scenarios: atomic, integration, baseline and E2E.
+// The attack scenarios: atomic, integration, baseline and E2E.
 const SCENARIO_DIRS = ['src/atomic', 'src/integration', 'src/baseline', 'src/e2e'];
 
 // Declares no capabilities and throws from every other contract method.

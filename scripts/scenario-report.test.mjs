@@ -4,7 +4,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -167,13 +168,94 @@ test('the report is written beside the recorded REPORT.md, to a name git ignores
     rmSync(dir, { recursive: true, force: true });
   }
   // .gitignore is read rather than asking git, which cannot answer in a source
-  // archive without git metadata or on a machine without git. The last line
-  // that names the file decides, as it does for git.
-  const named = readFileSync(join(repo, '.gitignore'), 'utf8')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.replace(/^!?\/?/, '') === REPORT_FILE);
-  assert.ok(named.length > 0 && !named.at(-1).startsWith('!'), `.gitignore does not list ${REPORT_FILE}`);
+  // archive without git metadata or on a machine without git.
+  const gitignore = readFileSync(join(repo, '.gitignore'), 'utf8');
+  assert.ok(gitignoreIgnores(gitignore, REPORT_FILE), `.gitignore does not ignore ${REPORT_FILE}`);
+});
+
+/**
+ * Whether a root .gitignore holding `text` ignores the file `name` at the
+ * repository root, decided as git decides it (gitignore(5)): the last pattern
+ * that matches wins, a leading "!" re-includes, a trailing "/" matches only
+ * directories, "\" escapes a character, and "*", "?", "[...]" and "**" are
+ * globs that do not match "/". POSIX class names such as [[:alpha:]] are not
+ * read.
+ */
+function gitignoreIgnores(text, name) {
+  assert.ok(!name.includes('/'), `${name} is not at the repository root`);
+  let ignored = false;
+  for (const line of text.split(/\r?\n/)) {
+    let pattern = line.replace(/(?<!\\) +$/, '');
+    if (pattern === '' || pattern.startsWith('#')) continue;
+    const negated = pattern.startsWith('!');
+    if (negated) pattern = pattern.slice(1);
+    if (pattern.endsWith('/')) continue;
+    if (globRegExp(pattern.replace(/^\//, '')).test(name)) ignored = !negated;
+  }
+  return ignored;
+}
+
+/** A gitignore glob as an anchored regular expression over a path. */
+function globRegExp(glob) {
+  const literal = (c) => c.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  let re = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '\\' && i + 1 < glob.length) {
+      re += literal(glob[++i]);
+    } else if (c === '*' && glob[i + 1] === '*' && (i === 0 || glob[i - 1] === '/') && [undefined, '/'].includes(glob[i + 2])) {
+      // "**" as a whole segment: "**/" matches any leading directories, "/**" all inside.
+      re += glob[i + 2] === undefined ? '.*' : '(?:.*/)?';
+      i += 2;
+    } else if (c === '*') {
+      re += '[^/]*';
+    } else if (c === '?') {
+      re += '[^/]';
+    } else if (c === '[') {
+      // A "]" right after "[" or "[!" is one of the class's characters.
+      const negated = glob[i + 1] === '!' || glob[i + 1] === '^';
+      const start = i + (negated ? 2 : 1);
+      const end = glob.indexOf(']', start + 1);
+      if (end < 0) {
+        re += '\\[';
+        continue;
+      }
+      re += `[${negated ? '^' : ''}${glob.slice(start, end).replace(/[\]\\^]/g, '\\$&')}]`;
+      i = end;
+    } else {
+      re += literal(c);
+    }
+  }
+  return new RegExp(`^${re}$`);
+}
+
+test('the .gitignore reading decides as git does for a file at the root', () => {
+  const cases = [
+    ['REPORT.generated.md', true],
+    ['/REPORT.generated.md', true],
+    ['**/REPORT.generated.md', true],
+    ['REPORT.generated.md   ', true],
+    ['REPORT.*.md', true],
+    ['REPORT.?enerated.md', true],
+    ['REPORT.[gG]enerated.md', true],
+    ['REPORT.[!g]enerated.md', false],
+    ['*.md', true],
+    ['**', true],
+    ['REPORT.generated.md\n!*.md', false],
+    ['*.md\n!REPORT.generated.md', false],
+    ['!*.md\nREPORT.generated.md', true],
+    ['REPORT.generated.md/', false],
+    ['docs/REPORT.generated.md', false],
+    ['# REPORT.generated.md', false],
+    ['\\#REPORT.generated.md', false],
+    ['REPORT', false],
+    ['REPORT.generated.m', false],
+    ['REPORT.generated.md.bak', false],
+    ['REPORTxgenerated.md', false],
+  ];
+  for (const [text, ignored] of cases) {
+    assert.equal(gitignoreIgnores(text, REPORT_FILE), ignored, JSON.stringify(text));
+  }
 });
 
 test('a results file named on the command line must exist; the default one may be absent', () => {
@@ -181,7 +263,10 @@ test('a results file named on the command line must exist; the default one may b
   try {
     const missing = join(dir, 'nonexistent-results.json');
     assert.equal(readResults(missing, false), null);
-    assert.throws(() => readResults(missing, true), (err) => err.message === `${missing} does not exist`);
+    assert.throws(
+      () => readResults(missing, true),
+      (err) => err.message === `${missing} does not exist; write it with npx vitest run --reporter=json --outputFile=${missing}`,
+    );
 
     const results = join(dir, 'test-results.json');
     writeFileSync(results, '{"numTotalTests": 0, "testResults": []}');
@@ -190,6 +275,31 @@ test('a results file named on the command line must exist; the default one may b
 
     writeFileSync(results, 'not json');
     assert.throws(() => readResults(results, false), (err) => err.message.startsWith(`${results} is not JSON: `));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('npm run report exits 1 and writes nothing when the named results file does not exist', () => {
+  // Runs scripts/generate-report.ts as npm run report does, through the pinned tsx.
+  const tsx = join(repo, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const script = join(repo, 'scripts', 'generate-report.ts');
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
+  try {
+    const missing = join(dir, 'nonexistent-results.json');
+    const named = spawnSync(process.execPath, [tsx, script, missing], { cwd: dir, encoding: 'utf8' });
+    assert.equal(named.status, 1, named.stderr);
+    assert.equal(
+      named.stderr.trim(),
+      `Report not written: ${missing} does not exist; write it with npx vitest run --reporter=json --outputFile=${missing}`,
+    );
+    assert.equal(existsSync(join(dir, REPORT_FILE)), false);
+
+    // Without an argument the absent default test-results.json is not an error,
+    // so the same run in the same directory writes the mapping alone.
+    const unnamed = spawnSync(process.execPath, [tsx, script], { cwd: dir, encoding: 'utf8' });
+    assert.equal(unnamed.status, 0, unnamed.stderr);
+    assert.match(readFileSync(join(dir, REPORT_FILE), 'utf8'), /\| N\/A \|/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

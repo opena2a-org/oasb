@@ -514,17 +514,26 @@ stay on record here with the reason they changed.
   job uses.
 - `scripts/placeholder-credentials.test.mjs` reports an OpenAI-shaped key
   written right after an escape sequence, such as `\n` or `\x3D`, or after a
-  percent-encoded byte, such as `%3D`. The letter or digit that ends one did
-  not count as the start of a key, so the test passed such a value.
+  percent-encoded byte, such as `%3D`. A key after the letter or digit that
+  ends one was read as the middle of a word, so the test passed such a value.
 - `scripts/scenario-report.test.mjs` reads `.gitignore` to check that it
-  lists `REPORT.generated.md`. It asked git, and so failed in a source
-  archive without git metadata or where git is not installed.
+  ignores `REPORT.generated.md`. It asked git, and so failed in a source
+  archive without git metadata or where git is not installed. It decides as
+  git does: the last line that matches the file decides, a glob such as
+  `REPORT.*.md` or `!*.md` included. It read only lines that name the file,
+  so a later `!*.md` passed the test although git then does not ignore it.
 - `npm run report` exits 1, writing no report, when the results file named
-  as its argument does not exist. It wrote a report with every status N/A
-  and exited 0, as it still does when no argument is given and
-  `test-results.json` does not exist.
+  as its argument does not exist, and names the `npx vitest run` command
+  that writes it. It wrote a report with every status N/A and exited 0, as
+  it still does when no argument is given and `test-results.json` does not
+  exist.
+- `npm run report` runs tsx 4.23.15, pinned as a devDependency. It ran
+  `npx tsx`, which downloaded the registry's current tsx when none was
+  installed.
 - `docs/demo.tape` states no test or scenario count. It said 222 tests and
   222 attack scenarios; the README states the counts.
+- `docs/demo.tape` runs from the root of any clone. Its hidden setup changed
+  into one checkout path under the home directory.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

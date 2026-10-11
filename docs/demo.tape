@@ -1,6 +1,6 @@
 # OASB (Open Agent Security Benchmark) Demo
 # Attack scenarios for evaluating agent security products
-# Run: vhs docs/demo.tape
+# Run from the repository root: vhs docs/demo.tape
 
 Output docs/oasb-demo.gif
 
@@ -14,9 +14,10 @@ Set Padding 20
 Set Framerate 30
 Set PlaybackSpeed 1.0
 
-# Hidden setup: navigate to OASB directory
+# Hidden setup: clear the screen. The shell starts in the directory vhs runs
+# in, the repository root.
 Hide
-Type "cd ~/workspace/opena2a-org/oasb && clear"
+Type "clear"
 Enter
 Sleep 500ms
 Show
