@@ -414,12 +414,13 @@ stay on record here with the reason they changed.
   `npm test`. Two statements that did not hold when it was written are
   corrected and dated. The one skipped E2E test is disabled on every
   platform; the page said it is skipped when `lsof` or `ss` is unavailable.
-  Under `OASB_ADAPTER=llm-guard` the process, network, filesystem and
-  enforcement suites pass, because they construct the arp-guard adapter
-  directly whichever adapter is selected; follow-up 1 said they report
-  failures. `npm run check:readme` now fails when a page the README links
-  under a dated file name does not say "as of" that date and link to the
-  README above its first H2.
+  On 2026-06-03, under `OASB_ADAPTER=llm-guard`, the process, network,
+  filesystem and enforcement suites passed, because they then constructed
+  the arp-guard adapter directly whichever adapter was selected; follow-up 1
+  said they report failures. They are gated now and report N/A (see the
+  `OASB_ADAPTER` entry above). `npm run check:readme` now fails when a page
+  the README links under a dated file name does not say "as of" that date
+  and link to the README above its first H2.
 - Four statements in the README and `BENCHMARK-RESULTS.md` are corrected to
   match the data. The ATLAS sentence said the AI-agent technique family was
   added in 2025; of the agent techniques mapped here, AML.T0081 and
