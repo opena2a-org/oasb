@@ -59,6 +59,15 @@ the claims this repository publishes:
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.
 
+## The README checks on every pull request
+
+`npm test` runs `npm run test:scripts` first (its `pretest` script), so the CI
+job, which runs `npm test`, runs the tests of both README checks before the
+suite. One of them runs `npm run check:readme` on this README, so a pull
+request that adds or removes a test without updating the README's counts
+fails CI, not only the next release smoke. To run the suite without them, use
+`npx vitest run` or one of the `npm run test:*` groups.
+
 ## Why these guards exist
 
 - 2026-07-13: the README's "244 passing" claim and the published benchmark's

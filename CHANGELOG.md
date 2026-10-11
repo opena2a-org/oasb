@@ -185,6 +185,13 @@ stay on record here with the reason they changed.
   every row of the What Gets Tested table. It read three of them before, and
   passed a badge lower than the passing count. Its tests run with
   `npm run test:scripts`.
+- `npm test` runs the tests of both README checks (`npm run test:scripts`)
+  before the suite, so the pull request CI job and the release workflow, which
+  run `npm test`, run them too. They ran only in `npm run smoke` before, so a
+  pull request could change a README check, or add a test without updating
+  the README's counts, and pass CI. They are not vitest tests and do not
+  change the totals the README states. `npx vitest run` and the
+  `npm run test:*` groups run the suite without them.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of seven tests, so committing a run no longer changes the
   `npm test` total. Its check that at least one

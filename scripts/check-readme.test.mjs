@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -437,4 +437,28 @@ test('links inside inline code and fenced blocks are ignored', () => {
       '```md\n[x]: docs/nowhere.md\n```\n',
   );
   assert.equal(r.status, 0, r.stderr);
+});
+
+// The tests in scripts/ are not vitest tests, so `npm test` reaches them
+// through its pretest script, and the CI job reaches them through `npm test`.
+const npmScripts = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).scripts;
+
+test('npm run test:scripts runs every test file in scripts/', () => {
+  const run = npmScripts['test:scripts'].split(' ');
+  const files = readdirSync(join(repo, 'scripts')).filter((name) => name.endsWith('.test.mjs'));
+  assert.ok(files.includes('check-readme.test.mjs'), `scripts/ was not read: ${files.join(', ')}`);
+  for (const name of files) {
+    assert.ok(run.includes(`scripts/${name}`), `npm run test:scripts does not run scripts/${name}`);
+  }
+});
+
+test('npm test runs the tests in scripts/ before the suite, and the CI job runs npm test', () => {
+  assert.equal(
+    npmScripts.pretest,
+    'npm run test:scripts',
+    'npm test does not run the tests in scripts/: its pretest script is not "npm run test:scripts"',
+  );
+  const ci = readFileSync(join(repo, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const steps = ci.split('\n').filter((line) => /^ +run: npm test( |$)/.test(line) && !line.includes('--ignore-scripts'));
+  assert.notDeepEqual(steps, [], 'no step of the CI job runs npm test with its pretest script');
 });

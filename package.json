@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "pretest": "npm run test:scripts",
     "test": "vitest run",
     "smoke": "bash scripts/release-smoke.sh",
     "check:readme": "node scripts/check-readme.mjs",
