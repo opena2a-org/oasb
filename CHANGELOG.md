@@ -485,8 +485,8 @@ stay on record here with the reason they changed.
   inherits, such as `constructor` or `toString`. It threw a TypeError for
   those.
 - `scripts/placeholder-credentials.test.mjs` no longer reports a hyphenated
-  word that has "sk" before a hyphen, such as `risk-management-framework`, as
-  an OpenAI-shaped key.
+  word that has "sk" before a hyphen, such as a `risk-` compound with twenty
+  or more letters and hyphens after the hyphen, as an OpenAI-shaped key.
 - AT-AI-002's AWS output-leak test is named for the access key ID, the part
   of the payload OL-001 matches, and checks that OL-001 is the pattern that
   matched. It was named for a secret key, which OL-001 does not detect.

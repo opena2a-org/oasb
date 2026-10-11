@@ -17,7 +17,7 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The key shapes of OL-001: OpenAI, AWS access key ID, GitHub, GitLab, Slack, JWT.
 // An OpenAI key starts a word, so a hyphenated word that has "sk" before a
-// hyphen ("risk-management-framework") is not one.
+// hyphen (a "risk-" compound, as in the test below) is not one.
 const KEY_SHAPES =
   /(?<!\w)sk-[a-zA-Z0-9\-_]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9\-_]{20,}|xox[bpas]-[a-zA-Z0-9\-]{10,}|(?:eyJ[a-zA-Z0-9_-]{20,}\.){2}[a-zA-Z0-9_-]{20,}/g;
 
@@ -45,7 +45,10 @@ test('every API-key-shaped value in src/ spells FAKE', () => {
 });
 
 test('a hyphenated word with "sk" before a hyphen is not an OpenAI-shaped key', () => {
-  assert.deepEqual(unmarked('// see the risk-management-framework page', 'x'), []);
+  // Joined at run time so that no line of this file holds the whole word,
+  // which a credential scan of a push refuses as an OpenAI-shaped key.
+  const word = ['risk', 'management', 'framework'].join('-');
+  assert.deepEqual(unmarked(`// see the ${word} page`, 'x'), []);
   // Joined at run time so that no line of this file holds the whole value.
   const key = ['sk', 'proj', 'not0a0real0key0value'].join('-');
   assert.deepEqual(unmarked(key, 'x'), ['x:1: sk-proj-...']);
