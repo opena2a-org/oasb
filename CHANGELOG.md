@@ -209,6 +209,12 @@ stay on record here with the reason they changed.
   the option as best effort, as Node 26's `fetch` does, so a reset connection
   fails only its own request, and a new test resets a connection at that
   point.
+- `src/benchmark/pinned/pinned.test.ts` now ignores every error the
+  type-of-service option raises, as Node 26's `fetch` does, instead of only
+  EINVAL. A platform that reports another errno for a torn-down socket no
+  longer fails `npm test` with an unhandled error, and a new test checks the
+  option for EINVAL, ECONNRESET, ENOTCONN, EBADF, ENOPROTOOPT and an error
+  with no errno.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

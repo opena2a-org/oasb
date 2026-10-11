@@ -337,24 +337,27 @@ async function listen(): Promise<{ server: Server; port: number }> {
  * before it writes the first request, and a failure there escapes as an
  * uncaught error. On macOS the option fails with EINVAL once the peer has reset
  * the connection, which the stand-in daemons here do on purpose, and under load
- * the reset can arrive first. Node 26's fetch treats the option as best
- * effort; do the same while this file runs, so a dropped connection fails the
+ * the reset can arrive first; another platform can report another errno for a
+ * socket that is already torn down. Node 26's fetch ignores any error from the
+ * option; do the same while this file runs, so a dropped connection fails the
  * request it dropped instead of the whole test run.
  */
-const socketPrototype = Socket.prototype as Socket & { setTypeOfService?: (tos: number) => Socket };
+type SetTypeOfService = (this: Socket, tos: number) => Socket;
+const socketPrototype = Socket.prototype as Socket & { setTypeOfService?: SetTypeOfService };
 const setTypeOfService = socketPrototype.setTypeOfService;
 
-beforeAll(() => {
-  if (!setTypeOfService) return;
-  socketPrototype.setTypeOfService = function (this: Socket, tos: number) {
+function bestEffort(set: SetTypeOfService): SetTypeOfService {
+  return function (this: Socket, tos: number) {
     try {
-      return setTypeOfService.call(this, tos);
-    } catch (err) {
-      const { code, syscall } = err as NodeJS.ErrnoException;
-      if (code === 'EINVAL' && syscall === 'setTypeOfService') return this;
-      throw err;
+      return set.call(this, tos);
+    } catch {
+      return this;
     }
   };
+}
+
+beforeAll(() => {
+  if (setTypeOfService) socketPrototype.setTypeOfService = bestEffort(setTypeOfService);
 });
 
 afterAll(() => {
@@ -1319,6 +1322,23 @@ describe('a stand-in daemon that resets a connection before the request is writt
       diagnosticsChannel.unsubscribe('undici:client:connected', hold);
       process.off('uncaughtException', onUncaught);
       await daemon.terminate();
+    }
+  });
+
+  it('raises no error from the type-of-service option, whatever error the platform reports', () => {
+    // macOS reports EINVAL for a reset connection; other platforms can report
+    // another errno for a socket that is already torn down.
+    const errors: Error[] = ['EINVAL', 'ECONNRESET', 'ENOTCONN', 'EBADF', 'ENOPROTOOPT'].map(code =>
+      Object.assign(new Error(`setTypeOfService ${code}`), { code, syscall: 'setTypeOfService' }),
+    );
+    errors.push(new Error('not an errno error'));
+    for (const error of errors) {
+      const socket = new Socket();
+      const set = bestEffort(() => {
+        throw error;
+      });
+      expect(() => set.call(socket, 0x10), error.message).not.toThrow();
+      expect(set.call(socket, 0x10)).toBe(socket);
     }
   });
 });
