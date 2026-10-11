@@ -138,10 +138,11 @@ README's test counts do not include them.
   sha256, that a pull request is read from its base to its head and a push
   from its previous head to its new head, and that the scheduled run reads
   the full history. Its last test weakens a copy of the workflow in each of
-  those ways and fails when no other test fails on the copy. It does not
-  check the workflow's concurrency settings, under which a later run can
-  cancel one before its scan finishes, or which version of the checkout
-  action the job uses.
+  those ways and fails when no other test fails on the copy; the change to
+  the checksum step is made only where `sha256sum` is installed, as the
+  test that catches it runs only there. It does not check the workflow's
+  concurrency settings, under which a later run can cancel one before its
+  scan finishes, or which version of the checkout action the job uses.
 
 ## The README checks on every pull request
 

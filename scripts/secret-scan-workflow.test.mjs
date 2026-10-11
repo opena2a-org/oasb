@@ -6,7 +6,9 @@
 // pull request is read from its base to its head and a push from its
 // previous head to its new head, and the scheduled run reads the full
 // history. The last test makes each of those changes to a copy of the
-// workflow and checks that one of the other tests then fails.
+// workflow and checks that one of the other tests then fails; the change to
+// the checksum step is made only where sha256sum is installed, as the test
+// that catches it runs only there.
 // It does not check the workflow's concurrency settings, under which a later
 // run can cancel one before its scan finishes, or which version of the
 // checkout action the job uses.
@@ -353,8 +355,11 @@ for (const check of checks) {
 }
 
 // Each change weakens the secret scan, and one of the tests above must fail
-// on the workflow it leaves.
+// on the workflow it leaves. A fourth element, when truthy, is the reason the
+// change is not made here: the test that catches it is skipped for the same
+// reason.
 const weakenings = [
+  ['the pull request trigger is removed', '  pull_request:\n    branches: [main]\n', ''],
   ['the push trigger is removed', '  push:\n    branches: [main]\n', ''],
   ['the schedule trigger is removed', '  schedule:\n    - cron: "0 6 * * 1"\n', ''],
   ['the job runs only for pull requests', '    name: Secret Detection\n', "    name: Secret Detection\n    if: github.event_name == 'pull_request'\n"],
@@ -362,16 +367,25 @@ const weakenings = [
   ['the push scan may fail without failing the job', "        if: github.event_name == 'push'\n", "        if: github.event_name == 'push'\n        continue-on-error: true\n"],
   ['the push scan ignores its exit status', '--log-opts "$range" -v --redact', '--log-opts "$range" -v --redact || true'],
   ['the pull request scan sets its exit code to 0', '--log-opts "${BASE_SHA}..${HEAD_SHA}"', '--exit-code 0 --log-opts "${BASE_SHA}..${HEAD_SHA}"'],
+  ['the job token may write the repository', '    permissions:\n      contents: read\n', '    permissions:\n      contents: write\n'],
   ['the pull request scan reads only its head commit', '"${BASE_SHA}..${HEAD_SHA}"', '"${HEAD_SHA}~1..${HEAD_SHA}"'],
+  ['the push scan reads only its head commit', 'range="${BEFORE_SHA}..${AFTER_SHA}"', 'range="${AFTER_SHA}~1..${AFTER_SHA}"'],
+  ['the push scan has no fallback when the previous head is missing', 'range="${AFTER_SHA}"\n', 'range="${BEFORE_SHA}..${AFTER_SHA}"\n'],
   ['the scheduled scan reads no history', 'run: gitleaks detect ', 'run: gitleaks detect --no-git '],
   ['gitleaks is downloaded from another host', 'https://github.com/', 'https://mirror.example.invalid/'],
+  ['gitleaks is pinned to another version', 'GITLEAKS_VERSION: 8.30.1', 'GITLEAKS_VERSION: 8.30.0'],
   ['the pinned sha256 is another value', /(GITLEAKS_SHA256: )[0-9a-f]{64}/, `$1${'a'.repeat(64)}`],
+  ['the archive is unpacked whatever its sha256', 'if [ "$actual" != "$GITLEAKS_SHA256" ]; then', 'if [ "$actual" != "$actual" ]; then', !hasSha256sum && 'sha256sum is not installed here; the runner has it'],
   ['a step runs in another shell', "        if: github.event_name == 'schedule'\n", "        if: github.event_name == 'schedule'\n        shell: sh\n"],
 ];
 
 test('each weakening of the secret scan fails one of the tests above', (t) => {
   const missed = [];
-  for (const [what, from, to] of weakenings) {
+  for (const [what, from, to, skip] of weakenings) {
+    if (skip) {
+      t.diagnostic(`the change "${what}" was not made: ${skip}`);
+      continue;
+    }
     const text = workflowText.replace(from, to);
     assert.notEqual(text, workflowText, `the change "${what}" does not apply to security.yml`);
     const caught = checks.filter((check) => !check.skip).some((check) => {

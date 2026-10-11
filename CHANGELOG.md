@@ -506,10 +506,12 @@ stay on record here with the reason they changed.
   checksum's value and the step that checks it, the download host, the pull
   request range, the push range and its fallback, and the scheduled run's
   full history. Its last test weakens a copy of the workflow in each of
-  those ways and fails when no other test fails on the copy. It does not
-  check the workflow's concurrency settings, under which a later run can
-  cancel one before its scan finishes, or which version of the checkout
-  action the job uses.
+  those ways and fails when no other test fails on the copy; the change to
+  the step that checks the checksum is made only where `sha256sum` is
+  installed, as the test that catches it runs only there. It does not check
+  the workflow's concurrency settings, under which a later run can cancel
+  one before its scan finishes, or which version of the checkout action the
+  job uses.
 - `scripts/placeholder-credentials.test.mjs` reports an OpenAI-shaped key
   written right after an escape sequence, such as `\n` or `\x3D`, or after a
   percent-encoded byte, such as `%3D`. The letter or digit that ends one did
