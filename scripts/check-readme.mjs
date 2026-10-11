@@ -19,7 +19,7 @@
 //      comments, the scenario counts in the prose and in the
 //      `opena2a benchmark run` comment, and each row of the
 //      "What Gets Tested" table, counted per source directory. Without
-//      --tests the check collects the suite with vitest (nothing runs), so a
+//      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
 //      --tests it reads a vitest JSON report (`vitest run --reporter=json`)
 //      and compares it with the tests that passed. A stated count the check

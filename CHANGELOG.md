@@ -135,7 +135,7 @@ stay on record here with the reason they changed.
   in the `opena2a benchmark run` comment, and each row of the
   "What Gets Tested" table, per source directory. It read none of them, so a
   README with stale counts passed it. It collects the suite with vitest
-  (nothing runs), so it needs `npm ci` and compares each passing count with
+  (no test runs), so it needs `npm ci` and compares each passing count with
   the tests that are not skipped; `--tests <report.json>` compares with a
   vitest JSON report instead, and `--no-counts` skips the comparison, which
   the first step of `npm run smoke` uses before it installs.

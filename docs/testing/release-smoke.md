@@ -44,7 +44,7 @@ the claims this repository publishes:
    blocks the release - that is the point. Committing a run under `results/`
    does not change the totals: the run-of-record checks are a fixed set of
    tests. `npm run check:readme` compares the README's test counts without
-   a report, after `npm ci`: it collects the suite with vitest (nothing
+   a report, after `npm ci`: it collects the suite with vitest (no test
    runs) and compares each passing count with the tests that are not
    skipped, so it catches a stale count before a release without running the
    suite. It cannot tell a failing test from a passing one; this step can.
