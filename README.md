@@ -149,8 +149,7 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | **Attack scenarios** | **223** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 25 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names |
 | Pinned benchmark harness tests | 98 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
-| Adapter loading | 3 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory |
-| Adapter tests | 5 | `src/harness` | The rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded |
+| Adapter tests | 8 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded |
 | **`npm test` total** | **354** | (353 pass, 1 skipped on every platform) | |
 
 ---
