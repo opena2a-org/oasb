@@ -5,9 +5,11 @@
  *   - "arp" (default) — uses arp-guard (must be installed)
  *   - "llm-guard" — uses theRizwan/llm-guard
  *   - path to a JS/TS module that exports a class implementing SecurityProductAdapter
+ *     (a relative path such as ./my-adapter.js resolves from the working directory)
  *
  * All test files import from here instead of instantiating adapters directly.
  */
+import * as path from 'path';
 import type { SecurityProductAdapter, LabConfig } from './adapter';
 
 // Eagerly resolve the adapter class at import time.
@@ -17,32 +19,40 @@ import { ArpWrapper } from './arp-wrapper';
 import { LLMGuardWrapper } from './llm-guard-wrapper';
 import { RebuffWrapper } from './rebuff-wrapper';
 
-let AdapterClass: new (config?: LabConfig) => SecurityProductAdapter;
+type AdapterConstructor = new (config?: LabConfig) => SecurityProductAdapter;
 
-const adapterName = process.env.OASB_ADAPTER || 'arp';
+/**
+ * The specifier to require for a custom OASB_ADAPTER value. A relative path
+ * (./ or ../) resolves from `cwd`, not from this file; an absolute path or a
+ * package name is returned unchanged.
+ */
+export function adapterModulePath(adapterName: string, cwd: string = process.cwd()): string {
+  return /^\.\.?(?:[\\/]|$)/.test(adapterName) ? path.resolve(cwd, adapterName) : adapterName;
+}
 
-switch (adapterName) {
-  case 'arp':
-    AdapterClass = ArpWrapper;
-    break;
-  case 'llm-guard':
-    AdapterClass = LLMGuardWrapper;
-    break;
-  case 'rebuff':
-    AdapterClass = RebuffWrapper;
-    break;
-  default: {
-    // Custom adapter — loaded at module level
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require(adapterName);
-    const Cls = mod.default || mod.Adapter || mod[Object.keys(mod)[0]];
-    if (!Cls || typeof Cls !== 'function') {
-      throw new Error(`Module "${adapterName}" does not export an adapter class`);
+/** The adapter class an OASB_ADAPTER value selects. */
+export function resolveAdapterClass(adapterName: string, cwd: string = process.cwd()): AdapterConstructor {
+  switch (adapterName) {
+    case 'arp':
+      return ArpWrapper;
+    case 'llm-guard':
+      return LLMGuardWrapper;
+    case 'rebuff':
+      return RebuffWrapper;
+    default: {
+      // Custom adapter module
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require(adapterModulePath(adapterName, cwd));
+      const Cls = mod.default || mod.Adapter || mod[Object.keys(mod)[0]];
+      if (!Cls || typeof Cls !== 'function') {
+        throw new Error(`Module "${adapterName}" does not export an adapter class`);
+      }
+      return Cls;
     }
-    AdapterClass = Cls;
-    break;
   }
 }
+
+const AdapterClass = resolveAdapterClass(process.env.OASB_ADAPTER || 'arp');
 
 /**
  * Create a configured adapter instance.

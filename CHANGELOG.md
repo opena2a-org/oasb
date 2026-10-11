@@ -259,6 +259,13 @@ stay on record here with the reason they changed.
 - The README's What Gets Tested table calls the one skipped test "skipped on
   every platform", as its Counts note does. The table said
   "environment-skipped", but the test is skipped unconditionally.
+- A relative `OASB_ADAPTER` path, such as `OASB_ADAPTER=./my-adapter.js npm
+  test` from the README, resolves from the directory the command runs in. It
+  resolved from `src/harness/`, so the module was not found; an absolute path
+  or a package name loads as before. Three tests in
+  `src/harness/create-adapter.test.ts` load an adapter from a temporary
+  directory by a `./` path, a `../` path and an absolute path, and the README
+  counts them in a new Adapter loading row of What Gets Tested.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
