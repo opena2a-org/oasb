@@ -1,10 +1,12 @@
 # OASB Extension: Security Product Maturity Scorecard
 
+> **Status: proposal.** None of the 52 SM tests on this page exists in this repository: there is no `src/maturity/` directory and no Shield wrapper in `src/harness/`. No figure on this page is a test result. The Shield coverage it states is what the proposal expects once the tests are written, and is not measured.
+
 ## Context
 
 OASB currently evaluates **runtime detection** capabilities (222 attack scenarios across process, network, filesystem, prompt, and MCP layers). Shield provides capabilities that fall outside OASB's detection-focused scope but are critical for production security posture.
 
-This extension adds a **Security Product Maturity** category to OASB, covering infrastructure that runtime detection alone does not address.
+This extension would add a **Security Product Maturity** category to OASB, covering infrastructure that runtime detection alone does not address.
 
 ## Proposed Categories
 
@@ -23,7 +25,7 @@ Verifies that the security product maintains tamper-evident audit logs.
 | SM-LOG-007 | Concurrent write safety | Multiple writers do not corrupt the chain |
 | SM-LOG-008 | Event schema validation | Events conform to a defined schema (source, severity, outcome, timestamps) |
 
-**Shield coverage:** SM-LOG-001 through SM-LOG-006 pass today via `events.ts` and `integrity.ts`.
+**Expected Shield coverage (not measured):** SM-LOG-001 through SM-LOG-006, via `events.ts` and `integrity.ts`.
 
 ### SM-SIGN: Artifact Signing (6 tests)
 
@@ -38,7 +40,7 @@ Verifies that the security product signs its own artifacts (config, policy, scan
 | SM-SIGN-005 | Re-sign after update | Legitimate changes can be re-signed |
 | SM-SIGN-006 | Bulk verification | All signed artifacts verified in a single call |
 
-**Shield coverage:** All 6 pass today via `signing.ts`.
+**Expected Shield coverage (not measured):** all 6, via `signing.ts`.
 
 ### SM-SESSION: Session Attribution (6 tests)
 
@@ -53,7 +55,7 @@ Verifies that the product can identify which AI assistant is driving a session.
 | SM-SESSION-005 | No false positive | Returns null when no AI assistant is running |
 | SM-SESSION-006 | Confidence scoring | Returns confidence score with signal breakdown |
 
-**Shield coverage:** All 6 pass today via `session.ts`.
+**Expected Shield coverage (not measured):** all 6, via `session.ts`.
 
 ### SM-POLICY: Policy Management (8 tests)
 
@@ -70,7 +72,7 @@ Verifies that the product supports policy-as-data with per-agent overrides.
 | SM-POLICY-007 | Tamper detection | Modified policy file is detected |
 | SM-POLICY-008 | Default-deny for unknown | Unknown actions follow the configured default |
 
-**Shield coverage:** SM-POLICY-001 through SM-POLICY-007 pass today via `policy.ts` and `integrity.ts`.
+**Expected Shield coverage (not measured):** SM-POLICY-001 through SM-POLICY-007, via `policy.ts` and `integrity.ts`.
 
 ### SM-HEAL: Self-Healing Integrity (8 tests)
 
@@ -87,7 +89,7 @@ Verifies that the product can detect and recover from its own compromise.
 | SM-HEAL-007 | Recovery without verification | Forced recovery is available |
 | SM-HEAL-008 | Degraded state detection | Warns on non-critical integrity issues |
 
-**Shield coverage:** All 8 pass today via `integrity.ts`.
+**Expected Shield coverage (not measured):** all 8, via `integrity.ts`.
 
 ### SM-LLM: LLM-Assisted Analysis (6 tests)
 
@@ -102,7 +104,7 @@ Verifies that the product uses LLM intelligence for security analysis.
 | SM-LLM-005 | Response caching | LLM responses are cached with TTL |
 | SM-LLM-006 | Cost control | Budget stays under threshold (target: <$1/month) |
 
-**Shield coverage:** All 6 pass today via `llm.ts` and `llm-backend.ts`.
+**Expected Shield coverage (not measured):** all 6, via `llm.ts` and `llm-backend.ts`.
 
 ### SM-CRED: Credential Auditing (6 tests)
 
@@ -117,7 +119,7 @@ Verifies that the product discovers and audits credential exposure.
 | SM-CRED-005 | Scope drift detection | Detects keys with unintended cross-service access |
 | SM-CRED-006 | Credential migration | Migrates hardcoded credentials to env vars |
 
-**Shield coverage:** SM-CRED-001 through SM-CRED-005 pass today via `detect.ts` and `init.ts`. SM-CRED-006 via `protect` command.
+**Expected Shield coverage (not measured):** SM-CRED-001 through SM-CRED-005, via `detect.ts` and `init.ts`. SM-CRED-006 via `protect` command.
 
 ### SM-ENV: Environment Scanning (4 tests)
 
@@ -130,11 +132,13 @@ Verifies that the product scans the development environment comprehensively.
 | SM-ENV-003 | Security hygiene check | Checks gitignore, lock files, env protection |
 | SM-ENV-004 | Posture scoring | Computes a security score with risk level |
 
-**Shield coverage:** All 4 pass today via `detect.ts`, `init.ts`, and `status.ts`.
+**Expected Shield coverage (not measured):** all 4, via `detect.ts`, `init.ts`, and `status.ts`.
 
 ## Summary
 
-| Category | Tests | Shield Coverage |
+No SM test exists yet, so the third column is the proposal's expectation, not a result: the number of tests in each category that Shield is expected to pass once the tests are written under `src/maturity/`.
+
+| Category | Tests | Expected Shield coverage (not measured) |
 |----------|-------|----------------|
 | SM-LOG: Log Integrity | 8 | 6/8 |
 | SM-SIGN: Artifact Signing | 6 | 6/6 |
@@ -144,7 +148,7 @@ Verifies that the product scans the development environment comprehensively.
 | SM-LLM: LLM-Assisted Analysis | 6 | 6/6 |
 | SM-CRED: Credential Auditing | 6 | 5/6 |
 | SM-ENV: Environment Scanning | 4 | 4/4 |
-| **Total** | **52** | **48/52 (92%)** |
+| **Total** | **52** | **48/52** |
 
 Combined with the existing 222 detection tests, OASB would have **274 total tests** covering both runtime detection and security product maturity.
 
@@ -155,16 +159,8 @@ Combined with the existing 222 detection tests, OASB would have **274 total test
 3. Extend `metrics.ts` to compute maturity scores alongside detection scores
 4. Update `generate-report.ts` to include maturity category in reports
 5. Update README with the new category descriptions
+6. Replace the expected coverage on this page with what the tests measure, and remove its proposal status
 
 ## MITRE ATLAS Mapping
 
-| Category | ATLAS Technique |
-|----------|----------------|
-| SM-LOG | AML.T0006 (Audit Log Manipulation) |
-| SM-SIGN | AML.T0024 (Supply Chain Compromise) |
-| SM-SESSION | AML.T0043 (Shadow AI Discovery) |
-| SM-POLICY | AML.T0040 (Policy Evasion) |
-| SM-HEAL | AML.T0011 (Security Product Disablement) |
-| SM-LLM | AML.T0015 (Automated Triage) |
-| SM-CRED | AML.T0025 (Credential Theft) |
-| SM-ENV | AML.T0007 (Discovery) |
+The SM categories are not mapped to MITRE ATLAS techniques. ATLAS is an adversary framework, and each SM category checks the security product's own machinery (its audit log, signatures, policy, self-checks and scans), not an attack. OASB leaves its defensive-response and detection-capability tests unmapped for the same reason: see the last section of [MITRE ATLAS Test Mapping](mitre-atlas-mapping.md).

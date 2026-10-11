@@ -421,6 +421,24 @@ stay on record here with the reason they changed.
   there were at least 18 patterns. The test count is unchanged.
   `docs/test-catalog.md` and REPORT.md's AT-AI-005 row no longer say the test
   covers 19 patterns.
+- `docs/shield-maturity-extension.md` no longer maps its eight SM categories
+  to MITRE ATLAS techniques, and says that it is a proposal. Its mapping
+  table gave eight technique IDs names that `docs/mitre-atlas-mapping.md`,
+  the page whose IDs and names are verified against MITRE's `ATLAS.yaml`,
+  does not give them: AML.T0015 is Evade AI Model there, not "Automated
+  Triage", AML.T0025 is Exfiltration via Cyber Means, not "Credential Theft",
+  and the other six IDs are not on that page. The SM categories check the
+  security product's own machinery, not an attack, so the page leaves them
+  unmapped, as the mapping page leaves the defensive-response and capability
+  tests. The page also said that 48 of its 52 SM tests "pass today", but no
+  SM test exists in this repository and there is no `src/maturity/`. It now
+  opens with a proposal status, states each category's Shield coverage as
+  expected and not measured, and drops the 92% figure.
+  `scripts/check-maturity-page.mjs`, run by `npm run test:scripts`, fails
+  when the page writes an ATLAS technique ID that the mapping page does not
+  list or lists under another name, and, while `src/maturity` has no test
+  file, when the page is not marked as a proposal or states Shield coverage
+  without "not measured".
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

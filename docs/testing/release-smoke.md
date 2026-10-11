@@ -34,12 +34,16 @@ the claims this repository publishes:
    of both README checks, of the OWASP mapping check
    (`scripts/check-owasp-mapping.mjs`, which holds every scenario file's
    `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each
-   other), of the changelog's line width and of the scenario tests'
-   capability gating. One of them runs `npm run check:readme` on this
-   README, which collects the suite with vitest. The gating tests run the
-   scenario tests with vitest against an adapter that declares no
-   capabilities and against the llm-guard and rebuff adapters, and check that
-   a suite runs only when the adapter has every capability it needs.
+   other), of the maturity page check (`scripts/check-maturity-page.mjs`,
+   which holds `docs/shield-maturity-extension.md` to the ATLAS technique
+   names of `docs/mitre-atlas-mapping.md` and to stating its Shield coverage
+   as not measured while `src/maturity` has no test), of the changelog's
+   line width and of the scenario tests' capability gating. One of them runs
+   `npm run check:readme` on this README, which collects the suite with
+   vitest. The gating tests run the scenario tests with vitest against an
+   adapter that declares no capabilities and against the llm-guard and rebuff
+   adapters, and check that a suite runs only when the adapter has every
+   capability it needs.
 2. **Build + full suite.** `npm run build` then the complete vitest run,
    including E2E. E2E-003 is skipped on every platform (`it.skip`); any
    failure fails the smoke.
@@ -74,14 +78,17 @@ the claims this repository publishes:
 
 `npm test` runs `npm run test:scripts` first (its `pretest` script), so the CI
 job, which runs `npm test`, runs the tests of both README checks, of the
-OWASP mapping check, of the changelog's line width and of the scenario tests'
-capability gating before the suite. One of them runs
-`npm run check:readme` on this README, so a pull request that adds or removes
-a test without updating the README's counts fails CI, not only the next
-release smoke. Another runs the OWASP mapping check on this repository, so a
-scenario file without an `// OWASP Agentic:` header, or one the mapping page
-lists under another ID, fails CI too. To run the suite without them, use
-`npx vitest run` or one of
+OWASP mapping check, of the maturity page check, of the changelog's line
+width and of the scenario tests' capability gating before the suite. One of
+them runs `npm run check:readme` on this README, so a pull request that adds
+or removes a test without updating the README's counts fails CI, not only the
+next release smoke. Another runs the OWASP mapping check on this repository,
+so a scenario file without an `// OWASP Agentic:` header, or one the mapping
+page lists under another ID, fails CI too. A third runs the maturity page
+check on this repository, so an ATLAS technique ID on
+`docs/shield-maturity-extension.md` that `docs/mitre-atlas-mapping.md` does
+not list, or lists under another name, fails CI as well. To run the suite
+without them, use `npx vitest run` or one of
 the `npm run test:*` groups.
 
 ## Why these guards exist
