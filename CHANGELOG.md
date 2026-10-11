@@ -352,6 +352,14 @@ stay on record here with the reason they changed.
   is: its mapping, its integration and E2E counts, its "all 16 capability
   categories" for arp-guard and its llm-guard results no longer hold. The
   demo GIF in the README still shows the 222-test run and is not re-recorded.
+- When arp-guard is not installed, `getCapabilityMatrix()` and the default
+  adapter's methods throw an error that names `npm install arp-guard` and the
+  `OASB_ADAPTER` alternative. They threw `Cannot find module 'arp-guard'`,
+  which is what the README's library example did after
+  `npm install @opena2a/oasb`: arp-guard is an optional peer dependency and
+  npm does not install it. The example now installs arp-guard too.
+  `scripts/library-entry.test.mjs` builds the package and loads it where
+  arp-guard cannot be resolved.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

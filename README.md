@@ -92,6 +92,7 @@ The suite is also published as [`@opena2a/oasb`](https://www.npmjs.com/package/@
 
 ```bash
 npm install @opena2a/oasb
+npm install arp-guard   # the default adapter's product; not needed if you set OASB_ADAPTER
 ```
 
 ```ts

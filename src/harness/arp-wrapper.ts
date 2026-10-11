@@ -31,11 +31,30 @@ import type {
   Capability,
 } from './adapter';
 
+// arp-guard is an optional peer dependency, so `npm install @opena2a/oasb`
+// alone does not install it. Name the package and the alternative instead of
+// surfacing a bare "Cannot find module".
+const ARP_GUARD_MISSING =
+  'The default OASB adapter (OASB_ADAPTER unset or "arp") needs arp-guard, which is not installed. ' +
+  'Run "npm install arp-guard", or set OASB_ADAPTER to select another adapter: "llm-guard", ' +
+  '"rebuff" (each needs its own package) or the path of a module that exports your ' +
+  'SecurityProductAdapter class.';
+
 // Lazy-loaded arp-guard module
 let _arp: any;
 function arp(): any {
   if (!_arp) {
-    _arp = require('arp-guard');
+    try {
+      _arp = require('arp-guard');
+    } catch (err) {
+      // Only arp-guard itself missing; a module arp-guard fails to load is
+      // reported as it is.
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'MODULE_NOT_FOUND' && e.message.startsWith("Cannot find module 'arp-guard'")) {
+        throw new Error(ARP_GUARD_MISSING);
+      }
+      throw err;
+    }
   }
   return _arp;
 }
