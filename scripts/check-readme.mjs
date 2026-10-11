@@ -417,7 +417,7 @@ function checkCounts(text, tests) {
   return fixed;
 }
 
-// 6. A skipped scenario test listed as MITRE ATLAS coverage is marked as skipped.
+// 7. A skipped scenario test listed as MITRE ATLAS coverage is marked as skipped.
 
 // A scenario test's ID: its file name up to the first dot, such as E2E-003.
 function scenarioId(file) {
@@ -482,7 +482,7 @@ function checkSkippedCoverage(tests) {
   }
 }
 
-// 7. The Scanner Benchmark is offered for comparing products only as a
+// 8. The Scanner Benchmark is offered for comparing products only as a
 // recall-only comparison.
 const NAMES_BENCHMARK = /\]\(#skills-security-benchmark\)|\b(?:Scanner|Skills Security) Benchmark\b/;
 const COMPARES_PRODUCTS = /\bcross-product\b|\bapples-to-apples\b|\b(?:across|between) (?:products|scanners)\b/i;
@@ -555,7 +555,7 @@ for (const { n, line } of readme) {
   }
 }
 
-// 7. A dated page the README links says it is one. Nothing compares its
+// 9. A dated page the README links says it is one. Nothing compares its
 // counts with the suite, so above its first H2 it says "as of <the date in
 // its file name>" and links to the README. The note may be wrapped and may
 // sit in a blockquote; text in a code block or inline code is not the note.

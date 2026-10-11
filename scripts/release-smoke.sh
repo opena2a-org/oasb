@@ -6,9 +6,9 @@
 # and compares every test count the README states with the live suite.
 # Checks the README layout (Quick Start first, under 400 lines) and its links.
 # Also inspects the npm pack file list so a publish never ships without the
-# README, LICENSE, or the harness sources. Last, runs the commands the README
-# documents and holds them to what it says: OASB_ADAPTER by name and by a
-# relative path, and the library example in a fresh install of the tarball.
+# README, LICENSE, or the harness sources. Last, runs three of the commands the
+# README documents and holds them to what it says: OASB_ADAPTER by name and by
+# a relative path, and the library example in a fresh install of the tarball.
 #
 # Run before every release: npm run smoke
 # Documented in docs/testing/release-smoke.md
@@ -31,7 +31,7 @@ node scripts/check-readme.mjs --no-counts
 echo "==> npm ci (lockfile install, registry deps only)"
 npm ci --silent
 
-echo "==> Tests in scripts/: the README checks, the changelog width and the scenario tests' capability gating (these use vitest)"
+echo "==> Tests in scripts/, listed in docs/testing/release-smoke.md (some use vitest)"
 npm run test:scripts
 
 echo "==> npm run build"

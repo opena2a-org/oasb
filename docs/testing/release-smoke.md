@@ -30,22 +30,8 @@ the claims this repository publishes:
    README.
    This step runs the checker with `--no-counts`: vitest is not installed
    yet, and step 3 compares the test counts with the suite's report. After
-   `npm ci`, the tests in `scripts/` (`npm run test:scripts`) run: the tests
-   of both README checks, of the OWASP mapping check
-   (`scripts/check-owasp-mapping.mjs`, which holds every scenario file's
-   `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each
-   other), of the maturity page check (`scripts/check-maturity-page.mjs`,
-   which holds `docs/shield-maturity-extension.md` to the ATLAS technique
-   names of `docs/mitre-atlas-mapping.md` and to stating its Shield coverage
-   as not measured while `src/maturity` has no test), of the
-   documented-command check (step 5), of the changelog's line width, of
-   the scenario tests' capability gating and of the placeholder marking of
-   API-key-shaped values in `src/`. One of them runs
-   `npm run check:readme` on this README, which collects the suite with
-   vitest. The gating tests run the scenario tests with vitest against an
-   adapter that declares no capabilities and against the llm-guard and rebuff
-   adapters, and check that a suite runs only when the adapter has every
-   capability it needs.
+   `npm ci`, the tests in `scripts/` (`npm run test:scripts`) run; each file
+   is listed under [The tests in `scripts/`](#the-tests-in-scripts).
 2. **Build + full suite.** `npm run build` then the complete vitest run,
    including E2E. E2E-003 is skipped on every platform (`it.skip`); any
    failure fails the smoke.
@@ -76,8 +62,8 @@ the claims this repository publishes:
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.
 5. **Documented commands.** `scripts/check-documented-commands.mjs` runs
-   what the README tells a user to run and holds each result to what the
-   README says:
+   three of the commands the README documents and holds each result to what
+   the README says:
    - `OASB_ADAPTER=llm-guard` on a scenario file gated by capability
      (`AT-AI-002`, prompt output scanning) and an OS-level one
      (`AT-PROC-003`, process monitoring). llm-guard declares neither
@@ -103,13 +89,52 @@ the claims this repository publishes:
    (`npm run test:scripts`) cover how it reads a report and the README, and
    that the smoke runs it after the build.
 
+## The tests in `scripts/`
+
+`npm run test:scripts` runs these files with `node --test`. The smoke runs
+them after `npm ci` (step 1) and `npm test` runs them before the suite; the
+README's test counts do not include them.
+
+- `scripts/check-readme.test.mjs`: the README layout, link and test-count
+  check (`scripts/check-readme.mjs`). One of its tests runs
+  `npm run check:readme` on this README, which collects the suite with
+  vitest.
+- `scripts/check-test-counts.test.mjs`: the drift guard
+  (`scripts/check-test-counts.mjs`, step 3).
+- `scripts/check-owasp-mapping.test.mjs`: the OWASP mapping check
+  (`scripts/check-owasp-mapping.mjs`), which holds every scenario file's
+  `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each
+  other.
+- `scripts/check-maturity-page.test.mjs`: the maturity page check
+  (`scripts/check-maturity-page.mjs`), which holds
+  `docs/shield-maturity-extension.md` to the ATLAS technique names of
+  `docs/mitre-atlas-mapping.md` and to stating its Shield coverage as not
+  measured while `src/maturity` has no test.
+- `scripts/check-documented-commands.test.mjs`: the documented-command check
+  (step 5).
+- `scripts/changelog-width.test.mjs`: `CHANGELOG.md` stays wrapped at 80
+  characters.
+- `scripts/adapter-gating.test.mjs`: the scenario tests' capability gating.
+  It runs the scenario tests with vitest against an adapter that declares no
+  capabilities and against the llm-guard and rebuff adapters, and checks
+  that a suite runs only when the adapter has every capability it needs.
+- `scripts/scenario-report.test.mjs`: the report `npm run report` writes
+  (`scripts/scenario-report.mjs`).
+- `scripts/library-entry.test.mjs`: the package entry point as a library
+  install sees it, built where arp-guard cannot be resolved, as after
+  `npm install @opena2a/oasb` on its own.
+- `scripts/doc-facts.test.mjs`: statements in `README.md` and
+  `BENCHMARK-RESULTS.md` that must match the corpus and scripts they
+  describe.
+- `scripts/placeholder-credentials.test.mjs`: the placeholder marking of
+  API-key-shaped values in `src/`; fails when one does not spell FAKE.
+
 ## The README checks on every pull request
 
 `npm test` runs `npm run test:scripts` first (its `pretest` script), so the CI
-job, which runs `npm test`, runs the tests of both README checks, of the
-OWASP mapping check, of the maturity page check, of the documented-command
-check, of the changelog's line width and of the scenario tests' capability
-gating before the suite. The documented commands themselves run only in the
+job, which runs `npm test`, runs every file under
+[The tests in `scripts/`](#the-tests-in-scripts) before the suite. The
+documented commands themselves run only in the
 smoke. One of them runs `npm run check:readme` on this README, so a pull
 request that adds or removes a test without updating the README's counts
 fails CI, not only the next release smoke. Another runs the OWASP mapping

@@ -202,7 +202,7 @@ Adapter: `arp-guard` v0.3.0 (re-exports `hackmyagent/arp`)
 
 | Metric | Value |
 |--------|-------|
-| Scan throughput | 101,138 scans/sec (1KB payload, 19 patterns) |
+| Scan throughput | 101,138 scans/sec (1KB payload; measured on 2026-03-23 on the 19-pattern build, not re-measured on the 20-pattern build in the AT-AI-005 row) |
 | Scan latency (1KB, P99) | 16.9 us |
 | Full test suite duration | 4.58s |
 | Total test files | 47 |

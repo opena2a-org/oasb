@@ -1,18 +1,21 @@
 // Tests for scripts/check-documented-commands.mjs, the release smoke's check
-// that the commands the README documents do what it says.
+// that three of the commands the README documents do what it says.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   GATED_FILE,
   LIBRARY_HEADING,
   OS_LEVEL_FILE,
+  errorLine,
+  libraryExampleFailure,
   librarySection,
   notSkipped,
   placeholdersToChecks,
@@ -102,6 +105,45 @@ test('a call whose argument list is only a comment is checked to be a function, 
   assert.equal(called, false);
   assert.throws(() => run(() => {}, {}), /^TypeError: benchmark\.determineTier is not a function$/);
   assert.equal(placeholdersToChecks('createAdapter();'), 'createAdapter();');
+});
+
+test('a library example that throws is reported with the install lines that ran and the message it threw', () => {
+  // The shape of src/harness/arp-wrapper.ts when arp-guard is not installed:
+  // Node echoes the throwing statement before the error's message.
+  const dir = mkdtempSync(join(tmpdir(), 'oasb-documented-test-'));
+  try {
+    const example = join(dir, 'example.cjs');
+    writeFileSync(example, [
+      "const MISSING = 'The default OASB adapter needs arp-guard. Run \"npm install arp-guard\".';",
+      'function arp() {',
+      '  throw new Error(MISSING);',
+      '}',
+      'arp();',
+      '',
+    ].join('\n'));
+    const r = spawnSync(process.execPath, [example], { encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    const output = `${r.stderr}\n${r.stdout}`;
+    const message = 'Error: The default OASB adapter needs arp-guard. Run "npm install arp-guard".';
+    assert.equal(errorLine(output), message);
+    assert.equal(
+      libraryExampleFailure([['install', '@opena2a/oasb'], ['install', 'arp-guard']], r.status, output),
+      `README library example: exited 1 after npm install @opena2a/oasb and npm install arp-guard: ${message}`,
+    );
+    assert.equal(
+      libraryExampleFailure([['install', '@opena2a/oasb']], r.status, output),
+      `README library example: exited 1 after npm install @opena2a/oasb: ${message}`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an npm failure is reported by its first error line, a silent one by its last line', () => {
+  assert.equal(errorLine('npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/nope'), 'npm error code E404');
+  assert.equal(errorLine("\nError [ERR_MODULE_NOT_FOUND]: Cannot find package 'nope'\n"), "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'nope'");
+  assert.equal(errorLine('first\nlast\n'), 'last');
+  assert.equal(errorLine(''), '(no output)');
 });
 
 test('--help prints the usage and exits 0; an unknown option exits 1', () => {

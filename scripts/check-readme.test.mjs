@@ -574,7 +574,7 @@ test('links inside inline code and fenced blocks are ignored', () => {
   assert.equal(r.status, 0, r.stderr);
 });
 
-const RECALL_ONLY_FAILURE =/the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison/;
+const RECALL_ONLY_FAILURE = /the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison/;
 
 test('a paragraph that offers the Scanner Benchmark for comparing products fails until it says recall-only', () => {
   const offer =
@@ -725,4 +725,15 @@ test('npm run smoke runs the tests in scripts/ through npm run test:scripts, not
   assert.ok(lines.includes('npm run test:scripts'), 'scripts/release-smoke.sh does not run npm run test:scripts');
   const own = lines.filter((line) => /^\s*node --test\b/.test(line));
   assert.deepEqual(own, [], 'scripts/release-smoke.sh names test files itself; npm run test:scripts is the one list');
+});
+
+test('docs/testing/release-smoke.md lists every file npm run test:scripts runs', () => {
+  const pkg = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  const files = pkg.scripts['test:scripts'].split(/\s+/).filter((arg) => arg.endsWith('.test.mjs'));
+  assert.notDeepEqual(files, [], 'npm run test:scripts names no test file');
+  const guide = readFileSync(join(repo, 'docs', 'testing', 'release-smoke.md'), 'utf8');
+  const section = /^## The tests in `scripts\/`$([\s\S]*?)(?=^## )/m.exec(guide);
+  assert.ok(section, 'docs/testing/release-smoke.md has no "## The tests in `scripts/`" section');
+  const unlisted = files.filter((f) => !section[1].includes(`\`${f}\``));
+  assert.deepEqual(unlisted, [], 'docs/testing/release-smoke.md does not list these files under "The tests in `scripts/`"');
 });

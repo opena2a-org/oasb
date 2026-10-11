@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Documented-command check.
 //
-// Runs what the README tells a user to run and holds each result to what the
-// README says it does:
+// Runs three of the commands the README documents and holds each result to
+// what the README says it does:
 //   1. a product chosen by name: `OASB_ADAPTER=llm-guard` on a scenario file
 //      gated by capability (AT-AI-002, prompt output scanning) and on an
 //      OS-level one (AT-PROC-003, process monitoring). llm-guard declares
@@ -42,6 +42,7 @@ const USAGE = 'Usage: node scripts/check-documented-commands.mjs [path/to/checko
 export const GATED_FILE = 'src/atomic/ai-layer/AT-AI-002.prompt-output-scan.test.ts';
 export const OS_LEVEL_FILE = 'src/atomic/process/AT-PROC-003.high-cpu.test.ts';
 export const LIBRARY_HEADING = '## Use as a library';
+const LIBRARY_LABEL = 'README library example';
 const NA_CLAIM = 'README "Evaluating Other Products" says the tests for a surface the product does not support are N/A (skipped), not FAIL';
 
 // A custom adapter that declares no capabilities, so every test gated by
@@ -136,10 +137,29 @@ function run(command, args, options) {
   return { status: r.status, stdout: r.stdout ?? '', output: `${r.stderr ?? ''}\n${r.stdout ?? ''}` };
 }
 
-/** The first error a failed command printed, or its last line. */
-function errorLine(output) {
+/**
+ * The first error a failed command printed, or its last line. A line that
+ * starts with an error's name and message (`Error: ...`) comes first: Node
+ * prints the statement that threw, such as `throw new Error(MESSAGE);`, above
+ * it.
+ */
+export function errorLine(output) {
   const lines = String(output).split('\n').map((l) => l.trim()).filter(Boolean);
-  return lines.find((l) => /\b\w*Error\b|^npm (error|ERR!)/.test(l)) ?? lines.at(-1) ?? '(no output)';
+  return (
+    lines.find((l) => /^\w*Error(?: \[\w+\])?: /.test(l)) ??
+    lines.find((l) => /\b\w*Error\b|^npm (error|ERR!)/.test(l)) ??
+    lines.at(-1) ??
+    '(no output)'
+  );
+}
+
+/**
+ * The failure of the library example: its exit status, the `npm install`
+ * lines of the README that ran before it, and the error it printed.
+ */
+export function libraryExampleFailure(installs, status, output) {
+  const ran = installs.map((args) => `npm ${args.join(' ')}`).join(' and ');
+  return `${LIBRARY_LABEL}: exited ${status} after ${ran}: ${errorLine(output)}`;
 }
 
 function vitestSkips(root, files, env, label, work) {
@@ -171,7 +191,7 @@ function checkByRelativePath(root, work) {
 }
 
 function checkLibraryExample(root, work) {
-  const label = 'README library example';
+  const label = LIBRARY_LABEL;
   let section;
   try {
     section = librarySection(readFileSync(join(root, 'README.md'), 'utf8'));
@@ -201,7 +221,7 @@ function checkLibraryExample(root, work) {
   });
   writeFileSync(join(project, 'example.cjs'), outputText);
   const r = run(process.execPath, ['example.cjs'], { cwd: project, env });
-  return r.status === 0 ? [] : [`${label}: exited ${r.status} after npm install @opena2a/oasb: ${errorLine(r.output)}`];
+  return r.status === 0 ? [] : [libraryExampleFailure(section.installs, r.status, r.output)];
 }
 
 /** Runs the three documented commands in `root` and returns their failures. */

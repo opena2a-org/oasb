@@ -81,9 +81,11 @@ stay on record here with the reason they changed.
   unchanged, and the package description names both lists.
   `scripts/check-owasp-mapping.mjs`, run by `npm run test:scripts`, fails when
   a scenario file names no published Agentic ID or when the page disagrees
-  with the headers. `scripts/generate-report.ts` listed four IDs (A01, A04,
-  A06, A07) under "OWASP Agentic Top 10 Coverage" that are on neither list;
-  it now lists the Agentic IDs the scenarios name.
+  with the headers. The report `npm run report` writes listed four IDs (A01,
+  A04, A06, A07) under "OWASP Agentic Top 10 Coverage" that are on neither
+  list; it now lists the Agentic IDs the scenarios name, from the map in
+  `scripts/scenario-report.mjs`, which `scripts/generate-report.ts` builds
+  the report through.
 - `npm run smoke` runs three of the commands the README documents, with
   `scripts/check-documented-commands.mjs`: `OASB_ADAPTER=llm-guard` on a
   scenario file gated by capability and on an OS-level one, which must both
@@ -419,7 +421,8 @@ stay on record here with the reason they changed.
   filesystem and enforcement suites passed, because they then constructed
   the arp-guard adapter directly whichever adapter was selected; follow-up 1
   said they report failures. They are gated now and report N/A (see the
-  `OASB_ADAPTER` entry above). `npm run check:readme` now fails when a page
+  first entry under Changed, on `OASB_ADAPTER` selecting the product for
+  every scenario test). `npm run check:readme` now fails when a page
   the README links under a dated file name does not say "as of" that date
   and link to the README above its first H2.
 - Four statements in the README and `BENCHMARK-RESULTS.md` are corrected to
@@ -441,7 +444,9 @@ stay on record here with the reason they changed.
   build's 20 patterns it never exercised. Its first test checked only that
   there were at least 18 patterns. The test count is unchanged.
   `docs/test-catalog.md` and REPORT.md's AT-AI-005 row no longer say the test
-  covers 19 patterns.
+  covers 19 patterns. REPORT.md's scan throughput row says it was measured on
+  2026-03-23 on the 19-pattern build and not re-measured on the 20-pattern
+  one.
 - `docs/shield-maturity-extension.md` no longer maps its eight SM categories
   to MITRE ATLAS techniques, and says that it is a proposal. Its mapping
   table gave eight technique IDs names that `docs/mitre-atlas-mapping.md`,

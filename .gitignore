@@ -3,6 +3,8 @@ dist/
 coverage/
 .opena2a/
 *.tsbuildinfo
+# Left by an interrupted npm run smoke (scripts/check-documented-commands.mjs)
+.oasb-smoke-adapter-*/
 .env
 .env.*
 secrets.json
