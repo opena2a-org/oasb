@@ -313,6 +313,17 @@ stay on record here with the reason they changed.
   incomplete rebuff install and the failed scan; none covers a missing
   typescript. The rebuff figures in `REPORT.md` were measured before this
   change and have not been re-measured.
+- The README's Usage via OpenA2A CLI section shows the commands the CLIs
+  have: `opena2a benchmark <dir>` (with `--level` and `--format json`) and
+  `hackmyagent secure <dir> -b oasb-1` (with `--fail-below`), which check an
+  agent directory against the OASB-1 controls. It showed
+  `opena2a benchmark run` running all 222 scenarios, a `--technique` filter
+  and per-technique detection rates in the JSON output; the OpenA2A CLI has
+  no `benchmark run` subcommand or `--technique` option, and runs none of
+  the scenarios, which still run with `npm test`. `npm run check:readme`
+  fails when a README line shows `opena2a benchmark run` or an `opena2a`
+  command with `--technique`, and no longer looks for the
+  `# all <n> scenarios` comment.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

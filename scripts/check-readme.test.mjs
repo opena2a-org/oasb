@@ -108,7 +108,7 @@ const COUNTED = [
   '## Usage via OpenA2A CLI',
   '',
   '```bash',
-  'opena2a benchmark run       # all 10 scenarios',
+  'opena2a benchmark ./my-agent  # the control set, not the scenarios',
   '```',
   '',
 ].join('\n');
@@ -197,7 +197,7 @@ test('every count the README states is compared by this check and by the drift g
   const counts = [...COUNTED.matchAll(/\b\d+\b/g)].filter(
     (m) => !notCounts.some(([start, end]) => m.index >= start && m.index < end),
   );
-  assert.equal(counts.length, 43);
+  assert.equal(counts.length, 42);
   for (const m of counts) {
     const line = lineOf(COUNTED, m.index);
     const stated = Number(m[0]) + 1;
@@ -382,13 +382,26 @@ test('the per-group comments and table rows are counted per source directory', (
   );
 });
 
-test('the scenario count in the benchmark run comment is checked', () => {
-  const r = checkCounts(COUNTED.replace('# all 10 scenarios', '# all 11 scenarios'));
+test('an OpenA2A CLI command the CLI does not have fails, in a code block or in prose', () => {
+  const r = check('```bash\nopena2a benchmark run\nopena2a benchmark ./agent --technique T0015\n```\n\nRun `opena2a benchmark run --format json` in CI.\n');
   assert.equal(r.status, 1);
-  assert.match(
-    r.stderr,
-    /line 46: the benchmark run comment says 11; the test report has 10 attack-scenario tests \(src\/atomic, src\/integration, src\/baseline and src\/e2e\)\./,
+  assert.match(r.stderr, /^README: line 12: the OpenA2A CLI has no "benchmark run" subcommand: /m);
+  assert.match(r.stderr, /^README: line 13: the OpenA2A CLI has no --technique option; /m);
+  assert.match(r.stderr, /^README: line 16: the OpenA2A CLI has no "benchmark run" subcommand: /m);
+  assert.match(r.stderr, /opena2a benchmark and hackmyagent secure -b oasb-1 check the OASB-1 controls/);
+});
+
+test('the OpenA2A CLI and HackMyAgent benchmark commands that exist pass', () => {
+  const r = check(
+    '```bash\nopena2a benchmark ./my-agent --level L2 --format json\nhackmyagent secure ./my-agent -b oasb-1\n```\n\nThe scenarios run with `npm test`; a run of them is not an `opena2a benchmark` option.\n',
   );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('this repository\'s README shows no OpenA2A CLI command the CLI does not have', () => {
+  const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
+  assert.doesNotMatch(r.stderr, /the OpenA2A CLI has no /);
+  assert.equal(r.status, 0, r.stderr);
 });
 
 test('a failing test is not counted as passing', () => {

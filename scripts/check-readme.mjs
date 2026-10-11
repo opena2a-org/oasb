@@ -16,10 +16,9 @@
 //      definition inside a list item, are not read.
 //   5. every test count the README states equals the suite: the badge, the
 //      Quick Start comment, the Counts note, the per-group `npm run test:*`
-//      comments, the scenario counts in the prose and in the
-//      `opena2a benchmark run` comment, the MITRE ATLAS counts (a scenario
-//      file under the README's directory maps to ATLAS when it cites a
-//      technique ID), and each row of the
+//      comments, the scenario counts in the prose, the MITRE ATLAS counts
+//      (a scenario file under the README's directory maps to ATLAS when it
+//      cites a technique ID), and each row of the
 //      "What Gets Tested" table, counted per source directory. Without
 //      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
@@ -30,6 +29,9 @@
 //      never silently unchecked. The statements are listed in
 //      scripts/readme-counts.mjs, which the release smoke's drift guard reads
 //      too.
+//   6. no line, in prose or in a code block, shows an OpenA2A CLI command
+//      the published CLI does not have. Each entry of UNSHIPPED is one such
+//      command; remove it when the CLI ships the command.
 //
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
@@ -392,6 +394,26 @@ if (!noCounts) {
     fail(reportPath ? `cannot read the test report ${reportPath}: ${readFailure(err)}` : err.message);
   }
   if (tests) counted = checkCounts(readmeText, tests);
+}
+
+// 6. OpenA2A CLI commands the CLI does not have. A reader who copies one gets
+// an error or a different command, so each entry says what the CLI does.
+const UNSHIPPED = [
+  {
+    re: /\bopena2a\s+benchmark\s+run\b/,
+    why: 'the OpenA2A CLI has no "benchmark run" subcommand: `opena2a benchmark run` checks a directory named run against the OASB-1 controls',
+  },
+  { re: /\bopena2a\b.*\s--technique\b/, why: 'the OpenA2A CLI has no --technique option' },
+];
+for (const { n, line } of readme) {
+  for (const { re, why } of UNSHIPPED) {
+    if (re.test(line)) {
+      fail(
+        `line ${n}: ${why}; describe what the CLIs do today (opena2a benchmark and hackmyagent secure -b oasb-1 ` +
+          'check the OASB-1 controls; the attack scenarios run with npm test).',
+      );
+    }
+  }
 }
 
 if (failures.length) {

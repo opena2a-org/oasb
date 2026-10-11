@@ -113,16 +113,17 @@ The package exports the adapter contract (`SecurityProductAdapter`, event and en
 
 ## Usage via OpenA2A CLI
 
-OASB is available as a built-in adapter in the [OpenA2A CLI](https://github.com/opena2a-org/opena2a) via the `benchmark` command, and OASB controls are available in [HackMyAgent](https://github.com/opena2a-org/hackmyagent) v0.8.0+ the same way. The CLI delegates to the `oasb` package using an import adapter, so no separate installation is needed if you already have the CLI installed. This repository remains the canonical source for the full evaluation suite.
+The [OpenA2A CLI](https://github.com/opena2a-org/opena2a) and [HackMyAgent](https://github.com/opena2a-org/hackmyagent) check an agent directory against the OASB-1 controls: how the agent is configured, not how a security product detects attacks. Neither runs the attack scenarios in this repository; those run from a checkout with `npm test` (see [Quick Start](#quick-start)).
 
 ```bash
-opena2a benchmark run                                 # all 223 scenarios, detection coverage scorecard
-opena2a benchmark run --technique T0015               # one MITRE ATLAS technique (T0015 = Evasion)
-opena2a benchmark run --format json                   # machine-readable output for CI
-opena2a benchmark run --technique T0057 --format json # flags combine
+opena2a benchmark ./my-agent                            # OASB-1 controls at level L1
+opena2a benchmark ./my-agent --level L2                 # levels L1, L2 and L3
+opena2a benchmark ./my-agent --format json              # rating, compliance and control coverage as JSON
+hackmyagent secure ./my-agent -b oasb-1                 # the same controls from HackMyAgent
+hackmyagent secure ./my-agent -b oasb-1 --fail-below 80 # also exit 1 below 80% compliance, for CI
 ```
 
-`--format json` outputs the compliance score and per-technique detection rates as JSON. Integrate it into CI pipelines to enforce minimum detection thresholds on every build.
+Both score only the controls they could evaluate. The rest are listed as not evaluated (OpenA2A CLI) or unverified (HackMyAgent), not counted as passing.
 
 ---
 

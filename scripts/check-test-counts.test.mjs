@@ -81,7 +81,6 @@ const README = [
   'npm run test:integration    # 3 tests across 2 integration scenarios',
   'npm run test:baseline       # 2 false-positive / baseline tests',
   'npm run test:e2e            # 3 E2E tests',
-  'opena2a benchmark run       # all 13 scenarios',
   '',
   '| Category | Tests | Source | What It Evaluates |',
   '|---|---|---|---|',
@@ -103,7 +102,7 @@ const README = [
 test('a README whose counts match the suite passes', () => {
   const { drift, compared } = compareCounts(suite(), README, source);
   assert.deepEqual(drift, []);
-  assert.equal(compared, 43);
+  assert.equal(compared, 42);
 });
 
 test('every key of the shared statement list is a count the guard measures', () => {
@@ -133,7 +132,7 @@ test('a changed pinned row and Quick Start comment are drift', () => {
   assert.deepEqual(drift, [
     'README line 5 (Quick Start comment) states 18 tests in total; the suite has 19',
     'README line 5 (Quick Start comment) states 17 passing tests; the suite has 18',
-    'README line 27 (test table, Pinned benchmark harness tests) states 3 tests in src/benchmark/pinned; the suite has 4',
+    'README line 26 (test table, Pinned benchmark harness tests) states 3 tests in src/benchmark/pinned; the suite has 4',
   ]);
 });
 
@@ -186,11 +185,11 @@ test('a scenario file that stops citing its technique is drift in every ATLAS co
     'README line 3 (introduction) states 5 scenario files that cite a MITRE ATLAS technique; the suite has 4',
     'README line 3 (introduction) states 4 MITRE ATLAS techniques cited by the scenario files; the suite has 3',
     'README line 3 (introduction) states 3 scenario tests in files that cite no MITRE ATLAS technique; the suite has 5',
-    'README line 30 (MITRE ATLAS Coverage line) states 10 scenario tests in files that cite a MITRE ATLAS technique; the suite has 8',
-    'README line 30 (MITRE ATLAS Coverage line) states 5 scenario files that cite a MITRE ATLAS technique; the suite has 4',
-    'README line 30 (MITRE ATLAS Coverage line) states 4 MITRE ATLAS techniques cited by the scenario files; the suite has 3',
-    'README line 30 (MITRE ATLAS Coverage line) states 3 scenario tests in files that cite no MITRE ATLAS technique; the suite has 5',
-    'README line 30 (MITRE ATLAS Coverage line) states 2 scenario files that cite no MITRE ATLAS technique; the suite has 3',
+    'README line 29 (MITRE ATLAS Coverage line) states 10 scenario tests in files that cite a MITRE ATLAS technique; the suite has 8',
+    'README line 29 (MITRE ATLAS Coverage line) states 5 scenario files that cite a MITRE ATLAS technique; the suite has 4',
+    'README line 29 (MITRE ATLAS Coverage line) states 4 MITRE ATLAS techniques cited by the scenario files; the suite has 3',
+    'README line 29 (MITRE ATLAS Coverage line) states 3 scenario tests in files that cite no MITRE ATLAS technique; the suite has 5',
+    'README line 29 (MITRE ATLAS Coverage line) states 2 scenario files that cite no MITRE ATLAS technique; the suite has 3',
   ]);
 });
 
@@ -215,7 +214,7 @@ test('the command exits 1 on drift and 0 when every count matches', () => {
     writeSources(dir);
     const ok = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README.md')], { encoding: 'utf8' });
     assert.equal(ok.status, 0, ok.stderr);
-    assert.match(ok.stdout, /43 README counts match the live suite\./);
+    assert.match(ok.stdout, /42 README counts match the live suite\./);
     const bad = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README-drift.md')], { encoding: 'utf8' });
     assert.equal(bad.status, 1);
     assert.match(bad.stderr, /^DRIFT: README line 9 \(Counts note\) states 20 tests in total; the suite has 19$/m);

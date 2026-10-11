@@ -54,7 +54,6 @@ export const STATEMENTS = [
   },
   { where: 'test:baseline comment', re: /test:baseline +# (\d+) false-positive \/ baseline tests/g, keys: ['baseline'] },
   { where: 'test:e2e comment', re: /test:e2e +# (\d+) E2E tests/g, keys: ['e2e'] },
-  { where: 'benchmark run comment', re: /# all (\d+) scenarios/g, keys: ['scenarios'] },
   {
     where: 'MITRE ATLAS Coverage line',
     re: /Of the (\d+) tests across (\d+) scenario files, (\d+) tests in (\d+) files map to (\d+) unique techniques/g,
