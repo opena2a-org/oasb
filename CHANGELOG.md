@@ -500,10 +500,16 @@ stay on record here with the reason they changed.
   not only the last commit. gitleaks is pinned to 8.30.1 and its archive is
   checked against the release's sha256 before it is unpacked; it was the
   latest release, unchecked. The job's token can only read the repository.
-  `scripts/secret-scan-workflow.test.mjs` checks the job's steps for these:
-  the push range and its fallback, the scheduled run's full history, the
-  pinned version, the checksum step and the read-only token. It does not
-  check the workflow's triggers or the checksum's value.
+  `scripts/secret-scan-workflow.test.mjs` checks these: the workflow's
+  triggers, that the job has no condition of its own and fails when
+  gitleaks reports a leak, the read-only token, the pinned version, the
+  checksum's value and the step that checks it, the download host, the pull
+  request range, the push range and its fallback, and the scheduled run's
+  full history. Its last test weakens a copy of the workflow in each of
+  those ways and fails when no other test fails on the copy. It does not
+  check the workflow's concurrency settings, under which a later run can
+  cancel one before its scan finishes, or which version of the checkout
+  action the job uses.
 - `scripts/placeholder-credentials.test.mjs` reports an OpenAI-shaped key
   written right after an escape sequence, such as `\n` or `\x3D`, or after a
   percent-encoded byte, such as `%3D`. The letter or digit that ends one did

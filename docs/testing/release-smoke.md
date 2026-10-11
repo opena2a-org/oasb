@@ -129,11 +129,19 @@ README's test counts do not include them.
 - `scripts/placeholder-credentials.test.mjs`: the placeholder marking of
   API-key-shaped values in `src/`; fails when one does not spell FAKE.
 - `scripts/secret-scan-workflow.test.mjs`: the secret-scan job of
-  `.github/workflows/security.yml`. It runs the job's install and push scan
-  scripts with stub commands and checks that the token can only read the
-  repository, that gitleaks is unpacked only when its archive matches the
-  pinned sha256, that a push is read from its previous head to its new head,
-  and that the scheduled run reads the full history.
+  `.github/workflows/security.yml`. It runs the job's install and scan
+  scripts with stub commands and checks that the workflow runs on pull
+  requests and pushes to `main` and every Monday, that the job has no
+  condition of its own and fails when gitleaks reports a leak, that its
+  token can only read the repository, that gitleaks is downloaded from its
+  GitHub release and unpacked only when its archive matches the pinned
+  sha256, that a pull request is read from its base to its head and a push
+  from its previous head to its new head, and that the scheduled run reads
+  the full history. Its last test weakens a copy of the workflow in each of
+  those ways and fails when no other test fails on the copy. It does not
+  check the workflow's concurrency settings, under which a later run can
+  cancel one before its scan finishes, or which version of the checkout
+  action the job uses.
 
 ## The README checks on every pull request
 
