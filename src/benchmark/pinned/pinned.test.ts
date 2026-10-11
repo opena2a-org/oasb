@@ -9,6 +9,7 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import * as diagnosticsChannel from 'node:diagnostics_channel';
 import {
   appendFileSync,
   cpSync,
@@ -23,10 +24,11 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
-import { createServer, type Server } from 'node:net';
+import { createServer, type Server, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Worker } from 'node:worker_threads';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runCli } from './cli.js';
 import { ResultsExistError, writeNew } from './harness.js';
 import { gitEnv } from './inputs.js';
@@ -329,6 +331,35 @@ async function listen(): Promise<{ server: Server; port: number }> {
   await new Promise<void>(done => server.listen(0, '127.0.0.1', () => done()));
   return { server, port: (server.address() as { port: number }).port };
 }
+
+/**
+ * Node 24's fetch sets the type-of-service option on each new connection just
+ * before it writes the first request, and a failure there escapes as an
+ * uncaught error. On macOS the option fails with EINVAL once the peer has reset
+ * the connection, which the stand-in daemons here do on purpose, and under load
+ * the reset can arrive first. Node 26's fetch treats the option as best
+ * effort; do the same while this file runs, so a dropped connection fails the
+ * request it dropped instead of the whole test run.
+ */
+const socketPrototype = Socket.prototype as Socket & { setTypeOfService?: (tos: number) => Socket };
+const setTypeOfService = socketPrototype.setTypeOfService;
+
+beforeAll(() => {
+  if (!setTypeOfService) return;
+  socketPrototype.setTypeOfService = function (this: Socket, tos: number) {
+    try {
+      return setTypeOfService.call(this, tos);
+    } catch (err) {
+      const { code, syscall } = err as NodeJS.ErrnoException;
+      if (code === 'EINVAL' && syscall === 'setTypeOfService') return this;
+      throw err;
+    }
+  };
+});
+
+afterAll(() => {
+  if (setTypeOfService) socketPrototype.setTypeOfService = setTypeOfService;
+});
 
 interface Run {
   code: number;
@@ -1250,6 +1281,45 @@ describe('the stand-in daemon port', () => {
     const r = await run(fx);
     expect(r.err).toEqual([]);
     expect(r.code).toBe(0);
+  });
+});
+
+describe('a stand-in daemon that resets a connection before the request is written', () => {
+  it('fails that request and raises no uncaught error', async () => {
+    // The daemon runs on a worker thread, so it can reset the connection while
+    // this thread is held between the fetch's connect event and its first write.
+    const reset = new Int32Array(new SharedArrayBuffer(4));
+    const daemon = new Worker(
+      `const { parentPort, workerData: reset } = require('node:worker_threads');
+       const server = require('node:net').createServer(socket => {
+         socket.resetAndDestroy();
+         Atomics.store(reset, 0, 1);
+         Atomics.notify(reset, 0);
+       });
+       server.listen(0, '127.0.0.1', () => parentPort.postMessage(server.address().port));`,
+      { eval: true, workerData: reset },
+    );
+    const port = await new Promise<number>(done => daemon.once('message', done));
+    const uncaught: unknown[] = [];
+    const onUncaught = (err: unknown) => uncaught.push(err);
+    const hold = () => {
+      Atomics.wait(reset, 0, 0, 2000);
+      // Leave time for the reset to reach this end of the connection.
+      const until = Date.now() + 100;
+      while (Date.now() < until);
+    };
+    process.on('uncaughtException', onUncaught);
+    diagnosticsChannel.subscribe('undici:client:connected', hold);
+    try {
+      await expect(
+        fetch(`http://127.0.0.1:${port}/v1/infer`, { method: 'POST', body: '{}', signal: AbortSignal.timeout(2000) }),
+      ).rejects.toThrow('fetch failed');
+      expect(uncaught).toEqual([]);
+    } finally {
+      diagnosticsChannel.unsubscribe('undici:client:connected', hold);
+      process.off('uncaughtException', onUncaught);
+      await daemon.terminate();
+    }
   });
 });
 

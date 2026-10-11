@@ -192,6 +192,15 @@ stay on record here with the reason they changed.
   current record schema: a run of any schema but v1 that records what scored
   its samples is enough, so raising the schema does not fail that check
   before a run of the new schema exists.
+- `npm test` on Node 24 under load on macOS no longer fails now and then with
+  an unhandled `setTypeOfService EINVAL` error while every test passes.
+  Node 24's `fetch` sets the type-of-service option on a new connection just
+  before it writes the request and lets the error escape when the connection
+  was reset first, which the stand-in NanoMind daemons in
+  `src/benchmark/pinned/pinned.test.ts` do on purpose. That file now treats
+  the option as best effort, as Node 26's `fetch` does, so a reset connection
+  fails only its own request, and a new test resets a connection at that
+  point.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
