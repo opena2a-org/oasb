@@ -29,8 +29,8 @@ node scripts/check-readme.mjs --no-counts
 echo "==> npm ci (lockfile install, registry deps only)"
 npm ci --silent
 
-echo "==> Tests of the README checks (one collects the suite, so it needs vitest)"
-node --test scripts/check-readme.test.mjs scripts/check-test-counts.test.mjs
+echo "==> Tests in scripts/: the README checks and the changelog width (one collects the suite, so it needs vitest)"
+npm run test:scripts
 
 echo "==> npm run build"
 npm run build

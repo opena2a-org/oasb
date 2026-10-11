@@ -186,13 +186,25 @@ stay on record here with the reason they changed.
   every row of the What Gets Tested table. It read three of them before, and
   passed a badge lower than the passing count. Its tests run with
   `npm run test:scripts`.
-- `npm test` runs the tests of both README checks (`npm run test:scripts`)
-  before the suite, so the pull request CI job and the release workflow, which
-  run `npm test`, run them too. They ran only in `npm run smoke` before, so a
-  pull request could change a README check, or add a test without updating
-  the README's counts, and pass CI. They are not vitest tests and do not
-  change the totals the README states. `npx vitest run` and the
-  `npm run test:*` groups run the suite without them.
+- `npm test` runs the tests in `scripts/` (`npm run test:scripts`) before the
+  suite, so the pull request CI job and the release workflow, which run
+  `npm test`, run them too: the tests of both README checks, and
+  `scripts/changelog-width.test.mjs`, which fails when a line of this file is
+  wider than 80 characters. The README check tests ran only in
+  `npm run smoke` before, so a pull request could change a README check, or
+  add a test without updating the README's counts, and pass CI. They are not
+  vitest tests and do not change the totals the README states.
+  `npx vitest run` and the `npm run test:*` groups run the suite without
+  them.
+- The changelog width test does not count the carriage return of a CRLF line
+  ending, so an 80-character line passes in a checkout that converts line
+  endings; it was reported as 81 wide. The test exempts one line, the
+  2026-08-27 correction recorded as a single paragraph, and now matches that
+  line whole: any line that starts the same way was exempt before, at any
+  width.
+- `npm run smoke` runs `npm run test:scripts` instead of a list of its own,
+  which named two of the three test files in `scripts/` and left the
+  changelog width test out.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of seven tests, so committing a run no longer changes the
   `npm test` total. Its check that at least one
@@ -214,7 +226,12 @@ stay on record here with the reason they changed.
   EINVAL. A platform that reports another errno for a torn-down socket no
   longer fails `npm test` with an unhandled error, and a new test checks the
   option for EINVAL, ECONNRESET, ENOTCONN, EBADF, ENOPROTOOPT and an error
-  with no errno.
+  with no errno. Two more tests check that the option is called once, with
+  its return value passed through, when it succeeds, and that it stays
+  wrapped while the file runs; no test failed before when either was removed.
+- The README's What Gets Tested table calls the one skipped test "skipped on
+  every platform", as its Counts note does. The table said
+  "environment-skipped", but the test is skipped unconditionally.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

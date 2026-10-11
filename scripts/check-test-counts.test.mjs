@@ -67,7 +67,7 @@ const README = [
   '| **Attack scenarios** | **13** | atomic + integration + baseline + E2E | |',
   '| Scoring-engine unit tests | 2 | `src/benchmark` | metrics |',
   '| Pinned benchmark harness tests | 4 | `src/benchmark/pinned` | pins |',
-  '| **`npm test` total** | **19** | (18 pass, 1 environment-skipped) | |',
+  '| **`npm test` total** | **19** | (18 pass, 1 skipped on every platform) | |',
   '',
   'Techniques across 7 scenario files.',
   '',

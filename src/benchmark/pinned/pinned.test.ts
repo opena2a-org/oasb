@@ -1341,6 +1341,30 @@ describe('a stand-in daemon that resets a connection before the request is writt
       expect(set.call(socket, 0x10)).toBe(socket);
     }
   });
+
+  it('calls the type-of-service option once and returns what it returns when it succeeds', () => {
+    const socket = new Socket();
+    // Not the socket the option is set on, so returning `this` is not enough.
+    const returned = new Socket();
+    const calls: { on: Socket; tos: number }[] = [];
+    const set = bestEffort(function (this: Socket, tos: number) {
+      calls.push({ on: this, tos });
+      return returned;
+    });
+    expect(set.call(socket, 0x10)).toBe(returned);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].on).toBe(socket);
+    expect(calls[0].tos).toBe(0x10);
+  });
+
+  it('keeps the type-of-service option wrapped while this file runs', () => {
+    // A Node release without the option has nothing to wrap, and gains none.
+    if (!setTypeOfService) {
+      expect(socketPrototype.setTypeOfService).toBeUndefined();
+      return;
+    }
+    expect(socketPrototype.setTypeOfService).not.toBe(setTypeOfService);
+  });
 });
 
 describe('deprecated v1 runner', () => {

@@ -1,7 +1,6 @@
 # OASB ATC Verification — Formal Deferral
 
 **Status:** Deferred indefinitely. Not scheduled for any milestone.
-**Chief:** [CA-014]
 **Date:** 2026-04-14
 
 ## Context

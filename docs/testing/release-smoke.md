@@ -26,9 +26,10 @@ the claims this repository publishes:
    in `docs/` (for example `docs/test-catalog.md`), linked from the README.
    This step runs the checker with `--no-counts`: vitest is not installed
    yet, and step 3 compares the test counts with the suite's report. After
-   `npm ci`, the tests of both README checks (`npm run test:scripts`) run;
-   one of them runs `npm run check:readme` on this README, which collects
-   the suite with vitest.
+   `npm ci`, the tests in `scripts/` (`npm run test:scripts`) run: the tests
+   of both README checks and of the changelog's line width. One of them runs
+   `npm run check:readme` on this README, which collects the suite with
+   vitest.
 2. **Build + full suite.** `npm run build` then the complete vitest run,
    including E2E. E2E-003 is skipped on every platform (`it.skip`); any
    failure fails the smoke.
@@ -62,11 +63,12 @@ the claims this repository publishes:
 ## The README checks on every pull request
 
 `npm test` runs `npm run test:scripts` first (its `pretest` script), so the CI
-job, which runs `npm test`, runs the tests of both README checks before the
-suite. One of them runs `npm run check:readme` on this README, so a pull
-request that adds or removes a test without updating the README's counts
-fails CI, not only the next release smoke. To run the suite without them, use
-`npx vitest run` or one of the `npm run test:*` groups.
+job, which runs `npm test`, runs the tests of both README checks and of the
+changelog's line width before the suite. One of them runs
+`npm run check:readme` on this README, so a pull request that adds or removes
+a test without updating the README's counts fails CI, not only the next
+release smoke. To run the suite without them, use `npx vitest run` or one of
+the `npm run test:*` groups.
 
 ## Why these guards exist
 

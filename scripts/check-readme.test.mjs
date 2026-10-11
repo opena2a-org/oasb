@@ -85,7 +85,7 @@ const COUNTED = [
   '| **Attack scenarios** | **10** | atomic + integration + baseline + E2E | **4 techniques** |',
   '| Scoring-engine unit tests | 2 | `src/benchmark` | Metrics |',
   '| Pinned benchmark harness tests | 3 | `src/benchmark/pinned` | Pin checks |',
-  '| **`npm test` total** | **15** | (14 pass, 1 environment-skipped) | |',
+  '| **`npm test` total** | **15** | (14 pass, 1 skipped on every platform) | |',
   '',
   '## MITRE ATLAS Coverage',
   '',
@@ -461,4 +461,11 @@ test('npm test runs the tests in scripts/ before the suite, and the CI job runs 
   const ci = readFileSync(join(repo, '.github', 'workflows', 'ci.yml'), 'utf8');
   const steps = ci.split('\n').filter((line) => /^ +run: npm test( |$)/.test(line) && !line.includes('--ignore-scripts'));
   assert.notDeepEqual(steps, [], 'no step of the CI job runs npm test with its pretest script');
+});
+
+test('npm run smoke runs the tests in scripts/ through npm run test:scripts, not a list of its own', () => {
+  const lines = readFileSync(join(repo, 'scripts', 'release-smoke.sh'), 'utf8').split(/\r?\n/);
+  assert.ok(lines.includes('npm run test:scripts'), 'scripts/release-smoke.sh does not run npm run test:scripts');
+  const own = lines.filter((line) => /^\s*node --test\b/.test(line));
+  assert.deepEqual(own, [], 'scripts/release-smoke.sh names test files itself; npm run test:scripts is the one list');
 });

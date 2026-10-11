@@ -51,7 +51,7 @@ export const STATEMENTS = [
   },
   {
     where: '"npm test total" row',
-    re: /^\| \*\*`npm test` total\*\* \| \*\*(\d+)\*\* \| \((\d+) pass, (\d+) environment-skipped\)/gm,
+    re: /^\| \*\*`npm test` total\*\* \| \*\*(\d+)\*\* \| \((\d+) pass, (\d+) skipped on every platform\)/gm,
     keys: ['total', 'passed', 'skipped'],
   },
 ];
