@@ -356,8 +356,15 @@ function bestEffort(set: SetTypeOfService): SetTypeOfService {
   };
 }
 
+// The wrapper this file installs, kept so a test can check that it is the
+// one in place, not merely something other than the original.
+let installed: SetTypeOfService | undefined;
+
 beforeAll(() => {
-  if (setTypeOfService) socketPrototype.setTypeOfService = bestEffort(setTypeOfService);
+  if (setTypeOfService) {
+    installed = bestEffort(setTypeOfService);
+    socketPrototype.setTypeOfService = installed;
+  }
 });
 
 afterAll(() => {
@@ -1361,9 +1368,11 @@ describe('a stand-in daemon that resets a connection before the request is writt
     // A Node release without the option has nothing to wrap, and gains none.
     if (!setTypeOfService) {
       expect(socketPrototype.setTypeOfService).toBeUndefined();
+      expect(installed).toBeUndefined();
       return;
     }
-    expect(socketPrototype.setTypeOfService).not.toBe(setTypeOfService);
+    expect(installed).toBeDefined();
+    expect(socketPrototype.setTypeOfService).toBe(installed);
   });
 });
 

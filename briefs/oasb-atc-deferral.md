@@ -5,7 +5,7 @@
 
 ## Context
 
-Earlier memory (`project_secretless_v2_state_2026_04_14.md`, "Still open / deferred" list) carried an entry: _"OASB ATC verification (deferred from Phase 7 originally)"_. The entry was ambiguous — readable as either a deferred feature inside OASB or a deferred piece of the Secretless v2 rollout. There was no corresponding deferred flag, TODO, or unfinished code path in this repository.
+The list of open and deferred items kept for the Secretless v2 rollout carried an entry: _"OASB ATC verification (deferred from Phase 7 originally)"_. The entry was ambiguous — readable as either a deferred feature inside OASB or a deferred piece of the Secretless v2 rollout. There was no corresponding deferred flag, TODO, or unfinished code path in this repository.
 
 This brief closes that ambiguity.
 
@@ -34,7 +34,7 @@ Reopen the decision when **any** of the following become true:
 
 - A defender enrolled in OASB (ARP, a customer deployment, etc.) advertises ATC validation and we want to verify the claim.
 - The `atc-forgery-attack` scenario is upgraded from social-engineering narrative into a protocol-level fixture (requires aim-cloud to expose a forged-ATC generator and a `verifyAtc(bytes) -> {valid, reason}` API).
-- CSR/CDS requests an ATC-forgery track in a published OASB release for benchmarking purposes (e.g., a Black Hat / DEFCON deliverable).
+- The threat research or model evaluation owner requests an ATC-forgery track in a published OASB release for benchmarking purposes (e.g., a Black Hat / DEFCON deliverable).
 
 At that point:
 - **Do not** re-implement the verifier in OASB — import the aim-cloud client as a dependency.
@@ -44,10 +44,10 @@ At that point:
 ## Alternatives considered
 
 - **Implement now as a forward-compatible stub.** Rejected — a stub with no production call site accrues drift cost and makes the repo harder to audit.
-- **Leave the ambiguous memory entry in place.** Rejected — drift flags rot quickly; "don't leave undocumented deferred flags" is a standing rule.
-- **Move the entry to an OASB-specific TODO.** Rejected — the entry was never OASB's; it was a leftover from the Secretless v2 rollout. Correct resolution is to close it here and prune the memory entry.
+- **Leave the ambiguous entry in place.** Rejected — drift flags rot quickly; "don't leave undocumented deferred flags" is a standing rule.
+- **Move the entry to an OASB-specific TODO.** Rejected — the entry was never OASB's; it was a leftover from the Secretless v2 rollout. Correct resolution is to close it here and remove it from the rollout's list.
 
 ## Escalation
 
-- **CA** owns the architectural call to delegate ATC validation to aim-cloud and keep OASB a pure attack benchmark. Re-route here if that decision changes.
-- **CSR** should flag if any threat-research deliverable requires an OASB-internal ATC generator (trigger #3 above).
+- **The architecture owner** made the call to delegate ATC validation to aim-cloud and keep OASB a pure attack benchmark. Re-route here if that decision changes.
+- **The threat research owner** should flag if any threat-research deliverable requires an OASB-internal ATC generator (trigger #3 above).
