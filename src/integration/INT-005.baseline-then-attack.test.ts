@@ -1,17 +1,45 @@
 // INT-005: Baseline Learning Then Attack Burst
 // ATLAS: AML.T0015 (Evade AI Model)
 // OWASP: LLM06 (Excessive Agency)
-// Scenario: 5 minutes of normal traffic, then sudden attack burst
+// Scenario: an hour of normal traffic, then a sudden burst
 //
-// This test simulates an attack pattern where the adversary establishes
-// normal-looking traffic first (30 info events), then launches a rapid
-// burst of 5 high-severity violation events. The event engine's buffer
-// should retain both phases, allowing detection of the severity shift.
+// The anomaly test spreads normal process events over 60 simulated minutes,
+// at 1 to 5 events a minute, so the product's anomaly scorer learns a timed
+// baseline. A burst of 20 events in one minute follows. The burst events are
+// labelled normal/info like the baseline, so only their rate sets them apart,
+// and the scorer must flag them with a z-score above 2.
+//
+// The other tests inject 30 normal/info events back to back, then 5 events
+// already labelled violation/high, and check the rule-based alert, the event
+// engine's buffer and the severities of the two phases.
 
-import { it, expect, beforeEach, afterEach } from 'vitest';
+import { it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
-import type { AlertRule, SecurityProductAdapter } from '../harness/adapter';
+import type { AlertRule, SecurityEvent, SecurityProductAdapter } from '../harness/adapter';
+
+/** The z-score above which ARP's statistical layer flags an event as an anomaly. */
+const ANOMALY_THRESHOLD = 2.0;
+
+const BASELINE_START = Date.UTC(2026, 0, 1);
+const BASELINE_MINUTES = 60;
+/** Events per minute during the baseline, repeated: a mean of 3 a minute. */
+const BASELINE_RATE = [1, 2, 3, 4, 5];
+const BURST_SIZE = 20;
+
+/** A normal process event stamped with the current (simulated) time. */
+function processEvent(id: string, phase: 'baseline' | 'attack'): SecurityEvent {
+  return {
+    id,
+    timestamp: new Date().toISOString(),
+    source: 'process',
+    category: 'normal',
+    severity: 'info',
+    description: `Process activity ${id}`,
+    data: { binary: 'node', phase },
+    classifiedBy: 'L0-rules',
+  };
+}
 
 describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-monitoring', 'enforcement-alert'], 'INT-005: Baseline Learning Then Attack Burst', () => {
   let arp: SecurityProductAdapter;
@@ -64,6 +92,51 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-
 
     const enforcements = arp.getEnforcements();
     expect(enforcements.length).toBe(0);
+  });
+
+  it('should score a burst after an hour of timed baseline traffic as anomalous', () => {
+    const scorer = arp.createAnomalyScorer();
+    // The scorer buckets events by the minute of the clock, so the clock is
+    // set to each event's time. Each event is scored and then recorded, in
+    // the order the product's statistical layer handles a live event.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const baselineScores: number[] = [];
+      for (let minute = 0; minute < BASELINE_MINUTES; minute++) {
+        const rate = BASELINE_RATE[minute % BASELINE_RATE.length];
+        for (let i = 0; i < rate; i++) {
+          vi.setSystemTime(BASELINE_START + minute * 60_000 + i * 10_000);
+          const event = processEvent(`int005-baseline-${minute}-${i}`, 'baseline');
+          baselineScores.push(scorer.score(event));
+          scorer.record(event);
+        }
+      }
+
+      // One baseline bucket per simulated minute, with spread to measure against
+      const baseline = scorer.getBaseline('process');
+      expect(baseline).not.toBeNull();
+      expect(baseline!.count).toBe(BASELINE_MINUTES);
+      expect(baseline!.mean).toBe(3);
+      expect(baseline!.stddev).toBeGreaterThan(0);
+
+      // Traffic at the baseline rate is not flagged
+      expect(Math.max(...baselineScores)).toBeLessThanOrEqual(ANOMALY_THRESHOLD);
+
+      // The burst: 20 events, one a second, in the minute after the baseline
+      const burstStart = BASELINE_START + BASELINE_MINUTES * 60_000;
+      const burstScores: number[] = [];
+      for (let i = 0; i < BURST_SIZE; i++) {
+        vi.setSystemTime(burstStart + i * 1_000);
+        const event = processEvent(`int005-burst-${i}`, 'attack');
+        burstScores.push(scorer.score(event));
+        scorer.record(event);
+      }
+
+      expect(Math.max(...burstScores)).toBeGreaterThan(ANOMALY_THRESHOLD);
+      expect(Math.max(...burstScores)).toBeGreaterThan(Math.max(...baselineScores));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should detect violation burst after baseline phase', async () => {

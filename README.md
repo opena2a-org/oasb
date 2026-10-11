@@ -4,12 +4,12 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-351%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-352%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
 
-222 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 165 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](#mitre-atlas-coverage). Most scenarios also cite the OWASP LLM/Agentic Top 10. Plug in your product, run the suite, get a detection coverage scorecard.
+223 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 166 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](#mitre-atlas-coverage). Most scenarios also cite the OWASP LLM/Agentic Top 10. Plug in your product, run the suite, get a detection coverage scorecard.
 
 [OASB Website](https://oasb.ai) | [MITRE ATLAS Coverage](#mitre-atlas-coverage) | [Contributing](#contributing)
 
@@ -18,18 +18,18 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 352 tests (351 pass, 1 skip)
+npm test                    # Full suite: 353 tests (352 pass, 1 skip)
 ```
 
-The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 222 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
+The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **352 tests** (351 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **222 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **97 pinned benchmark harness tests** and the adapter tests in `src/harness`. "222" is the scenario count; "351 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
+> **Counts.** `npm test` runs **353 tests** (352 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **97 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "352 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests of this README's checks, the changelog's line width and the scenario tests' capability gating (`npm run test:scripts`), which these counts do not include.
 
 Run one group at a time:
 
 ```bash
 npm run test:atomic         # 144 atomic detection tests (no external deps)
-npm run test:integration    # 43 tests across 8 integration scenarios
+npm run test:integration    # 44 tests across 8 integration scenarios
 npm run test:baseline       # 12 false-positive / baseline tests
 npm run test:e2e            # 23 E2E tests (real OS detection; E2E-003 currently skipped)
 ```
@@ -116,7 +116,7 @@ The package exports the adapter contract (`SecurityProductAdapter`, event and en
 OASB is available as a built-in adapter in the [OpenA2A CLI](https://github.com/opena2a-org/opena2a) via the `benchmark` command, and OASB controls are available in [HackMyAgent](https://github.com/opena2a-org/hackmyagent) v0.8.0+ the same way. The CLI delegates to the `oasb` package using an import adapter, so no separate installation is needed if you already have the CLI installed. This repository remains the canonical source for the full evaluation suite.
 
 ```bash
-opena2a benchmark run                                 # all 222 scenarios, detection coverage scorecard
+opena2a benchmark run                                 # all 223 scenarios, detection coverage scorecard
 opena2a benchmark run --technique T0015               # one MITRE ATLAS technique (T0015 = Evasion)
 opena2a benchmark run --format json                   # machine-readable output for CI
 opena2a benchmark run --technique T0057 --format json # flags combine
@@ -140,22 +140,22 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Intelligence layers | 21 | `src/atomic/intelligence` | Rule matching, anomaly scoring, LLM escalation, budget exhaustion |
 | Enforcement actions | 18 | `src/atomic/enforcement` | Logging, alerting, process pause (SIGSTOP), kill (SIGTERM/SIGKILL), resume |
 | AI-layer scanning | 40 | `src/atomic/ai-layer` | Prompt injection/output, MCP tool call validation, A2A message scanning, pattern coverage |
-| Multi-step attacks | 43 | `src/integration` | Data exfiltration chains, MCP tool abuse, prompt injection, A2A trust exploitation |
+| Multi-step attacks | 44 | `src/integration` | Data exfiltration chains, MCP tool abuse, prompt injection, A2A trust exploitation |
 | Baseline behavior | 12 | `src/baseline` | False positive rates, anomaly injection, baseline persistence |
 | Real OS detection | 9 | `src/e2e` (live monitors) | Live filesystem watches, process polling, network monitoring |
 | Application-level hooks | 14 | `src/e2e` (interceptors) | Pre-execution interception of spawn, connect, read/write |
-| **Attack scenarios** | **222** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
+| **Attack scenarios** | **223** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 25 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names |
 | Pinned benchmark harness tests | 97 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
 | Adapter loading | 3 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory |
 | Adapter tests | 5 | `src/harness` | The rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded |
-| **`npm test` total** | **352** | (351 pass, 1 skipped on every platform) | |
+| **`npm test` total** | **353** | (352 pass, 1 skipped on every platform) | |
 
 ---
 
 ## MITRE ATLAS Coverage
 
-Of the 222 tests across 47 scenario files, 165 tests in 33 files map to 15 unique techniques in [MITRE ATLAS](https://atlas.mitre.org/) as of the current matrix (which renamed the ML-attack techniques to AI and added the AI-agent technique family in 2025). The other 57 tests, in 14 files, are defensive and capability tests, listed below the table. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data). Per-technique detail: [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
+Of the 223 tests across 47 scenario files, 166 tests in 33 files map to 15 unique techniques in [MITRE ATLAS](https://atlas.mitre.org/) as of the current matrix (which renamed the ML-attack techniques to AI and added the AI-agent technique family in 2025). The other 57 tests, in 14 files, are defensive and capability tests, listed below the table. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data). Per-technique detail: [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
 
 | Technique | ID | Tests |
 |-----------|----|-------|

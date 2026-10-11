@@ -100,7 +100,7 @@ Multi-step attack chains that combine multiple techniques. Tests whether the pro
 | INT-002 | AML.T0053 | MCP tool abuse: path traversal + command injection via tool arguments |
 | INT-003 | AML.T0051 | Prompt injection: establish baseline → inject malicious prompt → measure detection |
 | INT-004 | AML.T0073 | A2A trust exploitation: spoofed agent identity → unauthorized data access |
-| INT-005 | AML.T0015 | Evasion: 5 minutes normal traffic → sudden attack burst → verify anomaly detection |
+| INT-005 | AML.T0015 | Evasion: 60 minutes of timed normal traffic → burst of 20 normal-looking events in one minute → anomaly scorer flags the burst (z-score above 2); rule alert on a burst of pre-labelled violations |
 | INT-006 | capability | Multi-monitor correlation: single attack triggers process + network + filesystem events |
 | INT-007 | AML.T0046 | Budget exhaustion: noise flood (chaff) drains LLM budget → real attack goes unanalyzed |
 | INT-008 | response | Kill switch: critical threat → product kills agent → verify death → recovery |

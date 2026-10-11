@@ -109,6 +109,17 @@ stay on record here with the reason they changed.
   against llm-guard and rebuff, and fails when a suite runs without every
   capability it needs.
 
+- INT-005 checks anomaly detection, as `docs/test-catalog.md` said it did. It
+  injected 30 normal events back to back and then 5 events already labelled
+  violation/high, and checked the rule alert, the event buffer and the
+  severities; no anomaly scorer was called. A new test spreads normal process
+  events over 60 simulated minutes, 1 to 5 a minute, then sends a burst of 20
+  events labelled normal in one minute. It checks that the scorer learns one
+  baseline bucket per minute, scores no baseline event above a z-score of 2
+  and scores the burst above 2. The catalog said "5 minutes normal traffic";
+  5 minutes was only the window of an event buffer query, and the entry now
+  describes the 60-minute baseline. The suite has 223 attack scenarios, 166
+  of them mapped to MITRE ATLAS.
 - The README no longer says that every scenario maps to MITRE ATLAS. 165 of
   the 222 tests, in 33 of the 47 scenario files, cite one of 15 ATLAS
   techniques; the other 57, in 14 files, test the product's defensive
