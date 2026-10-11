@@ -20,27 +20,62 @@ jobs:
   secret-scan:
     name: Secret Detection
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
+      # Full history: a pull request's base, a push's previous head and the
+      # scheduled run's oldest commit can each be any number of commits back.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          # sha256 of gitleaks_8.30.1_linux_x64.tar.gz, from gitleaks_8.30.1_checksums.txt
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         run: |
-          GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name"' | sed 's/.*"v\(.*\)".*/\1/')
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz
-          sudo mv gitleaks /usr/local/bin/
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -sSfL -o "$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          actual="$(sha256sum "$archive" | cut -d ' ' -f 1)"
+          if [ "$actual" != "$GITLEAKS_SHA256" ]; then
+            echo "gitleaks archive sha256 is ${actual}, expected ${GITLEAKS_SHA256}" >&2
+            exit 1
+          fi
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+          sudo install -m 0755 "$RUNNER_TEMP/gitleaks" /usr/local/bin/gitleaks
+          gitleaks version
 
       - name: Run gitleaks (PR — scan new commits)
         if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           gitleaks detect --config .gitleaks.toml --source . \
-            --log-opts "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" \
+            --log-opts "${BASE_SHA}..${HEAD_SHA}" \
             -v --redact
 
-      - name: Run gitleaks (push/schedule — scan last commit)
-        if: github.event_name != 'pull_request'
-        run: gitleaks detect --config .gitleaks.toml --source . --log-opts "HEAD~1..HEAD" -v --redact
+      # Every commit the push added, not only its head. A push that creates the
+      # branch, or a force push whose previous head is no longer in the
+      # history, has no range to read, so it reads all history up to the head.
+      - name: Run gitleaks (push — scan every pushed commit)
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          if git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            range="${BEFORE_SHA}..${AFTER_SHA}"
+          else
+            echo "Previous head ${BEFORE_SHA} is not in the history; scanning all history up to ${AFTER_SHA}."
+            range="${AFTER_SHA}"
+          fi
+          gitleaks detect --config .gitleaks.toml --source . --log-opts "$range" -v --redact
+
+      - name: Run gitleaks (schedule — scan full history)
+        if: github.event_name == 'schedule'
+        run: gitleaks detect --config .gitleaks.toml --source . -v --redact
 
   dependency-audit:
     name: Dependency Audit

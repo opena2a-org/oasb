@@ -128,6 +128,12 @@ README's test counts do not include them.
   describe.
 - `scripts/placeholder-credentials.test.mjs`: the placeholder marking of
   API-key-shaped values in `src/`; fails when one does not spell FAKE.
+- `scripts/secret-scan-workflow.test.mjs`: the secret-scan job of
+  `.github/workflows/security.yml`. It runs the job's install and push scan
+  scripts with stub commands and checks that the token can only read the
+  repository, that gitleaks is unpacked only when its archive matches the
+  pinned sha256, that a push is read from its previous head to its new head,
+  and that the scheduled run reads the full history.
 
 ## The README checks on every pull request
 

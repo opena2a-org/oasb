@@ -492,6 +492,15 @@ stay on record here with the reason they changed.
   matched. It was named for a secret key, which OL-001 does not detect.
 - `npm run report` writes `REPORT.generated.md`, which git ignores. It wrote
   `REPORT.md` and so replaced the 2026-03-23 run kept there as recorded.
+- The secret scan in the security workflow reads every commit a push to
+  `main` adds, from the push's previous head to its new head; it read only
+  the head commit, so a push of several commits left all but the last
+  unscanned. A push with no previous head in the history, such as a force
+  push, is read in full. The weekly scheduled run reads the full history,
+  not only the last commit. gitleaks is pinned to 8.30.1 and its archive is
+  checked against the release's sha256 before it is unpacked; it was the
+  latest release, unchecked. The job's token can only read the repository.
+  `scripts/secret-scan-workflow.test.mjs` fails when any of these regress.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
