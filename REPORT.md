@@ -10,9 +10,9 @@ Generated: 2026-03-23
 >   2026-06-03. The current mapping covers 15 techniques; see
 >   [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
 > - The 222 tests of this run are the attack scenarios alone. The integration
->   group now has 43 tests and the E2E group 23, one of them skipped. The
+>   group now has 44 tests and the E2E group 23, one of them skipped. The
 >   README's Counts note has the current `npm test` totals.
-> - The arp-guard adapter declares 15 of the 16 capabilities; it does not
+> - The arp-guard adapter declares 16 of the 17 capabilities; it does not
 >   declare event correlation.
 > - Since 2026-06-03 an AI-layer suite (AT-AI-001 to AT-AI-005) for a
 >   capability the adapter does not declare is skipped, not failed. Under
