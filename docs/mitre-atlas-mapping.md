@@ -1,6 +1,6 @@
 # MITRE ATLAS Test Mapping
 
-OASB maps each scenario that simulates an adversary to a [MITRE ATLAS](https://atlas.mitre.org/) technique; the [README](../README.md#mitre-atlas-coverage) states how many of the tests and files that is. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data) for the current matrix, which renamed the ML-attack techniques (ML → AI) and added the AI-agent technique family in 2025.
+OASB maps each scenario that simulates an adversary to a [MITRE ATLAS](https://atlas.mitre.org/) technique; the [README](../README.md#mitre-atlas-coverage) states how many of the tests and files that is. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data) for the current matrix, which renamed the ML-attack techniques (ML → AI) and has added AI-agent techniques since 2025: of those mapped here, AML.T0081 and AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and AML.T0034.002 on 2026-03-30.
 
 Defensive-response and detection-capability tests are tracked separately (see the end of this document): ATLAS is an adversary framework, so a test that validates the product's *reaction* or its *own detection machinery* is not mapped to an attack technique.
 

@@ -156,7 +156,7 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 
 ## MITRE ATLAS Coverage
 
-Of the 223 tests across 47 scenario files, 166 tests in 33 files map to 15 unique techniques in [MITRE ATLAS](https://atlas.mitre.org/) as of the current matrix (which renamed the ML-attack techniques to AI and added the AI-agent technique family in 2025). The other 57 tests, in 14 files, are defensive and capability tests, listed below the table. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data). Per-technique detail: [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
+Of the 223 tests across 47 scenario files, 166 tests in 33 files map to 15 unique techniques in [MITRE ATLAS](https://atlas.mitre.org/) as of the current matrix, which renamed the ML-attack techniques to AI and has added AI-agent techniques since 2025 (of those mapped here, AML.T0081 and AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and AML.T0034.002 on 2026-03-30). The other 57 tests, in 14 files, are defensive and capability tests, listed below the table. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data). Per-technique detail: [docs/mitre-atlas-mapping.md](docs/mitre-atlas-mapping.md).
 
 | Technique | ID | Tests |
 |-----------|----|-------|
@@ -218,7 +218,7 @@ A scoring engine for scanners that judge AI agent skills and configurations, in 
 | Benign | 3,881 | 3,704 labeled benign from the scanner under test's own registry scan results (see below), 177 hand-authored |
 | Edge cases | 94 | Security tools, defensive governance, broad-permission configs |
 
-> The published results below were produced on this 4,245-sample categorized set. The corpus file (`corpus/v2.json`) has since grown additional uncategorized malicious samples; the `--categorized-only` flag used by the runner pins evaluation to the 270 categorized malicious samples (30 × 9) so the numbers are reproducible.
+> The published results below were produced on this 4,245-sample categorized set. The corpus file (`corpus/v2.json`) also holds 225 uncategorized malicious samples, which it already held when both published runs excluded them; the `--categorized-only` flag used by the runner pins evaluation to the 270 categorized malicious samples (30 × 9) so the numbers are reproducible.
 
 ### Benchmark Runner
 

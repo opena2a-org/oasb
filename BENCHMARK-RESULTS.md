@@ -27,7 +27,8 @@ give it beside the 2026-06-05 figures; everything else in this document is the 2
 > and **`safe` appears zero times**. So the benign class is not "artifacts HackMyAgent called
 > clean". It is **artifacts HackMyAgent emitted a warning on, kept because they scored 70 or
 > above**. The count was also overstated: **3,704** benign samples carry a scanner verdict, and a
-> further 177 are hand-authored fixtures that merely declare `source: 'registry'`.
+> further 177 are hand-authored fixtures with no scanner verdict: 107 declare `source: 'registry'`
+> and 70 declare `source: 'enterprise'`.
 >
 > The conclusion is unchanged and, if anything, stronger. Any artifact the scanner scored below 70
 > was excluded from the benign class by construction, so a near-zero false-positive rate was
@@ -155,7 +156,7 @@ alike and so carry no malicious-intent signal:
 
   > **Correction, 2026-08-27.** This exclusion was previously justified by the claim that "over
   > 2,900 benign registry MCP servers declare this". **Those servers did not declare it.**
-  > `scripts/export-registry-corpus.mjs:233` hard-codes `allowedTools: ['*']` into every
+  > `scripts/export-registry-corpus.mjs:243` hard-codes `allowedTools: ['*']` into every
   > synthesized `mcp_tool` sample, so all **3,101 of 3,101** registry-derived MCP samples contain
   > it and **2,954** of those are labeled benign. The observation that motivated excluding a check
   > class from the verdict was written into the corpus by the corpus builder, which is the same

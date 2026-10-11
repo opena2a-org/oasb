@@ -387,6 +387,19 @@ stay on record here with the reason they changed.
   failures. `npm run check:readme` now fails when a page the README links
   under a dated file name does not say "as of" that date and link to the
   README above its first H2.
+- Four statements in the README and `BENCHMARK-RESULTS.md` are corrected to
+  match the data. The ATLAS sentence said the AI-agent technique family was
+  added in 2025; of the agent techniques mapped here, AML.T0081 and
+  AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and
+  AML.T0034.002 on 2026-03-30 (also corrected in
+  `docs/mitre-atlas-mapping.md`). The README said `corpus/v2.json` has since
+  grown uncategorized malicious samples; the file last changed on 2026-03-27
+  and already held its 225 when both published runs excluded them. Of the
+  177 hand-authored benign samples, 107 declare `source: 'registry'` and 70
+  declare `source: 'enterprise'`; all 177 were said to declare `registry`.
+  The `allowedTools: ['*']` line in `scripts/export-registry-corpus.mjs` is
+  243, not 233. `scripts/doc-facts.test.mjs` reads the corpus and the script
+  and fails when the last three statements no longer match them.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
