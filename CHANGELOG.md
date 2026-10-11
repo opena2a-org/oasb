@@ -151,8 +151,8 @@ stay on record here with the reason they changed.
   0. A README or test report that cannot be read is named once, followed by
   the reason (`ENOENT: no such file or directory`); the line repeated the path
   in Node's error message after it. An error whose message does not end with
-  the path keeps its whole message instead of only its code. The statements both checks compare are one
-  list, `STATEMENTS` in
+  the path keeps its whole message instead of only its code. The statements
+  both checks compare are one list, `STATEMENTS` in
   `scripts/readme-counts.mjs`; each check kept its own copy before, and a
   reworded sentence had to be updated in both. The tests of both checks run
   after `npm ci` in `npm run smoke`, and include one that changes each count
