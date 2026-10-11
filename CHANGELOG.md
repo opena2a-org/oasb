@@ -109,6 +109,12 @@ stay on record here with the reason they changed.
   against llm-guard and rebuff, and fails when a suite runs without every
   capability it needs.
 
+- The MITRE ATLAS coverage tables mark E2E-003 as skipped. Its one test is
+  skipped on every platform, but the README's MITRE ATLAS Coverage table and
+  `docs/mitre-atlas-mapping.md` listed it under AML.T0025 as if it ran.
+  `npm run check:readme` now fails when a scenario test whose tests are all
+  skipped is listed, without "(skipped)" after its ID, in a table of the
+  README's MITRE ATLAS Coverage section or of a page that section links to.
 - INT-005 checks anomaly detection, as `docs/test-catalog.md` said it did. It
   injected 30 normal events back to back and then 5 events already labelled
   violation/high, and checked the rule alert, the event buffer and the

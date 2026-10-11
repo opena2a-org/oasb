@@ -192,6 +192,52 @@ test('a scenario file the check cannot read is named, and the ATLAS counts are r
   assert.equal(r.stderr.trim().split('\n').length, 1, r.stderr);
 });
 
+// COUNTED with `row` in a MITRE ATLAS Coverage table at line 45, and `link`
+// appended to the section's first line (41).
+function withAtlas(row, link = '') {
+  return COUNTED.replace(
+    'are defensive and capability tests.',
+    `are defensive and capability tests.${link}\n\n| Technique | ID | Tests |\n|-----------|----|-------|\n${row}`,
+  );
+}
+
+// The SUITE's sources plus docs/atlas.md, whose sixth line is `row`.
+const withPage = (row) => ({
+  ...SOURCES,
+  'docs/atlas.md': `# Mapping\n\n| Test ID | Description |\n|---------|-------------|\n| AT-NET-001 | Outbound |\n${row}\n`,
+});
+
+const SKIPPED_E2E_003 =
+  'E2E-003 is listed as MITRE ATLAS coverage, but every test in src/e2e/E2E-003.live-network-detection.test.ts is skipped; write it as "E2E-003 (skipped)" or remove it.';
+
+test('a skipped test the MITRE ATLAS Coverage table lists fails until it is marked as skipped', () => {
+  for (const tests of ['AT-NET-001, E2E-003', 'AT-NET-001, E2E-001/003']) {
+    const r = checkCounts(withAtlas(`| Exfiltration via Cyber Means | AML.T0025 | ${tests} |`));
+    assert.equal(r.status, 1, tests);
+    assert.equal(r.stderr.trim(), `README: line 45: ${SKIPPED_E2E_003}`);
+  }
+  const r = checkCounts(withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001, E2E-001, E2E-003 (skipped) |'));
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('a skipped test listed in a page the MITRE ATLAS Coverage section links to fails until it is marked as skipped', () => {
+  const readme = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](docs/atlas.md).');
+  let r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
+  r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 (skipped) | Outbound TCP |'));
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('a page linked from outside the MITRE ATLAS Coverage section is not read for skipped tests', () => {
+  const readme = COUNTED.replace(
+    'run the same 10 attack scenarios.',
+    'run the same 10 attack scenarios. See [mapping](docs/atlas.md).',
+  );
+  const r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test('every count the README states is compared by this check and by the drift guard', () => {
   const notCounts = [...COUNTED.matchAll(NOT_COUNTS)].map((m) => [m.index, m.index + m[0].length]);
   const counts = [...COUNTED.matchAll(/\b\d+\b/g)].filter(

@@ -42,7 +42,7 @@ Data exfiltration over conventional network channels.
 | AT-NET-002 | Connection to known-bad host (webhook.site, ngrok) |
 | AT-NET-004 | Allowed-host bypass via subdomain matching |
 | AT-NET-005 | Exfiltration destination detection (transfer.sh, requestbin) |
-| E2E-003 | `lsof` detects outbound TCP |
+| E2E-003 (skipped) | `lsof` / `ss` polling detects outbound TCP. Skipped on every platform (`it.skip`) until the `ss` check sees the connection on Linux CI, so it adds no coverage yet |
 | E2E-005 | `net.Socket.connect` intercepted before connection |
 
 ### AML.T0055 - Unsecured Credentials

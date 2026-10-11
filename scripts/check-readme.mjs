@@ -32,6 +32,14 @@
 //   6. no line, in prose or in a code block, shows an OpenA2A CLI command
 //      the published CLI does not have. Each entry of UNSHIPPED is one such
 //      command; remove it when the CLI ships the command.
+//   7. a scenario test that a MITRE ATLAS coverage table lists, and whose
+//      tests are all skipped, is marked as skipped there. The tables read are
+//      those in the README's "MITRE ATLAS Coverage" section and in each .md
+//      page that section links to. A table lists a test by the ID its file
+//      name starts with (E2E-003), or several with one prefix
+//      (AT-NET-001/002); a skipped one must be written out in full and
+//      followed by "(skipped", as in "E2E-003 (skipped)". Like the counts,
+//      this reads the suite, so --no-counts skips it.
 //
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
@@ -385,6 +393,71 @@ function checkCounts(text, tests) {
   return fixed;
 }
 
+// 6. A skipped scenario test listed as MITRE ATLAS coverage is marked as skipped.
+
+// A scenario test's ID: its file name up to the first dot, such as E2E-003.
+function scenarioId(file) {
+  const id = file.slice(file.lastIndexOf('/') + 1).split('.')[0];
+  return /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+$/.test(id) ? id : null;
+}
+
+// The test IDs a table row lists: AT-NET-001/002 lists AT-NET-001 and AT-NET-002.
+function listedIds(row) {
+  const ids = [];
+  for (const m of row.matchAll(/\b([A-Z][A-Z0-9]*(?:-[A-Z]+)*-)(\d+)((?:\/\d+)*)/g)) {
+    ids.push(m[1] + m[2]);
+    for (const n of m[3].split('/').slice(1)) ids.push(m[1] + n);
+  }
+  return ids;
+}
+
+function checkSkippedCoverage(tests) {
+  const byId = new Map();
+  for (const t of tests) {
+    if (!SCENARIO_DIRS.some((dir) => t.file.startsWith(dir + '/'))) continue;
+    const id = scenarioId(t.file);
+    if (!id) continue;
+    if (!byId.has(id)) byId.set(id, { file: t.file, states: [] });
+    byId.get(id).states.push(t.state);
+  }
+  const skipped = new Map([...byId].filter(([, v]) => v.states.every((s) => s === 'skipped')));
+
+  // The README's MITRE ATLAS Coverage section, and the .md pages it links to.
+  const start = readme.findIndex((l) => !l.inFence && /^##\s+MITRE ATLAS Coverage\s*$/.test(l.line));
+  if (start < 0) return;
+  let end = start + 1;
+  while (end < readme.length && (readme[end].inFence || !/^##\s/.test(readme[end].line))) end++;
+  const section = readme.slice(start + 1, end);
+  const pages = [{ lines: section, prefix: '' }];
+  const seen = new Set([readmePath]);
+  for (const { line, inFence } of section) {
+    if (inFence) continue;
+    for (const target of linkTargets(line.replace(/`[^`]*`/g, ''))) {
+      if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
+      const pathPart = target.split('#')[0];
+      if (!pathPart || !/\.md$/i.test(pathPart)) continue;
+      const file = resolve(dirname(readmePath), decodeURIComponent(pathPart));
+      if (seen.has(file) || !existsSync(file)) continue; // a missing page is reported by the link check
+      seen.add(file);
+      pages.push({ lines: parse(readFileSync(file, 'utf8')), prefix: `${pathPart} ` });
+    }
+  }
+
+  for (const { lines, prefix } of pages) {
+    for (const { n, line, inFence } of lines) {
+      if (inFence || !line.startsWith('|')) continue;
+      for (const id of new Set(listedIds(line))) {
+        if (!skipped.has(id)) continue;
+        if (new RegExp(`\\b${id}\\s*\\(skipped`).test(line)) continue;
+        fail(
+          `${prefix}line ${n}: ${id} is listed as MITRE ATLAS coverage, but every test in ${skipped.get(id).file} is skipped; ` +
+            `write it as "${id} (skipped)" or remove it.`,
+        );
+      }
+    }
+  }
+}
+
 let counted = null;
 if (!noCounts) {
   let tests = null;
@@ -393,7 +466,10 @@ if (!noCounts) {
   } catch (err) {
     fail(reportPath ? `cannot read the test report ${reportPath}: ${readFailure(err)}` : err.message);
   }
-  if (tests) counted = checkCounts(readmeText, tests);
+  if (tests) {
+    counted = checkCounts(readmeText, tests);
+    checkSkippedCoverage(tests);
+  }
 }
 
 // 6. OpenA2A CLI commands the CLI does not have. A reader who copies one gets
