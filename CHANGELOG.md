@@ -504,6 +504,19 @@ stay on record here with the reason they changed.
   the push range and its fallback, the scheduled run's full history, the
   pinned version, the checksum step and the read-only token. It does not
   check the workflow's triggers or the checksum's value.
+- `scripts/placeholder-credentials.test.mjs` reports an OpenAI-shaped key
+  written right after an escape sequence, such as `\n` or `\x3D`, or after a
+  percent-encoded byte, such as `%3D`. The letter or digit that ends one did
+  not count as the start of a key, so the test passed such a value.
+- `scripts/scenario-report.test.mjs` reads `.gitignore` to check that it
+  lists `REPORT.generated.md`. It asked git, and so failed in a source
+  archive without git metadata or where git is not installed.
+- `npm run report` exits 1, writing no report, when the results file named
+  as its argument does not exist. It wrote a report with every status N/A
+  and exited 0, as it still does when no argument is given and
+  `test-results.json` does not exist.
+- `docs/demo.tape` states no test or scenario count. It said 222 tests and
+  222 attack scenarios; the README states the counts.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

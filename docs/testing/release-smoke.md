@@ -125,7 +125,7 @@ README's test counts do not include them.
   `npm install @opena2a/oasb` on its own.
 - `scripts/doc-facts.test.mjs`: statements in `README.md` and
   `BENCHMARK-RESULTS.md` that must match the corpus and scripts they
-  describe.
+  describe, and that `docs/demo.tape` states no test or scenario count.
 - `scripts/placeholder-credentials.test.mjs`: the placeholder marking of
   API-key-shaped values in `src/`; fails when one does not spell FAKE.
 - `scripts/secret-scan-workflow.test.mjs`: the secret-scan job of

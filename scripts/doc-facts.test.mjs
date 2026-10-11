@@ -1,5 +1,5 @@
 // Tests that statements in README.md and BENCHMARK-RESULTS.md match the
-// corpus and scripts they describe.
+// corpus and scripts they describe, and that docs/demo.tape states no count.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -39,6 +39,17 @@ test('BENCHMARK-RESULTS.md states the source of each hand-authored benign sample
   for (const [source, n] of bySource) {
     assert.ok(text.includes(`${n} declare \`source: '${source}'\``), `${n} declare \`source: '${source}'\` is not stated`);
   }
+});
+
+test('docs/demo.tape states no test or scenario count', () => {
+  // The tape is recorded once and kept, so a count in it goes stale as tests
+  // are added; README.md states the counts, and scripts/check-readme.mjs
+  // holds them to the suite.
+  const counted = read('docs/demo.tape')
+    .split('\n')
+    .map((line, i) => `docs/demo.tape:${i + 1}: ${line.trim()}`)
+    .filter((line) => /\b\d+\s+(?:\w+\s+)?(?:tests?|scenarios?)\b/i.test(line.replace(/^[^ ]+ /, '')));
+  assert.deepEqual(counted, [], 'refer to the counts README.md states instead');
 });
 
 test('README.md states the uncategorized malicious count corpus/v2.json holds', () => {

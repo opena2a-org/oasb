@@ -6,7 +6,7 @@
 // The totals and the status of each file come from a vitest JSON report when
 // one is given.
 
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCENARIO_DIRS, reportFiles, sourcePath } from './readme-counts.mjs';
@@ -189,6 +189,28 @@ export function generateReport({ scenarios, results = null, date }) {
   );
 
   return lines.join('\n');
+}
+
+/**
+ * The parsed vitest JSON report at `path`. When `required` is false a file
+ * that does not exist gives null, so that the report holds the mapping alone;
+ * that is for the default test-results.json, which a run may not have written.
+ * A file named on the command line is required: one that does not exist, or
+ * cannot be read or parsed, throws an error that names `path`.
+ */
+export function readResults(path, required) {
+  if (!required && !existsSync(path)) return null;
+  let text;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (err) {
+    throw new Error(err.code === 'ENOENT' ? `${path} does not exist` : `${path} cannot be read: ${err.message}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error(`${path} is not JSON: ${err.message}`);
+  }
 }
 
 // The tracked REPORT.md is a dated run kept as recorded, so a generated

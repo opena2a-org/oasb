@@ -17,9 +17,13 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The key shapes of OL-001: OpenAI, AWS access key ID, GitHub, GitLab, Slack, JWT.
 // An OpenAI key starts a word, so a hyphenated word that has "sk" before a
-// hyphen (a "risk-" compound, as in the test below) is not one.
+// hyphen (a "risk-" compound, as in the test below) is not one. The letter or
+// digit that ends an escape sequence (`\n`, `\x3D`, `\u003D`) or a
+// percent-encoded byte (`%3D`) is not part of a word in the decoded text, and
+// a credential scan with no left boundary still matches a key after it, so
+// such a key is reported too.
 const KEY_SHAPES =
-  /(?<!\w)sk-[a-zA-Z0-9\-_]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9\-_]{20,}|xox[bpas]-[a-zA-Z0-9\-]{10,}|(?:eyJ[a-zA-Z0-9_-]{20,}\.){2}[a-zA-Z0-9_-]{20,}/g;
+  /(?:(?<!\w)|(?<=\\(?:[a-z0]|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}))|(?<=%[0-9A-Fa-f]{2}))sk-[a-zA-Z0-9\-_]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9\-_]{20,}|xox[bpas]-[a-zA-Z0-9\-]{10,}|(?:eyJ[a-zA-Z0-9_-]{20,}\.){2}[a-zA-Z0-9_-]{20,}/g;
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
@@ -53,4 +57,15 @@ test('a hyphenated word with "sk" before a hyphen is not an OpenAI-shaped key', 
   const key = ['sk', 'proj', 'not0a0real0key0value'].join('-');
   assert.deepEqual(unmarked(key, 'x'), ['x:1: sk-proj-...']);
   assert.deepEqual(unmarked(`the key is "${key}"`, 'x'), ['x:1: sk-proj-...']);
+});
+
+test('an OpenAI-shaped key right after an escape sequence or a percent-encoded byte is reported', () => {
+  // Joined at run time so that no line of this file holds the whole value.
+  const key = ['sk', 'proj', 'not0a0real0key0value'].join('-');
+  for (const before of ['\\n', '\\r', '\\t', '\\0', '\\x3D', '\\u003D', '%3D', '%3d']) {
+    assert.deepEqual(unmarked(`const body = "a${before}${key}";`, 'x'), ['x:1: sk-proj-...'], `after ${before}`);
+  }
+  const word = ['risk', 'management', 'framework'].join('-');
+  assert.deepEqual(unmarked(`const body = "a\\n${word}";`, 'x'), []);
+  assert.deepEqual(unmarked(`see https://example.org/?q=%3D${word}`, 'x'), []);
 });

@@ -14,25 +14,19 @@
  *
  * Without an argument it reads test-results.json in the current directory, and
  * reports the mapping alone (every status N/A) when that file does not exist.
- * The report itself is built by scripts/scenario-report.mjs. REPORT.md, which
+ * A results file named as the argument must exist: when it does not, no report
+ * is written and the command exits 1 naming the path. The report itself is built by scripts/scenario-report.mjs. REPORT.md, which
  * is tracked, is the 2026-03-23 run kept as recorded and is not overwritten.
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
 
 async function main(): Promise<void> {
-  const { generateReport, readScenarios, writeReport } = await import('./scenario-report.mjs');
+  const { generateReport, readResults, readScenarios, writeReport } = await import('./scenario-report.mjs');
 
-  const resultsPath = process.argv[2] || path.join(process.cwd(), 'test-results.json');
-  let results: unknown = null;
-  if (fs.existsSync(resultsPath)) {
-    try {
-      results = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
-    } catch (err) {
-      throw new Error(`${resultsPath} is not JSON: ${(err as Error).message}`);
-    }
-  }
+  const named = process.argv[2];
+  const resultsPath = named || path.join(process.cwd(), 'test-results.json');
+  const results = readResults(resultsPath, Boolean(named));
 
   const scenarios = readScenarios();
   let report: string;

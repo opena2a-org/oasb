@@ -1,5 +1,5 @@
 # OASB (Open Agent Security Benchmark) Demo
-# 222 attack scenarios for evaluating agent security products
+# Attack scenarios for evaluating agent security products
 # Run: vhs docs/demo.tape
 
 Output docs/oasb-demo.gif
@@ -24,12 +24,12 @@ Show
 # Title pause
 Sleep 1s
 
-# Step 1: Run the full benchmark (222 tests)
+# Step 1: Run the full benchmark (README.md states the test counts)
 Type "npm test"
 Enter
 Sleep 8s
 
-# Let users see all 222 tests passing
+# Let users read the test summary
 Sleep 4s
 
 # Step 2: Generate the coverage report

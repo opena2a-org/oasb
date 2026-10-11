@@ -4,7 +4,6 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -13,6 +12,7 @@ import {
   REPORT_FILE,
   generateReport,
   parseAtlas,
+  readResults,
   readScenarios,
   techniqueSummary,
   writeReport,
@@ -166,6 +166,31 @@ test('the report is written beside the recorded REPORT.md, to a name git ignores
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-  const ignored = spawnSync('git', ['check-ignore', '-q', REPORT_FILE], { cwd: repo });
-  assert.equal(ignored.status, 0, `.gitignore does not list ${REPORT_FILE}`);
+  // .gitignore is read rather than asking git, which cannot answer in a source
+  // archive without git metadata or on a machine without git. The last line
+  // that names the file decides, as it does for git.
+  const named = readFileSync(join(repo, '.gitignore'), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.replace(/^!?\/?/, '') === REPORT_FILE);
+  assert.ok(named.length > 0 && !named.at(-1).startsWith('!'), `.gitignore does not list ${REPORT_FILE}`);
+});
+
+test('a results file named on the command line must exist; the default one may be absent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
+  try {
+    const missing = join(dir, 'nonexistent-results.json');
+    assert.equal(readResults(missing, false), null);
+    assert.throws(() => readResults(missing, true), (err) => err.message === `${missing} does not exist`);
+
+    const results = join(dir, 'test-results.json');
+    writeFileSync(results, '{"numTotalTests": 0, "testResults": []}');
+    assert.deepEqual(readResults(results, true), { numTotalTests: 0, testResults: [] });
+    assert.deepEqual(readResults(results, false), { numTotalTests: 0, testResults: [] });
+
+    writeFileSync(results, 'not json');
+    assert.throws(() => readResults(results, false), (err) => err.message.startsWith(`${results} is not JSON: `));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
