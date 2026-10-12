@@ -534,6 +534,32 @@ stay on record here with the reason they changed.
   222 attack scenarios; the README states the counts.
 - `docs/demo.tape` runs from the root of any clone. Its hidden setup changed
   into one checkout path under the home directory.
+- Before each case, the E2E-001 live filesystem tests write files named
+  `oasb-watch-probe-N` into the watched directory, one every 250 ms, until
+  the product reports one. They paused a fixed 200 ms after starting the
+  product. The wait is at most 5 seconds, and it ends 1 second before the
+  10-second timeout of the hook it runs in, so a product that is slow to
+  start gets the time the fixed pause left it: the wait lasts at least
+  200 ms. The `.env` case and the normal-file case leave the probe events
+  out. Each detection still waits 5 seconds, and `vitest.config.ts` is not
+  changed. A `waitForEvent` that throws, or that does not settle when its
+  timeout passes, counts as no report. The 8 tests in
+  `src/harness/filesystem-watch.test.ts` cover the wait and its budget.
+- Of six test adapters written for the comparison, not in this
+  repository, the E2E-001 result changed for one: an adapter whose watcher
+  misses the writes made in the first second after `start()` went from
+  4 failed and 1 passed to 5 passed. Adapters that report each write
+  7 seconds late (4 failed, 1 passed), that report only sensitive paths
+  with a `start()` of 5.2, 6 or 9 seconds (5 passed), whose `waitForEvent`
+  never settles (5 passed) or throws (4 failed, 1 passed), and that report
+  every write as a violation (1 failed, 4 passed) kept their results.
+  `llm-guard` and `rebuff` skip E2E-001 with and without the change.
+- E2E-001 still times out against the reference adapter (`arp-guard`
+  0.3.0) under full-suite load: in one `npx vitest run --maxWorkers=4` on
+  a 16-core macOS host at a 1-minute load of 7.9 to 8.1, the `.bashrc` and
+  `.npmrc` cases timed out after 5 seconds. The file run alone, with four
+  workers, passed at a load of 9.1 and had one such timeout at a load of
+  10.4 while other test runs shared the host.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

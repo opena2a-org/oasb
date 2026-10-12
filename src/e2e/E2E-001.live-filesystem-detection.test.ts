@@ -12,6 +12,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
+import { isWatchProbeEvent, probeWaitMs, waitForFilesystemWatch } from '../harness/filesystem-watch';
 import type { SecurityProductAdapter } from '../harness/adapter';
 
 describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detection', () => {
@@ -19,6 +20,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
   let watchDir: string;
 
   beforeEach(async () => {
+    const hookStart = Date.now();
     // Create a temp directory to watch
     watchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arp-e2e-fs-'));
 
@@ -32,8 +34,12 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     });
     await arp.start();
 
-    // Give fs.watch a moment to initialize
-    await new Promise((r) => setTimeout(r, 200));
+    // Write probe files until the watcher reports one, instead of pausing a
+    // fixed 200 ms. The wait is at most 5 s, and it ends 1 s before this hook's
+    // 10 s timeout (vitest.config.ts), so a product that is slow to start has
+    // the time the fixed pause left it: the wait is never shorter than 200 ms.
+    // The probe events are excluded below.
+    await waitForFilesystemWatch(arp, watchDir, { timeoutMs: probeWaitMs(Date.now() - hookStart) });
   });
 
   afterEach(async () => {
@@ -52,7 +58,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
 
     // Wait for the filesystem monitor to pick it up
     const event = await arp.waitForEvent(
-      (e) => e.source === 'filesystem' && e.data.sensitive === true,
+      (e) => e.source === 'filesystem' && e.data.sensitive === true && !isWatchProbeEvent(e),
       5000,
     );
 
@@ -119,11 +125,11 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     await new Promise((r) => setTimeout(r, 1500));
 
     // Should NOT have any violations
-    const violations = arp.getEventsByCategory('violation');
+    const violations = arp.getEventsByCategory('violation').filter((e) => !isWatchProbeEvent(e));
     expect(violations.length).toBe(0);
 
     // Might have a normal 'rename' event from fs.watch
-    const allEvents = arp.getEvents();
+    const allEvents = arp.getEvents().filter((e) => !isWatchProbeEvent(e));
     for (const event of allEvents) {
       expect(event.category).not.toBe('violation');
       expect(event.category).not.toBe('threat');
