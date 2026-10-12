@@ -764,9 +764,11 @@ stay on record here with the reason they changed.
   event's `data` without `?.`, left `npm test` and `npm run test:scripts`
   passing. The code is the same, so no verdict changes.
   `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
-  `src/` uses `markDetected`, so a case that got no event from the
-  product, such as the normal-file case, cannot mark itself detected, and
-  when E2E-001 stops reading its cases through these functions. After a
+  `src/` names `markDetected`, and when E2E-001 stops calling `detectWrite`
+  or `openControlWatchOrSkip`. It reads the text of those files: a mark
+  written another way (`ctx.task.meta.detected = true` in a case) and a
+  predicate written inline in E2E-001 in place of `isSensitiveFileEvent` or
+  `fileEventFor` are not detected. After a
   case whose product's `stop()` rejects and whose control's `close()`
   throws, `endWatchCase` passes on the rejection of `stop()`, as its
   description says; it passed on the error of `close()`. The README says

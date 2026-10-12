@@ -330,7 +330,7 @@ function functionText(text, name) {
   return text.slice(start, text.indexOf('\n}\n', start) + 2);
 }
 
-test('a case is marked detected only by detectWrite, after its inconclusive and missed checks, and no test under src/ marks one itself', () => {
+test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by detectWrite after its inconclusive and missed checks, no test file under src/ names markDetected, and E2E-001 calls detectWrite and openControlWatchOrSkip', () => {
   const src = join(here, '..', 'src');
   // A test file that called markDetected could mark a case that got no event
   // from the product, such as E2E-001's normal-file case, and the drift
