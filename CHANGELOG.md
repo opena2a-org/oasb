@@ -554,12 +554,13 @@ stay on record here with the reason they changed.
   never settles (5 passed) or throws (4 failed, 1 passed), and that report
   every write as a violation (1 failed, 4 passed) kept their results.
   `llm-guard` and `rebuff` skip E2E-001 with and without the change.
-- E2E-001 still times out against the reference adapter (`arp-guard`
-  0.3.0) under full-suite load: in one `npx vitest run --maxWorkers=4` on
-  a 16-core macOS host at a 1-minute load of 7.9 to 8.1, the `.bashrc` and
-  `.npmrc` cases timed out after 5 seconds. The file run alone, with four
-  workers, passed at a load of 9.1 and had one such timeout at a load of
-  10.4 while other test runs shared the host.
+- With the probe wait alone, E2E-001 detection cases still reached their
+  5-second timeout under full-suite load: in one
+  `npx vitest run --maxWorkers=4` on a 16-core macOS host at a 1-minute
+  load of 7.9 to 8.1, the `.bashrc` and `.npmrc` cases timed out. The file
+  run alone, with four workers, passed at a load of 9.1 and had one such
+  timeout at a load of 10.4 while other test runs shared the host. The
+  entry below reads such a case against the harness's own watcher.
 - An E2E-001 detection case the product reported nothing for within its
   5-second window is read against a control: the harness's own `fs.watch`
   of the watched directory, opened before the product starts and closed
@@ -578,7 +579,7 @@ stay on record here with the reason they changed.
   that is not skipped passes or fails as it did before, so the adapters
   compared above keep their results in every case that is not skipped. The
   window, the single write per case, the five cases and their assertions do
-  not change, and no case passes without the product's own event. On a
+  not change. No detection case passes without the product's own event. On a
   16-core macOS host at a 1-minute load of 14.8 to 28.3, with `fseventsd`
   at 85% to 106% of a core, the file run alone five times gave 0 failed and
   4 or 5 skipped per run; each readiness skip stated that the control saw
