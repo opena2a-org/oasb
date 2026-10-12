@@ -37,7 +37,8 @@ the claims this repository publishes:
    failure fails the smoke.
 3. **README count drift guard.** `scripts/check-test-counts.mjs` reads the
    per-file results of the JSON reporter and compares every test count the
-   README states with them: the tests badge, the Quick Start comment, the
+   README in the clone states with them (the committed README, so an
+   uncommitted edit to it is not what the smoke measures): the tests badge, the Quick Start comment, the
    Counts note (total, passing, skipped, attack scenarios, scoring-engine and
    pinned harness tests), the per-group `npm run test:*` comments, the
    scenario counts in the prose, the scenario-file count under MITRE ATLAS

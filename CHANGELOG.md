@@ -301,6 +301,10 @@ stay on record here with the reason they changed.
 - `npm run smoke` runs `npm run test:scripts` instead of a list of its own,
   which named two of the three test files in `scripts/` and left the
   changelog width test out.
+- The drift guard in `npm run smoke` compares the test counts of the README in
+  the fresh clone, the committed one. It read the README of the working tree
+  the smoke was started from, so an uncommitted edit to it was what the smoke
+  measured.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of eight tests, so committing a run no longer changes the
   `npm test` total. Its check that at least one

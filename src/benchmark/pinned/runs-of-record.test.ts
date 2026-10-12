@@ -125,8 +125,9 @@ describe('committed pinned runs', () => {
   });
 
   // A v1 run does not show whether the model or the word list produced its
-  // verdicts. Every later schema records it, so a run of any schema but v1
-  // with run totals in its record counts, whichever schema is current.
+  // verdicts. Of the schemas that exist, only v2 records it, in the run totals
+  // of its record (nanomindUse), so a run that is not v1 and holds those
+  // totals counts.
   it('holds at least one run of record that says what scored each sample', () => {
     const saying = runs.filter(name => {
       const record = readRecord(join(RESULTS_ROOT, name));

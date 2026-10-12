@@ -41,7 +41,8 @@ echo "==> Full test suite with JSON reporter"
 npx vitest run --reporter=json --outputFile="$TMP/results.json" >/dev/null
 
 echo "==> Drift guard: every README test count vs the live suite"
-node scripts/check-test-counts.mjs "$TMP/results.json" "$ROOT/README.md"
+# The clone's README: the committed one, not an uncommitted edit in $ROOT.
+node scripts/check-test-counts.mjs "$TMP/results.json" README.md
 
 echo "==> Pack check: required files present in the publish tarball"
 node - <<'EOF'

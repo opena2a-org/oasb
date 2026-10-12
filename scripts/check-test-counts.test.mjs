@@ -352,6 +352,19 @@ test('a scenario file the report names and the README directory lacks is named, 
   assert.doesNotMatch(r.stderr, /^\s+at /m);
 });
 
+test('the release smoke compares the counts of the README in its clone, not of the working tree', () => {
+  const lines = readFileSync(join(here, 'release-smoke.sh'), 'utf8')
+    .split('\n')
+    .filter((l) => !l.trimStart().startsWith('#'))
+    .map((l) => l.trim());
+  const clone = lines.indexOf('cd "$TMP/oasb"');
+  const guard = lines.findIndex((l) => /^node scripts\/check-test-counts\.mjs\b/.test(l));
+  assert.notEqual(guard, -1, 'scripts/release-smoke.sh does not run scripts/check-test-counts.mjs');
+  assert.ok(clone !== -1 && clone < guard, 'the drift guard does not run inside the fresh clone');
+  const readme = lines[guard].split(/\s+/).at(-1);
+  assert.equal(readme, 'README.md', `the drift guard reads ${readme}; an uncommitted edit to the working tree's README would be what it measures`);
+});
+
 test('readFailure drops the path a file-system error repeats and keeps any other message', () => {
   const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-'));
   try {
