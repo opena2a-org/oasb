@@ -10,10 +10,14 @@ import { EventCollector } from './event-collector';
 import {
   WATCH_PROBE_PREFIX,
   awaitDetection,
+  detectWrite,
   endWatchCase,
+  fileEventFor,
+  isSensitiveFileEvent,
   isWatchProbeEvent,
   loadNote,
   openControlWatch,
+  openControlWatchOrSkip,
   probeWaitMs,
   readinessMessage,
   readinessSkip,
@@ -215,6 +219,45 @@ const noRecursiveWatch = () =>
     new Error('The feature watch recursively is unavailable on the current platform, which is being used to run Node.js'),
     { code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM' },
   );
+
+/** What the skip of a fake test context throws, as vitest's ends the test. */
+class Skipped extends Error {}
+
+/**
+ * A stand-in for the vitest test context of a case: its meta, and a skip
+ * that records the note and throws, as vitest's ends the test. It is not a
+ * run-time skip of a test in this file, so it is written as a property,
+ * which the run-time skip check in scripts/check-test-counts.test.mjs does
+ * not read as one.
+ */
+function fakeContext() {
+  const skips: (string | undefined)[] = [];
+  const ctx = {
+    task: { meta: {} as { inconclusive?: string; detected?: boolean } },
+    skip: (note?: string): never => {
+      skips.push(note);
+      throw new Skipped(note);
+    },
+  };
+  return { ctx, skips };
+}
+
+/** A filesystem event that has no `data`, which the adapter interface allows. */
+const datalessEvent = (): SecurityEvent => ({
+  source: 'filesystem',
+  category: 'normal',
+  severity: 'info',
+  description: 'File changed',
+});
+
+/** A filesystem event of the product for a sensitive path, as for E2E-001's writes. */
+const sensitiveEvent = (name: string): SecurityEvent => ({
+  source: 'filesystem',
+  category: 'violation',
+  severity: 'high',
+  description: `Sensitive file created: ${name}`,
+  data: { path: name, sensitive: true },
+});
 
 describe('openControlWatch', () => {
   it('records the path and time of each event the watcher delivers, and nothing for an event without a path', () => {
@@ -543,5 +586,153 @@ describe('endWatchCase', () => {
     await endWatchCase({});
 
     expect(existsSync(dir)).toBe(false);
+  });
+
+  it('passes on the rejection of stop(), not the error of close(), when both fail, and removes the directory', async () => {
+    const adapter = { stop: () => Promise.reject(new Error('stop failed')) };
+    const control = {
+      close: () => {
+        throw new Error('close failed');
+      },
+    };
+
+    await expect(endWatchCase({ adapter, control, dir })).rejects.toThrow('stop failed');
+
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  it('passes on the error of close() when stop() resolves, and removes the directory', async () => {
+    const adapter = { stop: async () => undefined };
+    const control = {
+      close: () => {
+        throw new Error('close failed');
+      },
+    };
+
+    await expect(endWatchCase({ adapter, control, dir })).rejects.toThrow('close failed');
+
+    expect(existsSync(dir)).toBe(false);
+  });
+});
+
+describe('openControlWatchOrSkip', () => {
+  it('opens the control as openControlWatch does, and does not skip the case', () => {
+    const { ctx, skips } = fakeContext();
+    const { watch, deliver } = fakeWatch();
+
+    const control = openControlWatchOrSkip(ctx, '/watched', { watch });
+    deliver('.env');
+
+    expect(control.seen('.env')?.path).toBe('.env');
+    expect(skips).toEqual([]);
+    expect(ctx.task.meta).toEqual({});
+  });
+
+  it('skips the case as inconclusive, with the message of recursiveWatchSkip, where Node.js has no recursive fs.watch', () => {
+    const { ctx, skips } = fakeContext();
+    const thrown = noRecursiveWatch();
+
+    expect(() => openControlWatchOrSkip(ctx, '/watched', { watch: failingWatch(thrown) })).toThrow(Skipped);
+
+    const message = recursiveWatchSkip(thrown);
+    expect(message).toMatch(/^inconclusive: Node\.js .* has no recursive fs\.watch/);
+    expect(skips).toEqual([message]);
+    expect(ctx.task.meta).toEqual({ inconclusive: message });
+  });
+
+  it('throws any other error on opening the control, which fails the case, without skipping it', () => {
+    const { ctx, skips } = fakeContext();
+    const thrown = Object.assign(new Error('ENOENT: no such file or directory, watch'), { code: 'ENOENT' });
+
+    let caught: unknown;
+    try {
+      openControlWatchOrSkip(ctx, '/watched', { watch: failingWatch(thrown) });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBe(thrown);
+    expect(skips).toEqual([]);
+    expect(ctx.task.meta).toEqual({});
+  });
+});
+
+describe('detectWrite', () => {
+  const controlThatSaw = (observation: ControlObservation | undefined) => ({ seen: () => observation });
+
+  it('returns the product event and marks the case detected when the product reports the write', async () => {
+    const { ctx, skips } = fakeContext();
+    const collector = new EventCollector();
+    const event = sensitiveEvent('.env');
+    collector.eventHandler(event);
+
+    expect(await detectWrite(ctx, collector, controlThatSaw(undefined), '.env', isSensitiveFileEvent, 100)).toBe(event);
+
+    expect(skips).toEqual([]);
+    expect(ctx.task.meta).toEqual({ detected: true });
+  });
+
+  it('fails the case, and does not mark it detected, when the product reports nothing and the control saw the path', async () => {
+    const { ctx, skips } = fakeContext();
+    const control = controlThatSaw({ path: '.bashrc', at: Date.now() });
+
+    await expect(detectWrite(ctx, new EventCollector(), control, '.bashrc', fileEventFor('.bashrc'), 100)).rejects.toThrow(
+      /^Timed out after 100ms waiting for event; the control fs\.watch saw \.bashrc -?\d+ ms after the write$/,
+    );
+
+    expect(skips).toEqual([]);
+    expect(ctx.task.meta).toEqual({});
+  });
+
+  it('skips the case as inconclusive, and does not mark it detected, when the product reports nothing and the control saw nothing', async () => {
+    const { ctx, skips } = fakeContext();
+
+    await expect(
+      detectWrite(ctx, new EventCollector(), controlThatSaw(undefined), '.npmrc', fileEventFor('.npmrc'), 100),
+    ).rejects.toThrow(Skipped);
+
+    expect(skips).toHaveLength(1);
+    expect(skips[0]).toMatch(/^inconclusive: host delivered no file event for \.npmrc within 100 ms \(control fs\.watch\)/);
+    expect(ctx.task.meta).toEqual({ inconclusive: skips[0] });
+  });
+
+  it('waits past a filesystem event without data that the collector already holds, with each predicate E2E-001 passes', async () => {
+    const cases: [string, (event: SecurityEvent) => boolean][] = [
+      ['.env', isSensitiveFileEvent],
+      ['.ssh', fileEventFor('.ssh')],
+      ['.bashrc', fileEventFor('.bashrc')],
+      ['.npmrc', fileEventFor('.npmrc')],
+    ];
+    for (const [name, predicate] of cases) {
+      const { ctx, skips } = fakeContext();
+      const collector = new EventCollector();
+      collector.eventHandler(datalessEvent());
+      const event = sensitiveEvent(name);
+      // The control saw the write, so a predicate that threw on the event
+      // without data would fail the case as a product miss.
+      const control = controlThatSaw({ path: name, at: Date.now() });
+      setTimeout(() => collector.eventHandler(event), 20);
+
+      expect(await detectWrite(ctx, collector, control, name, predicate, 1000), name).toBe(event);
+      expect(skips, name).toEqual([]);
+      expect(ctx.task.meta, name).toEqual({ detected: true });
+    }
+  });
+});
+
+describe('the detection predicates of E2E-001', () => {
+  it('match a filesystem event for the path, are false for an event without data, and isSensitiveFileEvent passes over a probe', () => {
+    const probe = sensitiveEvent(`${WATCH_PROBE_PREFIX}1`);
+
+    expect(isSensitiveFileEvent(sensitiveEvent('.env'))).toBe(true);
+    expect(isSensitiveFileEvent(fileEvent('.env'))).toBe(false);
+    expect(isSensitiveFileEvent(probe)).toBe(false);
+    expect(isSensitiveFileEvent({ ...sensitiveEvent('.env'), source: 'process' })).toBe(false);
+    expect(isSensitiveFileEvent(datalessEvent())).toBe(false);
+
+    expect(fileEventFor('.ssh')(fileEvent('.ssh/id_rsa'))).toBe(true);
+    expect(fileEventFor('.ssh')(fileEvent('.bashrc'))).toBe(false);
+    expect(fileEventFor('.ssh')(fileEvent('.ssh/id_rsa', 'process'))).toBe(false);
+    expect(fileEventFor('.ssh')(datalessEvent())).toBe(false);
   });
 });

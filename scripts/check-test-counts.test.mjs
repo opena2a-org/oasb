@@ -322,6 +322,45 @@ test('a test under src/ that skips at run time does so through skipInconclusive,
   assert.match(readFileSync(join(src, 'harness', 'filesystem-watch.ts'), 'utf8'), /^ {2}return ctx\.skip\(message\);$/m);
 });
 
+// The text of the function `name` in `text`, from its signature to the
+// closing brace at the start of a line.
+function functionText(text, name) {
+  const start = text.indexOf(`export async function ${name}(`);
+  assert.ok(start >= 0, `no export async function ${name}`);
+  return text.slice(start, text.indexOf('\n}\n', start) + 2);
+}
+
+test('a case is marked detected only by detectWrite, after its inconclusive and missed checks, and no test under src/ marks one itself', () => {
+  const src = join(here, '..', 'src');
+  // A test file that called markDetected could mark a case that got no event
+  // from the product, such as E2E-001's normal-file case, and the drift
+  // guard would take the file as measured on a run that measured nothing.
+  for (const file of testFiles(src)) {
+    assert.doesNotMatch(readFileSync(join(src, file), 'utf8'), /\bmarkDetected\b/, `src/${file} uses markDetected`);
+  }
+  const harness = readFileSync(join(src, 'harness', 'filesystem-watch.ts'), 'utf8');
+  assert.equal(harness.split('markDetected(ctx);').length - 1, 1, 'src/harness/filesystem-watch.ts calls markDetected other than once');
+  const detectWrite = functionText(harness, 'detectWrite');
+  const steps = [
+    "if (outcome.kind === 'inconclusive') skipInconclusive(ctx, outcome.message);",
+    "if (outcome.kind === 'missed') throw new Error(outcome.message);",
+    'markDetected(ctx);',
+    'return outcome.event;',
+  ].map(step => detectWrite.indexOf(step));
+  assert.ok(steps.every(at => at >= 0), `detectWrite lacks a step: ${steps}`);
+  assert.deepEqual([...steps].sort((a, b) => a - b), steps, 'detectWrite marks the case before its inconclusive and missed checks');
+  // E2E-001 reads each case through the harness, whose rules have unit
+  // tests: its detection cases through detectWrite, its control through
+  // openControlWatchOrSkip.
+  const e2e001 = readFileSync(join(src, 'e2e', 'E2E-001.live-filesystem-detection.test.ts'), 'utf8');
+  assert.match(e2e001, /^ {4}return detectWrite\(ctx, arp, control, name, predicate, timeoutMs\);$/m);
+  assert.equal(e2e001.split('await detect(ctx, ').length - 1, 4, 'E2E-001 has other than 4 detection cases');
+  assert.match(e2e001, /^ {4}control = opened\.control = openControlWatchOrSkip\(ctx, watchDir\);$/m);
+  for (const inlined of ['awaitDetection', 'openControlWatch(', 'recursiveWatchSkip']) {
+    assert.ok(!e2e001.includes(inlined), `E2E-001 calls ${inlined} itself instead of through the harness`);
+  }
+});
+
 test('the changelog and the smoke guide name the skips the run-time skip check does not see', () => {
   for (const doc of ['CHANGELOG.md', 'docs/testing/release-smoke.md']) {
     const text = readFileSync(join(here, '..', doc), 'utf8').replace(/\s+/g, ' ');

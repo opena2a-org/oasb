@@ -751,6 +751,29 @@ stay on record here with the reason they changed.
   `data` no longer fails a detection case. On 2026-10-12 the command
   reports 259 errors in 34 other scenario test files, which this entry
   does not fix, and `npm test` does not run it.
+- The code that reads an E2E-001 case moves from the test file to
+  `src/harness/filesystem-watch.ts`, where unit tests cover it:
+  `detectWrite` awaits the product's event for a write, fails the case on
+  a product miss, skips it as inconclusive when the host delivered no
+  event and marks it detected only when the product reported the write;
+  `openControlWatchOrSkip` opens the control and skips the case as
+  inconclusive where Node.js has no recursive `fs.watch`; and
+  `isSensitiveFileEvent` and `fileEventFor` are the four detection
+  predicates. In the test file, deleting the mark, that skip or the
+  rethrow of any other error on opening the control, or reading an
+  event's `data` without `?.`, left `npm test` and `npm run test:scripts`
+  passing. The code is the same, so no verdict changes.
+  `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
+  `src/` uses `markDetected`, so a case that got no event from the
+  product, such as the normal-file case, cannot mark itself detected, and
+  when E2E-001 stops reading its cases through these functions. After a
+  case whose product's `stop()` rejects and whose control's `close()`
+  throws, `endWatchCase` passes on the rejection of `stop()`, as its
+  description says; it passed on the error of `close()`. The README says
+  an inconclusive E2E-001 skip prints the measured load where the
+  platform measures one: on Windows the message says `loadavg unavailable
+  on Windows`. `src/harness/filesystem-watch.test.ts` has 10 more tests,
+  41 in the file; the suite is 396 tests, 395 not skipped.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

