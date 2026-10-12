@@ -17,7 +17,7 @@ import {
   isWatchProbeEvent,
   openControlWatch,
   probeWaitMs,
-  readinessMessage,
+  readinessSkip,
   waitForFilesystemWatch,
   type ControlWatch,
 } from '../harness/filesystem-watch';
@@ -73,12 +73,15 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     // fixed 200 ms. The wait is at most 5 s, and it ends 1 s before this hook's
     // 10 s timeout (vitest.config.ts), so a product that is slow to start has
     // the time the fixed pause left it: the wait is never shorter than 200 ms.
-    // The probe events are excluded below. A case whose product reported no
-    // probe is not measured: it ends here, as inconclusive, without its
-    // write.
+    // The probe events are excluded below. When the product reported no
+    // probe, the case still makes its write if the harness's own watcher saw a
+    // probe file; if that watcher saw none either, the host delivered no file
+    // event, so the case is not measured: it ends here, as inconclusive,
+    // without its write.
     const budgetMs = probeWaitMs(Date.now() - hookStart);
     const ready = await waitForFilesystemWatch(arp, watchDir, { timeoutMs: budgetMs });
-    if (!ready) ctx.skip(readinessMessage(control, watchDir, budgetMs));
+    const inconclusive = ready ? undefined : readinessSkip(control, watchDir, budgetMs);
+    if (inconclusive) ctx.skip(inconclusive);
   });
 
   afterEach(async () => {

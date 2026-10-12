@@ -14,6 +14,7 @@ import {
   openControlWatch,
   probeWaitMs,
   readinessMessage,
+  readinessSkip,
   waitForFilesystemWatch,
   type ControlObservation,
 } from './filesystem-watch';
@@ -260,12 +261,29 @@ describe('awaitDetection', () => {
     expect(windows).toEqual([['.bashrc', { sinceMs: writtenAt, untilMs: writtenAt + 300 }]]);
   });
 
-  it('is inconclusive, with the window and the load, when the product reports nothing and the control saw nothing', async () => {
+  it('is inconclusive, with the window, the load and the reason from the product, when the product reports nothing and the control saw nothing', async () => {
     const outcome = await awaitDetection(timedOut, controlThatSaw(undefined), '.npmrc', reports('.npmrc'), 300);
 
     expect(outcome.kind).toBe('inconclusive');
     expect(outcome.kind === 'inconclusive' && outcome.message).toMatch(
-      /^inconclusive: host delivered no file event for \.npmrc within 300 ms \(control fs\.watch\); loadavg \d+\.\d\d$/,
+      /^inconclusive: host delivered no file event for \.npmrc within 300 ms \(control fs\.watch\); loadavg \d+\.\d\d; the product's wait: Timed out after 300ms waiting for event$/,
+    );
+  });
+
+  it('reads the control when the window ends, so a wait that fails at once is a miss when the control sees the path later in the window', async () => {
+    const { watch, deliver } = fakeWatch();
+    const control = openControlWatch('/watched', { watch });
+    const crashed = { waitForEvent: () => Promise.reject(new Error('monitor crashed')) };
+    const writtenAt = Date.now();
+    const later = setTimeout(() => deliver('.env'), 100);
+
+    const outcome = await awaitDetection(crashed, control, '.env', reports('.env'), 1000, writtenAt);
+    clearTimeout(later);
+
+    expect(Date.now() - writtenAt).toBeGreaterThanOrEqual(990);
+    expect(outcome.kind).toBe('missed');
+    expect(outcome.kind === 'missed' && outcome.message).toMatch(
+      /^monitor crashed; the control fs\.watch saw \.env \d+ ms after the write$/,
     );
   });
 
@@ -302,6 +320,36 @@ describe('readinessMessage', () => {
 
     expect(readinessMessage({ observations: () => observations }, dir, 4200)).toMatch(
       /^inconclusive: product reported no probe file within 4200 ms of start\(\); the control fs\.watch saw 1 of the 3 probe files written; loadavg \d+\.\d\d$/,
+    );
+  });
+});
+
+describe('readinessSkip', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'oasb-watch-'));
+    for (const n of [1, 2, 3]) writeFileSync(join(dir, `${WATCH_PROBE_PREFIX}${n}`), '');
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('lets the case make its write when the product reported no probe but the control saw one', () => {
+    const observations = [
+      { path: 'other', at: 1 },
+      { path: `${WATCH_PROBE_PREFIX}2`, at: 2 },
+    ];
+
+    expect(readinessSkip({ observations: () => observations }, dir, 4200)).toBeUndefined();
+  });
+
+  it('skips the case as inconclusive, before its write, when the control saw no probe file either', () => {
+    const observations = [{ path: 'other', at: 1 }];
+
+    expect(readinessSkip({ observations: () => observations }, dir, 4200)).toMatch(
+      /^inconclusive: product reported no probe file within 4200 ms of start\(\); the control fs\.watch saw 0 of the 3 probe files written; loadavg \d+\.\d\d$/,
     );
   });
 });

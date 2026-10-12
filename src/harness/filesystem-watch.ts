@@ -6,17 +6,19 @@
  * files there until the product reports one, or until a time limit passes,
  * instead of pausing for a fixed time after start(). The limit is cut to
  * what is left of the test hook's time, so a product that is slow to start
- * gets the time the fixed pause left it and no more. A case whose product
- * reported no probe is not measured and ends as inconclusive, without its
- * write.
+ * gets the time the fixed pause left it and no more. When the product
+ * reported no probe, the case still makes its write if the control below saw
+ * a probe file, because the host is delivering file events; if the control
+ * saw none either, the case is not measured and ends as inconclusive, without
+ * its write.
  *
  * A control watcher owned by the harness, an fs.watch of the same directory
  * opened before the product starts and closed after it stops, records every
  * file event the host delivers to the process. When the product reports
- * nothing for a write within the window, the control decides what that
- * means: the host delivered the event and the product missed it, which is a
- * failure, or the host delivered nothing, which is inconclusive. A case never
- * passes without the product's own event.
+ * nothing for a write within the window, the control, read when the window
+ * has ended, decides what that means: the host delivered the event and the
+ * product missed it, which is a failure, or the host delivered nothing, which
+ * is inconclusive. A case never passes without the product's own event.
  */
 import * as fs from 'fs';
 import * as os from 'os';
@@ -165,8 +167,9 @@ export type DetectionOutcome =
  * Await the product's event for the write of `name`, made just before this
  * call, for `timeoutMs`, and read a miss against the control. The write is
  * made once by the caller and the product is awaited exactly as before; the
- * control only decides what a miss means. `writtenAt` is the time of the
- * write, this call's time unless given.
+ * control only decides what a miss means, and it is read when the window has
+ * ended, also when the product's wait fails sooner. `writtenAt` is the time
+ * of the write, this call's time unless given.
  */
 export async function awaitDetection(
   adapter: Pick<SecurityProductAdapter, 'waitForEvent'>,
@@ -182,9 +185,13 @@ export async function awaitDetection(
   } catch (err) {
     failure = err;
   }
+  // A wait that fails before the window ends leaves the host the rest of the
+  // window to deliver the event.
+  const rest = writtenAt + timeoutMs - Date.now();
+  if (rest > 0) await new Promise((r) => setTimeout(r, rest));
+  const reason = failure instanceof Error ? failure.message : String(failure);
   const delivered = control.seen(name, { sinceMs: writtenAt, untilMs: writtenAt + timeoutMs });
   if (delivered) {
-    const reason = failure instanceof Error ? failure.message : String(failure);
     return {
       kind: 'missed',
       control: delivered,
@@ -193,8 +200,15 @@ export async function awaitDetection(
   }
   return {
     kind: 'inconclusive',
-    message: `inconclusive: host delivered no file event for ${name} within ${timeoutMs} ms (control fs.watch); loadavg ${loadavg()}`,
+    message:
+      `inconclusive: host delivered no file event for ${name} within ${timeoutMs} ms (control fs.watch); ` +
+      `loadavg ${loadavg()}; the product's wait: ${reason}`,
   };
+}
+
+/** How many distinct probe files the control saw. */
+function probesSeen(control: Pick<ControlWatch, 'observations'>): number {
+  return new Set(control.observations().map((o) => o.path).filter((p) => p.includes(WATCH_PROBE_PREFIX))).size;
 }
 
 /**
@@ -204,9 +218,24 @@ export async function awaitDetection(
  */
 export function readinessMessage(control: Pick<ControlWatch, 'observations'>, dir: string, budgetMs: number): string {
   const written = fs.readdirSync(dir).filter((name) => name.startsWith(WATCH_PROBE_PREFIX)).length;
-  const seen = new Set(control.observations().map((o) => o.path).filter((p) => p.includes(WATCH_PROBE_PREFIX))).size;
   return (
     `inconclusive: product reported no probe file within ${budgetMs} ms of start(); ` +
-    `the control fs.watch saw ${seen} of the ${written} probe files written; loadavg ${loadavg()}`
+    `the control fs.watch saw ${probesSeen(control)} of the ${written} probe files written; loadavg ${loadavg()}`
   );
+}
+
+/**
+ * For a case whose product reported no probe file within `budgetMs`: the
+ * inconclusive message it is skipped with, before its write, when the
+ * control saw none of the probe files either, because the host delivered no
+ * file event to the process; undefined when the control saw one, because the
+ * host is delivering file events and the case makes its write and is judged
+ * by it.
+ */
+export function readinessSkip(
+  control: Pick<ControlWatch, 'observations'>,
+  dir: string,
+  budgetMs: number,
+): string | undefined {
+  return probesSeen(control) > 0 ? undefined : readinessMessage(control, dir, budgetMs);
 }
