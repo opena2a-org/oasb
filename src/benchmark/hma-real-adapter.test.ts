@@ -1,0 +1,159 @@
+/**
+ * The deprecated AST adapter calls the analyzers on the route the shipped
+ * scanner takes: each of analyzeCredentials, analyzeGovernance, analyzeScope
+ * and analyzePrompt is given the sample content, as HMAPipelineAdapter gives
+ * it. Without the content those analyzers decide from the AST alone, which the
+ * scanner never does.
+ *
+ * Both adapters scan one corpus sample on a stand-in package with the
+ * nanomind-core API. MAL-EXFIL-006 is a skill, the artifact type both adapters
+ * compile under the same file name, and its credential rows depend on the
+ * content on the shipped analyzers: hackmyagent 0.33.2 reports AST-CRED-003
+ * for it without the content and no credential row with it.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import type { ScannerAdapter } from './runner.js';
+import type { BenchmarkDataset, BenchmarkSample } from './types.js';
+
+const OASB_ROOT = resolve(__dirname, '..', '..');
+const SAMPLE_ID = 'MAL-EXFIL-006';
+
+/** One analyzer call as the stand-in records it. */
+interface AnalyzerCall {
+  analyzer: string;
+  /** The arguments after the AST and the verifier. */
+  extraArgs: unknown[];
+  rows: Array<{ checkId: string; contentSha256?: string }>;
+}
+
+/** What a stand-in recorded during one scan. */
+interface Recorded {
+  compiledAs: string[];
+  calls: AnalyzerCall[];
+}
+
+// Each analyzer's rows say which route it took: a row that names the sha256 of
+// the content it was given, or a no-content row when it was given none. The
+// content is read at its position in the published signature of that analyzer.
+// `build` starts each check id, so a row names the stand-in that returned it.
+const standInCore = (build: string): string => `'use strict';
+const { createHash } = require('crypto');
+const g = globalThis;
+g.__oasbAstAdapterCompiles = [];
+g.__oasbAstAdapterCalls = [];
+class SemanticCompiler {
+  async compile(content, filename) {
+    g.__oasbAstAdapterCompiles.push(filename);
+    return { ast: { intentClassification: 'benign', intentConfidence: 0.5, inferredRiskSurface: [] } };
+  }
+  verifyAST() { return true; }
+}
+function analyzer(name, checkId, contentAt) {
+  return function (...args) {
+    const content = args[contentAt];
+    const row = typeof content === 'string'
+      ? { checkId, contentSha256: createHash('sha256').update(content).digest('hex') }
+      : { checkId: checkId + '-NO-CONTENT' };
+    const rows = [{ ...row, passed: false, severity: 'high', attackClass: 'CRED-HARDCODED' }];
+    g.__oasbAstAdapterCalls.push({ analyzer: name, extraArgs: args.slice(2), rows });
+    return rows;
+  };
+}
+exports.SemanticCompiler = SemanticCompiler;
+exports.analyzeCapabilities = () => [];
+exports.analyzeCredentials = analyzer('analyzeCredentials', '${build}-CRED', 3);
+exports.analyzeGovernance = analyzer('analyzeGovernance', '${build}-GOV', 4);
+exports.analyzeScope = analyzer('analyzeScope', '${build}-SCOPE', 3);
+exports.analyzePrompt = analyzer('analyzePrompt', '${build}-PROMPT', 3);
+exports.analyzeCode = () => [];
+`;
+
+const CONTENT_ANALYZERS = ['analyzeCredentials', 'analyzeGovernance', 'analyzeScope', 'analyzePrompt'];
+
+const recorded = globalThis as unknown as {
+  __oasbAstAdapterCompiles: string[];
+  __oasbAstAdapterCalls: AnalyzerCall[];
+};
+
+/** What the stand-in recorded since the last call. */
+function takeRecorded(): Recorded {
+  return {
+    compiledAs: recorded.__oasbAstAdapterCompiles.splice(0),
+    calls: recorded.__oasbAstAdapterCalls.splice(0),
+  };
+}
+
+const callOf = (run: Recorded, analyzer: string): AnalyzerCall | undefined =>
+  run.calls.find(call => call.analyzer === analyzer);
+
+describe('the AST adapter and the pipeline adapter call the analyzers alike', () => {
+  const roots: string[] = [];
+  let sample: BenchmarkSample;
+  let configureHmaRoot: (root: string) => void;
+  let newAstAdapter: () => ScannerAdapter;
+  let ast: Recorded;
+  let pipeline: Recorded;
+
+  /** A package directory holding a stand-in whose check ids start with `build`. */
+  function standInRoot(build: string): string {
+    const root = mkdtempSync(join(tmpdir(), 'oasb-ast-adapter-'));
+    roots.push(root);
+    mkdirSync(join(root, 'dist', 'nanomind-core'), { recursive: true });
+    writeFileSync(join(root, 'package.json'), '{"name":"hackmyagent","version":"0.0.0-stand-in"}\n');
+    writeFileSync(join(root, 'dist', 'nanomind-core', 'index.js'), standInCore(build));
+    return root;
+  }
+
+  beforeEach(async () => {
+    const corpus = JSON.parse(readFileSync(join(OASB_ROOT, 'corpus', 'v2.json'), 'utf-8')) as BenchmarkDataset;
+    const found = corpus.samples.find(s => s.id === SAMPLE_ID);
+    if (!found) throw new Error(`corpus/v2.json has no sample ${SAMPLE_ID}`);
+    sample = found;
+
+    // Both adapters load the scanner from the configured root, on fresh
+    // modules so neither keeps a scanner an earlier test loaded.
+    vi.resetModules();
+    const pipelineModule = await import('./hma-pipeline-adapter.js');
+    const { HMARealASTAdapter } = await import('./hma-real-adapter.js');
+    configureHmaRoot = pipelineModule.configureHmaRoot;
+    newAstAdapter = () => new HMARealASTAdapter();
+    configureHmaRoot(standInRoot('STAND-IN'));
+
+    await newAstAdapter().scan(sample.content, sample.id);
+    ast = takeRecorded();
+    await new pipelineModule.HMAPipelineAdapter().scan(sample.content, sample.id, sample.artifactType);
+    pipeline = takeRecorded();
+  });
+
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+
+  it('gives each content-reading analyzer the sample content, where the pipeline adapter gives it', () => {
+    expect(sample.artifactType).toBe('skill');
+    expect(ast.compiledAs).toEqual([`${SAMPLE_ID}.skill.md`]);
+    expect(pipeline.compiledAs).toEqual(ast.compiledAs);
+
+    for (const analyzer of CONTENT_ANALYZERS) {
+      const fromPipeline = callOf(pipeline, analyzer);
+      expect(fromPipeline?.extraArgs, `${analyzer} called by the pipeline adapter`).toContain(sample.content);
+      expect(callOf(ast, analyzer)?.extraArgs, `${analyzer} called by the AST adapter`).toEqual(fromPipeline?.extraArgs);
+    }
+  });
+
+  it('gets the credential rows the pipeline adapter gets for a corpus sample', () => {
+    const fromPipeline = callOf(pipeline, 'analyzeCredentials')?.rows;
+    expect(fromPipeline?.map(row => row.checkId)).toEqual(['STAND-IN-CRED']);
+    expect(fromPipeline?.[0].contentSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(callOf(ast, 'analyzeCredentials')?.rows).toEqual(fromPipeline);
+  });
+
+  it('loads the scanner of another root once configureHmaRoot() names it', async () => {
+    configureHmaRoot(standInRoot('OTHER'));
+    await newAstAdapter().scan(sample.content, sample.id);
+    expect(callOf(takeRecorded(), 'analyzeCredentials')?.rows.map(row => row.checkId)).toEqual(['OTHER-CRED']);
+  });
+});

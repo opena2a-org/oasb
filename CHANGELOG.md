@@ -784,6 +784,17 @@ stay on record here with the reason they changed.
   platform measures one: on Windows the message says `loadavg unavailable
   on Windows`. `src/harness/filesystem-watch.test.ts` has 10 more tests,
   41 in the file; the suite is 396 tests, 395 not skipped.
+- The deprecated AST adapter (`HMARealASTAdapter` in
+  `src/benchmark/hma-real-adapter.ts`) now calls `analyzeCredentials`,
+  `analyzeGovernance`, `analyzeScope` and `analyzePrompt` with the sample
+  content, like the pipeline adapter. It called them with the AST alone, a
+  route the shipped scanner never takes. No committed result changes: this
+  adapter produced none, and its only runner, `scripts/run-benchmark.ts`,
+  stays deprecated. The adapter now loads hackmyagent from the root
+  `configureHmaRoot()` names, as the pipeline adapters do; without that
+  call it is the sibling checkout, as before. Three more tests cover the
+  calls and the root, 28 in `src/benchmark` outside
+  `src/benchmark/pinned`; the suite is 399 tests, 398 not skipped.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

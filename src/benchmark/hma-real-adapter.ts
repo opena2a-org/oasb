@@ -10,6 +10,8 @@
  * 3. HMARealFullAdapter: AST + behavioral simulation
  */
 
+import { dirname, join } from 'node:path';
+import { hmaCorePath } from './hma-pipeline-adapter.js';
 import type { ScannerAdapter } from './runner.js';
 import type { ScannerResult, AttackCategory } from './types.js';
 
@@ -26,13 +28,15 @@ let getTMEClassifier: any;
 let SimulationEngine: any;
 let parseSkillProfile: any;
 
-let loaded = false;
+// The nanomind-core entry point the components above were loaded from.
+let loadedFrom: string | null = null;
 
 async function loadHMA(): Promise<boolean> {
-  if (loaded) return true;
+  // The build the pipeline adapters load: the local monorepo sibling
+  // (hackmyagent/dist/) unless configureHmaRoot() names another root.
+  const hmaPath = hmaCorePath();
+  if (loadedFrom === hmaPath) return true;
   try {
-    // Load from local monorepo sibling (hackmyagent/dist/)
-    const hmaPath = require('path').resolve(__dirname, '..', '..', '..', 'hackmyagent', 'dist', 'nanomind-core', 'index.js');
     const core = await import(hmaPath);
     SemanticCompiler = core.SemanticCompiler;
     analyzeCapabilities = core.analyzeCapabilities;
@@ -43,14 +47,16 @@ async function loadHMA(): Promise<boolean> {
     analyzeCode = core.analyzeCode;
     getTMEClassifier = core.getTMEClassifier;
 
+    SimulationEngine = undefined;
+    parseSkillProfile = undefined;
     try {
-      const simPath = require('path').resolve(__dirname, '..', '..', '..', 'hackmyagent', 'dist', 'simulation', 'index.js');
+      const simPath = join(dirname(dirname(hmaPath)), 'simulation', 'index.js');
       const sim = await import(simPath);
       SimulationEngine = sim.SimulationEngine;
       parseSkillProfile = sim.parseSkillProfile;
     } catch { /* simulation optional */ }
 
-    loaded = true;
+    loadedFrom = hmaPath;
     return true;
   } catch (err) {
     console.error('Failed to load HMA:', (err as Error).message);
@@ -87,14 +93,17 @@ export class HMARealASTAdapter implements ScannerAdapter {
       // Compile artifact into AST (TME classifier runs as Tier 1 inference)
       const { ast } = await this.compiler.compile(content, `${sampleId}.skill.md`);
 
-      // Run all analyzers
+      // Run all analyzers, passing the raw content as HMAPipelineAdapter and
+      // the shipped scanner do. Without it the credential, governance, scope
+      // and prompt analyzers decide from the AST alone, a route the scanner
+      // never takes.
       const verifier = this.compiler.verifyAST.bind(this.compiler);
       const allFindings = [
         ...analyzeCapabilities(ast),
-        ...(analyzeCredentials ? analyzeCredentials(ast, verifier) : []),
-        ...(analyzeGovernance ? analyzeGovernance(ast, verifier) : []),
-        ...(analyzeScope ? analyzeScope(ast, verifier) : []),
-        ...(analyzePrompt ? analyzePrompt(ast, verifier) : []),
+        ...(analyzeCredentials ? analyzeCredentials(ast, verifier, undefined, content) : []),
+        ...(analyzeGovernance ? analyzeGovernance(ast, verifier, undefined, undefined, content) : []),
+        ...(analyzeScope ? analyzeScope(ast, verifier, undefined, content) : []),
+        ...(analyzePrompt ? analyzePrompt(ast, verifier, undefined, content) : []),
         ...(analyzeCode ? analyzeCode(ast, verifier) : []),
       ];
 
