@@ -1,15 +1,20 @@
 // Fixture for scripts/check-test-counts.test.mjs, which runs it with vitest
-// and reads the JSON report: one test passes, one is declared skipped, one is
-// skipped at run time without the inconclusive marker, and two are skipped as
-// inconclusive by the harness's skipInconclusive, from the test and from
-// beforeEach as E2E-001 does. Not part of the suite: vitest.config.ts
-// includes src/ only.
+// and reads the JSON report: one test passes, one passes with the harness's
+// markDetected as an E2E-001 detection case does, one is declared skipped,
+// one is skipped at run time without the inconclusive marker, and two are
+// skipped as inconclusive by the harness's skipInconclusive, from the test
+// and from beforeEach as E2E-001 does. Not part of the suite:
+// vitest.config.ts includes src/ only.
 
 import { beforeEach, describe, it } from 'vitest';
-import { skipInconclusive } from '../../../../src/harness/filesystem-watch';
+import { markDetected, skipInconclusive } from '../../../../src/harness/filesystem-watch';
 
 describe('skips in a test', () => {
   it('passes', () => {});
+
+  it('passes with the event of the product', (ctx) => {
+    markDetected(ctx);
+  });
 
   it.skip('is skipped on every run', () => {});
 

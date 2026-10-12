@@ -23,7 +23,12 @@
 //      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
 //      --tests it reads a vitest JSON report (`vitest run --reporter=json`)
-//      and compares it with the tests that passed. A report written in
+//      and compares it with the tests that passed. A test the report shows
+//      skipped as inconclusive at run time (isInconclusiveSkip in
+//      scripts/readme-counts.mjs) is counted with them, not with the skipped
+//      ones, as the release smoke's drift guard counts it, and the number of
+//      such tests is printed; whether the run measured their file is the
+//      drift guard's check, not this one's. A report written in
 //      another checkout is read by each file's path from its src/ directory.
 //      A stated count the check cannot find fails, so a reworded claim is
 //      never silently unchecked. The statements are listed in
@@ -57,7 +62,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const MAX_LINES = 400;
 const QUICK_START_BY = 25;
@@ -250,13 +255,17 @@ function repoPath(file) {
 
 // The suite as a list of { file, state }: state is 'passed', 'failed' or
 // 'skipped' from a report, and 'skipped' or 'collected' from a collection.
+// A test of a report also says whether it was skipped as `inconclusive`.
 async function suiteTests() {
   if (reportPath) {
     const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+    // A test skipped as inconclusive at run time is counted with the tests
+    // that passed, as the drift guard counts it.
     return reportFiles(report).flatMap((file) =>
       file.assertionResults.map((t) => ({
         file: repoPath(file.name),
-        state: t.status === 'passed' || t.status === 'failed' ? t.status : 'skipped',
+        state: t.status === 'passed' || t.status === 'failed' ? t.status : isInconclusiveSkip(t) ? 'passed' : 'skipped',
+        inconclusive: isInconclusiveSkip(t),
       })),
     );
   }
@@ -522,6 +531,7 @@ for (const { n, text } of blocks(readme)) {
 }
 
 let counted = null;
+let inconclusive = 0;
 if (!noCounts) {
   let tests = null;
   try {
@@ -532,6 +542,7 @@ if (!noCounts) {
   if (tests) {
     counted = checkCounts(readmeText, tests);
     checkSkippedCoverage(tests);
+    inconclusive = tests.filter((t) => t.inconclusive).length;
   }
 }
 
@@ -602,4 +613,5 @@ if (counted) {
       `${counted.skipped[0]} skipped, ${counted.scenarios[0]} attack scenarios, ` +
       `${counted.scoringEngine[0]} scoring-engine, ${counted.pinned[0]} pinned.`,
   );
+  if (inconclusive > 0) console.log(`   ${inconclusive} skipped as inconclusive, counted with the passing tests.`);
 }

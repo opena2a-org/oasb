@@ -150,6 +150,18 @@ export function reportFiles(report) {
 }
 
 /**
+ * True for a test result of a report that was skipped at run time as
+ * inconclusive: E2E-001 skips a case so when the host delivered no file event
+ * to the harness's own watcher, and records the reason as `inconclusive` in
+ * the test's meta (skipInconclusive in src/harness/filesystem-watch.ts). Both
+ * README checks count such a test with the passing tests, not the skipped
+ * ones: the README's skipped count is of the tests skipped on every run.
+ */
+export function isInconclusiveSkip(test) {
+  return test.status === 'skipped' && typeof test.meta?.inconclusive === 'string';
+}
+
+/**
  * Why a file could not be read, without the path the caller already names:
  * Node's "ENOENT: no such file or directory, open '<path>'" becomes
  * "ENOENT: no such file or directory". Any other error keeps its message.

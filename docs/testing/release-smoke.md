@@ -50,16 +50,19 @@ the claims this repository publishes:
    reason as `inconclusive` in its meta (`skipInconclusive` in
    `src/harness/filesystem-watch.ts`), and a test skipped without it still
    counts as skipped. A file in which a test was skipped so and no test
-   passed fails the guard as `NOT MEASURED`, whatever the counts say: the run
-   says nothing about that file, so run the smoke again when the host
-   delivers file events. Where Node.js has no recursive `fs.watch` (Linux
-   before 19.1.0), the harness cannot open its watcher, every E2E-001 case
-   is skipped so, and the guard fails that way on every run: run the smoke
-   on a Node.js that has one. A statement it cannot find fails too, so a
-   wording change has to update `STATEMENTS` in `scripts/readme-counts.mjs`,
-   the one list both README checks read. Its own tests
-   (`npm run test:scripts`) run after `npm ci`. Any mismatch fails the
-   smoke. If you
+   passed with the product's own event fails the guard as `NOT MEASURED`,
+   whatever the counts say: the run says nothing about that file, so run the
+   smoke again when the host delivers file events. An E2E-001 detection case
+   that gets the product's event records `detected` in its meta
+   (`markDetected` in the same file); the case that expects no violation for
+   a normal file passes without an event, so it does not stand for the file.
+   Where Node.js has no recursive `fs.watch` (Linux before 19.1.0), the
+   harness cannot open its watcher, every E2E-001 case is skipped so, and the
+   guard fails that way on every run: run the smoke on a Node.js that has
+   one. A statement it cannot find fails too, so a wording change has to
+   update `STATEMENTS` in `scripts/readme-counts.mjs`, the one list both
+   README checks read. Its own tests (`npm run test:scripts`) run after
+   `npm ci`. Any mismatch fails the smoke. If you
    add or remove tests, update the README in the same change or this gate
    blocks the release - that is the point. Committing a run under `results/`
    does not change the totals: the run-of-record checks are a fixed set of
@@ -69,9 +72,10 @@ the claims this repository publishes:
    skipped, so it catches a stale count before a release without running the
    suite. It cannot tell a failing test from a passing one; this step can.
    With `--tests <report>` it reads a JSON report instead and compares the
-   passing counts with the tests that passed; a report written in another
-   checkout is read by each file's path from its `src/` directory, as the
-   drift guard reads it.
+   passing counts with the tests that passed, counting a case skipped as
+   inconclusive with them as the drift guard does; a report written in
+   another checkout is read by each file's path from its `src/` directory,
+   as the drift guard reads it.
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.
@@ -115,8 +119,12 @@ README's test counts do not include them.
   vitest.
 - `scripts/check-test-counts.test.mjs`: the drift guard
   (`scripts/check-test-counts.mjs`, step 3). It also fails when the smoke
-  script would run the guard outside its clone, or when a test file under
-  `src/` skips at run time without `skipInconclusive`.
+  script would run the guard outside its clone, or when a `*.test.ts` file
+  under `src/` calls `skip(` on anything but `it`, `test` or `describe`
+  instead of calling `skipInconclusive`. That check reads the text of those
+  files: a skip written another way, such as `ctx.skip (...)` or
+  `ctx['skip'](...)`, or made by a helper outside those files is not
+  detected.
 - `scripts/check-owasp-mapping.test.mjs`: the OWASP mapping check
   (`scripts/check-owasp-mapping.mjs`), which holds every scenario file's
   `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each

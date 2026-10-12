@@ -16,6 +16,7 @@ import {
   awaitDetection,
   endWatchCase,
   isWatchProbeEvent,
+  markDetected,
   openControlWatch,
   probeWaitMs,
   readinessSkip,
@@ -41,7 +42,8 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
    * case fails if the harness's own watcher saw the path in that time (the
    * host delivered the event) and is skipped as inconclusive if it saw
    * nothing (the host delivered no event to this process). A detection case
-   * never passes without the product's own event.
+   * never passes without the product's own event, and records that it got
+   * one (markDetected) for the release smoke's drift guard.
    *
    * An event's `data` is optional in the adapter interface, so each predicate
    * below reads it with `?.`: a filesystem event that has none is not the
@@ -57,6 +59,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const outcome = await awaitDetection(arp, control, name, predicate, timeoutMs);
     if (outcome.kind === 'inconclusive') skipInconclusive(ctx, outcome.message);
     if (outcome.kind === 'missed') throw new Error(outcome.message);
+    markDetected(ctx);
     return outcome.event;
   }
 

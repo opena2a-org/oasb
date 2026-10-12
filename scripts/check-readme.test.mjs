@@ -166,6 +166,40 @@ test('README counts that equal the test report pass', () => {
   assert.deepEqual(compareCounts(report(SUITE), COUNTED, source).drift, []);
 });
 
+// report(SUITE) with one of the two INT-001 cases skipped at run time; `meta`
+// is the meta vitest writes for that test.
+function withRunTimeSkip(meta) {
+  const skipped = report(SUITE);
+  const file = skipped.testResults.find((f) => f.name.endsWith('INT-001.exfil.test.ts'));
+  file.assertionResults[1] = { status: 'skipped', title: 'detects a write', fullName: 'INT-001 detects a write', meta };
+  skipped.numPassedTests -= 1;
+  skipped.numPendingTests += 1;
+  return skipped;
+}
+
+test('with --tests a case skipped as inconclusive is counted with the passing tests, as the drift guard counts it', () => {
+  const skipped = withRunTimeSkip({ inconclusive: 'inconclusive: host delivered no file event' });
+  const r = checkCounts(COUNTED, SUITE, skipped);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /test counts match the test report: 15 tests, 14 passing, 1 skipped, 10 attack scenarios/);
+  assert.match(r.stdout, /^ {3}1 skipped as inconclusive, counted with the passing tests\.$/m);
+  const guard = compareCounts(skipped, COUNTED, source);
+  assert.deepEqual(guard.drift, []);
+  assert.deepEqual({ passed: guard.live.passed, skipped: guard.live.skipped }, { passed: 14, skipped: 1 });
+});
+
+test('with --tests a case skipped at run time without the inconclusive marker is a skipped test, as the drift guard counts it', () => {
+  for (const meta of [{}, undefined, { inconclusive: true }]) {
+    const skipped = withRunTimeSkip(meta);
+    const r = checkCounts(COUNTED, SUITE, skipped);
+    assert.equal(r.status, 1, JSON.stringify(meta));
+    assert.match(r.stderr, /^README: line \d+: the tests badge says 14; the test report has 13 passing tests\.$/m);
+    assert.doesNotMatch(r.stdout, /skipped as inconclusive/);
+    const { drift } = compareCounts(skipped, COUNTED, source);
+    assert.ok(drift.some((d) => / \(tests badge\) states 14 passing tests; the suite has 13$/.test(d)), drift.join('\n'));
+  }
+});
+
 test('a README that says every scenario maps to ATLAS fails while a scenario file cites no technique', () => {
   const r = checkCounts(COUNTED.replace('8 of them, in 6 files,', '10 of them, in 8 files,').replace('the other 2 test', 'the other 0 test'));
   assert.equal(r.status, 1);

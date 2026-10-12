@@ -347,3 +347,16 @@ export async function endWatchCase({ adapter, control, dir }: WatchCaseParts): P
     }
   }
 }
+
+/**
+ * Records in the test's meta, as `detected`, that the case got the product's
+ * own event, which vitest's JSON reporter writes out with the result. The
+ * release smoke's drift guard (scripts/check-test-counts.mjs) takes a file in
+ * which a case was skipped as inconclusive as measured only when one of its
+ * cases passed with this mark: a case that passes without an event from the
+ * product, such as E2E-001's normal-file case, says nothing about the file on
+ * a run in which the host delivered no event for the other cases.
+ */
+export function markDetected(ctx: Pick<InconclusiveSkipContext, 'task'>): void {
+  (ctx.task.meta as { detected?: boolean }).detected = true;
+}

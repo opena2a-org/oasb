@@ -18,8 +18,10 @@
 // list npm run check:readme reads too, in the same change. An E2E-001 case
 // skipped as inconclusive at run time, because the host delivered no file
 // event, is counted with the passing tests, not the skipped ones, and listed.
-// A file in which a test was skipped so and no test passed fails the guard as
-// not measured, whatever the counts say.
+// A file in which a test was skipped so and no test passed with the product's
+// own event, which an E2E-001 detection case records as `detected` in its
+// meta, fails the guard as not measured, whatever the counts say: the E2E-001
+// case that expects no violation for a normal file passes without any event.
 //
 // Usage: node scripts/check-test-counts.mjs <vitest-results.json> [path/to/README.md]
 // Exit code 0 when every stated count matches and no file went unmeasured (and for --help), 1 otherwise. Run by npm run smoke.
@@ -27,7 +29,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const LABELS = {
   total: 'tests in total',
@@ -56,13 +58,13 @@ const inDir = (path, dir) => path.startsWith(dir.endsWith('/') ? dir : dir + '/'
 const fileName = path => path.slice(path.lastIndexOf('/') + 1);
 
 /**
- * True for a test skipped at run time as inconclusive: E2E-001 skips a case
- * so when the host delivered no file event to the harness's own watcher, and
- * records the reason as `inconclusive` in the test's meta
- * (skipInconclusive in src/harness/filesystem-watch.ts).
+ * True for a test that passed with the product's own event: an E2E-001
+ * detection case records `detected` in the test's meta when the product
+ * reported its write (markDetected in src/harness/filesystem-watch.ts). The
+ * case that expects no violation for a normal file passes without one.
  */
-function isInconclusiveSkip(test) {
-  return test.status === 'skipped' && typeof test.meta?.inconclusive === 'string';
+function passedWithDetection(test) {
+  return test.status === 'passed' && test.meta?.detected === true;
 }
 
 /**
@@ -73,7 +75,9 @@ function isInconclusiveSkip(test) {
  * run, and such a case is skipped only when the host delivered no file event,
  * so it is not a change to the suite. `inconclusive` lists those tests.
  * `unmeasured` lists the files in which a test was skipped so and no test
- * passed: the counts still match, but the run says nothing about the file.
+ * passed with the product's own event: the counts still match, but the run
+ * says nothing about the file, whether or not a test that needs no event
+ * from the product passed.
  */
 export function liveCounts(results, source) {
   const reported = reportFiles(results);
@@ -85,7 +89,7 @@ export function liveCounts(results, source) {
     t.assertionResults.filter(isInconclusiveSkip).map(a => `${sourcePath(t.name)} > ${a.fullName ?? a.title ?? '(untitled)'}`),
   );
   const unmeasured = reported
-    .filter(t => t.assertionResults.some(isInconclusiveSkip) && !t.assertionResults.some(a => a.status === 'passed'))
+    .filter(t => t.assertionResults.some(isInconclusiveSkip) && !t.assertionResults.some(passedWithDetection))
     .map(t => sourcePath(t.name));
   const tests = keep => files.filter(f => keep(f.path)).reduce((sum, f) => sum + f.tests, 0);
   const fileCount = keep => files.filter(f => keep(f.path)).length;
@@ -217,7 +221,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   }
   for (const d of drift) console.error('DRIFT: ' + d);
   for (const file of live.unmeasured) {
-    console.error(`NOT MEASURED: ${file}: none of its tests passed and at least one was skipped as inconclusive, so the run says nothing about the file; run the suite again`);
+    console.error(`NOT MEASURED: ${file}: none of its tests passed with the product's own event and at least one was skipped as inconclusive, so the run says nothing about the file; run the suite again`);
   }
   if (drift.length > 0 || live.unmeasured.length > 0) process.exit(1);
   console.log(`   ${compared} README counts match the live suite.`);
