@@ -148,6 +148,74 @@ test('a new pinned test without a README edit is drift', () => {
   assert.ok(drift.some(d => /Quick Start comment\) states 19 tests in total; the suite has 20$/.test(d)), drift.join('\n'));
 });
 
+// suite() with the second E2E-001 case skipped at run time; `meta` is the
+// meta vitest writes for that test.
+function withRunTimeSkip(meta) {
+  const report = suite();
+  const file = report.testResults.find(f => f.name.endsWith('/src/e2e/E2E-001.live-filesystem.test.ts'));
+  file.assertionResults[1] = { status: 'skipped', title: 'detects a write', fullName: 'E2E-001 detects a write', meta };
+  report.numPassedTests -= 1;
+  report.numPendingTests += 1;
+  return report;
+}
+
+test('an E2E-001 case skipped as inconclusive is counted with the passing tests, not as drift', () => {
+  const { drift, live } = compareCounts(withRunTimeSkip({ inconclusive: 'inconclusive: host delivered no file event' }), README, source);
+  assert.deepEqual(drift, []);
+  assert.deepEqual({ total: live.total, passed: live.passed, skipped: live.skipped }, { total: 19, passed: 18, skipped: 1 });
+  assert.deepEqual(live.inconclusive, ['src/e2e/E2E-001.live-filesystem.test.ts > E2E-001 detects a write']);
+});
+
+test('a test skipped at run time without the inconclusive marker is drift', () => {
+  for (const meta of [{}, undefined, { inconclusive: true }, { inconclusive: null }]) {
+    const { drift, live } = compareCounts(withRunTimeSkip(meta), README, source);
+    assert.deepEqual(live.inconclusive, [], JSON.stringify(meta));
+    assert.ok(drift.includes('README line 1 (tests badge) states 18 passing tests; the suite has 17'), drift.join('\n'));
+    assert.ok(drift.includes('README line 5 (Quick Start comment) states 1 skipped tests; the suite has 2'), drift.join('\n'));
+  }
+});
+
+test('a passing test is not counted as inconclusive, whatever its meta says', () => {
+  const report = suite();
+  report.testResults[0].assertionResults[0].meta = { inconclusive: 'left over' };
+  const { drift, live } = compareCounts(report, README, source);
+  assert.deepEqual(drift, []);
+  assert.deepEqual(live.inconclusive, []);
+});
+
+test('the command lists the tests skipped as inconclusive and exits 0 when the counts match', () => {
+  const r = runCommand(withRunTimeSkip({ inconclusive: 'inconclusive: host delivered no file event' }));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {3}total=19 passed=18 skipped=1 /m);
+  assert.match(r.stdout, /^ {3}1 skipped as inconclusive, counted with the passing tests:\n {5}src\/e2e\/E2E-001\.live-filesystem\.test\.ts > E2E-001 detects a write$/m);
+  assert.match(r.stdout, /42 README counts match the live suite\./);
+});
+
+test("the tests the harness skips as inconclusive reach the guard through vitest's JSON report", () => {
+  const repo = join(here, '..');
+  const vitest = join(repo, 'node_modules', 'vitest', 'vitest.mjs');
+  const fixture = join(here, 'fixtures', 'inconclusive-skip');
+  const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-'));
+  try {
+    const out = join(dir, 'report.json');
+    const r = spawnSync(process.execPath, [vitest, 'run', '--root', fixture, '--reporter=json', `--outputFile=${out}`], {
+      cwd: repo,
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 0, r.stderr.slice(-2000));
+    const report = JSON.parse(readFileSync(out, 'utf8'));
+    assert.deepEqual([report.numTotalTests, report.numPassedTests, report.numPendingTests], [5, 1, 4]);
+    const live = liveCounts(report, path => assert.fail(`${path} is not a scenario file`));
+    assert.deepEqual({ total: live.total, passed: live.passed, skipped: live.skipped }, { total: 5, passed: 3, skipped: 2 });
+    assert.deepEqual(live.inconclusive, [
+      'src/inconclusive-skip.test.ts > skips in a test is skipped as inconclusive from the test',
+      'src/inconclusive-skip.test.ts > skips in beforeEach is skipped as inconclusive before it runs',
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('tests in a directory the table does not name are drift', () => {
   const { drift } = compareCounts(suite({ ...FILES, 'src/harness/adapter.test.ts': 1 }), README, source);
   assert.ok(drift.includes("the test table's source rows cover 19 of the suite's 20 tests; add a row for the directory they are in"), drift.join('\n'));

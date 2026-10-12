@@ -305,6 +305,17 @@ stay on record here with the reason they changed.
   the fresh clone, the committed one. It read the README of the working tree
   the smoke was started from, so an uncommitted edit to it was what the smoke
   measured.
+- The drift guard in `npm run smoke` counts an E2E-001 case skipped as
+  inconclusive with the passing tests, not with the skipped ones, and lists
+  each such case in its output. A case is skipped so only when the host
+  delivered no file event to the harness's own watcher, which is not a change
+  to the suite, but the guard read the passing and skipped counts of the run
+  as they were, so on a loaded host the smoke failed with the README's
+  passing and skipped counts reported as drift. E2E-001 now skips such a case
+  with `skipInconclusive` (`src/harness/filesystem-watch.ts`), which records
+  the reason as `inconclusive` in the test's meta, where vitest's JSON
+  reporter writes it. A test skipped without it, such as a new `it.skip`,
+  still changes the skipped count the guard compares.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of eight tests, so committing a run no longer changes the
   `npm test` total. Its check that at least one

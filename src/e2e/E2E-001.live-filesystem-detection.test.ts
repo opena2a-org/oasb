@@ -18,6 +18,7 @@ import {
   openControlWatch,
   probeWaitMs,
   readinessSkip,
+  skipInconclusive,
   waitForFilesystemWatch,
   type ControlWatch,
 } from '../harness/filesystem-watch';
@@ -43,7 +44,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     timeoutMs: number,
   ): Promise<SecurityEvent> {
     const outcome = await awaitDetection(arp, control, name, predicate, timeoutMs);
-    if (outcome.kind === 'inconclusive') ctx.skip(outcome.message);
+    if (outcome.kind === 'inconclusive') skipInconclusive(ctx, outcome.message);
     if (outcome.kind === 'missed') throw new Error(outcome.message);
     return outcome.event;
   }
@@ -81,7 +82,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const budgetMs = probeWaitMs(Date.now() - hookStart);
     const ready = await waitForFilesystemWatch(arp, watchDir, { timeoutMs: budgetMs });
     const inconclusive = ready ? undefined : readinessSkip(control, watchDir, budgetMs);
-    if (inconclusive) ctx.skip(inconclusive);
+    if (inconclusive) skipInconclusive(ctx, inconclusive);
   });
 
   afterEach(async () => {

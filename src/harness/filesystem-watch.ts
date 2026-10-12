@@ -239,3 +239,22 @@ export function readinessSkip(
 ): string | undefined {
   return probesSeen(control) > 0 ? undefined : readinessMessage(control, dir, budgetMs);
 }
+
+/** The part of a vitest test context that skipInconclusive uses. */
+export interface InconclusiveSkipContext {
+  task: { meta: object };
+  skip(note?: string): never;
+}
+
+/**
+ * Skips the case with `message` and records the message as `inconclusive` in
+ * the test's meta, which vitest's JSON reporter writes out with the result.
+ * The release smoke's drift guard (scripts/check-test-counts.mjs) counts a
+ * skipped test that carries it with the tests the README states as passing,
+ * so a case the host delivered no file event for is not read as a change to
+ * the suite's counts.
+ */
+export function skipInconclusive(ctx: InconclusiveSkipContext, message: string): never {
+  (ctx.task.meta as { inconclusive?: string }).inconclusive = message;
+  return ctx.skip(message);
+}

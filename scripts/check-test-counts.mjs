@@ -15,7 +15,9 @@
 // suite total, so a test in a directory the table does not name is drift. A
 // statement the guard looks for and does not find is drift too: when the
 // README wording changes, update STATEMENTS in scripts/readme-counts.mjs, the
-// list npm run check:readme reads too, in the same change.
+// list npm run check:readme reads too, in the same change. An E2E-001 case
+// skipped as inconclusive at run time, because the host delivered no file
+// event, is counted with the passing tests, not the skipped ones, and listed.
 //
 // Usage: node scripts/check-test-counts.mjs <vitest-results.json> [path/to/README.md]
 // Exit code 0 when every stated count matches (and for --help), 1 otherwise. Run by npm run smoke.
@@ -52,22 +54,41 @@ const inDir = (path, dir) => path.startsWith(dir.endsWith('/') ? dir : dir + '/'
 const fileName = path => path.slice(path.lastIndexOf('/') + 1);
 
 /**
+ * True for a test skipped at run time as inconclusive: E2E-001 skips a case
+ * so when the host delivered no file event to the harness's own watcher, and
+ * records the reason as `inconclusive` in the test's meta
+ * (skipInconclusive in src/harness/filesystem-watch.ts).
+ */
+function isInconclusiveSkip(test) {
+  return test.status === 'skipped' && typeof test.meta?.inconclusive === 'string';
+}
+
+/**
  * The counts the README states, from a vitest JSON report and `source`, which
- * returns the text of a scenario file by its path from src/ on.
+ * returns the text of a scenario file by its path from src/ on. A test
+ * skipped as inconclusive is counted with the passing tests and not with the
+ * skipped ones: the README's skipped count is of the tests skipped on every
+ * run, and such a case is skipped only when the host delivered no file event,
+ * so it is not a change to the suite. `inconclusive` lists those tests.
  */
 export function liveCounts(results, source) {
-  const files = reportFiles(results).map(t => ({ path: sourcePath(t.name), tests: t.assertionResults.length }));
+  const reported = reportFiles(results);
+  const files = reported.map(t => ({ path: sourcePath(t.name), tests: t.assertionResults.length }));
   for (const field of ['numTotalTests', 'numPassedTests', 'numPendingTests']) {
     if (typeof results[field] !== 'number') throw new Error(`it has no "${field}" count, so it is not a vitest JSON report`);
   }
+  const inconclusive = reported.flatMap(t =>
+    t.assertionResults.filter(isInconclusiveSkip).map(a => `${sourcePath(t.name)} > ${a.fullName ?? a.title ?? '(untitled)'}`),
+  );
   const tests = keep => files.filter(f => keep(f.path)).reduce((sum, f) => sum + f.tests, 0);
   const fileCount = keep => files.filter(f => keep(f.path)).length;
   const scenario = path => SCENARIO_DIRS.some(dir => inDir(path, dir));
   return {
     files,
+    inconclusive,
     total: results.numTotalTests,
-    passed: results.numPassedTests,
-    skipped: results.numPendingTests,
+    passed: results.numPassedTests + inconclusive.length,
+    skipped: results.numPendingTests - inconclusive.length,
     scenarios: tests(scenario),
     scenarioFiles: fileCount(scenario),
     scoringEngine: tests(p => inDir(p, 'src/benchmark') && !inDir(p, 'src/benchmark/pinned')),
@@ -182,6 +203,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const { live, compared, drift } = counted;
   console.log(`   total=${live.total} passed=${live.passed} skipped=${live.skipped} scenarios=${live.scenarios}` +
     ` scoring-engine=${live.scoringEngine} pinned=${live.pinned}`);
+  if (live.inconclusive.length > 0) {
+    console.log(`   ${live.inconclusive.length} skipped as inconclusive, counted with the passing tests:`);
+    for (const name of live.inconclusive) console.log(`     ${name}`);
+  }
   for (const d of drift) console.error('DRIFT: ' + d);
   if (drift.length > 0) process.exit(1);
   console.log(`   ${compared} README counts match the live suite.`);
