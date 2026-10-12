@@ -4,7 +4,7 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-361%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-369%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
@@ -18,12 +18,12 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 362 tests (361 pass, 1 skip)
+npm test                    # Full suite: 370 tests (369 pass, 1 skip)
 ```
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **362 tests** (361 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **98 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "361 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](docs/testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
+> **Counts.** `npm test` runs **370 tests** (369 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`; E2E-001 cases are skipped only when the host delivered no file event to the harness's own watcher, each such skip naming the path, the window and the measured load): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **98 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "369 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](docs/testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
 
 Run one group at a time:
 
@@ -149,8 +149,8 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | **Attack scenarios** | **223** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 25 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names |
 | Pinned benchmark harness tests | 98 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
-| Adapter tests | 16 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left |
-| **`npm test` total** | **362** | (361 pass, 1 skipped on every platform) | |
+| Adapter tests | 24 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left; the harness's own control watcher and the rule that reads an E2E-001 miss against it (a failure when the host delivered the event, inconclusive when it delivered none) |
+| **`npm test` total** | **370** | (369 pass, 1 skipped on every platform) | |
 
 ---
 
@@ -193,7 +193,7 @@ The harness wraps a security product via an adapter interface and provides event
 | `llm-guard-wrapper.ts` | Worked example: adapter for `llm-guard` (declares prompt-input + pattern scanning) |
 | `rebuff-wrapper.ts` | Worked example: adapter for `rebuff` (declares prompt-input + pattern scanning) |
 | `event-collector.ts` | Captures events with async `waitForEvent(predicate, timeout)` |
-| `filesystem-watch.ts` | Before each E2E-001 case, writes `oasb-watch-probe-N` files into the watched directory until the product reports one, for at most 5 s, cut to what is left before the last 1 s of the hook's 10 s timeout, and for at least 200 ms; E2E-001 leaves those events out of its checks |
+| `filesystem-watch.ts` | Before each E2E-001 case, writes `oasb-watch-probe-N` files into the watched directory until the product reports one, for at most 5 s, cut to what is left before the last 1 s of the hook's 10 s timeout, and for at least 200 ms; a case whose product reported no probe is skipped as inconclusive without its write. E2E-001 leaves the probe events out of its checks. Also opens the harness's own `fs.watch` of the directory before the product starts and closes it after the product stops: a product miss within the 5 s window fails when that watcher saw the path in the window and is skipped as inconclusive when it saw nothing; no case passes without the product's own event |
 | `mock-llm-adapter.ts` | Deterministic LLM for intelligence layer testing (pattern-based responses) |
 | `dvaa-client.ts` | HTTP client for DVAA vulnerable agent endpoints |
 | `dvaa-manager.ts` | DVAA process lifecycle (spawn, health check, teardown) |

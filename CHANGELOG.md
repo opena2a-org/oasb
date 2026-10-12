@@ -560,6 +560,32 @@ stay on record here with the reason they changed.
   `.npmrc` cases timed out after 5 seconds. The file run alone, with four
   workers, passed at a load of 9.1 and had one such timeout at a load of
   10.4 while other test runs shared the host.
+- An E2E-001 detection case the product reported nothing for within its
+  5-second window is read against a control: the harness's own `fs.watch`
+  of the watched directory, opened before the product starts and closed
+  after it stops, which records every file event the host delivers to the
+  process. When the control saw the path within the window, the case fails
+  as before, with the control's time added to the message; when the control
+  saw nothing, the case is skipped from inside the test as inconclusive,
+  naming the path, the window and the measured load. A case whose product
+  reported no probe file within the readiness wait is skipped the same way,
+  without its write; before, it went on to the write. The window, the single
+  write per case, the five cases and their assertions do not change, and no
+  case passes without the product's own event. On a 16-core macOS host with
+  `fseventsd` at 99% to 192% of a core, the file run alone five times gave
+  0 failed and from 1 to 4 skipped per run, and one `npx vitest run
+  --maxWorkers=4` of the whole suite gave 366 passed, 4 skipped (3 E2E-001
+  cases and E2E-003) and 0 failed. Against scratch adapters outside the
+  repository that report probe files at once, one that never reports a
+  sensitive write and one that reports it 7 seconds late each failed the 3
+  cases whose write the control saw and skipped the 1 it did not; with the
+  control replaced by a watcher that delivers nothing, the silent adapter
+  skipped all 4 and passed none. On Linux, where inotify delivers at once,
+  the results do not change. `src/harness/filesystem-watch.test.ts` has 8
+  more tests, 16 in the file, for the control and the rule; the suite is
+  370 tests, 369 not skipped. `docs/test-catalog.md` states the 5000 ms
+  window for E2E-001 instead of a latency of about 200 ms, which no
+  measurement supported.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
