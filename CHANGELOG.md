@@ -305,9 +305,15 @@ stay on record here with the reason they changed.
   the fresh clone, the committed one. It read the README of the working tree
   the smoke was started from, so an uncommitted edit to it was what the smoke
   measured. The test of this in `scripts/check-test-counts.test.mjs` fails
-  when the last change of directory before the drift guard is not
+  when the last line before the drift guard that changes directory is not
   `cd "$TMP/oasb"`, so a `cd "$ROOT"` between the clone and the guard no
-  longer passes it, and it accepts `./README.md` as the README's path.
+  longer passes it, and it accepts `./README.md` as the README's path. It
+  counts a line that is not a comment as a change of directory when `cd`,
+  `pushd` or `popd` starts it or comes right after `;`, `&`, `|`, `(`, `{`,
+  `!`, `if`, `elif`, `while`, `until`, `then`, `do`, `else`, `eval`, `time`,
+  `builtin`, `command` or a `NAME=value` assignment with no space in its
+  value. A change of directory written another way, or made inside a shell
+  function or a sourced file, is not detected.
 - The drift guard in `npm run smoke` counts an E2E-001 case skipped as
   inconclusive with the passing tests, not with the skipped ones, and lists
   each such case in its output. A case is skipped so only when the host

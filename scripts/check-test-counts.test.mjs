@@ -421,9 +421,15 @@ test('a scenario file the report names and the README directory lacks is named, 
 });
 
 // Why the drift guard in a release smoke script would not read the README of
-// the fresh clone, or null when it does. The last change of directory before
-// the guard has to be `cd "$TMP/oasb"`, and the guard's last argument has to
-// name README.md in it (`./README.md` is the same file).
+// the fresh clone, or null when it does. The last line before the guard that
+// changes directory has to be `cd "$TMP/oasb"`, and the guard's last argument
+// has to name README.md in it (`./README.md` is the same file). A line that is
+// not a comment changes directory when `cd`, `pushd` or `popd` starts it or
+// comes right after `;`, `&`, `|`, `(`, `{`, `!`, `if`, `elif`, `while`,
+// `until`, `then`, `do`, `else`, `eval`, `time`, `builtin`, `command` or a
+// `NAME=value` assignment with no space in its value. A change of directory
+// written another way, or made inside a shell function or a sourced file, is
+// not detected.
 function cloneReadmeProblem(smoke) {
   const lines = smoke
     .split('\n')
@@ -433,7 +439,7 @@ function cloneReadmeProblem(smoke) {
   if (guard === -1) return 'scripts/release-smoke.sh does not run scripts/check-test-counts.mjs';
   const move = lines
     .slice(0, guard)
-    .findLast((l) => /(?:^|[;&|({]|\b(?:then|do|else|builtin|command))\s*(?:cd|pushd|popd)\b/.test(l));
+    .findLast((l) => /(?:^|[;&|({!]|\b(?:if|elif|while|until|then|do|else|eval|time|builtin|command)|\b[A-Za-z_]\w*=\S*\s)\s*(?:cd|pushd|popd)\b/.test(l));
   if (move !== 'cd "$TMP/oasb"') {
     const where = move === undefined ? 'the directory the smoke started in' : `the directory \`${move}\` leaves it in`;
     return `the drift guard runs in ${where}, not in the fresh clone`;
@@ -456,7 +462,22 @@ test('a change of directory between the clone and the drift guard fails the clon
   const readme = '"$TMP/results.json" README.md\n';
   for (const part of [drift, clone, readme]) assert.ok(smoke.includes(part), `scripts/release-smoke.sh no longer contains ${part.trim()}`);
   const before = (line) => smoke.replace(drift, `\n${line}${drift}`);
-  for (const move of ['cd "$ROOT"', 'pushd "$ROOT" >/dev/null', 'popd >/dev/null', 'true && cd ..', 'if true; then cd "$ROOT"; fi']) {
+  for (const move of [
+    'cd "$ROOT"',
+    'pushd "$ROOT" >/dev/null',
+    'popd >/dev/null',
+    'true && cd ..',
+    'if true; then cd "$ROOT"; fi',
+    'if cd "$ROOT"; then :; fi',
+    'if false; then :; elif cd "$ROOT"; then :; fi',
+    'while cd "$ROOT"; do break; done',
+    'until cd "$ROOT"; do sleep 1; done',
+    '! cd "$ROOT"',
+    'if ! cd "$ROOT"; then exit 1; fi',
+    'eval cd "$ROOT"',
+    'time cd "$ROOT"',
+    'CDPATH= cd "$ROOT"',
+  ]) {
     assert.match(cloneReadmeProblem(before(move)) ?? '', /^the drift guard runs in the directory `.+` leaves it in, not in the fresh clone$/, move);
   }
   assert.equal(cloneReadmeProblem(smoke.replace(clone, '\n')), 'the drift guard runs in the directory the smoke started in, not in the fresh clone');
