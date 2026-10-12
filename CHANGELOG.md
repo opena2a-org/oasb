@@ -304,7 +304,10 @@ stay on record here with the reason they changed.
 - The drift guard in `npm run smoke` compares the test counts of the README in
   the fresh clone, the committed one. It read the README of the working tree
   the smoke was started from, so an uncommitted edit to it was what the smoke
-  measured.
+  measured. The test of this in `scripts/check-test-counts.test.mjs` fails
+  when the last change of directory before the drift guard is not
+  `cd "$TMP/oasb"`, so a `cd "$ROOT"` between the clone and the guard no
+  longer passes it, and it accepts `./README.md` as the README's path.
 - The drift guard in `npm run smoke` counts an E2E-001 case skipped as
   inconclusive with the passing tests, not with the skipped ones, and lists
   each such case in its output. A case is skipped so only when the host

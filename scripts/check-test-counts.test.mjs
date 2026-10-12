@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compareCounts, liveCounts, readmeStatements } from './check-test-counts.mjs';
 import { STATEMENTS, readFailure } from './readme-counts.mjs';
@@ -420,17 +420,51 @@ test('a scenario file the report names and the README directory lacks is named, 
   assert.doesNotMatch(r.stderr, /^\s+at /m);
 });
 
-test('the release smoke compares the counts of the README in its clone, not of the working tree', () => {
-  const lines = readFileSync(join(here, 'release-smoke.sh'), 'utf8')
+// Why the drift guard in a release smoke script would not read the README of
+// the fresh clone, or null when it does. The last change of directory before
+// the guard has to be `cd "$TMP/oasb"`, and the guard's last argument has to
+// name README.md in it (`./README.md` is the same file).
+function cloneReadmeProblem(smoke) {
+  const lines = smoke
     .split('\n')
     .filter((l) => !l.trimStart().startsWith('#'))
     .map((l) => l.trim());
-  const clone = lines.indexOf('cd "$TMP/oasb"');
   const guard = lines.findIndex((l) => /^node scripts\/check-test-counts\.mjs\b/.test(l));
-  assert.notEqual(guard, -1, 'scripts/release-smoke.sh does not run scripts/check-test-counts.mjs');
-  assert.ok(clone !== -1 && clone < guard, 'the drift guard does not run inside the fresh clone');
-  const readme = lines[guard].split(/\s+/).at(-1);
-  assert.equal(readme, 'README.md', `the drift guard reads ${readme}; an uncommitted edit to the working tree's README would be what it measures`);
+  if (guard === -1) return 'scripts/release-smoke.sh does not run scripts/check-test-counts.mjs';
+  const move = lines
+    .slice(0, guard)
+    .findLast((l) => /(?:^|[;&|({]|\b(?:then|do|else|builtin|command))\s*(?:cd|pushd|popd)\b/.test(l));
+  if (move !== 'cd "$TMP/oasb"') {
+    const where = move === undefined ? 'the directory the smoke started in' : `the directory \`${move}\` leaves it in`;
+    return `the drift guard runs in ${where}, not in the fresh clone`;
+  }
+  const readme = lines[guard].split(/\s+/).at(-1).replace(/^(['"])(.*)\1$/, '$2');
+  if (posix.normalize(readme) !== 'README.md') {
+    return `the drift guard reads ${readme}; an uncommitted edit to the working tree's README would be what it measures`;
+  }
+  return null;
+}
+
+test('the release smoke compares the counts of the README in its clone, not of the working tree', () => {
+  assert.equal(cloneReadmeProblem(readFileSync(join(here, 'release-smoke.sh'), 'utf8')), null);
+});
+
+test('a change of directory between the clone and the drift guard fails the clone README check; ./README.md passes it', () => {
+  const smoke = readFileSync(join(here, 'release-smoke.sh'), 'utf8');
+  const drift = '\necho "==> Drift guard';
+  const clone = '\ncd "$TMP/oasb"\n';
+  const readme = '"$TMP/results.json" README.md\n';
+  for (const part of [drift, clone, readme]) assert.ok(smoke.includes(part), `scripts/release-smoke.sh no longer contains ${part.trim()}`);
+  const before = (line) => smoke.replace(drift, `\n${line}${drift}`);
+  for (const move of ['cd "$ROOT"', 'pushd "$ROOT" >/dev/null', 'popd >/dev/null', 'true && cd ..', 'if true; then cd "$ROOT"; fi']) {
+    assert.match(cloneReadmeProblem(before(move)) ?? '', /^the drift guard runs in the directory `.+` leaves it in, not in the fresh clone$/, move);
+  }
+  assert.equal(cloneReadmeProblem(smoke.replace(clone, '\n')), 'the drift guard runs in the directory the smoke started in, not in the fresh clone');
+  assert.equal(cloneReadmeProblem(before('cd "$ROOT"\ncd "$TMP/oasb"')), null);
+  for (const path of ['./README.md', '"README.md"', "'./README.md'"]) {
+    assert.equal(cloneReadmeProblem(smoke.replace(readme, `"$TMP/results.json" ${path}\n`)), null, path);
+  }
+  assert.match(cloneReadmeProblem(smoke.replace(readme, '"$TMP/results.json" "$ROOT/README.md"\n')) ?? '', /^the drift guard reads \$ROOT\/README\.md; /);
 });
 
 test('readFailure drops the path a file-system error repeats and keeps any other message', () => {
