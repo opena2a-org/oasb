@@ -193,7 +193,7 @@ The harness wraps a security product via an adapter interface and provides event
 | `llm-guard-wrapper.ts` | Worked example: adapter for `llm-guard` (declares prompt-input + pattern scanning) |
 | `rebuff-wrapper.ts` | Worked example: adapter for `rebuff` (declares prompt-input + pattern scanning) |
 | `event-collector.ts` | Captures events with async `waitForEvent(predicate, timeout)` |
-| `filesystem-watch.ts` | Before each E2E-001 case, writes `oasb-watch-probe-N` files into the watched directory until the product reports one, for at most 5 s and never past 1 s before the hook's 10 s timeout; E2E-001 leaves those events out of its checks |
+| `filesystem-watch.ts` | Before each E2E-001 case, writes `oasb-watch-probe-N` files into the watched directory until the product reports one, for at most 5 s, cut to what is left before the last 1 s of the hook's 10 s timeout, and for at least 200 ms; E2E-001 leaves those events out of its checks |
 | `mock-llm-adapter.ts` | Deterministic LLM for intelligence layer testing (pattern-based responses) |
 | `dvaa-client.ts` | HTTP client for DVAA vulnerable agent endpoints |
 | `dvaa-manager.ts` | DVAA process lifecycle (spawn, health check, teardown) |
