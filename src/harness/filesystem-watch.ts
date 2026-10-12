@@ -18,7 +18,12 @@
  * nothing for a write within the window, the control, read when the window
  * has ended, decides what that means: the host delivered the event and the
  * product missed it, which is a failure, or the host delivered nothing, which
- * is inconclusive. A case never passes without the product's own event.
+ * is inconclusive. A detection case never passes without the product's own
+ * event.
+ *
+ * The control is a recursive fs.watch, which Node.js has on Linux from
+ * 19.1.0. Where it is unavailable, a case is not measured and ends as
+ * inconclusive, with a message that says so.
  */
 import * as fs from 'fs';
 import * as os from 'os';
@@ -121,6 +126,8 @@ export interface ControlWatch {
   observations(): ControlObservation[];
   /** The first observation whose path contains `name`, inside the window. */
   seen(name: string, window?: ObservationWindow): ControlObservation | undefined;
+  /** The first error the watcher reported, after which it records nothing more; undefined while it has reported none. */
+  error(): Error | undefined;
   /** Stop observing. */
   close(): void;
 }
@@ -137,26 +144,67 @@ export interface ControlWatchOptions {
  */
 export function openControlWatch(dir: string, { watch = fs.watch }: ControlWatchOptions = {}): ControlWatch {
   const observations: ControlObservation[] = [];
+  let failure: Error | undefined;
   const watcher = watch(dir, { recursive: true }, (_eventType, filename) => {
     if (filename) observations.push({ path: String(filename), at: Date.now() });
   });
-  // An error ends what the control will see; what it saw stays recorded.
-  watcher.on('error', () => undefined);
+  // An error ends what the control will see; what it saw stays recorded, and
+  // the error is kept for the message of a case the control did not decide.
+  watcher.on('error', (err: unknown) => {
+    failure ??= err instanceof Error ? err : new Error(String(err));
+  });
   return {
     observations: () => [...observations],
     seen: (name, { sinceMs = 0, untilMs = Infinity }: ObservationWindow = {}) =>
       observations.find((o) => o.at >= sinceMs && o.at <= untilMs && o.path.includes(name)),
+    error: () => failure,
     close: () => watcher.close(),
   };
 }
 
-const loadavg = () => os.loadavg()[0].toFixed(2);
+export interface WatchRuntime {
+  version: string;
+  platform: string;
+}
+
+/**
+ * For an error openControlWatch threw: the inconclusive message a case is
+ * skipped with, before anything is written, when the error says this Node.js
+ * has no recursive watch on this platform, as on Linux before 19.1.0;
+ * undefined for any other error, which fails the case. E2E-001 skips with
+ * this message through skipInconclusive, as it does for a host that
+ * delivered no file event; on such a Node.js every one of its cases is
+ * skipped, so the release smoke's drift guard fails the file as not
+ * measured.
+ */
+export function recursiveWatchSkip(
+  err: unknown,
+  { version, platform }: WatchRuntime = { version: process.version, platform: process.platform },
+): string | undefined {
+  if ((err as NodeJS.ErrnoException | null)?.code !== 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM') return undefined;
+  return (
+    `inconclusive: Node.js ${version} on ${platform} has no recursive fs.watch, which the control needs ` +
+    `(Linux has it from Node.js 19.1.0), so the case is not measured: ${(err as Error).message}`
+  );
+}
+
+/**
+ * The 1-minute load, for a message. os.loadavg() is all zeros on Windows,
+ * where the load is not measured, so no figure is given there.
+ */
+export function loadNote(platform: string = process.platform, loadavg: number[] = os.loadavg()): string {
+  return platform === 'win32' ? 'loadavg unavailable on Windows' : `loadavg ${loadavg[0].toFixed(2)}`;
+}
+
+/** A control that may report the error that ended its observation. */
+type ControlError = Partial<Pick<ControlWatch, 'error'>>;
 
 /**
  * The outcome of one detection case: the product's event, a miss the host
  * delivered the event for (a failure, with the control's time), or an
  * inconclusive result because the host delivered no event for the path to
- * anyone in the window.
+ * anyone in the window, or because the control reported an error and
+ * recorded none.
  */
 export type DetectionOutcome =
   | { kind: 'reported'; event: SecurityEvent }
@@ -173,7 +221,7 @@ export type DetectionOutcome =
  */
 export async function awaitDetection(
   adapter: Pick<SecurityProductAdapter, 'waitForEvent'>,
-  control: Pick<ControlWatch, 'seen'>,
+  control: Pick<ControlWatch, 'seen'> & ControlError,
   name: string,
   predicate: (event: SecurityEvent) => boolean,
   timeoutMs: number,
@@ -198,11 +246,15 @@ export async function awaitDetection(
       message: `${reason}; the control fs.watch saw ${delivered.path} ${delivered.at - writtenAt} ms after the write`,
     };
   }
+  // A control that reported an error recorded nothing after it, so its
+  // silence does not show that the host delivered nothing.
+  const broken = control.error?.();
+  const undecided = broken
+    ? `the control fs.watch reported an error (${broken.message}) and recorded no file event for ${name} within ${timeoutMs} ms`
+    : `host delivered no file event for ${name} within ${timeoutMs} ms (control fs.watch)`;
   return {
     kind: 'inconclusive',
-    message:
-      `inconclusive: host delivered no file event for ${name} within ${timeoutMs} ms (control fs.watch); ` +
-      `loadavg ${loadavg()}; the product's wait: ${reason}`,
+    message: `inconclusive: ${undecided}; ${loadNote()}; the product's wait: ${reason}`,
   };
 }
 
@@ -214,13 +266,20 @@ function probesSeen(control: Pick<ControlWatch, 'observations'>): number {
 /**
  * The inconclusive message of a case whose product reported no probe file
  * within `budgetMs`: how many of the probe files written into `dir` the
- * control saw, and the load.
+ * control saw, the error the control reported if it reported one, and the
+ * load.
  */
-export function readinessMessage(control: Pick<ControlWatch, 'observations'>, dir: string, budgetMs: number): string {
+export function readinessMessage(
+  control: Pick<ControlWatch, 'observations'> & ControlError,
+  dir: string,
+  budgetMs: number,
+): string {
   const written = fs.readdirSync(dir).filter((name) => name.startsWith(WATCH_PROBE_PREFIX)).length;
+  const broken = control.error?.();
   return (
     `inconclusive: product reported no probe file within ${budgetMs} ms of start(); ` +
-    `the control fs.watch saw ${probesSeen(control)} of the ${written} probe files written; loadavg ${loadavg()}`
+    `the control fs.watch saw ${probesSeen(control)} of the ${written} probe files written` +
+    `${broken ? ` and reported an error (${broken.message})` : ''}; ${loadNote()}`
   );
 }
 
@@ -233,7 +292,7 @@ export function readinessMessage(control: Pick<ControlWatch, 'observations'>, di
  * by it.
  */
 export function readinessSkip(
-  control: Pick<ControlWatch, 'observations'>,
+  control: Pick<ControlWatch, 'observations'> & ControlError,
   dir: string,
   budgetMs: number,
 ): string | undefined {
@@ -257,4 +316,34 @@ export interface InconclusiveSkipContext {
 export function skipInconclusive(ctx: InconclusiveSkipContext, message: string): never {
   (ctx.task.meta as { inconclusive?: string }).inconclusive = message;
   return ctx.skip(message);
+}
+
+/** What a case has opened so far; a part is absent until the case has it. */
+export interface WatchCaseParts {
+  adapter?: Pick<SecurityProductAdapter, 'stop'>;
+  control?: Pick<ControlWatch, 'close'>;
+  dir?: string;
+}
+
+/**
+ * End a case: stop the product, close the control and remove the watched
+ * directory. The control is closed and the directory removed also when
+ * stop() rejects, and the rejection is passed on.
+ */
+export async function endWatchCase({ adapter, control, dir }: WatchCaseParts): Promise<void> {
+  try {
+    await adapter?.stop();
+  } finally {
+    try {
+      control?.close();
+    } finally {
+      if (dir !== undefined) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // best effort
+        }
+      }
+    }
+  }
 }

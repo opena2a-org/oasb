@@ -124,7 +124,7 @@ Real OS-level detection - no mocks, no event injection. These tests spawn real p
 
 | Test | Latency | What the Product Should Detect |
 |------|---------|-------------------------------|
-| E2E-001 | 5000ms window | fs.watch detects .env, .ssh, .bashrc, .npmrc writes; a case is skipped as inconclusive when the host delivered no file event to the harness's own watcher: none for the path within the window, or none for any probe file before the write when the product reported none |
+| E2E-001 | 5000ms window | fs.watch detects .env, .ssh, .bashrc, .npmrc writes; a case is skipped as inconclusive when the host delivered no file event to the harness's own watcher: none for the path within the window, or none for any probe file before the write when the product reported none; where Node.js has no recursive `fs.watch` (Linux before 19.1.0), every case is skipped as inconclusive with a message that says so; a filesystem event that has no `data` is not read as the report of a write, and the case goes on waiting |
 | E2E-002 | ~1000ms | ps polling detects child processes, suspicious binaries |
 | E2E-003 | ~1000ms | Outbound TCP detection (currently skipped pending a reliable cross-platform check) |
 

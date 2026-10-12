@@ -4,7 +4,7 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-372%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-385%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
@@ -18,12 +18,12 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 373 tests (372 pass, 1 skip)
+npm test                    # Full suite: 386 tests (385 pass, 1 skip)
 ```
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **373 tests** (372 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`; E2E-001 cases are skipped only when the host delivered no file event to the harness's own watcher: none for the case's file within its 5 s window, or none for any probe file during the readiness wait of a product that reported none; each such skip prints the wait, what that watcher saw and the measured load): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **98 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "372 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](docs/testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
+> **Counts.** `npm test` runs **386 tests** (385 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`; E2E-001 cases are skipped only when the harness's own watcher recorded no file event: none for the case's file within its 5 s window, or none for any probe file during the readiness wait of a product that reported none; each such skip prints the wait, what that watcher saw, the error it reported if it reported one, and the measured load; where Node.js has no recursive `fs.watch`, as on Linux before Node.js 19.1.0, that watcher cannot be opened and every E2E-001 case is skipped as inconclusive with a message that says so, which the release smoke reports as the file not measured): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **25 scoring-engine unit tests**, **99 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "385 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](docs/testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
 
 Run one group at a time:
 
@@ -148,9 +148,9 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Application-level hooks | 14 | `src/e2e` (interceptors) | Pre-execution interception of spawn, connect, read/write |
 | **Attack scenarios** | **223** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 25 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names |
-| Pinned benchmark harness tests | 98 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
-| Adapter tests | 27 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left; the harness's own control watcher and the rules that read an E2E-001 case against it: a product miss, read when the 5 s window ends (a failure when the host delivered the event, inconclusive when it delivered none), and a product that reported no probe file (the case makes its write when the watcher saw one, and is inconclusive when it saw none) |
-| **`npm test` total** | **373** | (372 pass, 1 skipped on every platform) | |
+| Pinned benchmark harness tests | 99 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
+| Adapter tests | 39 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left; the harness's own control watcher and the rules that read an E2E-001 case against it: a product miss, read when the 5 s window ends (a failure when the host delivered the event, inconclusive when it delivered none), and a product that reported no probe file (the case makes its write when the watcher saw one, and is inconclusive when it saw none); the inconclusive message of a case where Node.js has no recursive `fs.watch`, the watcher's own error in an inconclusive message, and the end of a case, which closes the watcher and removes the directory also when `stop()` rejects |
+| **`npm test` total** | **386** | (385 pass, 1 skipped on every platform) | |
 
 ---
 
@@ -193,11 +193,13 @@ The harness wraps a security product via an adapter interface and provides event
 | `llm-guard-wrapper.ts` | Worked example: adapter for `llm-guard` (declares prompt-input + pattern scanning) |
 | `rebuff-wrapper.ts` | Worked example: adapter for `rebuff` (declares prompt-input + pattern scanning) |
 | `event-collector.ts` | Captures events with async `waitForEvent(predicate, timeout)` |
-| `filesystem-watch.ts` | Before each E2E-001 case, writes `oasb-watch-probe-N` files into the watched directory until the product reports one, for at most 5 s, cut to what is left before the last 1 s of the hook's 10 s timeout, and for at least 200 ms. E2E-001 leaves the probe events out of its checks. Also opens the harness's own `fs.watch` of the directory before the product starts and closes it after the product stops: a case whose product reported no probe still makes its write when that watcher saw a probe file, and is skipped as inconclusive without its write when it saw none; a product miss within the 5 s window, read when the window ends, fails when that watcher saw the path in the window and is skipped as inconclusive when it saw nothing; no detection case passes without the product's own event |
+| `filesystem-watch.ts` | Before each E2E-001 case, writes `oasb-watch-probe-N` files into the watched directory until the product reports one, for at most 5 s, cut to what is left before the last 1 s of the hook's 10 s timeout, and for at least 200 ms. E2E-001 leaves the probe events out of its checks. Also opens the harness's own `fs.watch` of the directory before the product starts and closes it after the product stops: a case whose product reported no probe still makes its write when that watcher saw a probe file, and is skipped as inconclusive without its write when it saw none; a product miss within the 5 s window, read when the window ends, fails when that watcher saw the path in the window and is skipped as inconclusive when it saw nothing; no detection case passes without the product's own event. A product whose `start()` returns 8.8 s or more into the hook leaves the probe wait at its 200 ms minimum, so when it also reports no probe file (it reports only sensitive paths), its cases are measured only if that watcher saw a probe file within those 200 ms, and are skipped as inconclusive otherwise. That watcher is a recursive `fs.watch`, which Node.js has on Linux from 19.1.0: where it is unavailable, each E2E-001 case is skipped as inconclusive, before the product is created, with a message that says so. An error that watcher reports is named in the skip message of a case it recorded no event for. A detection case passes over a filesystem event that has no `data`, which the adapter interface makes optional, and goes on waiting for the report of its write |
 | `mock-llm-adapter.ts` | Deterministic LLM for intelligence layer testing (pattern-based responses) |
 | `dvaa-client.ts` | HTTP client for DVAA vulnerable agent endpoints |
 | `dvaa-manager.ts` | DVAA process lifecycle (spawn, health check, teardown) |
 | `metrics.ts` | Detection rate, false positive rate, P95 latency computation |
+
+`npm run build` compiles `src/` without its test files, and vitest does not check types. `npm run typecheck:tests` type-checks `src/` with them (`tsconfig.test.json`, no output). It reports type errors in scenario test files that are not fixed yet, and `npm test` does not run it.
 
 ---
 

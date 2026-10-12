@@ -52,10 +52,14 @@ the claims this repository publishes:
    counts as skipped. A file in which a test was skipped so and no test
    passed fails the guard as `NOT MEASURED`, whatever the counts say: the run
    says nothing about that file, so run the smoke again when the host
-   delivers file events. A statement it cannot find fails too, so a wording
-   change has to update `STATEMENTS` in `scripts/readme-counts.mjs`, the one
-   list both README checks read. Its own tests (`npm run test:scripts`) run
-   after `npm ci`. Any mismatch fails the smoke. If you
+   delivers file events. Where Node.js has no recursive `fs.watch` (Linux
+   before 19.1.0), the harness cannot open its watcher, every E2E-001 case
+   is skipped so, and the guard fails that way on every run: run the smoke
+   on a Node.js that has one. A statement it cannot find fails too, so a
+   wording change has to update `STATEMENTS` in `scripts/readme-counts.mjs`,
+   the one list both README checks read. Its own tests
+   (`npm run test:scripts`) run after `npm ci`. Any mismatch fails the
+   smoke. If you
    add or remove tests, update the README in the same change or this gate
    blocks the release - that is the point. Committing a run under `results/`
    does not change the totals: the run-of-record checks are a fixed set of

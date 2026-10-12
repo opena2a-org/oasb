@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
     "pretest": "npm run test:scripts",
     "test": "vitest run",
     "smoke": "bash scripts/release-smoke.sh",

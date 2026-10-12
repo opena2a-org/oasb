@@ -159,8 +159,18 @@ const CORPUS = {
 
 const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 
+/**
+ * The longest a git command of this file may run. The calls are synchronous,
+ * so a git child that stalls blocks the worker and the test timeout cannot
+ * fire; with this limit the child is stopped and the call throws.
+ */
+const GIT_TIMEOUT_MS = 8000;
+
 /** The variables that point git at a repository, as git itself lists them. */
-const REPOSITORY_ENV = execFileSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf-8' })
+const REPOSITORY_ENV = execFileSync('git', ['rev-parse', '--local-env-vars'], {
+  encoding: 'utf-8',
+  timeout: GIT_TIMEOUT_MS,
+})
   .split('\n')
   .filter(Boolean);
 
@@ -177,11 +187,21 @@ function fixtureGitEnv(): NodeJS.ProcessEnv {
 }
 
 function git(dir: string, ...args: string[]): string {
-  return execFileSync(
-    'git',
-    ['-C', dir, '-c', 'user.name=OASB Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args],
-    { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], env: fixtureGitEnv() },
-  );
+  return gitWithin(GIT_TIMEOUT_MS, dir, ...args);
+}
+
+/** git in `dir`; a command still running after `timeoutMs` is stopped and fails with a message that names it. */
+function gitWithin(timeoutMs: number, dir: string, ...args: string[]): string {
+  try {
+    return execFileSync(
+      'git',
+      ['-C', dir, '-c', 'user.name=OASB Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args],
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], env: fixtureGitEnv(), timeout: timeoutMs },
+    );
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ETIMEDOUT') throw err;
+    throw new Error(`git ${args.join(' ')} did not finish within ${timeoutMs} ms and was stopped`);
+  }
 }
 
 function write(path: string, text: string): void {
@@ -1422,6 +1442,17 @@ describe('deprecated v1 runner', () => {
       expect(() => checkUnpinnedRun(args, fx.root), line).not.toThrow();
     }
   }, 30000);
+});
+
+describe('fixture git commands', () => {
+  it('stops a git command that does not finish in time and fails with a message that names it', () => {
+    const started = Date.now();
+
+    expect(() => gitWithin(300, tmpdir(), '-c', 'alias.stall=!sleep 5', 'stall')).toThrow(
+      'git -c alias.stall=!sleep 5 stall did not finish within 300 ms and was stopped',
+    );
+    expect(Date.now() - started).toBeLessThan(4000);
+  });
 });
 
 describe('git variables in the environment', () => {

@@ -337,6 +337,9 @@ stay on record here with the reason they changed.
   was skipped so and no test passed fails the guard as `NOT MEASURED`,
   whatever the counts say: when the host delivers no file event during the
   run, every E2E-001 case is skipped and the run says nothing about the file.
+  The same holds where Node.js has no recursive `fs.watch`, since the entry
+  below that starts "Two E2E-001 verdicts change": every case is skipped so
+  there, and the guard fails the file that way on every run.
   `scripts/check-test-counts.test.mjs` fails when a test file under `src/`
   skips at run time without `skipInconclusive`, and it runs its skip fixture
   with vitest's cache off, so the run writes nothing under `scripts/`.
@@ -614,11 +617,16 @@ stay on record here with the reason they changed.
   probe files; when the control saw none, the case is skipped as
   inconclusive without its write, naming the wait, how many of the probe
   files the control saw and the measured load. A case is skipped only when
-  the control saw no file event in the wait that decides it, and a case
-  that is not skipped passes or fails as it did before, so the adapters
-  compared above keep their results in every case that is not skipped. The
-  window, the single write per case, the five cases and their assertions do
-  not change. No detection case passes without the product's own event. On a
+  the control saw no file event for what decides it: none for the case's
+  file within its 5-second window, or none for any probe file during the
+  readiness wait of a product that reported none. A case that is not
+  skipped passes or fails as it did before, so the adapters compared above
+  keep their results in every case that is not skipped. The window, the
+  single write per case, the five cases and their assertions do not
+  change. No detection case passes without the product's own event. The
+  entry below that starts "Two E2E-001 verdicts change" changes two of
+  these verdicts: it adds a skip where the control cannot be opened, and a
+  filesystem event without `data` no longer fails a case. On a
   16-core macOS host at a 1-minute load of 14.8 to 28.3, with `fseventsd`
   at 85% to 106% of a core, the file run alone five times gave 0 failed and
   4 or 5 skipped per run; each readiness skip stated that the control saw
@@ -638,13 +646,91 @@ stay on record here with the reason they changed.
   only files that are not sensitive skipped all 4 detection cases and
   passed none, and reporting nothing skipped all 5 before their write.
   `src/harness/filesystem-watch.test.ts` has 11 more tests, 19 in the file,
-  for the control and the rules; the suite is 373 tests, 372 not skipped.
-  `docs/test-catalog.md` states the 5000 ms window for E2E-001 instead of a
-  latency of about 200 ms, which no measurement supported.
+  for the control and the rules; the suite was then 373 tests, 372 not
+  skipped. `docs/test-catalog.md` states the 5000 ms window for E2E-001
+  instead of a latency of about 200 ms, which no measurement supported.
 - `scripts/changelog-width.test.mjs` also fails when a line of
   `docs/testing/release-smoke.md` is wider than 80 characters. Two lines of
   the guide's drift guard step were wider, 104 and 84 characters; they are
   rewrapped at 78 or less, with the text unchanged.
+- Two E2E-001 verdicts change. First, where Node.js has no recursive
+  `fs.watch`, every E2E-001 case is skipped as inconclusive; each one
+  failed there. The control is a recursive `fs.watch`, which Node.js has
+  on Linux from 19.1.0, while `package.json` allows Node.js 18. Before
+  19.1.0 on Linux, opening it throws `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`
+  in the hook that runs before each case, so all five cases, the
+  normal-file case among them, failed with that error whatever the product
+  did. Now each case is skipped there, before the product is created or
+  any file is written, with a message that says the case was not measured
+  and names the Node.js version, the platform and the error; any other
+  error on opening the control still fails the case. The skip is made
+  with `skipInconclusive`, as every run-time skip of a test under `src/`
+  is, so the release smoke's drift guard counts these cases with the
+  passing tests and, as no test of the file passed, fails the file as
+  `NOT MEASURED` on every run on such a Node.js;
+  `docs/testing/release-smoke.md` says so. Not run on Node.js 18: with
+  `fs.watch` replaced by one that throws that error for a recursive watch,
+  the file gave 5 failed before this change and 5 skipped with it, each
+  recorded as inconclusive, and the drift guard read the report of that
+  run as the file not measured; a unit test replaces the watch function
+  the same way. Second, a filesystem
+  event that has no `data`, which the adapter interface allows, no longer
+  fails a detection case. The four detection predicates read `data`
+  without a check and threw a `TypeError` on such an event; they now read
+  it with `?.` and pass over the event. With such an event collected
+  before a case's wait, the wait failed at once, so the case failed when
+  the control saw the path and was skipped as inconclusive when it saw
+  nothing, also when the product then reported the write; now the case
+  waits for that report and is read by it. With such an event arriving
+  during the wait, the `TypeError` was thrown into the adapter's call of
+  its event handler; now nothing is thrown. A product whose only report of
+  the write has no `data` is read as a miss, as before. Measured with the
+  harness's event collector, a stubbed control and the predicates as
+  written before and after. The reference adapter's filesystem monitor
+  puts `data` on every event it reports (hackmyagent 0.23.8, the locked
+  version), so its results do not change. Nothing else in this entry
+  changes a verdict. An error the control's watcher reports was ignored, so
+  its silence afterwards read as the host delivering nothing. The first
+  such error is kept and named in the inconclusive message of a case the
+  control recorded no event for, in the 5-second window or in the readiness
+  wait; a case whose path the control recorded before the error still
+  fails as a product miss. The inconclusive messages gave `loadavg 0.00` on
+  Windows, where Node.js measures no load; there they say `loadavg
+  unavailable on Windows`. After a case, the control is closed and the
+  watched directory removed also when the product's `stop()` rejects; both
+  were left behind. The rules a case is read by stay where they were:
+  `awaitDetection` and `readinessSkip` decide in
+  `src/harness/filesystem-watch.ts`, and the test file fails the case or
+  skips it with `skipInconclusive`, where
+  `scripts/check-test-counts.test.mjs` checks each skip.
+  `src/harness/filesystem-watch.test.ts` has 12 more tests, 31 in the
+  file: for the message where Node.js has no recursive `fs.watch`, the
+  control's error, the load on Windows, the end of a case, a case the
+  control saw only other files for, and an upper bound on the wait that
+  follows a product miss. The README states a limit of the readiness
+  wait: a product whose `start()` returns 8.8 seconds or more into the hook
+  leaves that wait at its 200 ms minimum, so when it also reports no probe
+  file, its cases are measured only if the control saw a probe file within
+  those 200 ms. On a 16-core macOS host at a 1-minute load of 16.3 to
+  24.3, the file run alone three times gave 0 failed in each run: 4
+  skipped and the normal-file case passed; 5 skipped; 5 skipped. Each skip
+  named a wait in which the control saw no event, so no detection case was
+  measured in those runs.
+- The git commands of `src/benchmark/pinned/pinned.test.ts` are stopped
+  after 8 seconds and fail with a message that names the command. They had
+  no time limit, and the calls are synchronous: a stalled git blocked the
+  test worker, so the 10-second test timeout could not fire. One more test
+  covers it, 99 in `src/benchmark/pinned`; the suite is 386 tests, 385 not
+  skipped.
+- `npm run typecheck:tests` type-checks `src/` with its test files
+  (`tsconfig.test.json`, no output). `npm run build` excludes the test
+  files and vitest does not check types, so a type error in a test was
+  never reported. The 8 in E2E-001 are fixed, each by reading an event's
+  optional `data` with `?.`. The assertions do not change; one verdict
+  does, as the E2E-001 entry above states: a filesystem event without
+  `data` no longer fails a detection case. On 2026-10-12 the command
+  reports 259 errors in 34 other scenario test files, which this entry
+  does not fix, and `npm test` does not run it.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

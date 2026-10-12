@@ -14,13 +14,16 @@ import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
 import {
   awaitDetection,
+  endWatchCase,
   isWatchProbeEvent,
   openControlWatch,
   probeWaitMs,
   readinessSkip,
+  recursiveWatchSkip,
   skipInconclusive,
   waitForFilesystemWatch,
   type ControlWatch,
+  type WatchCaseParts,
 } from '../harness/filesystem-watch';
 import type { SecurityEvent, SecurityProductAdapter } from '../harness/adapter';
 
@@ -28,14 +31,22 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
   let arp: SecurityProductAdapter;
   let watchDir: string;
   let control: ControlWatch;
+  // What the current case has opened so far. afterEach ends exactly that,
+  // also for a case that was skipped before the product was created.
+  let opened: WatchCaseParts = {};
 
   /**
    * The product's event for the write of `name`, awaited for `timeoutMs`
    * from the write as before. When the product reports nothing in time, the
    * case fails if the harness's own watcher saw the path in that time (the
    * host delivered the event) and is skipped as inconclusive if it saw
-   * nothing (the host delivered no event to this process). A case never
-   * passes without the product's own event.
+   * nothing (the host delivered no event to this process). A detection case
+   * never passes without the product's own event.
+   *
+   * An event's `data` is optional in the adapter interface, so each predicate
+   * below reads it with `?.`: a filesystem event that has none is not the
+   * report a case waits for, and the case goes on waiting. Read without the
+   * check, such an event threw a TypeError and failed the case.
    */
   async function detect(
     ctx: TestContext,
@@ -53,14 +64,25 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const hookStart = Date.now();
     // Create a temp directory to watch
     watchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arp-e2e-fs-'));
+    opened = { dir: watchDir };
 
     // The harness's own watcher, opened before the product starts and closed
     // after it stops, records every file event the host delivers to this
-    // process. No watcher is added or removed between here and the case's
-    // write.
-    control = openControlWatch(watchDir);
+    // process. The product's watcher is added by start() below; no watcher is
+    // added or removed between the readiness wait and the case's write.
+    // Where this Node.js has no recursive fs.watch (Linux before 19.1.0), the
+    // watcher cannot be opened, so the case is not measured: it ends here, as
+    // inconclusive, before the product is created, with a message that says
+    // so. Any other error on opening the watcher fails the case.
+    try {
+      control = opened.control = openControlWatch(watchDir);
+    } catch (err) {
+      const unavailable = recursiveWatchSkip(err);
+      if (unavailable) skipInconclusive(ctx, unavailable);
+      throw err;
+    }
 
-    arp = createAdapter({
+    arp = opened.adapter = createAdapter({
       monitors: {
         process: false,
         network: false,
@@ -86,13 +108,10 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
   });
 
   afterEach(async () => {
-    await arp.stop();
-    control.close();
-    try {
-      fs.rmSync(watchDir, { recursive: true, force: true });
-    } catch {
-      // best effort
-    }
+    // The control is closed and the directory removed also when stop() rejects.
+    const parts = opened;
+    opened = {};
+    await endWatchCase(parts);
   });
 
   it('should detect creation of a .env file as a sensitive path violation', async (ctx) => {
@@ -104,7 +123,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const event = await detect(
       ctx,
       '.env',
-      (e) => e.source === 'filesystem' && e.data.sensitive === true && !isWatchProbeEvent(e),
+      (e) => e.source === 'filesystem' && e.data?.sensitive === true && !isWatchProbeEvent(e),
       5000,
     );
 
@@ -112,8 +131,8 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     expect(event.source).toBe('filesystem');
     expect(event.category).toBe('violation');
     expect(event.severity).toBe('high');
-    expect(event.data.sensitive).toBe(true);
-    expect(String(event.data.path)).toContain('.env');
+    expect(event.data?.sensitive).toBe(true);
+    expect(String(event.data?.path)).toContain('.env');
   });
 
   it('should detect creation of a .ssh directory file as sensitive', async (ctx) => {
@@ -125,14 +144,14 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const event = await detect(
       ctx,
       '.ssh',
-      (e) => e.source === 'filesystem' && String(e.data.path).includes('.ssh'),
+      (e) => e.source === 'filesystem' && String(e.data?.path).includes('.ssh'),
       5000,
     );
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
     expect(event.severity).toBe('high');
-    expect(event.data.sensitive).toBe(true);
+    expect(event.data?.sensitive).toBe(true);
   });
 
   it('should detect .bashrc write as persistence attempt', async (ctx) => {
@@ -142,7 +161,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const event = await detect(
       ctx,
       '.bashrc',
-      (e) => e.source === 'filesystem' && String(e.data.path).includes('.bashrc'),
+      (e) => e.source === 'filesystem' && String(e.data?.path).includes('.bashrc'),
       5000,
     );
 
@@ -158,14 +177,14 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     const event = await detect(
       ctx,
       '.npmrc',
-      (e) => e.source === 'filesystem' && String(e.data.path).includes('.npmrc'),
+      (e) => e.source === 'filesystem' && String(e.data?.path).includes('.npmrc'),
       5000,
     );
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
     expect(event.severity).toBe('high');
-    expect(event.data.sensitive).toBe(true);
+    expect(event.data?.sensitive).toBe(true);
   });
 
   it('should allow normal file creation without triggering violations', async () => {
