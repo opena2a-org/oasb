@@ -18,9 +18,11 @@
 // list npm run check:readme reads too, in the same change. An E2E-001 case
 // skipped as inconclusive at run time, because the host delivered no file
 // event, is counted with the passing tests, not the skipped ones, and listed.
+// A file in which a test was skipped so and no test passed fails the guard as
+// not measured, whatever the counts say.
 //
 // Usage: node scripts/check-test-counts.mjs <vitest-results.json> [path/to/README.md]
-// Exit code 0 when every stated count matches (and for --help), 1 otherwise. Run by npm run smoke.
+// Exit code 0 when every stated count matches and no file went unmeasured (and for --help), 1 otherwise. Run by npm run smoke.
 
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -70,6 +72,8 @@ function isInconclusiveSkip(test) {
  * skipped ones: the README's skipped count is of the tests skipped on every
  * run, and such a case is skipped only when the host delivered no file event,
  * so it is not a change to the suite. `inconclusive` lists those tests.
+ * `unmeasured` lists the files in which a test was skipped so and no test
+ * passed: the counts still match, but the run says nothing about the file.
  */
 export function liveCounts(results, source) {
   const reported = reportFiles(results);
@@ -80,12 +84,16 @@ export function liveCounts(results, source) {
   const inconclusive = reported.flatMap(t =>
     t.assertionResults.filter(isInconclusiveSkip).map(a => `${sourcePath(t.name)} > ${a.fullName ?? a.title ?? '(untitled)'}`),
   );
+  const unmeasured = reported
+    .filter(t => t.assertionResults.some(isInconclusiveSkip) && !t.assertionResults.some(a => a.status === 'passed'))
+    .map(t => sourcePath(t.name));
   const tests = keep => files.filter(f => keep(f.path)).reduce((sum, f) => sum + f.tests, 0);
   const fileCount = keep => files.filter(f => keep(f.path)).length;
   const scenario = path => SCENARIO_DIRS.some(dir => inDir(path, dir));
   return {
     files,
     inconclusive,
+    unmeasured,
     total: results.numTotalTests,
     passed: results.numPassedTests + inconclusive.length,
     skipped: results.numPendingTests - inconclusive.length,
@@ -208,6 +216,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     for (const name of live.inconclusive) console.log(`     ${name}`);
   }
   for (const d of drift) console.error('DRIFT: ' + d);
-  if (drift.length > 0) process.exit(1);
+  for (const file of live.unmeasured) {
+    console.error(`NOT MEASURED: ${file}: none of its tests passed and at least one was skipped as inconclusive, so the run says nothing about the file; run the suite again`);
+  }
+  if (drift.length > 0 || live.unmeasured.length > 0) process.exit(1);
   console.log(`   ${compared} README counts match the live suite.`);
 }

@@ -308,12 +308,21 @@ stay on record here with the reason they changed.
   when the last line before the drift guard that changes directory is not
   `cd "$TMP/oasb"`, so a `cd "$ROOT"` between the clone and the guard no
   longer passes it, and it accepts `./README.md` as the README's path. It
-  counts a line that is not a comment as a change of directory when `cd`,
-  `pushd` or `popd` starts it or comes right after `;`, `&`, `|`, `(`, `{`,
-  `!`, `if`, `elif`, `while`, `until`, `then`, `do`, `else`, `eval`, `time`,
-  `builtin`, `command` or a `NAME=value` assignment with no space in its
-  value. A change of directory written another way, or made inside a shell
-  function or a sourced file, is not detected.
+  counts a line that is not a comment as a change of directory when one of
+  its commands is `cd`, `pushd` or `popd`, also written `\cd`. A command
+  starts the line or follows `;`, `&`, `|`, `{`, a `(` left open on the line
+  or the `)` of a `case` pattern, and its name comes after any `NAME=value`
+  assignments and any of `!`, `if`, `elif`, `while`, `until`, `then`, `do`,
+  `else`, `eval`, `time`, `builtin` and `command`. Text in a quoted string, a
+  `${...}` expansion, a command substitution, a comment or a `(...)` subshell
+  that closes on the line is not a command of the script's shell and is not
+  counted. Some lines count that leave the script's shell where it is: a `cd`
+  in a pipeline, in a background job or in the body of a shell function,
+  called or not, and, as each line is read on its own, a `cd` on a line of a
+  subshell, string or here-document that spans lines. A change of directory
+  written another way (`"cd"`, `eval "cd ..."`, a variable or an alias), or
+  made by a sourced file or by a call of a shell function defined before the
+  clone, is not detected.
 - The drift guard in `npm run smoke` counts an E2E-001 case skipped as
   inconclusive with the passing tests, not with the skipped ones, and lists
   each such case in its output. A case is skipped so only when the host
@@ -324,7 +333,13 @@ stay on record here with the reason they changed.
   with `skipInconclusive` (`src/harness/filesystem-watch.ts`), which records
   the reason as `inconclusive` in the test's meta, where vitest's JSON
   reporter writes it. A test skipped without it, such as a new `it.skip`,
-  still changes the skipped count the guard compares.
+  still changes the skipped count the guard compares. A file in which a test
+  was skipped so and no test passed fails the guard as `NOT MEASURED`,
+  whatever the counts say: when the host delivers no file event during the
+  run, every E2E-001 case is skipped and the run says nothing about the file.
+  `scripts/check-test-counts.test.mjs` fails when a test file under `src/`
+  skips at run time without `skipInconclusive`, and it runs its skip fixture
+  with vitest's cache off, so the run writes nothing under `scripts/`.
 - `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
   inside a fixed set of eight tests, so committing a run no longer changes the
   `npm test` total. Its check that at least one

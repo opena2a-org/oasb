@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,11 +55,14 @@ function writeSources(dir) {
   }
 }
 
-// A vitest JSON report of FILES, as the reporter writes it with absolute paths.
+// A vitest JSON report of FILES, as the reporter writes it with absolute
+// paths. The skipped test is in the last file under src/e2e, so the tests of
+// E2E-001 pass, as in the suite, where the skipped test is in E2E-003.
 function suite(files = FILES, skipped = 1) {
+  const skippedIn = Object.keys(files).findLast(path => path.includes('/e2e/'));
   const testResults = Object.entries(files).map(([path, n]) => ({
     name: `/home/user/oasb/${path}`,
-    assertionResults: Array.from({ length: n }, (_, i) => ({ status: path.includes('/e2e/') && i < skipped ? 'skipped' : 'passed' })),
+    assertionResults: Array.from({ length: n }, (_, i) => ({ status: path === skippedIn && i < skipped ? 'skipped' : 'passed' })),
   }));
   const total = Object.values(files).reduce((s, n) => s + n, 0);
   return { numTotalTests: total, numPassedTests: total - skipped, numPendingTests: skipped, testResults };
@@ -191,26 +194,112 @@ test('the command lists the tests skipped as inconclusive and exits 0 when the c
   assert.match(r.stdout, /42 README counts match the live suite\./);
 });
 
+// suite() with both E2E-001 cases skipped as inconclusive, as when the host
+// delivers no file event during the run: no test of the file passed.
+function withNoCaseMeasured() {
+  const report = withRunTimeSkip({ inconclusive: 'inconclusive: host delivered no file event' });
+  const file = report.testResults.find(f => f.name.endsWith('/src/e2e/E2E-001.live-filesystem.test.ts'));
+  file.assertionResults[0] = {
+    status: 'skipped',
+    title: 'detects a create',
+    fullName: 'E2E-001 detects a create',
+    meta: { inconclusive: 'inconclusive: product reported no probe file' },
+  };
+  report.numPassedTests -= 1;
+  report.numPendingTests += 1;
+  return report;
+}
+
+test('a file is not measured when none of its tests passed and one was skipped as inconclusive', () => {
+  const { drift, live } = compareCounts(withNoCaseMeasured(), README, source);
+  assert.deepEqual(drift, []);
+  assert.deepEqual(live.unmeasured, ['src/e2e/E2E-001.live-filesystem.test.ts']);
+  const declared = withRunTimeSkip({ inconclusive: 'inconclusive: host delivered no file event' });
+  declared.testResults.find(f => f.name.endsWith('/src/e2e/E2E-001.live-filesystem.test.ts')).assertionResults[0] = { status: 'skipped' };
+  assert.deepEqual(liveCounts(declared, source).unmeasured, ['src/e2e/E2E-001.live-filesystem.test.ts']);
+});
+
+test('a file with a passing test, or with no test skipped as inconclusive, is measured', () => {
+  assert.deepEqual(liveCounts(suite(), source).unmeasured, []);
+  assert.deepEqual(liveCounts(withRunTimeSkip({ inconclusive: 'inconclusive: host delivered no file event' }), source).unmeasured, []);
+  assert.deepEqual(liveCounts(withRunTimeSkip({}), source).unmeasured, []);
+});
+
+test('the command exits 1 and names the file when every case of E2E-001 was skipped as inconclusive', () => {
+  const r = runCommand(withNoCaseMeasured());
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stdout, /^ {3}total=19 passed=18 skipped=1 /m);
+  assert.match(r.stdout, /^ {3}2 skipped as inconclusive, counted with the passing tests:$/m);
+  assert.match(
+    r.stderr,
+    /^NOT MEASURED: src\/e2e\/E2E-001\.live-filesystem\.test\.ts: none of its tests passed and at least one was skipped as inconclusive, so the run says nothing about the file; run the suite again$/m,
+  );
+  assert.doesNotMatch(r.stderr, /DRIFT/);
+  assert.doesNotMatch(r.stdout, /README counts match/);
+});
+
+// The lines of a test file's text that skip at run time without the
+// inconclusive marker: a call of `skip` on anything but `it`, `test` or
+// `describe`, which skip a test on every run.
+function unmarkedSkips(text) {
+  return text
+    .split('\n')
+    .map((l, i) => `line ${i + 1}: ${l.trim()}`)
+    .filter(l => !/^line \d+: (?:\/\/|\*)/.test(l) && /(?<!\b(?:it|test|describe)\.)\bskip\(/.test(l));
+}
+
+// Every *.test.ts file under `dir`, as a path from `dir` on.
+function testFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.isDirectory()) return testFiles(join(dir, entry.name)).map(path => `${entry.name}/${path}`);
+    return entry.name.endsWith('.test.ts') ? [entry.name] : [];
+  });
+}
+
+test('a test under src/ that skips at run time does so through skipInconclusive, E2E-001 among them', () => {
+  const src = join(here, '..', 'src');
+  const e2e001 = 'e2e/E2E-001.live-filesystem-detection.test.ts';
+  const files = testFiles(src);
+  assert.ok(files.includes(e2e001), `src/${e2e001} is not among the ${files.length} test files`);
+  for (const file of files) assert.deepEqual(unmarkedSkips(readFileSync(join(src, file), 'utf8')), [], `src/${file}`);
+  // The same file with each skipInconclusive call written as ctx.skip.
+  const text = readFileSync(join(src, e2e001), 'utf8');
+  const sites = text.split('skipInconclusive(ctx, ').length - 1;
+  assert.ok(sites > 0, `src/${e2e001} no longer calls skipInconclusive(ctx, ...)`);
+  const unmarked = unmarkedSkips(text.replaceAll('skipInconclusive(ctx, ', 'ctx.skip('));
+  assert.equal(unmarked.length, sites, unmarked.join('\n'));
+  for (const line of unmarked) assert.match(line, /^line \d+: if \(.+\) ctx\.skip\(/);
+  assert.deepEqual(unmarkedSkips("it('x', ({ skip }) => {\n  skip();\n  it.skip('y');\n  // ctx.skip() in a comment\n});\n"), ['line 2: skip();']);
+});
+
 test("the tests the harness skips as inconclusive reach the guard through vitest's JSON report", () => {
   const repo = join(here, '..');
   const vitest = join(repo, 'node_modules', 'vitest', 'vitest.mjs');
   const fixture = join(here, 'fixtures', 'inconclusive-skip');
   const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-'));
+  // What this test left in the fixture directory while it ran vitest with
+  // its cache on.
+  rmSync(join(fixture, 'node_modules'), { recursive: true, force: true });
   try {
     const out = join(dir, 'report.json');
-    const r = spawnSync(process.execPath, [vitest, 'run', '--root', fixture, '--reporter=json', `--outputFile=${out}`], {
+    const r = spawnSync(process.execPath, [vitest, 'run', '--root', fixture, '--no-cache', '--reporter=json', `--outputFile=${out}`], {
       cwd: repo,
       encoding: 'utf8',
     });
     assert.equal(r.status, 0, r.stderr.slice(-2000));
+    assert.deepEqual(readdirSync(fixture), ['src'], 'the vitest run wrote into the fixture directory');
     const report = JSON.parse(readFileSync(out, 'utf8'));
-    assert.deepEqual([report.numTotalTests, report.numPassedTests, report.numPendingTests], [5, 1, 4]);
+    assert.deepEqual([report.numTotalTests, report.numPassedTests, report.numPendingTests], [7, 1, 6]);
     const live = liveCounts(report, path => assert.fail(`${path} is not a scenario file`));
-    assert.deepEqual({ total: live.total, passed: live.passed, skipped: live.skipped }, { total: 5, passed: 3, skipped: 2 });
-    assert.deepEqual(live.inconclusive, [
+    assert.deepEqual({ total: live.total, passed: live.passed, skipped: live.skipped }, { total: 7, passed: 5, skipped: 2 });
+    assert.deepEqual([...live.inconclusive].sort(), [
       'src/inconclusive-skip.test.ts > skips in a test is skipped as inconclusive from the test',
       'src/inconclusive-skip.test.ts > skips in beforeEach is skipped as inconclusive before it runs',
+      'src/not-measured.test.ts > is the first case skipped before it runs',
+      'src/not-measured.test.ts > is the second case skipped before it runs',
     ]);
+    // inconclusive-skip.test.ts has a passing test; not-measured.test.ts has none.
+    assert.deepEqual(live.unmeasured, ['src/not-measured.test.ts']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -420,16 +509,89 @@ test('a scenario file the report names and the README directory lacks is named, 
   assert.doesNotMatch(r.stderr, /^\s+at /m);
 });
 
+// One line of a shell script as the commands its own shell runs. A quoted
+// string, a `${...}` expansion, a `$(...)` or backquoted command substitution
+// and an escaped character that is not a letter each become the word `_`; a
+// `(...)` subshell that closes on the line becomes `;`, because nothing in it
+// moves the shell that runs the script; a comment is dropped; and an escaped
+// letter stands for itself, because `\cd` runs `cd`. What a string, an
+// expansion or a substitution leaves open is read as closed at the end of the
+// line. Each character is read once.
+function ownCommands(line) {
+  let i = 0;
+  // Pass the rest of a backquoted or double-quoted string.
+  const quoted = (close) => {
+    while (i < line.length) {
+      const c = line[i++];
+      if (c === close) return;
+      if (c === '\\') i++;
+      else if (close === '"' && c === '`') quoted('`');
+      else if (close === '"' && c === '$' && (line[i] === '(' || line[i] === '{')) commands(line[i++] === '(' ? ')' : '}');
+    }
+  };
+  // The commands up to an unquoted `close`, and whether it was found.
+  const commands = (close) => {
+    let out = '';
+    while (i < line.length) {
+      const c = line[i++];
+      if (c === close) return [out, true];
+      if (c === '\\') {
+        const escaped = line[i++] ?? '';
+        out += /[A-Za-z]/.test(escaped) ? escaped : escaped && '_';
+      } else if (c === "'") {
+        const end = line.indexOf("'", i);
+        i = end === -1 ? line.length : end + 1;
+        out += '_';
+      } else if (c === '"' || c === '`') {
+        quoted(c);
+        out += '_';
+      } else if (c === '$' && (line[i] === '(' || line[i] === '{')) {
+        commands(line[i++] === '(' ? ')' : '}');
+        out += '_';
+      } else if (c === '(') {
+        const [inner, closed] = commands(')');
+        out += closed ? ';' : `(${inner}`;
+      } else if (c === '#' && (i === 1 || /[\s;&|()]/.test(line[i - 2]))) {
+        i = line.length;
+      } else {
+        out += c;
+      }
+    }
+    return [out, false];
+  };
+  return commands(undefined)[0];
+}
+
+// The words that come before a command and leave it the command of the line.
+const BEFORE_A_COMMAND = new Set(['!', 'if', 'elif', 'while', 'until', 'then', 'do', 'else', 'eval', 'time', 'builtin', 'command']);
+
+// True when one of the line's own commands (ownCommands) is `cd`, `pushd` or
+// `popd`. A command starts the line or follows `;`, `&`, `|`, `(`, `)` (the
+// end of a `case` pattern) or `{`; its name is its first word after any
+// `NAME=value` assignments and any of the words in BEFORE_A_COMMAND.
+function changesDirectory(line) {
+  return ownCommands(line)
+    .split(/[;&|(){]/)
+    .some((command) => {
+      const name = command
+        .trim()
+        .split(/\s+/)
+        .find((word) => !BEFORE_A_COMMAND.has(word) && !/^[A-Za-z_]\w*\+?=/.test(word));
+      return /^(?:cd|pushd|popd)(?:$|[<>])/.test(name ?? '');
+    });
+}
+
 // Why the drift guard in a release smoke script would not read the README of
 // the fresh clone, or null when it does. The last line before the guard that
-// changes directory has to be `cd "$TMP/oasb"`, and the guard's last argument
-// has to name README.md in it (`./README.md` is the same file). A line that is
-// not a comment changes directory when `cd`, `pushd` or `popd` starts it or
-// comes right after `;`, `&`, `|`, `(`, `{`, `!`, `if`, `elif`, `while`,
-// `until`, `then`, `do`, `else`, `eval`, `time`, `builtin`, `command` or a
-// `NAME=value` assignment with no space in its value. A change of directory
-// written another way, or made inside a shell function or a sourced file, is
-// not detected.
+// changes directory (changesDirectory) has to be `cd "$TMP/oasb"`, and the
+// guard's last argument has to name README.md in it (`./README.md` is the
+// same file). Some lines count that leave the script's shell where it is: a
+// `cd` in a pipeline, in a background job or in the body of a shell function,
+// called or not, and, as each line is read on its own, a `cd` on a line of a
+// subshell, string or here-document that spans lines. A change of directory
+// written another way (`"cd"`, `eval "cd ..."`, a variable or an alias), or
+// made by a sourced file or by a call of a shell function defined before the
+// clone, is not detected.
 function cloneReadmeProblem(smoke) {
   const lines = smoke
     .split('\n')
@@ -437,9 +599,7 @@ function cloneReadmeProblem(smoke) {
     .map((l) => l.trim());
   const guard = lines.findIndex((l) => /^node scripts\/check-test-counts\.mjs\b/.test(l));
   if (guard === -1) return 'scripts/release-smoke.sh does not run scripts/check-test-counts.mjs';
-  const move = lines
-    .slice(0, guard)
-    .findLast((l) => /(?:^|[;&|({!]|\b(?:if|elif|while|until|then|do|else|eval|time|builtin|command)|\b[A-Za-z_]\w*=\S*\s)\s*(?:cd|pushd|popd)\b/.test(l));
+  const move = lines.slice(0, guard).findLast(changesDirectory);
   if (move !== 'cd "$TMP/oasb"') {
     const where = move === undefined ? 'the directory the smoke started in' : `the directory \`${move}\` leaves it in`;
     return `the drift guard runs in ${where}, not in the fresh clone`;
@@ -477,11 +637,51 @@ test('a change of directory between the clone and the drift guard fails the clon
     'eval cd "$ROOT"',
     'time cd "$ROOT"',
     'CDPATH= cd "$ROOT"',
+    'CDPATH="" cd "$ROOT"',
+    'HERE=$(pwd) cd "$ROOT"',
+    'command cd "$ROOT"',
+    '\\cd "$ROOT"',
+    'case x in *) cd "$ROOT";; esac',
+    'case x in (*) cd "$ROOT";; esac',
+    '{ cd "$ROOT"; }',
+    'echo "moving"; cd "$ROOT" # back to the working tree',
   ]) {
     assert.match(cloneReadmeProblem(before(move)) ?? '', /^the drift guard runs in the directory `.+` leaves it in, not in the fresh clone$/, move);
   }
+  for (const stay of [
+    'echo "then cd somewhere"',
+    '(cd "$ROOT" && true)',
+    'echo "x=y cd"',
+    'echo "!cd"',
+    "echo 'do cd'",
+    'echo "it\'s done"; echo "now cd \\"$ROOT\\""',
+    'HERE=$(cd "$ROOT" && pwd)',
+    'echo "$(cd "$(dirname "$ROOT")" && pwd)"',
+    'echo `cd "$ROOT" && pwd`',
+    'echo "${ROOT:-cd}" ${cd}',
+    'echo done # then cd "$ROOT"',
+    'echo \\; cd',
+    'ifcd=1 docd "$ROOT"',
+  ]) {
+    assert.equal(cloneReadmeProblem(before(stay)), null, stay);
+  }
   assert.equal(cloneReadmeProblem(smoke.replace(clone, '\n')), 'the drift guard runs in the directory the smoke started in, not in the fresh clone');
   assert.equal(cloneReadmeProblem(before('cd "$ROOT"\ncd "$TMP/oasb"')), null);
+  // A shell function is read by the lines of its body: one defined after the
+  // clone is reported whether or not it is called, and a call of one defined
+  // before the clone is not seen.
+  assert.equal(
+    cloneReadmeProblem(before('go() { cd "$ROOT"; }')),
+    'the drift guard runs in the directory `go() { cd "$ROOT"; }` leaves it in, not in the fresh clone',
+  );
+  assert.equal(cloneReadmeProblem(before('go() (cd "$ROOT")\ngo')), null);
+  assert.equal(cloneReadmeProblem(before('go').replace(clone, `\ngo() { cd "$ROOT"; }${clone}`)), null);
+  // A line is read in time proportional to its length.
+  const start = performance.now();
+  assert.equal(cloneReadmeProblem(before('x='.repeat(100_000))), null);
+  assert.equal(cloneReadmeProblem(before(`${'x='.repeat(100_000)} cd "$ROOT"`)) === null, false);
+  const elapsed = performance.now() - start;
+  assert.ok(elapsed < 2000, `two 200 KB lines took ${Math.round(elapsed)} ms to read`);
   for (const path of ['./README.md', '"README.md"', "'./README.md'"]) {
     assert.equal(cloneReadmeProblem(smoke.replace(readme, `"$TMP/results.json" ${path}\n`)), null, path);
   }

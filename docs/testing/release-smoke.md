@@ -49,7 +49,10 @@ the claims this repository publishes:
    the skipped ones, and listed in the guard's output: the test records the
    reason as `inconclusive` in its meta (`skipInconclusive` in
    `src/harness/filesystem-watch.ts`), and a test skipped without it still
-   counts as skipped. A statement it cannot find fails too, so a wording
+   counts as skipped. A file in which a test was skipped so and no test
+   passed fails the guard as `NOT MEASURED`, whatever the counts say: the run
+   says nothing about that file, so run the smoke again when the host
+   delivers file events. A statement it cannot find fails too, so a wording
    change has to update `STATEMENTS` in `scripts/readme-counts.mjs`, the one
    list both README checks read. Its own tests (`npm run test:scripts`) run
    after `npm ci`. Any mismatch fails the smoke. If you
@@ -107,7 +110,9 @@ README's test counts do not include them.
   `npm run check:readme` on this README, which collects the suite with
   vitest.
 - `scripts/check-test-counts.test.mjs`: the drift guard
-  (`scripts/check-test-counts.mjs`, step 3).
+  (`scripts/check-test-counts.mjs`, step 3). It also fails when the smoke
+  script would run the guard outside its clone, or when a test file under
+  `src/` skips at run time without `skipInconclusive`.
 - `scripts/check-owasp-mapping.test.mjs`: the OWASP mapping check
   (`scripts/check-owasp-mapping.mjs`), which holds every scenario file's
   `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each
