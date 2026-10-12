@@ -415,7 +415,9 @@ export async function detectWrite(
 // An event's `data` is optional in the adapter interface, so the predicates
 // below read it with `?.`: a filesystem event that has none is not the report
 // a case waits for, and the case goes on waiting. Read without the check, such
-// an event threw a TypeError and failed the case.
+// an event threw a TypeError and failed the case. An event without a path has
+// no path to contain a name: read as String(undefined), it matched every name
+// that is part of the text "undefined", such as "def" or "".
 
 /** True for a filesystem event, other than a probe's, that reports a sensitive path. */
 export function isSensitiveFileEvent(event: SecurityEvent): boolean {
@@ -424,5 +426,8 @@ export function isSensitiveFileEvent(event: SecurityEvent): boolean {
 
 /** A predicate that is true for a filesystem event whose path contains `name`. */
 export function fileEventFor(name: string): (event: SecurityEvent) => boolean {
-  return (event) => event.source === 'filesystem' && String(event.data?.path).includes(name);
+  return (event) => {
+    const reported = event.data?.path;
+    return event.source === 'filesystem' && reported != null && String(reported).includes(name);
+  };
 }

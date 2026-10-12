@@ -330,16 +330,77 @@ function functionText(text, name) {
   return text.slice(start, text.indexOf('\n}\n', start) + 2);
 }
 
-test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by detectWrite after its inconclusive and missed checks, no test file under src/ names markDetected, and E2E-001 calls detectWrite and openControlWatchOrSkip', () => {
+// An assignment operator after a property: `=` or a compound one, not `==`.
+const ASSIGNED = String.raw`\s*(?:\*\*|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^])?=(?!=)`;
+const DETECTED_WRITES = [
+  // `(ctx.task.meta as ...).detected = true`, or through another name for
+  // the meta; any object's `detected`, as the check cannot tell them apart.
+  new RegExp(String.raw`\.\s*detected\b` + ASSIGNED),
+  new RegExp(String.raw`\[\s*(['"\x60])detected\1\s*\]` + ASSIGNED),
+  // Reflect.set(meta, 'detected', true), Object.defineProperty(meta, 'detected', ...).
+  /(['"\x60])detected\1\s*,/,
+  // Object.assign(ctx.task.meta, { detected: true }), or a new meta object.
+  /\bmeta\b.*\bdetected\s*[:,}]/,
+];
+
+// The lines of `text`, outside comments, that write a property named
+// `detected`, as markDetected writes it to a task's meta; an object with a
+// `detected` key counts only on a line that names `meta` and is not an
+// `expect(`. UNSEEN_MARKS lists writes this does not see.
+function detectedWrites(text) {
+  return text
+    .split('\n')
+    .map((l, i) => `line ${i + 1}: ${l.trim()}`)
+    .filter(l => !/^line \d+: (?:\/\/|\*|expect\()/.test(l) && DETECTED_WRITES.some(re => re.test(l)));
+}
+
+// Writes of the mark that detectedWrites does not see, each as CHANGELOG.md
+// and docs/testing/release-smoke.md name it and as a case could write it.
+const UNSEEN_MARKS = [
+  {
+    named: 'a key built at run time (`meta[key] = true`)',
+    written: "const key = ['detec', 'ted'].join('');\n    (ctx.task.meta as Record<string, boolean>)[key] = true;",
+  },
+  {
+    named: 'an object whose `detected` key is on another line than `meta`',
+    written: 'Object.assign(ctx.task.meta, {\n      detected: true,\n    });',
+  },
+];
+
+// E2E-001's detection cases, each as the text of what it passes detect
+// after ctx: the name it writes, the predicate and the time limit.
+function detectionCases(text) {
+  return text.split('await detect(ctx, ').slice(1).map(rest => rest.slice(0, rest.indexOf(');')));
+}
+
+// The detection cases of `text` whose predicate is neither the harness's
+// isSensitiveFileEvent nor its fileEventFor of the name the case writes.
+function ownPredicates(text) {
+  return detectionCases(text).filter(args => {
+    const [, name, predicate] = /^'([^']*)', (.+), \d+$/.exec(args) ?? [];
+    return predicate !== 'isSensitiveFileEvent' && predicate !== `fileEventFor('${name}')`;
+  });
+}
+
+test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by detectWrite after its inconclusive and missed checks, and it alone writes the mark; no test file under src/ names markDetected or writes the mark; E2E-001 calls detectWrite and openControlWatchOrSkip, and passes each case the harness predicate for its name', () => {
   const src = join(here, '..', 'src');
-  // A test file that called markDetected could mark a case that got no event
-  // from the product, such as E2E-001's normal-file case, and the drift
-  // guard would take the file as measured on a run that measured nothing.
+  // A test file that called markDetected, or wrote the mark itself, could
+  // mark a case that got no event from the product, such as E2E-001's
+  // normal-file case, and the drift guard would take the file as measured on
+  // a run that measured nothing.
   for (const file of testFiles(src)) {
-    assert.doesNotMatch(readFileSync(join(src, file), 'utf8'), /\bmarkDetected\b/, `src/${file} uses markDetected`);
+    const text = readFileSync(join(src, file), 'utf8');
+    assert.doesNotMatch(text, /\bmarkDetected\b/, `src/${file} uses markDetected`);
+    assert.deepEqual(detectedWrites(text), [], `src/${file} writes \`detected\` to an object`);
   }
   const harness = readFileSync(join(src, 'harness', 'filesystem-watch.ts'), 'utf8');
   assert.equal(harness.split('markDetected(ctx);').length - 1, 1, 'src/harness/filesystem-watch.ts calls markDetected other than once');
+  const mark = '(ctx.task.meta as { detected?: boolean }).detected = true;';
+  assert.ok(
+    harness.includes(`export function markDetected(ctx: Pick<InconclusiveSkipContext, 'task'>): void {\n  ${mark}\n}\n`),
+    'markDetected does not write the mark as it did',
+  );
+  assert.deepEqual(detectedWrites(harness).map(l => l.replace(/^line \d+: /, '')), [mark], 'src/harness/filesystem-watch.ts writes the mark other than in markDetected');
   const detectWrite = functionText(harness, 'detectWrite');
   const steps = [
     "if (outcome.kind === 'inconclusive') skipInconclusive(ctx, outcome.message);",
@@ -359,6 +420,37 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
   for (const inlined of ['awaitDetection', 'openControlWatch(', 'recursiveWatchSkip']) {
     assert.ok(!e2e001.includes(inlined), `E2E-001 calls ${inlined} itself instead of through the harness`);
   }
+  // Each detection case reads the product's event with a harness predicate,
+  // which has unit tests, and E2E-001 names each predicate only in its import
+  // and in the cases that pass it, so it declares no predicate of that name.
+  const cases = detectionCases(e2e001);
+  assert.deepEqual(ownPredicates(e2e001), [], 'E2E-001 passes detect a predicate of its own');
+  for (const predicate of ['isSensitiveFileEvent', 'fileEventFor']) {
+    const passed = cases.filter(args => args.includes(predicate)).length;
+    assert.ok(passed > 0, `no E2E-001 case passes ${predicate}`);
+    assert.equal(e2e001.match(new RegExp(String.raw`\b${predicate}\b`, 'g')).length, 1 + passed, `E2E-001 names ${predicate} other than in its import and its cases`);
+  }
+  // What the checks see: the predicate inline in place of
+  // isSensitiveFileEvent, fileEventFor of another name, and the mark written
+  // in the normal-file case.
+  const inline = "(e) => e.source === 'filesystem' && (e.data as any).sensitive === true && !isWatchProbeEvent(e)";
+  assert.deepEqual(ownPredicates(e2e001.replace("'.env', isSensitiveFileEvent,", `'.env', ${inline},`)), [`'.env', ${inline}, 5000`]);
+  assert.deepEqual(ownPredicates(e2e001.replace("fileEventFor('.npmrc')", "fileEventFor('.np')")), ["'.npmrc', fileEventFor('.np'), 5000"]);
+  const normal = "it('should allow normal file creation without triggering violations', async () => {\n";
+  assert.ok(e2e001.includes(normal), 'E2E-001 has no normal-file case as written');
+  const marked = (write) => e2e001.replace(normal, normal.replace('async () =>', 'async (ctx) =>') + `    ${write}\n`);
+  for (const write of [
+    mark,
+    '(ctx.task.meta as Record<string, unknown>)["detected"] = true;',
+    "(ctx.task.meta as Record<string, unknown>)['detected'] ||= true;",
+    "Reflect.set(ctx.task.meta, 'detected', true);",
+    'Object.assign(ctx.task.meta, { detected: true });',
+    'const meta = ctx.task.meta as { detected?: boolean }; meta.detected = true;',
+  ]) {
+    assert.equal(detectedWrites(marked(write)).length, 1, write);
+  }
+  // And what they do not see.
+  for (const { written } of UNSEEN_MARKS) assert.deepEqual(detectedWrites(marked(written)), [], written);
 });
 
 test('the changelog and the smoke guide name the skips the run-time skip check does not see', () => {
@@ -367,6 +459,17 @@ test('the changelog and the smoke guide name the skips the run-time skip check d
     assert.ok(text.includes('`*.test.ts` file under `src/`'), `${doc} does not say which files the check reads`);
     for (const written of UNSEEN_SKIPS) assert.ok(text.includes(`\`${written}\``), `${doc} does not name \`${written}\` as a skip the check does not see`);
     assert.ok(text.includes('a helper outside those files'), `${doc} does not say a skip made by a helper outside the test files is not seen`);
+  }
+});
+
+test('the changelog and the smoke guide describe the check of the mark and the predicates, and name the marks it does not see', () => {
+  for (const doc of ['CHANGELOG.md', 'docs/testing/release-smoke.md']) {
+    const text = readFileSync(join(here, '..', doc), 'utf8').replace(/\s+/g, ' ');
+    for (const named of ['names `markDetected`', 'writes a property named `detected`', '`detectWrite` or `openControlWatchOrSkip`', '`isSensitiveFileEvent`', '`fileEventFor` of the name the case writes']) {
+      assert.ok(text.includes(named), `${doc} does not say the check fails when a file ${named}`);
+    }
+    for (const { named } of UNSEEN_MARKS) assert.ok(text.includes(named), `${doc} does not name ${named} as a mark the check does not see`);
+    assert.ok(text.includes('or made by a helper outside those files, is not detected'), `${doc} does not say a mark made by a helper outside the test files is not seen`);
   }
 });
 

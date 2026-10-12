@@ -764,11 +764,18 @@ stay on record here with the reason they changed.
   event's `data` without `?.`, left `npm test` and `npm run test:scripts`
   passing. The code is the same, so no verdict changes.
   `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
-  `src/` names `markDetected`, and when E2E-001 stops calling `detectWrite`
-  or `openControlWatchOrSkip`. It reads the text of those files: a mark
-  written another way (`ctx.task.meta.detected = true` in a case) and a
-  predicate written inline in E2E-001 in place of `isSensitiveFileEvent` or
-  `fileEventFor` are not detected. After a
+  `src/` names `markDetected` or writes a property named `detected`, which
+  only `markDetected` writes, and when E2E-001 stops calling `detectWrite`
+  or `openControlWatchOrSkip`, or passes a detection case a predicate other
+  than `isSensitiveFileEvent` or `fileEventFor` of the name the case
+  writes. It reads the text of those files: a mark written with a key built
+  at run time (`meta[key] = true`) or with an object whose `detected` key is
+  on another line than `meta`, or made by a helper outside those files, is
+  not detected. `fileEventFor` read an event without a path as the text
+  `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
+  matched such an event; it now matches only an event whose path contains
+  the name. E2E-001's names (`.ssh`, `.bashrc`, `.npmrc`) are not part of
+  that text, so no verdict changes. After a
   case whose product's `stop()` rejects and whose control's `close()`
   throws, `endWatchCase` passes on the rejection of `stop()`, as its
   description says; it passed on the error of `close()`. The README says

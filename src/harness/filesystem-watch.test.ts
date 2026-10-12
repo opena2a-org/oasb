@@ -734,5 +734,12 @@ describe('the detection predicates of E2E-001', () => {
     expect(fileEventFor('.ssh')(fileEvent('.bashrc'))).toBe(false);
     expect(fileEventFor('.ssh')(fileEvent('.ssh/id_rsa', 'process'))).toBe(false);
     expect(fileEventFor('.ssh')(datalessEvent())).toBe(false);
+    // A name that is part of the text "undefined" matches no event without a
+    // path, and still matches an event whose path contains it.
+    for (const name of ['def', 'fine', 'undefined', '']) {
+      expect(fileEventFor(name)(datalessEvent()), name).toBe(false);
+      expect(fileEventFor(name)({ ...datalessEvent(), data: { eventType: 'rename' } }), name).toBe(false);
+      expect(fileEventFor(name)(fileEvent(`undefined/${name}`)), name).toBe(true);
+    }
   });
 });

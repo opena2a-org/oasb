@@ -124,7 +124,15 @@ README's test counts do not include them.
   instead of calling `skipInconclusive`. That check reads the text of those
   files: a skip written another way, such as `ctx.skip (...)` or
   `ctx['skip'](...)`, or made by a helper outside those files is not
-  detected.
+  detected. It fails as well when such a file names `markDetected` or
+  writes a property named `detected`, which only `markDetected` writes, as
+  the mark of a case that got the product's own event; and when E2E-001
+  stops calling `detectWrite` or `openControlWatchOrSkip`, or passes a
+  detection case a predicate other than `isSensitiveFileEvent` or
+  `fileEventFor` of the name the case writes. That check reads the text as
+  well: a mark written with a key built at run time (`meta[key] = true`) or
+  with an object whose `detected` key is on another line than `meta`, or
+  made by a helper outside those files, is not detected.
 - `scripts/check-owasp-mapping.test.mjs`: the OWASP mapping check
   (`scripts/check-owasp-mapping.mjs`), which holds every scenario file's
   `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each
