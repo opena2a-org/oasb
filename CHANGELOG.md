@@ -620,6 +620,10 @@ stay on record here with the reason they changed.
   for the control and the rules; the suite is 373 tests, 372 not skipped.
   `docs/test-catalog.md` states the 5000 ms window for E2E-001 instead of a
   latency of about 200 ms, which no measurement supported.
+- `scripts/changelog-width.test.mjs` also fails when a line of
+  `docs/testing/release-smoke.md` is wider than 80 characters. Two lines of
+  the guide's drift guard step were wider, 104 and 84 characters; they are
+  rewrapped at 78 or less, with the text unchanged.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

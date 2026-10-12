@@ -38,20 +38,21 @@ the claims this repository publishes:
 3. **README count drift guard.** `scripts/check-test-counts.mjs` reads the
    per-file results of the JSON reporter and compares every test count the
    README in the clone states with them (the committed README, so an
-   uncommitted edit to it is not what the smoke measures): the tests badge, the Quick Start comment, the
-   Counts note (total, passing, skipped, attack scenarios, scoring-engine and
-   pinned harness tests), the per-group `npm run test:*` comments, the
-   scenario counts in the prose, the scenario-file count under MITRE ATLAS
-   Coverage, and every row of the What Gets Tested table, whose source rows
-   must add up to the suite total. An E2E-001 case skipped as inconclusive,
-   because the host delivered no file event to the harness's own watcher, is
-   counted with the passing tests, not the skipped ones, and listed in the
-   guard's output: the test records the reason as `inconclusive` in its meta
-   (`skipInconclusive` in `src/harness/filesystem-watch.ts`), and a test
-   skipped without it still counts as skipped. A statement it cannot find fails too, so a
-   wording change has to update `STATEMENTS` in `scripts/readme-counts.mjs`,
-   the one list both README checks read. Its own tests
-   (`npm run test:scripts`) run after `npm ci`. Any mismatch fails the smoke. If you
+   uncommitted edit to it is not what the smoke measures): the tests badge,
+   the Quick Start comment, the Counts note (total, passing, skipped, attack
+   scenarios, scoring-engine and pinned harness tests), the per-group
+   `npm run test:*` comments, the scenario counts in the prose, the
+   scenario-file count under MITRE ATLAS Coverage, and every row of the What
+   Gets Tested table, whose source rows must add up to the suite total. An
+   E2E-001 case skipped as inconclusive, because the host delivered no file
+   event to the harness's own watcher, is counted with the passing tests, not
+   the skipped ones, and listed in the guard's output: the test records the
+   reason as `inconclusive` in its meta (`skipInconclusive` in
+   `src/harness/filesystem-watch.ts`), and a test skipped without it still
+   counts as skipped. A statement it cannot find fails too, so a wording
+   change has to update `STATEMENTS` in `scripts/readme-counts.mjs`, the one
+   list both README checks read. Its own tests (`npm run test:scripts`) run
+   after `npm ci`. Any mismatch fails the smoke. If you
    add or remove tests, update the README in the same change or this gate
    blocks the release - that is the point. Committing a run under `results/`
    does not change the totals: the run-of-record checks are a fixed set of
@@ -118,8 +119,8 @@ README's test counts do not include them.
   measured while `src/maturity` has no test.
 - `scripts/check-documented-commands.test.mjs`: the documented-command check
   (step 5).
-- `scripts/changelog-width.test.mjs`: `CHANGELOG.md` stays wrapped at 80
-  characters.
+- `scripts/changelog-width.test.mjs`: `CHANGELOG.md` and this guide stay
+  wrapped at 80 characters.
 - `scripts/adapter-gating.test.mjs`: the scenario tests' capability gating.
   It runs the scenario tests with vitest against an adapter that declares no
   capabilities and against the llm-guard and rebuff adapters, and checks

@@ -1,4 +1,5 @@
-// Tests that CHANGELOG.md stays wrapped at 80 characters.
+// Tests that CHANGELOG.md and docs/testing/release-smoke.md stay wrapped at
+// 80 characters.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -41,6 +42,12 @@ const changelog = readFileSync(join(repo, 'CHANGELOG.md'), 'utf8');
 test(`CHANGELOG.md lines are at most ${WIDTH} characters wide`, () => {
   const wide = wideLines(changelog);
   assert.deepEqual(wide, [], `CHANGELOG.md is wrapped at ${WIDTH} characters: ${wide.join('; ')}`);
+});
+
+test(`docs/testing/release-smoke.md lines are at most ${WIDTH} characters wide`, () => {
+  const guide = readFileSync(join(repo, 'docs', 'testing', 'release-smoke.md'), 'utf8');
+  const wide = wideLines(guide);
+  assert.deepEqual(wide, [], `docs/testing/release-smoke.md is wrapped at ${WIDTH} characters: ${wide.join('; ')}`);
 });
 
 test('a carriage return before the line feed is not counted', () => {
