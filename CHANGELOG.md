@@ -809,17 +809,17 @@ stay on record here with the reason they changed.
   `SemanticCompiler` of the root `configureHmaRoot()` names next. It kept
   the compiler of the first root, so a second scan built its AST on that
   build and ran the analyzers of the new one. One more test scans twice
-  on one adapter across a root change, 29 in `src/benchmark` outside
-  `src/benchmark/pinned`; the suite is 400 tests, 399 not skipped.
+  on one adapter across a root change, 30 in `src/benchmark` outside
+  `src/benchmark/pinned`; the suite is 401 tests, 400 not skipped.
 - The deprecated AST adapter (`HMARealASTAdapter`) and the full adapter
   built on it (`HMARealFullAdapter`) report as their version the version in
   the package.json of the hackmyagent root they load, as the pipeline
   adapters do. Both reported the fixed string `0.12.3` whichever build
   `configureHmaRoot()` named. The static adapter (`HMARealStaticAdapter`)
   loads no build and keeps its fixed version. No committed result changes:
-  these adapters produced none. One more test covers the version, 29 in
-  `src/benchmark` outside `src/benchmark/pinned`; the suite is 400 tests,
-  399 not skipped.
+  these adapters produced none. One more test covers the version, 30 in
+  `src/benchmark` outside `src/benchmark/pinned`; the suite is 401 tests,
+  400 not skipped.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
