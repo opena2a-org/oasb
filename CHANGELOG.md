@@ -773,10 +773,15 @@ stay on record here with the reason they changed.
   (`meta[key] = true`), with an object whose `detected` key is on another
   line than `meta` or with an object whose `detected` key follows a matcher
   (`.toBe(`) on its line, or made by a helper outside those files, is not
-  detected. From a matcher call such as `.toEqual(` to the end of its line
-  the check takes only an assignment as a write, so an assertion that reads
-  the mark there (`.toEqual({ detected: true })`,
-  `.toHaveProperty('detected', true)`) does not fail it.
+  detected. From a matcher call after `expect` on its line, such as
+  `.toEqual(`, to the end of the line the check takes only an assignment as
+  a write, so an assertion that reads the mark there
+  (`.toEqual({ detected: true })`, `.toHaveProperty('detected', true)`)
+  does not fail it. A call such as `.toString(` before `expect`, or on a
+  line without `expect`, is not a matcher call; the check took one as a
+  matcher, so a line such as
+  `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
+  did not fail it.
   `fileEventFor` read an event without a path as the text
   `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
   matched such an event; it now matches only an event whose path contains

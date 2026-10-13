@@ -345,10 +345,12 @@ const DETECTED_NAMED = /(['"\x60])detected\1\s*,/;
 // computed as well ({ 'detected': true }, { ['detected']: true }), in
 // shorthand ({ detected }), or a new meta object.
 const DETECTED_KEY = /\bmeta\b.*(?<![\w$])(['"\x60]?)detected\1\s*\]?\s*[:,}]/;
-// The call of an expect matcher: `.toEqual(`, `.toHaveProperty(`. A test
-// reads the mark in its arguments, as in `.toEqual({ detected: true })` and
-// `.toHaveProperty('detected', true)`.
-const MATCHER = /\.\s*to[A-Z]\w*\s*\(/;
+// The call of an expect matcher: `.toEqual(`, `.toHaveProperty(`, after
+// `expect` on its line. A test reads the mark in its arguments, as in
+// `.toEqual({ detected: true })` and `.toHaveProperty('detected', true)`.
+// Another `.toXxx(` call, such as `.toString(`, before `expect` or on a line
+// without it, is not a matcher.
+const MATCHER = /(?<=\bexpect\b.*)\.\s*to[A-Z]\w*\s*\(/;
 
 // The lines of `text`, outside comments, that write a property named
 // `detected`, as markDetected writes it to a task's meta. An assignment
@@ -477,6 +479,10 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
     'expect(Object.assign(ctx.task.meta, { detected: true })).toBeTruthy();',
     "expect(Reflect.set(m, 'detected', true)).toBe(true);",
     'expect(true).toBe((ctx.task.meta as { detected?: boolean }).detected = true);',
+    // A `.toXxx(` call that is not an expect matcher, on a line without
+    // `expect` and before `expect` on its line.
+    'const k = String(1).toString(); Object.assign(ctx.task.meta, { detected: true });',
+    "const k = String(1).toString(); Reflect.set(m, 'detected', true); expect(k).toBe('1');",
   ]) {
     assert.equal(detectedWrites(marked(write)).length, 1, write);
   }
@@ -488,6 +494,7 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
     "expect(ctx.task.meta).not.toHaveProperty('detected', true);",
     'expect.soft(ctx.task.meta).toEqual({ detected: true });',
     'await expect.poll(() => ctx.task.meta).toEqual({ detected: true });',
+    'const k = String(1).toString(); expect(ctx.task.meta).toEqual({ detected: true });',
     'if ((ctx.task.meta as { detected?: boolean }).detected === true) return;',
     'if ((ctx.task.meta as { detected?: boolean }).detected == true) return;',
   ]) {
@@ -522,8 +529,12 @@ test('the changelog and the smoke guide describe the check of the mark and the p
     for (const { named } of UNSEEN_MARKS) assert.ok(text.includes(named), `${doc} does not name ${named} as a mark the check does not see`);
     assert.ok(text.includes('or made by a helper outside those files, is not detected'), `${doc} does not say a mark made by a helper outside the test files is not seen`);
     assert.ok(
-      text.includes('From a matcher call such as `.toEqual(` to the end of its line the check takes only an assignment as a write'),
+      text.includes('From a matcher call after `expect` on its line, such as `.toEqual(`, to the end of the line the check takes only an assignment as a write'),
       `${doc} does not say where the check takes the mark as read`,
+    );
+    assert.ok(
+      text.includes('A call such as `.toString(` before `expect`, or on a line without `expect`, is not a matcher call'),
+      `${doc} does not say which \`.toXxx(\` calls are not matchers`,
     );
     // Other objects have a `detected` property that other code writes, such
     // as a result of the DVAA suite: only on a task's meta, as the mark, is
