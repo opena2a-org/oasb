@@ -769,9 +769,10 @@ stay on record here with the reason they changed.
   or `openControlWatchOrSkip`, or passes a detection case a predicate other
   than `isSensitiveFileEvent` or `fileEventFor` of the name the case
   writes. It reads the text of those files: a mark written with a key built
-  at run time (`meta[key] = true`) or with an object whose `detected` key is
-  on another line than `meta`, or made by a helper outside those files, is
-  not detected. `fileEventFor` read an event without a path as the text
+  at run time (`meta[key] = true`), with an object whose `detected` key is
+  on another line than `meta`, with an object whose `detected` key is on a
+  line that starts with `expect(`, or made by a helper outside those files,
+  is not detected. `fileEventFor` read an event without a path as the text
   `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
   matched such an event; it now matches only an event whose path contains
   the name. E2E-001's names (`.ssh`, `.bashrc`, `.npmrc`) are not part of

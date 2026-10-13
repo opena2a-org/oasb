@@ -339,19 +339,22 @@ const DETECTED_WRITES = [
   new RegExp(String.raw`\[\s*(['"\x60])detected\1\s*\]` + ASSIGNED),
   // Reflect.set(meta, 'detected', true), Object.defineProperty(meta, 'detected', ...).
   /(['"\x60])detected\1\s*,/,
-  // Object.assign(ctx.task.meta, { detected: true }), or a new meta object.
-  /\bmeta\b.*\bdetected\s*[:,}]/,
 ];
+// Object.assign(ctx.task.meta, { detected: true }), with the key quoted or
+// computed as well ({ 'detected': true }, { ['detected']: true }), or a new
+// meta object.
+const DETECTED_KEY = /\bmeta\b.*(?<![\w$])(['"\x60]?)detected\1\s*\]?\s*[:,}]/;
 
 // The lines of `text`, outside comments, that write a property named
 // `detected`, as markDetected writes it to a task's meta; an object with a
-// `detected` key counts only on a line that names `meta` and is not an
-// `expect(`. UNSEEN_MARKS lists writes this does not see.
+// `detected` key counts only on a line that names `meta` and does not start
+// with `expect(`. UNSEEN_MARKS lists writes this does not see.
 function detectedWrites(text) {
   return text
     .split('\n')
     .map((l, i) => `line ${i + 1}: ${l.trim()}`)
-    .filter(l => !/^line \d+: (?:\/\/|\*|expect\()/.test(l) && DETECTED_WRITES.some(re => re.test(l)));
+    .filter(l => !/^line \d+: (?:\/\/|\*)/.test(l)
+      && (DETECTED_WRITES.some(re => re.test(l)) || (!/^line \d+: expect\(/.test(l) && DETECTED_KEY.test(l))));
 }
 
 // Writes of the mark that detectedWrites does not see, each as CHANGELOG.md
@@ -364,6 +367,10 @@ const UNSEEN_MARKS = [
   {
     named: 'an object whose `detected` key is on another line than `meta`',
     written: 'Object.assign(ctx.task.meta, {\n      detected: true,\n    });',
+  },
+  {
+    named: 'an object whose `detected` key is on a line that starts with `expect(`',
+    written: 'expect(Object.assign(ctx.task.meta, { detected: true })).toBeTruthy();',
   },
 ];
 
@@ -445,11 +452,17 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
     "(ctx.task.meta as Record<string, unknown>)['detected'] ||= true;",
     "Reflect.set(ctx.task.meta, 'detected', true);",
     'Object.assign(ctx.task.meta, { detected: true });',
+    "Object.assign(ctx.task.meta, { 'detected': true });",
+    'Object.assign(ctx.task.meta, { "detected": true });',
+    "Object.assign(ctx.task.meta, { ['detected']: true });",
     'const meta = ctx.task.meta as { detected?: boolean }; meta.detected = true;',
+    'expect((ctx.task.meta as { detected?: boolean }).detected = true).toBe(true);',
   ]) {
     assert.equal(detectedWrites(marked(write)).length, 1, write);
   }
-  // And what they do not see.
+  // And what they do not see: a key that only ends in `detected` is not the
+  // mark, and the writes UNSEEN_MARKS lists are not detected.
+  assert.deepEqual(detectedWrites(marked('Object.assign(ctx.task.meta, { undetected: true });')), []);
   for (const { written } of UNSEEN_MARKS) assert.deepEqual(detectedWrites(marked(written)), [], written);
 });
 

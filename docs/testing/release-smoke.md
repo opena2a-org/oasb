@@ -130,8 +130,9 @@ README's test counts do not include them.
   stops calling `detectWrite` or `openControlWatchOrSkip`, or passes a
   detection case a predicate other than `isSensitiveFileEvent` or
   `fileEventFor` of the name the case writes. That check reads the text as
-  well: a mark written with a key built at run time (`meta[key] = true`) or
-  with an object whose `detected` key is on another line than `meta`, or
+  well: a mark written with a key built at run time (`meta[key] = true`),
+  with an object whose `detected` key is on another line than `meta`, with
+  an object whose `detected` key is on a line that starts with `expect(`, or
   made by a helper outside those files, is not detected.
 - `scripts/check-owasp-mapping.test.mjs`: the OWASP mapping check
   (`scripts/check-owasp-mapping.mjs`), which holds every scenario file's
