@@ -14,6 +14,10 @@
  * Once configureHmaRoot() names another root, an adapter that has scanned
  * before compiles on the SemanticCompiler of that root, the build its
  * analyzers then come from.
+ *
+ * The AST adapter and the full adapter built on it report the version of the
+ * hackmyagent build they load, read from that root's package.json, as the
+ * pipeline adapter does, not a fixed version string.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -104,15 +108,20 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
   let sample: BenchmarkSample;
   let configureHmaRoot: (root: string) => void;
   let newAstAdapter: () => ScannerAdapter;
+  let newFullAdapter: () => ScannerAdapter;
+  let newPipelineAdapter: () => ScannerAdapter;
   let ast: Recorded;
   let pipeline: Recorded;
 
-  /** A package directory holding a stand-in whose check ids start with `build`. */
-  function standInRoot(build: string): string {
+  /**
+   * A package directory holding a stand-in whose check ids start with `build`
+   * and whose package.json names `version`.
+   */
+  function standInRoot(build: string, version = '0.0.0-stand-in'): string {
     const root = mkdtempSync(join(tmpdir(), 'oasb-ast-adapter-'));
     roots.push(root);
     mkdirSync(join(root, 'dist', 'nanomind-core'), { recursive: true });
-    writeFileSync(join(root, 'package.json'), '{"name":"hackmyagent","version":"0.0.0-stand-in"}\n');
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'hackmyagent', version }) + '\n');
     writeFileSync(join(root, 'dist', 'nanomind-core', 'index.js'), standInCore(build));
     return root;
   }
@@ -127,14 +136,16 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
     // modules so neither keeps a scanner an earlier test loaded.
     vi.resetModules();
     const pipelineModule = await import('./hma-pipeline-adapter.js');
-    const { HMARealASTAdapter } = await import('./hma-real-adapter.js');
+    const { HMARealASTAdapter, HMARealFullAdapter } = await import('./hma-real-adapter.js');
     configureHmaRoot = pipelineModule.configureHmaRoot;
     newAstAdapter = () => new HMARealASTAdapter();
+    newFullAdapter = () => new HMARealFullAdapter();
+    newPipelineAdapter = () => new pipelineModule.HMAPipelineAdapter();
     configureHmaRoot(standInRoot('STAND-IN'));
 
     await newAstAdapter().scan(sample.content, sample.id);
     ast = takeRecorded();
-    await new pipelineModule.HMAPipelineAdapter().scan(sample.content, sample.id, sample.artifactType);
+    await newPipelineAdapter().scan(sample.content, sample.id, sample.artifactType);
     pipeline = takeRecorded();
   });
 
@@ -177,5 +188,17 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
     const run = takeRecorded();
     expect(run.compiledBy).toEqual(['OTHER']);
     expect(callOf(run, 'analyzeCredentials')?.rows.map(row => row.checkId)).toEqual(['OTHER-CRED']);
+  });
+
+  it('reports the version in the package.json of the root it loads, as the pipeline adapter does', () => {
+    for (const newAdapter of [newAstAdapter, newFullAdapter]) {
+      expect(newAdapter().version).toBe('0.0.0-stand-in');
+      expect(newAdapter().version).toBe(newPipelineAdapter().version);
+    }
+
+    configureHmaRoot(standInRoot('OTHER', '0.0.1-other'));
+    for (const newAdapter of [newAstAdapter, newFullAdapter]) {
+      expect(newAdapter().version).toBe('0.0.1-other');
+    }
   });
 });

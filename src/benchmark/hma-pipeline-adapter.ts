@@ -88,7 +88,8 @@ export function hmaCorePath(): string {
   return join(hmaRoot, 'dist', 'nanomind-core', 'index.js');
 }
 
-function hmaBuildVersion(): string {
+/** The version in the package.json of the hackmyagent root the adapters load, or 'unknown'. */
+export function hmaBuildVersion(): string {
   if (_hmaBuildVersion) return _hmaBuildVersion;
   try {
     const fs = require('fs');

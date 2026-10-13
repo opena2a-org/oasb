@@ -11,7 +11,7 @@
  */
 
 import { dirname, join } from 'node:path';
-import { hmaCorePath } from './hma-pipeline-adapter.js';
+import { hmaBuildVersion, hmaCorePath } from './hma-pipeline-adapter.js';
 import type { ScannerAdapter } from './runner.js';
 import type { ScannerResult, AttackCategory } from './types.js';
 
@@ -74,7 +74,8 @@ async function loadHMA(): Promise<boolean> {
  */
 export class HMARealASTAdapter implements ScannerAdapter {
   name = 'HackMyAgent + NanoMind AST';
-  version = '0.12.3';
+  // The build loaded from the configured root, as the pipeline adapters report it.
+  version = hmaBuildVersion();
   id = 'hma-ast-real';
 
   private compiler: any = null;
@@ -308,7 +309,7 @@ export class HMARealStaticAdapter implements ScannerAdapter {
  */
 export class HMARealFullAdapter implements ScannerAdapter {
   name = 'HackMyAgent + AST + Simulation';
-  version = '0.12.3';
+  version = hmaBuildVersion();
   id = 'hma-full-real';
 
   private astAdapter = new HMARealASTAdapter();
