@@ -765,14 +765,19 @@ stay on record here with the reason they changed.
   passing. The code is the same, so no verdict changes.
   `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
   `src/` names `markDetected` or writes a property named `detected`, which
-  only `markDetected` writes, and when E2E-001 stops calling `detectWrite`
-  or `openControlWatchOrSkip`, or passes a detection case a predicate other
-  than `isSensitiveFileEvent` or `fileEventFor` of the name the case
-  writes. It reads the text of those files: a mark written with a key built
-  at run time (`meta[key] = true`), with an object whose `detected` key is
-  on another line than `meta`, with an object whose `detected` key is on a
-  line that starts with `expect(`, or made by a helper outside those files,
-  is not detected. `fileEventFor` read an event without a path as the text
+  on a task's meta only `markDetected` writes, and when E2E-001 stops
+  calling `detectWrite` or `openControlWatchOrSkip`, or passes a detection
+  case a predicate other than `isSensitiveFileEvent` or `fileEventFor` of
+  the name the case writes. It reads the text of those files: a mark
+  written another way, such as with a key built at run time
+  (`meta[key] = true`), with an object whose `detected` key is on another
+  line than `meta` or with an object whose `detected` key follows a matcher
+  (`.toBe(`) on its line, or made by a helper outside those files, is not
+  detected. From a matcher call such as `.toEqual(` to the end of its line
+  the check takes only an assignment as a write, so an assertion that reads
+  the mark there (`.toEqual({ detected: true })`,
+  `.toHaveProperty('detected', true)`) does not fail it.
+  `fileEventFor` read an event without a path as the text
   `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
   matched such an event; it now matches only an event whose path contains
   the name. E2E-001's names (`.ssh`, `.bashrc`, `.npmrc`) are not part of

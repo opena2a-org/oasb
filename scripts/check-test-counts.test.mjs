@@ -332,33 +332,43 @@ function functionText(text, name) {
 
 // An assignment operator after a property: `=` or a compound one, not `==`.
 const ASSIGNED = String.raw`\s*(?:\*\*|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^])?=(?!=)`;
-const DETECTED_WRITES = [
-  // `(ctx.task.meta as ...).detected = true`, or through another name for
-  // the meta; any object's `detected`, as the check cannot tell them apart.
+// `(ctx.task.meta as ...).detected = true`, or through another name for the
+// meta; any object's `detected`, as the check cannot tell them apart. An
+// assignment is a write wherever it is on a line.
+const DETECTED_ASSIGNED = [
   new RegExp(String.raw`\.\s*detected\b` + ASSIGNED),
   new RegExp(String.raw`\[\s*(['"\x60])detected\1\s*\]` + ASSIGNED),
-  // Reflect.set(meta, 'detected', true), Object.defineProperty(meta, 'detected', ...).
-  /(['"\x60])detected\1\s*,/,
 ];
+// Reflect.set(meta, 'detected', true), Object.defineProperty(meta, 'detected', ...).
+const DETECTED_NAMED = /(['"\x60])detected\1\s*,/;
 // Object.assign(ctx.task.meta, { detected: true }), with the key quoted or
-// computed as well ({ 'detected': true }, { ['detected']: true }), or a new
-// meta object.
+// computed as well ({ 'detected': true }, { ['detected']: true }), in
+// shorthand ({ detected }), or a new meta object.
 const DETECTED_KEY = /\bmeta\b.*(?<![\w$])(['"\x60]?)detected\1\s*\]?\s*[:,}]/;
+// The call of an expect matcher: `.toEqual(`, `.toHaveProperty(`. A test
+// reads the mark in its arguments, as in `.toEqual({ detected: true })` and
+// `.toHaveProperty('detected', true)`.
+const MATCHER = /\.\s*to[A-Z]\w*\s*\(/;
 
 // The lines of `text`, outside comments, that write a property named
-// `detected`, as markDetected writes it to a task's meta; an object with a
-// `detected` key counts only on a line that names `meta` and does not start
-// with `expect(`. UNSEEN_MARKS lists writes this does not see.
+// `detected`, as markDetected writes it to a task's meta. An assignment
+// counts anywhere on a line. The quoted name before a comma, and an object
+// with a `detected` key on a line that names `meta` before it, count only
+// before the line's first matcher call: from that call to the line's end a
+// test reads the mark, so nothing but an assignment is a write there. A read
+// written without a matcher, such as `assert.deepEqual(meta, { detected:
+// true })`, counts as a write. UNSEEN_MARKS lists writes this does not see.
 function detectedWrites(text) {
   return text
     .split('\n')
     .map((l, i) => `line ${i + 1}: ${l.trim()}`)
     .filter(l => !/^line \d+: (?:\/\/|\*)/.test(l)
-      && (DETECTED_WRITES.some(re => re.test(l)) || (!/^line \d+: expect\(/.test(l) && DETECTED_KEY.test(l))));
+      && (DETECTED_ASSIGNED.some(re => re.test(l)) || [DETECTED_NAMED, DETECTED_KEY].some(re => re.test(l.split(MATCHER, 1)[0]))));
 }
 
 // Writes of the mark that detectedWrites does not see, each as CHANGELOG.md
 // and docs/testing/release-smoke.md name it and as a case could write it.
+// Both texts give them as examples: other spellings are not seen either.
 const UNSEEN_MARKS = [
   {
     named: 'a key built at run time (`meta[key] = true`)',
@@ -369,8 +379,8 @@ const UNSEEN_MARKS = [
     written: 'Object.assign(ctx.task.meta, {\n      detected: true,\n    });',
   },
   {
-    named: 'an object whose `detected` key is on a line that starts with `expect(`',
-    written: 'expect(Object.assign(ctx.task.meta, { detected: true })).toBeTruthy();',
+    named: 'an object whose `detected` key follows a matcher (`.toBe(`) on its line',
+    written: 'expect(ctx.task.meta).toBe(Object.assign(ctx.task.meta, { detected: true }));',
   },
 ];
 
@@ -451,15 +461,40 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
     '(ctx.task.meta as Record<string, unknown>)["detected"] = true;',
     "(ctx.task.meta as Record<string, unknown>)['detected'] ||= true;",
     "Reflect.set(ctx.task.meta, 'detected', true);",
+    // The quoted name before a comma, on a line that does not name `meta`.
+    "Reflect.set(m, 'detected', true);",
+    'Object.defineProperty(m, "detected", { value: true });',
     'Object.assign(ctx.task.meta, { detected: true });',
     "Object.assign(ctx.task.meta, { 'detected': true });",
     'Object.assign(ctx.task.meta, { "detected": true });',
     "Object.assign(ctx.task.meta, { ['detected']: true });",
+    // The key in shorthand, last in its object and before another key.
+    'Object.assign(ctx.task.meta, { detected });',
+    'Object.assign(ctx.task.meta, { detected, inconclusive: undefined });',
     'const meta = ctx.task.meta as { detected?: boolean }; meta.detected = true;',
     'expect((ctx.task.meta as { detected?: boolean }).detected = true).toBe(true);',
+    // A write before a matcher call, and an assignment in its arguments.
+    'expect(Object.assign(ctx.task.meta, { detected: true })).toBeTruthy();',
+    "expect(Reflect.set(m, 'detected', true)).toBe(true);",
+    'expect(true).toBe((ctx.task.meta as { detected?: boolean }).detected = true);',
   ]) {
     assert.equal(detectedWrites(marked(write)).length, 1, write);
   }
+  // A read of the mark is not a write: the arguments of a matcher, on a line
+  // that starts with `expect(` or another way, and a comparison.
+  for (const read of [
+    'expect(ctx.task.meta).toEqual({ detected: true });',
+    "expect(ctx.task.meta).toHaveProperty('detected', true);",
+    "expect(ctx.task.meta).not.toHaveProperty('detected', true);",
+    'expect.soft(ctx.task.meta).toEqual({ detected: true });',
+    'await expect.poll(() => ctx.task.meta).toEqual({ detected: true });',
+    'if ((ctx.task.meta as { detected?: boolean }).detected === true) return;',
+    'if ((ctx.task.meta as { detected?: boolean }).detected == true) return;',
+  ]) {
+    assert.deepEqual(detectedWrites(marked(read)), [], read);
+  }
+  // A read written without a matcher counts as a write.
+  assert.equal(detectedWrites(marked('assert.deepEqual(ctx.task.meta, { detected: true });')).length, 1);
   // And what they do not see: a key that only ends in `detected` is not the
   // mark, and the writes UNSEEN_MARKS lists are not detected.
   assert.deepEqual(detectedWrites(marked('Object.assign(ctx.task.meta, { undetected: true });')), []);
@@ -481,8 +516,19 @@ test('the changelog and the smoke guide describe the check of the mark and the p
     for (const named of ['names `markDetected`', 'writes a property named `detected`', '`detectWrite` or `openControlWatchOrSkip`', '`isSensitiveFileEvent`', '`fileEventFor` of the name the case writes']) {
       assert.ok(text.includes(named), `${doc} does not say the check fails when a file ${named}`);
     }
+    // The marks it does not see are examples, as other spellings are not
+    // seen either.
+    assert.ok(text.includes(`a mark written another way, such as with ${UNSEEN_MARKS[0].named}`), `${doc} does not give the marks the check does not see as examples`);
     for (const { named } of UNSEEN_MARKS) assert.ok(text.includes(named), `${doc} does not name ${named} as a mark the check does not see`);
     assert.ok(text.includes('or made by a helper outside those files, is not detected'), `${doc} does not say a mark made by a helper outside the test files is not seen`);
+    assert.ok(
+      text.includes('From a matcher call such as `.toEqual(` to the end of its line the check takes only an assignment as a write'),
+      `${doc} does not say where the check takes the mark as read`,
+    );
+    // Other objects have a `detected` property that other code writes, such
+    // as a result of the DVAA suite: only on a task's meta, as the mark, is
+    // markDetected its one writer.
+    assert.match(text, /which (?:on a task's meta only `markDetected` writes|only `markDetected` writes, as the mark of a case)/, `${doc} says only markDetected writes a property named \`detected\``);
   }
 });
 

@@ -741,5 +741,12 @@ describe('the detection predicates of E2E-001', () => {
       expect(fileEventFor(name)({ ...datalessEvent(), data: { eventType: 'rename' } }), name).toBe(false);
       expect(fileEventFor(name)(fileEvent(`undefined/${name}`)), name).toBe(true);
     }
+    // A path of `null` is no path either: read as the text "null", it would
+    // contain a name such as "nul" or "". An empty path is a path, which
+    // contains the empty name and no other.
+    for (const name of ['nul', 'null', '']) {
+      expect(fileEventFor(name)({ ...datalessEvent(), data: { path: null } }), name).toBe(false);
+      expect(fileEventFor(name)({ ...datalessEvent(), data: { path: '' } }), name).toBe(name === '');
+    }
   });
 });
