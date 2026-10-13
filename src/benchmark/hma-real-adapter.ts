@@ -74,7 +74,8 @@ async function loadHMA(): Promise<boolean> {
  */
 export class HMARealASTAdapter implements ScannerAdapter {
   name = 'HackMyAgent + NanoMind AST';
-  // The build loaded from the configured root, as the pipeline adapters report it.
+  // The build of the configured root, as the pipeline adapters report it:
+  // of the root configured now, then of the root each scan loads.
   version = hmaBuildVersion();
   id = 'hma-ast-real';
 
@@ -83,6 +84,9 @@ export class HMARealASTAdapter implements ScannerAdapter {
   private compilerFrom: string | null = null;
 
   async scan(content: string, sampleId: string): Promise<ScannerResult> {
+    // The version of the root this scan loads: no await separates this read
+    // from the one in loadHMA(), so both read the same root.
+    this.version = hmaBuildVersion();
     if (!await loadHMA()) {
       return { sampleId, verdict: 'unknown' };
     }
@@ -315,6 +319,9 @@ export class HMARealFullAdapter implements ScannerAdapter {
   private astAdapter = new HMARealASTAdapter();
 
   async scan(content: string, sampleId: string): Promise<ScannerResult> {
+    // The build of the root the AST adapter loads for this scan.
+    this.version = hmaBuildVersion();
+
     // First: AST classification
     const astResult = await this.astAdapter.scan(content, sampleId);
 

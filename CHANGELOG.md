@@ -771,17 +771,30 @@ stay on record here with the reason they changed.
   the name the case writes. It reads the text of those files: a mark
   written another way, such as with a key built at run time
   (`meta[key] = true`), with an object whose `detected` key is on another
-  line than `meta` or with an object whose `detected` key follows a matcher
-  (`.toBe(`) on its line, or made by a helper outside those files, is not
-  detected. From a matcher call after `expect` on its line, such as
-  `.toEqual(`, to the end of the line the check takes only an assignment as
-  a write, so an assertion that reads the mark there
-  (`.toEqual({ detected: true })`, `.toHaveProperty('detected', true)`)
-  does not fail it. A call such as `.toString(` before `expect`, or on a
-  line without `expect`, is not a matcher call; the check took one as a
-  matcher, so a line such as
+  line than `meta`, with an object whose `detected` key follows a matcher
+  (`.toBe(`) on its line or with an object whose `detected` key follows
+  another `.toXxx(` call (`.toString(`) after `expect` on its line, or made
+  by a helper outside those files, is not detected. From a matcher call
+  after `expect` on its line, such as `.toEqual(`, to the end of the line
+  the check takes only an assignment as a write, so an assertion that reads
+  the mark there (`.toEqual({ detected: true })`,
+  `.toHaveProperty('detected', true)`) does not fail it. A call such as
+  `.toString(` before `expect`, or on a line without `expect`, is not a
+  matcher call; the check took one as a matcher, so a line such as
   `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
-  did not fail it.
+  did not fail it. A matcher call on a later line than its `expect`, as in a
+  chained assertion that continues with `.toHaveProperty('detected', true)`
+  on the next line, is not taken as a matcher call either, so that read of
+  the mark fails the check: write the matcher call on the line of its
+  `expect`. After `expect` on a line the check takes every `.toXxx(` call
+  as a matcher call, chained to that `expect` or not, so after
+  `expect.assertions(0);` on the same line the write in
+  `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
+  still does not fail it. No file under `src/` has either form. The check
+  finds the first `expect` on a line once and looks for a matcher call
+  after it, so its time grows with the length of the line. Its pattern
+  looked back for `expect` from every `.`, in time that grew with the
+  square of that length: over 3 seconds on a line of 80,000 `.` characters.
   `fileEventFor` read an event without a path as the text
   `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
   matched such an event; it now matches only an event whose path contains
@@ -820,6 +833,28 @@ stay on record here with the reason they changed.
   these adapters produced none. One more test covers the version, 30 in
   `src/benchmark` outside `src/benchmark/pinned`; the suite is 401 tests,
   400 not skipped.
+- A benchmark adapter that has scanned reports the version of the
+  hackmyagent root configured at its last scan. `HMARealASTAdapter`,
+  `HMARealFullAdapter`, `HMAPipelineAdapter` and `HMAPipelineStaticAdapter`
+  read the version when they are created and again at each scan. They read
+  it only when they were created, so an adapter that scanned again after
+  `configureHmaRoot()` named another root still reported the version of the
+  first root, while the AST, full and pipeline adapters loaded the new one
+  for that scan. Until its first scan an adapter reports the version of the
+  root configured when it was created.
+  `HMAPipelineAdapter` and `HMATMEOnlyAdapter` now scan on the
+  `SemanticCompiler` or the classifier of the root `configureHmaRoot()`
+  names next, as `HMARealASTAdapter` does. Each kept the one of the first
+  root it scanned with: after a root change the pipeline adapter built its
+  AST on that build and ran the analyzers of the new one, and the
+  model-only adapter classified on that build. No committed result changes:
+  only the pinned harness calls `configureHmaRoot()`, once, before it
+  creates its adapters, and the other runners scan on the sibling checkout
+  throughout. Four more tests cover the version after a root change, the
+  root the pipeline and model-only adapters scan on after one, and that an
+  adapter builds one `SemanticCompiler` for its scans on one root, 34 in
+  `src/benchmark` outside `src/benchmark/pinned`; the suite is 405 tests,
+  404 not skipped.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

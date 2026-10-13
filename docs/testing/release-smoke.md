@@ -132,14 +132,21 @@ README's test counts do not include them.
   `fileEventFor` of the name the case writes. That check reads the text as
   well: a mark written another way, such as with a key built at run time
   (`meta[key] = true`), with an object whose `detected` key is on another
-  line than `meta` or with an object whose `detected` key follows a matcher
-  (`.toBe(`) on its line, or made by a helper outside those files, is not
-  detected. From a matcher call after `expect` on its line, such as
-  `.toEqual(`, to the end of the line the check takes only an assignment as
-  a write, so an assertion that reads the mark there
-  (`.toEqual({ detected: true })`, `.toHaveProperty('detected', true)`)
-  does not fail it. A call such as `.toString(` before `expect`, or on a
-  line without `expect`, is not a matcher call.
+  line than `meta`, with an object whose `detected` key follows a matcher
+  (`.toBe(`) on its line or with an object whose `detected` key follows
+  another `.toXxx(` call (`.toString(`) after `expect` on its line, or made
+  by a helper outside those files, is not detected. From a matcher call
+  after `expect` on its line, such as `.toEqual(`, to the end of the line
+  the check takes only an assignment as a write, so an assertion that reads
+  the mark there (`.toEqual({ detected: true })`,
+  `.toHaveProperty('detected', true)`) does not fail it. A call such as
+  `.toString(` before `expect`, or on a line without `expect`, is not a
+  matcher call. A matcher call on a later line than its `expect`, as in a
+  chained assertion that continues with `.toHaveProperty('detected', true)`
+  on the next line, is not taken as a matcher call either, so that read of
+  the mark fails the check: write the matcher call on the line of its
+  `expect`. After `expect` on a line the check takes every `.toXxx(` call
+  as a matcher call, chained to that `expect` or not.
 - `scripts/check-owasp-mapping.test.mjs`: the OWASP mapping check
   (`scripts/check-owasp-mapping.mjs`), which holds every scenario file's
   `// OWASP Agentic:` header and `docs/owasp-agentic-mapping.md` to each

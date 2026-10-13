@@ -349,8 +349,21 @@ const DETECTED_KEY = /\bmeta\b.*(?<![\w$])(['"\x60]?)detected\1\s*\]?\s*[:,}]/;
 // `expect` on its line. A test reads the mark in its arguments, as in
 // `.toEqual({ detected: true })` and `.toHaveProperty('detected', true)`.
 // Another `.toXxx(` call, such as `.toString(`, before `expect` or on a line
-// without it, is not a matcher.
-const MATCHER = /(?<=\bexpect\b.*)\.\s*to[A-Z]\w*\s*\(/;
+// without it, is not a matcher. Every `.toXxx(` call after `expect` on a line
+// is taken as one, chained to that `expect` or not.
+const EXPECT = /\bexpect\b/;
+const MATCHER = /\.\s*to[A-Z]\w*\s*\(/;
+
+// `line` up to its first matcher call, or all of it when it has none. The
+// first `expect` is found once and the call is searched for after it, so the
+// time grows with the length of the line: a pattern that looks back for
+// `expect` from each `.` takes time that grows with its square.
+function beforeMatcher(line) {
+  const expectAt = line.search(EXPECT);
+  if (expectAt < 0) return line;
+  const call = MATCHER.exec(line.slice(expectAt));
+  return call ? line.slice(0, expectAt + call.index) : line;
+}
 
 // The lines of `text`, outside comments, that write a property named
 // `detected`, as markDetected writes it to a task's meta. An assignment
@@ -359,14 +372,24 @@ const MATCHER = /(?<=\bexpect\b.*)\.\s*to[A-Z]\w*\s*\(/;
 // before the line's first matcher call: from that call to the line's end a
 // test reads the mark, so nothing but an assignment is a write there. A read
 // written without a matcher, such as `assert.deepEqual(meta, { detected:
-// true })`, counts as a write. UNSEEN_MARKS lists writes this does not see.
+// true })`, counts as a write, and so does a READ_AS_WRITE read. UNSEEN_MARKS
+// lists writes this does not see.
 function detectedWrites(text) {
   return text
     .split('\n')
     .map((l, i) => `line ${i + 1}: ${l.trim()}`)
     .filter(l => !/^line \d+: (?:\/\/|\*)/.test(l)
-      && (DETECTED_ASSIGNED.some(re => re.test(l)) || [DETECTED_NAMED, DETECTED_KEY].some(re => re.test(l.split(MATCHER, 1)[0]))));
+      && (DETECTED_ASSIGNED.some(re => re.test(l)) || [DETECTED_NAMED, DETECTED_KEY].some(re => re.test(beforeMatcher(l)))));
 }
+
+// A read of the mark that detectedWrites takes as a write, as CHANGELOG.md
+// and docs/testing/release-smoke.md name it and as a case could write it:
+// the matcher call is on the line after its `expect`, a line without
+// `expect`, so the quoted name before a comma counts there.
+const READ_AS_WRITE = {
+  named: "A matcher call on a later line than its `expect`, as in a chained assertion that continues with `.toHaveProperty('detected', true)` on the next line, is not taken as a matcher call either, so that read of the mark fails the check",
+  written: "expect(ctx.task.meta)\n      .toHaveProperty('detected', true);",
+};
 
 // Writes of the mark that detectedWrites does not see, each as CHANGELOG.md
 // and docs/testing/release-smoke.md name it and as a case could write it.
@@ -383,6 +406,10 @@ const UNSEEN_MARKS = [
   {
     named: 'an object whose `detected` key follows a matcher (`.toBe(`) on its line',
     written: 'expect(ctx.task.meta).toBe(Object.assign(ctx.task.meta, { detected: true }));',
+  },
+  {
+    named: 'an object whose `detected` key follows another `.toXxx(` call (`.toString(`) after `expect` on its line',
+    written: 'expect.assertions(0); const k = String(1).toString(); Object.assign(ctx.task.meta, { detected: true });',
   },
 ];
 
@@ -500,12 +527,33 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
   ]) {
     assert.deepEqual(detectedWrites(marked(read)), [], read);
   }
-  // A read written without a matcher counts as a write.
+  // A read written without a matcher counts as a write, and so does a read
+  // whose matcher call is on the line after its `expect`.
   assert.equal(detectedWrites(marked('assert.deepEqual(ctx.task.meta, { detected: true });')).length, 1);
+  assert.deepEqual(detectedWrites(marked(READ_AS_WRITE.written)).map(l => l.replace(/^line \d+: /, '')), [".toHaveProperty('detected', true);"]);
   // And what they do not see: a key that only ends in `detected` is not the
   // mark, and the writes UNSEEN_MARKS lists are not detected.
   assert.deepEqual(detectedWrites(marked('Object.assign(ctx.task.meta, { undetected: true });')), []);
   for (const { written } of UNSEEN_MARKS) assert.deepEqual(detectedWrites(marked(written)), [], written);
+});
+
+test('the check of the mark reads a line of 120,000 characters in under a second, with `expect` on it or not', () => {
+  // A line of `.` characters: a matcher pattern that looks back for `expect`
+  // from each `.` scans to the start of the line every time, and took over
+  // 3 seconds on 80,000 of them.
+  const dots = '.'.repeat(120_000);
+  for (const [line, writes] of [
+    [dots, 0],
+    [`expect(1)${dots}`, 0],
+    [`${dots} expect(ctx.task.meta).toEqual({ detected: true });`, 0],
+    [`${dots} Object.assign(ctx.task.meta, { detected: true });`, 1],
+  ]) {
+    const started = process.hrtime.bigint();
+    const found = detectedWrites(line);
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(found.length, writes, `${line.slice(0, 9)}... ${line.slice(-52)}`);
+    assert.ok(ms < 1000, `${ms.toFixed(0)} ms for a line of ${line.length} characters`);
+  }
 });
 
 test('the changelog and the smoke guide name the skips the run-time skip check does not see', () => {
@@ -535,6 +583,13 @@ test('the changelog and the smoke guide describe the check of the mark and the p
     assert.ok(
       text.includes('A call such as `.toString(` before `expect`, or on a line without `expect`, is not a matcher call'),
       `${doc} does not say which \`.toXxx(\` calls are not matchers`,
+    );
+    // Where the rule goes wrong: a read it takes as a write, and the calls
+    // it takes as matcher calls that are none, which UNSEEN_MARKS has too.
+    assert.ok(text.includes(READ_AS_WRITE.named), `${doc} does not say a matcher call on a later line than its \`expect\` fails the check`);
+    assert.ok(
+      text.includes('After `expect` on a line the check takes every `.toXxx(` call as a matcher call, chained to that `expect` or not'),
+      `${doc} does not say every \`.toXxx(\` call after \`expect\` is taken as a matcher call`,
     );
     // Other objects have a `detected` property that other code writes, such
     // as a result of the DVAA suite: only on a task's meta, as the mark, is

@@ -42,7 +42,8 @@ let analyzePrompt: any;
 let analyzeCode: any;
 let getTMEClassifier: any;
 
-let hmaLoaded = false;
+// The nanomind-core entry point the modules above were loaded from.
+let loadedFrom: string | null = null;
 
 // Root of the hackmyagent package the adapters load. Defaults to the monorepo
 // sibling checkout, which is unpinned; the pinned harness
@@ -64,12 +65,12 @@ let _tmeModel: TmeModelId | null = null;
 
 /**
  * Load hackmyagent from `root` (a package directory holding package.json and
- * dist/). Call before constructing an adapter: adapters read the build version
- * when they are created.
+ * dist/). Call before constructing an adapter: an adapter reads the build
+ * version when it is created and again at each scan, so until it scans it
+ * reports the version of the root configured when it was created.
  */
 export function configureHmaRoot(root: string): void {
   hmaRoot = root;
-  hmaLoaded = false;
   _hmaBuildVersion = null;
 }
 
@@ -132,9 +133,11 @@ function tmeModelName(): string {
 }
 
 export async function loadHMACore(): Promise<boolean> {
-  if (hmaLoaded) return true;
+  // Loaded again once configureHmaRoot() names another root.
+  const corePath = hmaCorePath();
+  if (loadedFrom === corePath) return true;
   try {
-    const core = await import(hmaCorePath());
+    const core = await import(corePath);
     SemanticCompiler = core.SemanticCompiler;
     analyzeCapabilities = core.analyzeCapabilities;
     analyzeCredentials = core.analyzeCredentials;
@@ -143,7 +146,7 @@ export async function loadHMACore(): Promise<boolean> {
     analyzePrompt = core.analyzePrompt;
     analyzeCode = core.analyzeCode;
     getTMEClassifier = core.getTMEClassifier;
-    hmaLoaded = true;
+    loadedFrom = corePath;
     return true;
   } catch (err) {
     console.error('Failed to load HMA core:', (err as Error).message);
@@ -277,13 +280,18 @@ export class HMATMEOnlyAdapter implements ScannerAdapter {
   id = 'hma-tme-only';
 
   private tme: any = null;
+  // The nanomind-core entry point the classifier came from.
+  private tmeFrom: string | null = null;
   private ready = false;
 
   async scan(content: string, sampleId: string): Promise<ScannerResult> {
     if (!await loadHMACore()) return { sampleId, verdict: 'unknown' };
 
-    if (!this.tme) {
+    // The classifier of another root once configureHmaRoot() names it, as
+    // loadHMACore() loads the analyzers of that root.
+    if (!this.tme || this.tmeFrom !== loadedFrom) {
       this.tme = getTMEClassifier();
+      this.tmeFrom = loadedFrom;
       await this.tme.ensureModel();
       await this.tme.ensureReady();
       this.ready = true;
@@ -327,16 +335,25 @@ export class HMATMEOnlyAdapter implements ScannerAdapter {
 
 export class HMAPipelineAdapter implements ScannerAdapter {
   name = `HMA Full Pipeline (AST + NanoMind${tmeModelName()})`;
+  // The build of the root configured now, then of the root each scan loads.
   version = hmaBuildVersion();
   id = 'hma-pipeline';
 
   private compiler: any = null;
+  // The nanomind-core entry point the compiler's SemanticCompiler came from.
+  private compilerFrom: string | null = null;
 
   async scan(content: string, sampleId: string, artifactType?: string): Promise<ScannerResult> {
+    // The version of the root this scan loads: no await separates this read
+    // from the one in loadHMACore(), so both read the same root.
+    this.version = hmaBuildVersion();
     if (!await loadHMACore()) return { sampleId, verdict: 'unknown' };
 
-    if (!this.compiler) {
+    // A new compiler once configureHmaRoot() names another root, so the AST
+    // comes from the build the analyzers below were loaded from.
+    if (!this.compiler || this.compilerFrom !== loadedFrom) {
       this.compiler = new SemanticCompiler({ useNanoMind: true });
+      this.compilerFrom = loadedFrom;
     }
 
     try {
@@ -458,10 +475,14 @@ export class HMAPipelineAdapter implements ScannerAdapter {
 
 export class HMAPipelineStaticAdapter implements ScannerAdapter {
   name = 'HMA Static Patterns (no NanoMind)';
+  // The build of the root configured now, then of the root configured at each
+  // scan, the version the pipeline adapter reports for the same run. This
+  // adapter loads no build.
   version = hmaBuildVersion();
   id = 'hma-static-pipeline';
 
   async scan(content: string, sampleId: string): Promise<ScannerResult> {
+    this.version = hmaBuildVersion();
     const startMs = Date.now();
 
     // Check unicode steganography

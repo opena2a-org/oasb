@@ -13,11 +13,14 @@
  *
  * Once configureHmaRoot() names another root, an adapter that has scanned
  * before compiles on the SemanticCompiler of that root, the build its
- * analyzers then come from.
+ * analyzers then come from, and the model-only adapter classifies on that
+ * root's classifier. On one root an adapter builds its SemanticCompiler once.
  *
  * The AST adapter and the full adapter built on it report the version of the
  * hackmyagent build they load, read from that root's package.json, as the
- * pipeline adapter does, not a fixed version string.
+ * pipeline adapter does, not a fixed version string. Each scan reads it from
+ * the root configured then, so an adapter that scans after a root change
+ * reports the version of the root that scan loaded.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -42,6 +45,10 @@ interface Recorded {
   compiledAs: string[];
   /** The build of the stand-in whose SemanticCompiler compiled each file. */
   compiledBy: string[];
+  /** The build of each stand-in SemanticCompiler that was constructed. */
+  constructed: string[];
+  /** The build of the stand-in whose classifier classified each sample. */
+  classifiedBy: string[];
   calls: AnalyzerCall[];
 }
 
@@ -54,8 +61,13 @@ const { createHash } = require('crypto');
 const g = globalThis;
 g.__oasbAstAdapterCompiles = [];
 g.__oasbAstAdapterCompilers = [];
+g.__oasbAstAdapterConstructed = [];
+g.__oasbAstAdapterClassifiers = [];
 g.__oasbAstAdapterCalls = [];
 class SemanticCompiler {
+  constructor() {
+    g.__oasbAstAdapterConstructed.push('${build}');
+  }
   async compile(content, filename) {
     g.__oasbAstAdapterCompiles.push(filename);
     g.__oasbAstAdapterCompilers.push('${build}');
@@ -74,7 +86,20 @@ function analyzer(name, checkId, contentAt) {
     return rows;
   };
 }
+// One shared classifier per build, as getTMEClassifier() returns one.
+const classifier = {
+  async ensureModel() {},
+  async ensureReady() {},
+  classify() {
+    g.__oasbAstAdapterClassifiers.push('${build}');
+    return { intentClass: 'benign', attackClass: 'none', confidence: 0.5 };
+  },
+  async classifyAsync(content) {
+    return this.classify(content);
+  },
+};
 exports.SemanticCompiler = SemanticCompiler;
+exports.getTMEClassifier = () => classifier;
 exports.analyzeCapabilities = () => [];
 exports.analyzeCredentials = analyzer('analyzeCredentials', '${build}-CRED', 3);
 exports.analyzeGovernance = analyzer('analyzeGovernance', '${build}-GOV', 4);
@@ -88,14 +113,21 @@ const CONTENT_ANALYZERS = ['analyzeCredentials', 'analyzeGovernance', 'analyzeSc
 const recorded = globalThis as unknown as {
   __oasbAstAdapterCompiles: string[];
   __oasbAstAdapterCompilers: string[];
+  __oasbAstAdapterConstructed: string[];
+  __oasbAstAdapterClassifiers: string[];
   __oasbAstAdapterCalls: AnalyzerCall[];
 };
 
-/** What the stand-in recorded since the last call. */
+/**
+ * What the stand-ins recorded since the last call. A stand-in empties the
+ * record when it is first loaded, so take it before naming a new root.
+ */
 function takeRecorded(): Recorded {
   return {
     compiledAs: recorded.__oasbAstAdapterCompiles.splice(0),
     compiledBy: recorded.__oasbAstAdapterCompilers.splice(0),
+    constructed: recorded.__oasbAstAdapterConstructed.splice(0),
+    classifiedBy: recorded.__oasbAstAdapterClassifiers.splice(0),
     calls: recorded.__oasbAstAdapterCalls.splice(0),
   };
 }
@@ -110,6 +142,8 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
   let newAstAdapter: () => ScannerAdapter;
   let newFullAdapter: () => ScannerAdapter;
   let newPipelineAdapter: () => ScannerAdapter;
+  let newStaticPipelineAdapter: () => ScannerAdapter;
+  let newModelOnlyAdapter: () => ScannerAdapter;
   let ast: Recorded;
   let pipeline: Recorded;
 
@@ -141,6 +175,8 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
     newAstAdapter = () => new HMARealASTAdapter();
     newFullAdapter = () => new HMARealFullAdapter();
     newPipelineAdapter = () => new pipelineModule.HMAPipelineAdapter();
+    newStaticPipelineAdapter = () => new pipelineModule.HMAPipelineStaticAdapter();
+    newModelOnlyAdapter = () => new pipelineModule.HMATMEOnlyAdapter();
     configureHmaRoot(standInRoot('STAND-IN'));
 
     await newAstAdapter().scan(sample.content, sample.id);
@@ -190,6 +226,39 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
     expect(callOf(run, 'analyzeCredentials')?.rows.map(row => row.checkId)).toEqual(['OTHER-CRED']);
   });
 
+  it('the pipeline adapter compiles on the scanner of another root once configureHmaRoot() names it, on the same adapter', async () => {
+    const adapter = newPipelineAdapter();
+    await adapter.scan(sample.content, sample.id, sample.artifactType);
+    expect(takeRecorded().compiledBy).toEqual(['STAND-IN']);
+
+    configureHmaRoot(standInRoot('OTHER'));
+    await adapter.scan(sample.content, sample.id, sample.artifactType);
+    const run = takeRecorded();
+    expect(run.compiledBy).toEqual(['OTHER']);
+    expect(callOf(run, 'analyzeCredentials')?.rows.map(row => row.checkId)).toEqual(['OTHER-CRED']);
+  });
+
+  it('the model-only adapter classifies on the classifier of another root once configureHmaRoot() names it, on the same adapter', async () => {
+    const adapter = newModelOnlyAdapter();
+    await adapter.scan(sample.content, sample.id);
+    expect(takeRecorded().classifiedBy).toEqual(['STAND-IN']);
+
+    configureHmaRoot(standInRoot('OTHER'));
+    await adapter.scan(sample.content, sample.id);
+    expect(takeRecorded().classifiedBy).toEqual(['OTHER']);
+  });
+
+  it('builds one SemanticCompiler for the scans an adapter makes on one root', async () => {
+    for (const newAdapter of [newAstAdapter, newPipelineAdapter]) {
+      const adapter = newAdapter();
+      await adapter.scan(sample.content, sample.id, sample.artifactType);
+      await adapter.scan(sample.content, sample.id, sample.artifactType);
+      const run = takeRecorded();
+      expect(run.compiledBy, adapter.id).toEqual(['STAND-IN', 'STAND-IN']);
+      expect(run.constructed, adapter.id).toEqual(['STAND-IN']);
+    }
+  });
+
   it('reports the version in the package.json of the root it loads, as the pipeline adapter does', () => {
     for (const newAdapter of [newAstAdapter, newFullAdapter]) {
       expect(newAdapter().version).toBe('0.0.0-stand-in');
@@ -200,5 +269,25 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
     for (const newAdapter of [newAstAdapter, newFullAdapter]) {
       expect(newAdapter().version).toBe('0.0.1-other');
     }
+  });
+
+  it('reports the version of the root configured at its last scan, not of the root configured when it was created', async () => {
+    configureHmaRoot(standInRoot('A', '1.0.0-a'));
+    const adapters = [newAstAdapter(), newFullAdapter(), newPipelineAdapter(), newStaticPipelineAdapter()];
+    for (const adapter of adapters) {
+      await adapter.scan(sample.content, sample.id, sample.artifactType);
+      expect(adapter.version, adapter.id).toBe('1.0.0-a');
+    }
+    // The static adapter compiles nothing.
+    expect(takeRecorded().compiledBy).toEqual(['A', 'A', 'A']);
+
+    configureHmaRoot(standInRoot('B', '2.0.0-b'));
+    for (const adapter of adapters) {
+      // Until it scans again, the version of the root its last scan read.
+      expect(adapter.version, adapter.id).toBe('1.0.0-a');
+      await adapter.scan(sample.content, sample.id, sample.artifactType);
+      expect(adapter.version, adapter.id).toBe('2.0.0-b');
+    }
+    expect(takeRecorded().compiledBy).toEqual(['B', 'B', 'B']);
   });
 });
