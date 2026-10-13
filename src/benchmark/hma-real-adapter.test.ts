@@ -10,6 +10,10 @@
  * compile under the same file name, and its credential rows depend on the
  * content on the shipped analyzers: hackmyagent 0.33.2 reports AST-CRED-003
  * for it without the content and no credential row with it.
+ *
+ * Once configureHmaRoot() names another root, an adapter that has scanned
+ * before compiles on the SemanticCompiler of that root, the build its
+ * analyzers then come from.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -32,6 +36,8 @@ interface AnalyzerCall {
 /** What a stand-in recorded during one scan. */
 interface Recorded {
   compiledAs: string[];
+  /** The build of the stand-in whose SemanticCompiler compiled each file. */
+  compiledBy: string[];
   calls: AnalyzerCall[];
 }
 
@@ -43,10 +49,12 @@ const standInCore = (build: string): string => `'use strict';
 const { createHash } = require('crypto');
 const g = globalThis;
 g.__oasbAstAdapterCompiles = [];
+g.__oasbAstAdapterCompilers = [];
 g.__oasbAstAdapterCalls = [];
 class SemanticCompiler {
   async compile(content, filename) {
     g.__oasbAstAdapterCompiles.push(filename);
+    g.__oasbAstAdapterCompilers.push('${build}');
     return { ast: { intentClassification: 'benign', intentConfidence: 0.5, inferredRiskSurface: [] } };
   }
   verifyAST() { return true; }
@@ -75,6 +83,7 @@ const CONTENT_ANALYZERS = ['analyzeCredentials', 'analyzeGovernance', 'analyzeSc
 
 const recorded = globalThis as unknown as {
   __oasbAstAdapterCompiles: string[];
+  __oasbAstAdapterCompilers: string[];
   __oasbAstAdapterCalls: AnalyzerCall[];
 };
 
@@ -82,6 +91,7 @@ const recorded = globalThis as unknown as {
 function takeRecorded(): Recorded {
   return {
     compiledAs: recorded.__oasbAstAdapterCompiles.splice(0),
+    compiledBy: recorded.__oasbAstAdapterCompilers.splice(0),
     calls: recorded.__oasbAstAdapterCalls.splice(0),
   };
 }
@@ -155,5 +165,17 @@ describe('the AST adapter and the pipeline adapter call the analyzers alike', ()
     configureHmaRoot(standInRoot('OTHER'));
     await newAstAdapter().scan(sample.content, sample.id);
     expect(callOf(takeRecorded(), 'analyzeCredentials')?.rows.map(row => row.checkId)).toEqual(['OTHER-CRED']);
+  });
+
+  it('compiles on the scanner of another root once configureHmaRoot() names it, on the same adapter', async () => {
+    const adapter = newAstAdapter();
+    await adapter.scan(sample.content, sample.id);
+    expect(takeRecorded().compiledBy).toEqual(['STAND-IN']);
+
+    configureHmaRoot(standInRoot('OTHER'));
+    await adapter.scan(sample.content, sample.id);
+    const run = takeRecorded();
+    expect(run.compiledBy).toEqual(['OTHER']);
+    expect(callOf(run, 'analyzeCredentials')?.rows.map(row => row.checkId)).toEqual(['OTHER-CRED']);
   });
 });

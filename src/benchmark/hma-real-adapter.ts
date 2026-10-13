@@ -78,15 +78,20 @@ export class HMARealASTAdapter implements ScannerAdapter {
   id = 'hma-ast-real';
 
   private compiler: any = null;
+  // The nanomind-core entry point the compiler's SemanticCompiler came from.
+  private compilerFrom: string | null = null;
 
   async scan(content: string, sampleId: string): Promise<ScannerResult> {
     if (!await loadHMA()) {
       return { sampleId, verdict: 'unknown' };
     }
 
-    if (!this.compiler) {
+    // A new compiler once configureHmaRoot() names another root, so the AST
+    // comes from the build the analyzers below were loaded from.
+    if (!this.compiler || this.compilerFrom !== loadedFrom) {
       // useNanoMind: true enables the local TME classifier (no daemon needed)
       this.compiler = new SemanticCompiler({ useNanoMind: true });
+      this.compilerFrom = loadedFrom;
     }
 
     try {

@@ -805,6 +805,12 @@ stay on record here with the reason they changed.
   call it is the sibling checkout, as before. Three more tests cover the
   calls and the root, 28 in `src/benchmark` outside
   `src/benchmark/pinned`; the suite is 399 tests, 398 not skipped.
+- An AST adapter that has scanned once now compiles on the
+  `SemanticCompiler` of the root `configureHmaRoot()` names next. It kept
+  the compiler of the first root, so a second scan built its AST on that
+  build and ran the analyzers of the new one. One more test scans twice
+  on one adapter across a root change, 29 in `src/benchmark` outside
+  `src/benchmark/pinned`; the suite is 400 tests, 399 not skipped.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

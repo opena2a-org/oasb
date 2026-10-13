@@ -4,7 +4,7 @@
 
 [![Status: stable](https://img.shields.io/badge/status-stable-green)](./STATUS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Tests](https://img.shields.io/badge/tests-398%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
+[![Tests](https://img.shields.io/badge/tests-399%20passing-brightgreen)](https://github.com/opena2a-org/oasb)
 [![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)
 
 **MITRE ATT&CK Evaluations, but for AI agent security products.**
@@ -18,12 +18,12 @@
 ```bash
 git clone https://github.com/opena2a-org/oasb.git
 cd oasb && npm ci
-npm test                    # Full suite: 399 tests (398 pass, 1 skip)
+npm test                    # Full suite: 400 tests (399 pass, 1 skip)
 ```
 
 The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](#evaluating-other-products).
 
-> **Counts.** `npm test` runs **399 tests** (398 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`; E2E-001 cases are skipped only when the harness's own watcher recorded no file event: none for the case's file within its 5 s window, or none for any probe file during the readiness wait of a product that reported none; each such skip prints the wait, what that watcher saw, the error it reported if it reported one, and the measured load where the platform measures one; where Node.js has no recursive `fs.watch`, as on Linux before Node.js 19.1.0, that watcher cannot be opened and every E2E-001 case is skipped as inconclusive with a message that says so, which the release smoke reports as the file not measured): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **28 scoring-engine unit tests**, **99 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "398 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](docs/testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
+> **Counts.** `npm test` runs **400 tests** (399 passing, 1 skipped on every platform: the live network-detection E2E is disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`; E2E-001 cases are skipped only when the harness's own watcher recorded no file event: none for the case's file within its 5 s window, or none for any probe file during the readiness wait of a product that reported none; each such skip prints the wait, what that watcher saw, the error it reported if it reported one, and the measured load where the platform measures one; where Node.js has no recursive `fs.watch`, as on Linux before Node.js 19.1.0, that watcher cannot be opened and every E2E-001 case is skipped as inconclusive with a message that says so, which the release smoke reports as the file not measured): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **29 scoring-engine unit tests**, **99 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "399 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](docs/testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
 
 Run one group at a time:
 
@@ -147,10 +147,10 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Real OS detection | 9 | `src/e2e` (live monitors) | Live filesystem watches, process polling, network monitoring |
 | Application-level hooks | 14 | `src/e2e` (interceptors) | Pre-execution interception of spawn, connect, read/write |
 | **Attack scenarios** | **223** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
-| Scoring-engine unit tests | 28 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names, analyzer calls of the deprecated AST adapter |
+| Scoring-engine unit tests | 29 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names, analyzer calls of the deprecated AST adapter and the scanner root it compiles and analyzes on |
 | Pinned benchmark harness tests | 99 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
 | Adapter tests | 49 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left; the harness's own control watcher and the rules that read an E2E-001 case against it: a product miss, read when the 5 s window ends (a failure when the host delivered the event, inconclusive when it delivered none), and a product that reported no probe file (the case makes its write when the watcher saw one, and is inconclusive when it saw none); the inconclusive skip of a case where Node.js has no recursive `fs.watch`, the watcher's own error in an inconclusive message, the mark of a case that got the product's own event, the detection predicates, which pass over an event without data, and the end of a case, which closes the watcher and removes the directory also when `stop()` rejects, and passes that rejection on |
-| **`npm test` total** | **399** | (398 pass, 1 skipped on every platform) | |
+| **`npm test` total** | **400** | (399 pass, 1 skipped on every platform) | |
 
 ---
 
