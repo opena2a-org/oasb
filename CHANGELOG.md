@@ -861,6 +861,20 @@ stay on record here with the reason they changed.
   adapter builds one `SemanticCompiler` for its scans on one root, 34 in
   `src/benchmark` outside `src/benchmark/pinned`; the suite is 405 tests,
   404 not skipped.
+- The README is shorter. Its first screen runs one scenario file and shows
+  what that prints, and its reference text moved, as written, to the pages
+  it links: what OASB is and is not to `docs/how-it-works.md`; the What Gets
+  Tested table, the Counts note and the command for each group to
+  `docs/test-catalog.md`; the MITRE ATLAS Coverage table to
+  `docs/mitre-atlas-mapping.md`; the harness files to
+  `docs/test-harness.md`; the adapter details and the note on cross-product
+  numbers to `docs/adapters.md`; the Skills Security Benchmark, its corpus,
+  runners and latest results to `docs/pinned-benchmark.md`; the Known
+  Detection Gaps to `docs/known-gaps.md`; and the Updates table to
+  `docs/updates.md`. `npm run check:readme` and the release smoke's drift
+  guard read the test counts, the What Gets Tested table and the links on
+  those pages as they read the README's (`README_PAGES` in
+  `scripts/readme-counts.mjs`), and a message about a page names it.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

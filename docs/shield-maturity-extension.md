@@ -4,7 +4,7 @@
 
 ## Context
 
-OASB currently evaluates **runtime detection** capabilities (attack scenarios across process, network, filesystem, prompt, and MCP layers; the [README](../README.md#quick-start) states how many). Shield provides capabilities that fall outside OASB's detection-focused scope but are critical for production security posture.
+OASB currently evaluates **runtime detection** capabilities (attack scenarios across process, network, filesystem, prompt, and MCP layers; the [test catalog](test-catalog.md#what-gets-tested) states how many). Shield provides capabilities that fall outside OASB's detection-focused scope but are critical for production security posture.
 
 This extension would add a **Security Product Maturity** category to OASB, covering infrastructure that runtime detection alone does not address.
 
@@ -150,7 +150,7 @@ No SM test exists yet, so the third column is the proposal's expectation, not a 
 | SM-ENV: Environment Scanning | 4 | 4/4 |
 | **Total** | **52** | **48/52** |
 
-These **52 maturity tests** would be added to the existing detection tests (the attack scenario count the [README](../README.md#quick-start) states), so OASB would cover both runtime detection and security product maturity.
+These **52 maturity tests** would be added to the existing detection tests (the attack scenario count the [test catalog](test-catalog.md#what-gets-tested) states), so OASB would cover both runtime detection and security product maturity.
 
 ## Implementation Plan
 

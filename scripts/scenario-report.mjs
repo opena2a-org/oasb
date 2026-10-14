@@ -175,7 +175,7 @@ export function generateReport({ scenarios, results = null, date }) {
   for (const [id, name] of Object.entries(OWASP_MAP)) lines.push(`| ${id} | ${name} | See mapping docs |`);
   lines.push('');
 
-  // The gaps of the README's Known Detection Gaps table, worded as it words them.
+  // The gaps of the Known Detection Gaps table in docs/known-gaps.md, worded as it words them.
   lines.push(
     '## Known Gaps (Documented)',
     '',

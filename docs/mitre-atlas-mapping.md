@@ -1,8 +1,32 @@
 # MITRE ATLAS Test Mapping
 
-OASB maps each scenario that simulates an adversary to a [MITRE ATLAS](https://atlas.mitre.org/) technique; the [README](../README.md#mitre-atlas-coverage) states how many of the tests and files that is. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data) for the current matrix, which renamed the ML-attack techniques (ML → AI) and has added AI-agent techniques since 2025: of those mapped here, AML.T0081 and AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and AML.T0034.002 on 2026-03-30.
+OASB maps each scenario that simulates an adversary to a [MITRE ATLAS](https://atlas.mitre.org/) technique; [MITRE ATLAS Coverage](#mitre-atlas-coverage) below states how many of the tests and files that is. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data) for the current matrix, which renamed the ML-attack techniques (ML → AI) and has added AI-agent techniques since 2025: of those mapped here, AML.T0081 and AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and AML.T0034.002 on 2026-03-30.
 
 Defensive-response and detection-capability tests are tracked separately (see the end of this document): ATLAS is an adversary framework, so a test that validates the product's *reaction* or its *own detection machinery* is not mapped to an attack technique.
+
+## MITRE ATLAS Coverage
+
+Of the 223 tests across 47 scenario files, 166 tests in 33 files map to 15 unique techniques in [MITRE ATLAS](https://atlas.mitre.org/) as of the current matrix, which renamed the ML-attack techniques to AI and has added AI-agent techniques since 2025 (of those mapped here, AML.T0081 and AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and AML.T0034.002 on 2026-03-30). The other 57 tests, in 14 files, are defensive and capability tests, listed below the table. Technique IDs and names are verified against MITRE's published [`ATLAS.yaml`](https://github.com/mitre-atlas/atlas-data). Per-technique detail: [docs/mitre-atlas-mapping.md](#technique-coverage).
+
+| Technique | ID | Tests |
+|-----------|----|-------|
+| Command and Scripting Interpreter | AML.T0050 | AT-PROC-001/002, E2E-002/004 |
+| Escape to Host | AML.T0105 | AT-PROC-004 |
+| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001/002/004/005, E2E-005, E2E-003 (skipped) |
+| Agentic Resource Consumption | AML.T0034.002 | AT-PROC-003, AT-NET-003, AT-FS-004, AT-INT-004 |
+| Unsecured Credentials | AML.T0055 | AT-FS-001/003, E2E-001/006 |
+| Data from Local System | AML.T0037 | AT-FS-002 |
+| Modify AI Agent Configuration | AML.T0081 | AT-FS-005, E2E-001/006 |
+| LLM Prompt Injection | AML.T0051 | AT-AI-001/005, INT-003 |
+| LLM Jailbreak | AML.T0054 | AT-AI-001/005 |
+| LLM Data Leakage | AML.T0057 | AT-AI-002/005 |
+| AI Agent Tool Invocation | AML.T0053 | AT-AI-003/005, INT-002 |
+| Impersonation | AML.T0073 | AT-AI-004/005, INT-004 |
+| Exfiltration via AI Agent Tool Invocation | AML.T0086 | INT-001 |
+| Spamming AI System with Chaff Data | AML.T0046 | INT-007 |
+| Evade AI Model | AML.T0015 | INT-005, AT-INT-002 |
+
+**Defensive and capability tests are not mapped to adversary techniques.** Enforcement tests (AT-ENF-001–005, AT-PROC-005, INT-008) validate the product's *response* to the Impact tactic (AML.TA0011). Intelligence-layer tests (AT-INT-001/003/005), correlation (INT-006), and baseline tests (BL-001–003) validate the product's own detection machinery. Mapping a defensive test to an attack technique (the prior table mapped enforcement to "AML.TA0006") conflates the adversary matrix with the defender - ATLAS is an adversary framework, so those tests are tracked separately.
 
 ## Technique Coverage
 

@@ -24,7 +24,7 @@ const OASB_ROOT = resolve(__dirname, '..', '..', '..');
 const RESULTS_ROOT = join(OASB_ROOT, 'results');
 const RUN_FILES = ['corpus-predictions.jsonl', 'dvaa-predictions.jsonl', 'record.json', 'summary.json'];
 /** The documents that lead with the scanner's detection figures. */
-const FIGURE_DOCUMENTS = ['README.md', 'BENCHMARK-RESULTS.md'];
+const FIGURE_DOCUMENTS = ['docs/pinned-benchmark.md', 'BENCHMARK-RESULTS.md'];
 
 interface CorpusPrediction {
   adapterId: string;
@@ -104,7 +104,7 @@ function tally(rows: Array<{ category: string; detected: boolean }>) {
 /**
  * Runs a check on every committed run and names the run in a failure. The
  * checks loop over the runs inside a fixed set of tests, so committing a run
- * does not change the test totals the README states.
+ * does not change the test totals docs/test-catalog.md states.
  */
 function eachRun(runs: string[], check: (dirName: string, dir: string) => void) {
   for (const dirName of runs) {
@@ -136,7 +136,7 @@ describe('committed pinned runs', () => {
     expect(saying).not.toEqual([]);
   });
 
-  // A reader of the README or BENCHMARK-RESULTS.md must find the most recent
+  // A reader of docs/pinned-benchmark.md or BENCHMARK-RESULTS.md must find the most recent
   // measurement of record: the newest run's directory and, for every corpus
   // adapter and for the DVAA scenarios, its count written "192/270" or
   // "192 of 270".

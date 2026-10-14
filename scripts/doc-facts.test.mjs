@@ -1,5 +1,6 @@
-// Tests that statements in README.md and BENCHMARK-RESULTS.md match the
-// corpus and scripts they describe, and that docs/demo.tape states no count.
+// Tests that statements in README.md, BENCHMARK-RESULTS.md and
+// docs/pinned-benchmark.md match the corpus and scripts they describe, and
+// that docs/demo.tape states no count.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -55,16 +56,16 @@ test('the count pattern finds a count with or without a word before "tests" or "
 
 test('docs/demo.tape states no test or scenario count', () => {
   // The tape is recorded once and kept, so a count in it goes stale as tests
-  // are added; README.md states the counts, and scripts/check-readme.mjs
-  // holds them to the suite.
+  // are added; docs/test-catalog.md states the counts, and
+  // scripts/check-readme.mjs holds them to the suite.
   const counted = read('docs/demo.tape')
     .split('\n')
     .map((line, i) => `docs/demo.tape:${i + 1}: ${line.trim()}`)
     .filter((line) => COUNT.test(line.replace(/^[^ ]+ /, '')));
-  assert.deepEqual(counted, [], 'refer to the counts README.md states instead');
+  assert.deepEqual(counted, [], 'refer to the counts docs/test-catalog.md states instead');
 });
 
-test('README.md states the uncategorized malicious count corpus/v2.json holds', () => {
+test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {
   const n = samples.filter((s) => s.label === 'malicious' && !s.category).length;
-  assert.ok(flat('README.md').includes(`also holds ${n} uncategorized malicious samples`), `${n} uncategorized malicious samples is not stated`);
+  assert.ok(flat('docs/pinned-benchmark.md').includes(`also holds ${n} uncategorized malicious samples`), `${n} uncategorized malicious samples is not stated`);
 });

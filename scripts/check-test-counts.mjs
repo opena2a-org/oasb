@@ -22,14 +22,17 @@
 // own event, which an E2E-001 detection case records as `detected` in its
 // meta, fails the guard as not measured, whatever the counts say: the E2E-001
 // case that expects no violation for a normal file passes without any event.
+// The counts and the What Gets Tested table that moved out of the README
+// into the pages of README_PAGES (scripts/readme-counts.mjs) are read on
+// those pages, beside the README, and a drift there names the page.
 //
 // Usage: node scripts/check-test-counts.mjs <vitest-results.json> [path/to/README.md]
 // Exit code 0 when every stated count matches and no file went unmeasured (and for --help), 1 otherwise. Run by npm run smoke.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, README_PAGES, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const LABELS = {
   total: 'tests in total',
@@ -116,29 +119,50 @@ export function liveCounts(results, source) {
 
 const lineOf = (text, index) => text.slice(0, index).split('\n').length;
 
-/** Every count the README states, with the line it is on; `missing` names statements not found. */
+/**
+ * The documents the counts are read from: `readme` is the README's text, or
+ * a list of { name, text } that holds the README (named "README") and the
+ * pages that took its text (each named by its path).
+ */
+const documentsOf = readme => (typeof readme === 'string' ? [{ name: 'README', text: readme }] : readme);
+
+/**
+ * Every count the README and its pages state, with the document and the line
+ * it is on; `missing` names statements not found in any of them.
+ */
 export function readmeStatements(readme) {
+  const documents = documentsOf(readme);
   const statements = [];
   const missing = [];
   for (const { where, re, keys } of STATEMENTS) {
-    const matches = [...readme.matchAll(re)];
-    if (matches.length === 0) missing.push(`${where} (${re.source})`);
-    for (const m of matches) {
-      keys.forEach((key, i) => statements.push({ line: lineOf(readme, m.index), where, key, stated: Number(m[i + 1]) }));
+    let found = 0;
+    for (const { name, text } of documents) {
+      for (const m of text.matchAll(re)) {
+        found++;
+        keys.forEach((key, i) => statements.push({ doc: name, line: lineOf(text, m.index), where, key, stated: Number(m[i + 1]) }));
+      }
     }
+    if (found === 0) missing.push(`${where} (${re.source})`);
   }
-  const rows = [...readme.matchAll(TABLE_ROW)].map(m => ({
-    line: lineOf(readme, m.index),
-    category: m[1].trim(),
-    stated: Number(m[2]),
-    dir: m[3].replace(/\/$/, ''),
-    qualifier: m[4] ?? null,
-  }));
+  const rows = documents.flatMap(({ name, text }) =>
+    [...text.matchAll(TABLE_ROW)].map(m => ({
+      doc: name,
+      line: lineOf(text, m.index),
+      category: m[1].trim(),
+      stated: Number(m[2]),
+      dir: m[3].replace(/\/$/, ''),
+      qualifier: m[4] ?? null,
+    })),
+  );
   if (rows.length === 0) missing.push('test table rows (| Category | N | `src/...` |)');
   return { statements, rows, missing };
 }
 
-/** Every difference between the README's stated counts and the suite; `source` as for liveCounts. */
+/**
+ * Every difference between the stated counts and the suite; `readme` as for
+ * readmeStatements, `source` as for liveCounts. A drift names the document
+ * that states the count: "README line N" or "<page> line N".
+ */
 export function compareCounts(results, readme, source) {
   const live = liveCounts(results, source);
   const { statements, rows, missing } = readmeStatements(readme);
@@ -146,14 +170,14 @@ export function compareCounts(results, readme, source) {
 
   for (const s of statements) {
     if (s.stated !== live[s.key]) {
-      drift.push(`README line ${s.line} (${s.where}) states ${s.stated} ${LABELS[s.key]}; the suite has ${live[s.key]}`);
+      drift.push(`${s.doc} line ${s.line} (${s.where}) states ${s.stated} ${LABELS[s.key]}; the suite has ${live[s.key]}`);
     }
   }
 
   let tableTotal = 0;
   for (const row of rows) {
     if (row.qualifier !== null && !QUALIFIERS[row.qualifier]) {
-      drift.push(`README line ${row.line} (test table, ${row.category}): unknown qualifier "(${row.qualifier})"`);
+      drift.push(`${row.doc} line ${row.line} (test table, ${row.category}): unknown qualifier "(${row.qualifier})"`);
       continue;
     }
     // Directories with a row of their own are counted there, not in their parent's row.
@@ -164,7 +188,7 @@ export function compareCounts(results, readme, source) {
     const actual = counted.reduce((sum, f) => sum + f.tests, 0);
     tableTotal += actual;
     if (row.stated !== actual) {
-      drift.push(`README line ${row.line} (test table, ${row.category}) states ${row.stated} tests in ${row.dir}${row.qualifier ? ` (${row.qualifier})` : ''}; the suite has ${actual}`);
+      drift.push(`${row.doc} line ${row.line} (test table, ${row.category}) states ${row.stated} tests in ${row.dir}${row.qualifier ? ` (${row.qualifier})` : ''}; the suite has ${actual}`);
     }
   }
   if (rows.length > 0 && tableTotal !== live.total) {
@@ -195,6 +219,19 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(`cannot read the README ${readmePath}: ${readFailure(err)}`);
     process.exit(1);
   }
+  // The README and the pages beside it that took its text. A page that does
+  // not exist is not read: a count it held is then reported as not found.
+  const documents = [{ name: 'README', text: readme }];
+  for (const page of README_PAGES) {
+    const file = join(dirname(readmePath), page);
+    if (!existsSync(file)) continue;
+    try {
+      documents.push({ name: page, text: readFileSync(file, 'utf8') });
+    } catch (err) {
+      console.error(`cannot read ${file}, a page that took text from the README: ${readFailure(err)}`);
+      process.exit(1);
+    }
+  }
   // The scenario files the report names, read under the README's directory.
   class SourceError extends Error {}
   const source = path => {
@@ -207,7 +244,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   };
   let counted;
   try {
-    counted = compareCounts(JSON.parse(readFileSync(resultsPath, 'utf8')), readme, source);
+    counted = compareCounts(JSON.parse(readFileSync(resultsPath, 'utf8')), documents, source);
   } catch (err) {
     console.error(err instanceof SourceError ? err.message : `cannot read the test report ${resultsPath}: ${readFailure(err)}`);
     process.exit(1);

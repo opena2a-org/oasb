@@ -25,7 +25,7 @@ Show
 # Title pause
 Sleep 1s
 
-# Step 1: Run the full benchmark (README.md states the test counts)
+# Step 1: Run the full benchmark (docs/test-catalog.md states the test counts)
 Type "npm test"
 Enter
 Sleep 8s

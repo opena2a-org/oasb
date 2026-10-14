@@ -21,8 +21,8 @@ const SCENARIO_DIRS = ['src/atomic', 'src/integration', 'src/baseline', 'src/e2e
 // Declares no capabilities and throws from every other contract method.
 const NO_CAPABILITY_ADAPTER = join(repo, 'scripts', 'fixtures', 'no-capability-adapter.cjs');
 
-// What the two prompt-only stubs declare in getCapabilities(), as the README's
-// Evaluating Other Products table lists them.
+// What the two prompt-only stubs declare in getCapabilities(), as the
+// Capabilities table of docs/adapters.md lists them.
 const PROMPT_ONLY = ['prompt-input-scanning', 'pattern-scanning'];
 
 // The title describeWithCapability gives a suite it skips.

@@ -17,7 +17,9 @@ the claims this repository publishes:
    which compares the test counts too, see step 3) checks the README layout:
    under 400 lines, "Quick Start" is the first H2
    and starts before line 25, a shell command appears before line 30, and
-   the relative links it reads resolve. It reads three link forms, each
+   the relative links it reads resolve, in the README and in the pages that
+   took its text (`README_PAGES` in `scripts/readme-counts.mjs`), each link
+   from the directory of the file it is in. It reads three link forms, each
    written within one line: inline links (`[text](path)`, with an optional
    double-quoted title), reference definitions at the start of a line
    (`[label]: path`) and quoted HTML `href` attributes. It checks a `#anchor`
@@ -37,8 +39,9 @@ the claims this repository publishes:
    failure fails the smoke.
 3. **README count drift guard.** `scripts/check-test-counts.mjs` reads the
    per-file results of the JSON reporter and compares every test count the
-   README in the clone states with them (the committed README, so an
-   uncommitted edit to it is not what the smoke measures): the tests badge,
+   README in the clone and the pages of `README_PAGES` beside it state with
+   them (the committed files, so an uncommitted edit is not what the smoke
+   measures; most of the counts are in `docs/test-catalog.md`): the tests badge,
    the Quick Start comment, the Counts note (total, passing, skipped, attack
    scenarios, scoring-engine and pinned harness tests), the per-group
    `npm run test:*` comments, the scenario counts in the prose, the
@@ -63,7 +66,7 @@ the claims this repository publishes:
    update `STATEMENTS` in `scripts/readme-counts.mjs`, the one list both
    README checks read. Its own tests (`npm run test:scripts`) run after
    `npm ci`. Any mismatch fails the smoke. If you
-   add or remove tests, update the README in the same change or this gate
+   add or remove tests, update the counts in the same change or this gate
    blocks the release - that is the point. Committing a run under `results/`
    does not change the totals: the run-of-record checks are a fixed set of
    tests. `npm run check:readme` compares the README's test counts without
@@ -169,9 +172,10 @@ README's test counts do not include them.
 - `scripts/library-entry.test.mjs`: the package entry point as a library
   install sees it, built where arp-guard cannot be resolved, as after
   `npm install @opena2a/oasb` on its own.
-- `scripts/doc-facts.test.mjs`: statements in `README.md` and
-  `BENCHMARK-RESULTS.md` that must match the corpus and scripts they
-  describe, and that `docs/demo.tape` states no test or scenario count.
+- `scripts/doc-facts.test.mjs`: statements in `README.md`,
+  `BENCHMARK-RESULTS.md` and `docs/pinned-benchmark.md` that must match the
+  corpus and scripts they describe, and that `docs/demo.tape` states no test
+  or scenario count.
 - `scripts/placeholder-credentials.test.mjs`: the placeholder marking of
   API-key-shaped values in `src/`; fails when one does not spell FAKE.
 - `scripts/secret-scan-workflow.test.mjs`: the secret-scan job of
@@ -197,13 +201,14 @@ job, which runs `npm test`, runs every file under
 [The tests in `scripts/`](#the-tests-in-scripts) before the suite. The
 documented commands themselves run only in the
 smoke. One of them runs `npm run check:readme` on this README, so a pull
-request that adds or removes a test without updating the README's counts
-fails CI, not only the next release smoke. Another runs the OWASP mapping
-check on this repository, so a scenario file without an `// OWASP Agentic:`
-header, or one the mapping page lists under another ID, fails CI too. A third
-runs the maturity page check on this repository, so an ATLAS technique ID on
-`docs/shield-maturity-extension.md` that `docs/mitre-atlas-mapping.md` does
-not list, or lists under another name, fails CI as well. To run the suite
+request that adds or removes a test without updating the counts the README
+and its pages state fails CI, not only the next release smoke. Another runs
+the OWASP mapping check on this repository, so a scenario file without an
+`// OWASP Agentic:` header, or one the mapping page lists under another ID,
+fails CI too. A third runs the maturity page check on this repository, so an
+ATLAS technique ID on `docs/shield-maturity-extension.md` that
+`docs/mitre-atlas-mapping.md` does not list, or lists under another name,
+fails CI as well. To run the suite
 without them, use `npx vitest run` or one of
 the `npm run test:*` groups.
 
@@ -226,6 +231,6 @@ Scanner figures are measured with a pinned run
 (`scripts/run-pinned-benchmark.ts`, see `docs/pinned-benchmark.md`), not by
 this smoke. A pinned run records the hackmyagent version and tarball
 integrity, the DVAA commit and the NanoMind manifest sha256 in
-`results/<date>-<runid>/record.json`. When BENCHMARK-RESULTS.md or the README
-cites a re-measured figure, update both in the same change and name the run
-directory it came from.
+`results/<date>-<runid>/record.json`. When BENCHMARK-RESULTS.md or
+docs/pinned-benchmark.md cites a re-measured figure, update both in the same
+change and name the run directory it came from.

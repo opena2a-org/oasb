@@ -1,9 +1,26 @@
-// The test counts the README states, in one list that both README checks
-// read: scripts/check-readme.mjs (npm run check:readme) and
-// scripts/check-test-counts.mjs (the release smoke's drift guard). When the
-// README wording of a count changes, update STATEMENTS here.
+// The test counts the README and the pages that took its text state, in one
+// list that both README checks read: scripts/check-readme.mjs (npm run
+// check:readme) and scripts/check-test-counts.mjs (the release smoke's drift
+// guard). When the wording of a count changes, update STATEMENTS here.
 
-// Each statement must appear at least once, and every match is compared.
+// The pages that took text moved out of the README, by their path from the
+// README's directory. Both checks read the counts these pages state as they
+// read the README's, and scripts/check-readme.mjs also reads their links and
+// their wording. A page that does not exist is not read: a statement it held
+// is then not found, and the README's link to it does not resolve.
+export const README_PAGES = [
+  'docs/adapters.md',
+  'docs/how-it-works.md',
+  'docs/known-gaps.md',
+  'docs/mitre-atlas-mapping.md',
+  'docs/pinned-benchmark.md',
+  'docs/test-catalog.md',
+  'docs/test-harness.md',
+  'docs/updates.md',
+];
+
+// Each statement must appear at least once in the README or one of
+// README_PAGES, and every match is compared.
 // Each capture group is a count; its key names the measure it must equal:
 //   total, passed, skipped  the whole suite (passed: the tests that passed)
 //   scenarios               tests under src/atomic, src/integration,
@@ -20,7 +37,8 @@
 //   unmappedScenarioFiles   scenario files that cite none
 //   techniques              distinct technique IDs the scenario files cite
 // The rows of the "What Gets Tested" table that name a source directory are
-// not listed here; each check counts them per directory.
+// not listed here; each check counts them per directory, in the README or the
+// page that holds the table (docs/test-catalog.md).
 export const STATEMENTS = [
   { where: 'tests badge', re: /tests-(\d+)%20passing/g, keys: ['passed'] },
   { where: 'introduction', re: /^(\d+) standardized attack scenarios/gm, keys: ['scenarios'] },

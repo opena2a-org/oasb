@@ -56,13 +56,19 @@
 //      counts are those of that day and are not compared with the suite, so
 //      the page itself sends the reader to the README for the current ones.
 //
+// Checks 4, 5, 6 and 8 read the pages that took text moved out of the README
+// (README_PAGES in scripts/readme-counts.mjs) as they read the README, so the
+// test totals, the "What Gets Tested" table and the links that moved are
+// still checked; a message about one of those pages names it before the
+// line number. A link on a page resolves from the page's directory.
+//
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALIFIERS, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
+import { QUALIFIERS, README_PAGES, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const MAX_LINES = 400;
 const QUICK_START_BY = 25;
@@ -151,6 +157,22 @@ try {
 }
 const readme = parse(readmeText);
 
+// The README and the pages that took its text, each with the prefix that
+// names it in a message: none for the README, its path for a page. A page
+// that does not exist is not read; the README's link to it is reported by
+// check 4, and a count it held by check 5.
+const documents = [{ file: readmePath, prefix: '', text: readmeText, lines: readme }];
+for (const path of README_PAGES) {
+  const file = resolve(dirname(readmePath), path);
+  if (!existsSync(file)) continue;
+  try {
+    const text = readFileSync(file, 'utf8');
+    documents.push({ file, prefix: `${path} `, text, lines: parse(text) });
+  } catch (err) {
+    fail(`cannot read ${path}, a page that took text from the README: ${readFailure(err)}`);
+  }
+}
+
 // 1. Length budget.
 if (readme.length >= MAX_LINES) {
   fail(`README has ${readme.length} lines; the budget is under ${MAX_LINES}. Move reference detail into docs/ and link to it.`);
@@ -210,27 +232,30 @@ function linkTargets(prose) {
 const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
 
 // The linked .md pages whose file name carries a date, each with the first
-// README line that links it. Read by check 7.
+// line of the README, or else of a page that took its text, that links it.
+// Read by check 9.
 const DATE_IN_NAME = /\d{4}-\d{2}-\d{2}/;
 const datedPages = new Map();
 
-for (const { n, line, inFence } of readme) {
-  if (inFence) continue;
-  const prose = line.replace(/`[^`]*`/g, '');
-  for (const target of linkTargets(prose)) {
-    if (!target) continue;
-    if (ABSOLUTE.test(target)) continue;
-    const [pathPart, anchor] = target.split('#');
-    const file = pathPart ? resolve(dirname(readmePath), decodeURIComponent(pathPart)) : readmePath;
-    if (!existsSync(file)) {
-      fail(`line ${n}: link target "${target}" does not exist.`);
-      continue;
-    }
-    if (anchor && /\.md$/i.test(file) && !anchorsOf(file).has(decodeURIComponent(anchor).toLowerCase())) {
-      fail(`line ${n}: anchor "#${anchor}" has no matching heading in ${pathPart || 'README.md'}.`);
-    }
-    if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file)) {
-      datedPages.set(file, { n, shown: pathPart });
+for (const { file: doc, prefix, lines } of documents) {
+  for (const { n, line, inFence } of lines) {
+    if (inFence) continue;
+    const prose = line.replace(/`[^`]*`/g, '');
+    for (const target of linkTargets(prose)) {
+      if (!target) continue;
+      if (ABSOLUTE.test(target)) continue;
+      const [pathPart, anchor] = target.split('#');
+      const file = pathPart ? resolve(dirname(doc), decodeURIComponent(pathPart)) : doc;
+      if (!existsSync(file)) {
+        fail(`${prefix}line ${n}: link target "${target}" does not exist.`);
+        continue;
+      }
+      if (anchor && /\.md$/i.test(file) && !anchorsOf(file).has(decodeURIComponent(anchor).toLowerCase())) {
+        fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${pathPart || prefix.trim() || 'README.md'}.`);
+      }
+      if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file)) {
+        datedPages.set(file, { at: `${prefix}line ${n}`, shown: pathPart });
+      }
     }
   }
 }
@@ -295,7 +320,7 @@ function lineOf(text, index) {
   return text.slice(0, index).split('\n').length;
 }
 
-function checkCounts(text, tests) {
+function checkCounts(tests) {
   const ran = Boolean(reportPath);
   const source = ran ? 'the test report' : 'the suite';
   const under = (dir) => tests.filter((t) => t.file.startsWith(dir + '/'));
@@ -346,8 +371,9 @@ function checkCounts(text, tests) {
     unmappedScenarioFiles: atlas && [atlas.unmappedScenarioFiles, 'scenario files that cite no MITRE ATLAS technique ID'],
     techniques: atlas && [atlas.techniques, 'MITRE ATLAS technique IDs cited by the scenario files'],
   };
-  const compare = (n, what, stated, [live, label]) => {
-    if (stated !== live) fail(`line ${n}: ${what} says ${stated}; ${source} has ${live} ${label}.`);
+  // `at` is where the count is stated: "line N" in the README, "<page> line N" on a page.
+  const compare = (at, what, stated, [live, label]) => {
+    if (stated !== live) fail(`${at}: ${what} says ${stated}; ${source} has ${live} ${label}.`);
   };
 
   for (const { where, re, keys } of STATEMENTS) {
@@ -356,34 +382,48 @@ function checkCounts(text, tests) {
         `STATEMENTS in scripts/readme-counts.mjs gives the ${where} the key "${key}", which names no count this check measures (${Object.keys(fixed).join(', ')}).`,
       );
     }
-    const matches = [...text.matchAll(re)];
+    const matches = documents.flatMap(({ prefix, text }) =>
+      [...text.matchAll(re)].map((m) => ({ m, at: `${prefix}line ${lineOf(text, m.index)}` })),
+    );
     if (matches.length === 0) {
       fail(`the ${where} (${re}) was not found; if its wording changed, update STATEMENTS in scripts/readme-counts.mjs.`);
     }
-    for (const m of matches) {
+    for (const { m, at } of matches) {
       keys.forEach((key, i) => {
         // An unknown key and an unread scenario file (null ATLAS measures) are reported above.
         if (!Object.hasOwn(fixed, key) || !fixed[key]) return;
-        compare(lineOf(text, m.index), `the ${where}`, Number(m[i + 1]), fixed[key]);
+        compare(at, `the ${where}`, Number(m[i + 1]), fixed[key]);
       });
     }
   }
 
-  // The "What Gets Tested" table: each test file belongs to the row with the
-  // longest Source directory that holds it (and whose qualifier matches), and
-  // every test file must belong to a row. The "Attack scenarios" and
-  // "npm test total" rows are statements, compared above.
-  const start = readme.findIndex((l) => !l.inFence && /^##\s+What Gets Tested\s*$/.test(l.line));
-  const rows = [];
-  for (let i = start + 1; start >= 0 && i < readme.length && !/^##\s/.test(readme[i].line); i++) {
-    const { n, line } = readme[i];
-    if (!line.startsWith('|') || /^\|\s*:?-/.test(line)) continue;
-    rows.push({ n, cells: line.split('|').slice(1, -1).map((c) => c.trim()) });
+  // The "What Gets Tested" table, in the README or a page that took its
+  // text: each test file belongs to the row with the longest Source directory
+  // that holds it (and whose qualifier matches), and every test file must
+  // belong to a row. The "Attack scenarios" and "npm test total" rows are
+  // statements, compared above. Every copy of the table is checked.
+  const tables = [];
+  for (const { prefix, lines } of documents) {
+    const start = lines.findIndex((l) => !l.inFence && /^##\s+What Gets Tested\s*$/.test(l.line));
+    const rows = [];
+    for (let i = start + 1; start >= 0 && i < lines.length && !/^##\s/.test(lines[i].line); i++) {
+      const { n, line } = lines[i];
+      if (!line.startsWith('|') || /^\|\s*:?-/.test(line)) continue;
+      rows.push({ n, cells: line.split('|').slice(1, -1).map((c) => c.trim()) });
+    }
+    if (rows.length >= 2) tables.push({ prefix, rows });
   }
-  if (rows.length < 2) {
+  if (tables.length === 0) {
     fail('the "What Gets Tested" table was not found; if it moved, update scripts/check-readme.mjs.');
     return fixed;
   }
+  for (const table of tables) checkTable(table, tests, compare);
+  return fixed;
+}
+
+// One "What Gets Tested" table: its rows, the prefix that names its page, and
+// the compare function of checkCounts.
+function checkTable({ prefix, rows }, tests, compare) {
   const plain = (s) => (s || '').replace(/[*`]/g, '').trim();
   const dirRows = [];
   for (const { n, cells } of rows.slice(1)) {
@@ -392,12 +432,12 @@ function checkCounts(text, tests) {
     const what = `the "${category}" row`;
     const stated = plain(cells[1]);
     if (!/^\d+$/.test(stated)) {
-      fail(`line ${n}: ${what} has no test count.`);
+      fail(`${prefix}line ${n}: ${what} has no test count.`);
       continue;
     }
     const src = (cells[2] || '').match(/^`([^`]+)`(?:\s+\(([^)]+)\))?$/);
     if (!src || (src[2] && !QUALIFIERS[src[2]])) {
-      fail(`line ${n}: cannot tell which tests ${what} counts; its Source must be a \`directory\`, optionally followed by one of: ${Object.keys(QUALIFIERS).map((q) => `(${q})`).join(', ')}.`);
+      fail(`${prefix}line ${n}: cannot tell which tests ${what} counts; its Source must be a \`directory\`, optionally followed by one of: ${Object.keys(QUALIFIERS).map((q) => `(${q})`).join(', ')}.`);
       continue;
     }
     dirRows.push({ n, what, stated: Number(stated), dir: src[1].replace(/\/$/, ''), qualifier: src[2], count: 0 });
@@ -420,10 +460,10 @@ function checkCounts(text, tests) {
       `tests in ${r.dir}` +
       (r.qualifier ? ` (${r.qualifier})` : '') +
       (narrower.length ? ` outside ${[...new Set(narrower)].join(', ')}` : '');
-    compare(r.n, r.what, r.stated, [r.count, label]);
+    compare(`${prefix}line ${r.n}`, r.what, r.stated, [r.count, label]);
   }
-  for (const f of unowned) fail(`no row of the "What Gets Tested" table counts the tests in ${f}.`);
-  return fixed;
+  const table = prefix ? `the "What Gets Tested" table in ${prefix.trim()}` : 'the "What Gets Tested" table';
+  for (const f of unowned) fail(`no row of ${table} counts the tests in ${f}.`);
 }
 
 // 7. A skipped scenario test listed as MITRE ATLAS coverage is marked as skipped.
@@ -519,11 +559,11 @@ function blocks(lines) {
   return out;
 }
 
-for (const { n, text } of blocks(readme)) {
+for (const { n, text, prefix } of documents.flatMap((d) => blocks(d.lines).map((b) => ({ ...b, prefix: d.prefix })))) {
   const prose = text.replace(/`[^`]*`/g, '');
   if (NAMES_BENCHMARK.test(prose) && COMPARES_PRODUCTS.test(prose) && !RECALL_ONLY.test(prose)) {
     fail(
-      `line ${n}: the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison. ` +
+      `${prefix}line ${n}: the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison. ` +
         'Its benign class was labeled by HackMyAgent, one of the scanners it compares, so false-positive rate, precision, ' +
         'F1, flag rate and tier favor that scanner; say "recall-only comparison".',
     );
@@ -540,7 +580,7 @@ if (!noCounts) {
     fail(reportPath ? `cannot read the test report ${reportPath}: ${readFailure(err)}` : err.message);
   }
   if (tests) {
-    counted = checkCounts(readmeText, tests);
+    counted = checkCounts(tests);
     checkSkippedCoverage(tests);
     inconclusive = tests.filter((t) => t.inconclusive).length;
   }
@@ -555,11 +595,11 @@ const UNSHIPPED = [
   },
   { re: /\bopena2a\b.*\s--technique\b/, why: 'the OpenA2A CLI has no --technique option' },
 ];
-for (const { n, line } of readme) {
+for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({ ...l, prefix: d.prefix })))) {
   for (const { re, why } of UNSHIPPED) {
     if (re.test(line)) {
       fail(
-        `line ${n}: ${why}; describe what the CLIs do today (opena2a benchmark and hackmyagent secure -b oasb-1 ` +
+        `${prefix}line ${n}: ${why}; describe what the CLIs do today (opena2a benchmark and hackmyagent secure -b oasb-1 ` +
           'check the OASB-1 controls; the attack scenarios run with npm test).',
       );
     }
@@ -570,7 +610,7 @@ for (const { n, line } of readme) {
 // counts with the suite, so above its first H2 it says "as of <the date in
 // its file name>" and links to the README. The note may be wrapped and may
 // sit in a blockquote; text in a code block or inline code is not the note.
-for (const [file, { n, shown }] of datedPages) {
+for (const [file, { at, shown }] of datedPages) {
   const date = basename(file).match(DATE_IN_NAME)[0];
   const page = parse(readFileSync(file, 'utf8'));
   const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
@@ -595,7 +635,7 @@ for (const [file, { n, shown }] of datedPages) {
   }
   if (missing.length) {
     fail(
-      `line ${n}: "${shown}" is a dated page, so above its first H2 it must ${missing.join(' and ')}; ` +
+      `${at}: "${shown}" is a dated page, so above its first H2 it must ${missing.join(' and ')}; ` +
         `its counts are those of ${date} and are not compared with the suite.`,
     );
   }
@@ -605,7 +645,7 @@ if (failures.length) {
   for (const f of failures) console.error('README: ' + f);
   process.exit(1);
 }
-console.log(`   README: ${readme.length} lines, Quick Start at line ${firstH2.n}, first command at line ${commandLine}, links resolve.`);
+console.log(`   README: ${readme.length} lines, Quick Start at line ${firstH2.n}, first command at line ${commandLine}, links resolve, also on the ${documents.length - 1} pages that took its text.`);
 if (counted) {
   console.log(
     `   README test counts match ${reportPath ? 'the test report' : 'the collected suite'}: ` +

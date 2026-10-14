@@ -19,6 +19,10 @@ The pin file and the hackmyagent directory belong outside the OASB checkout
 (here, in its parent directory): a run is refused while the checkout has
 uncommitted or untracked files, and a pin file written inside it is one.
 
+The [Skills Security Benchmark](#skills-security-benchmark) section at the end
+of this page describes the scoring engine, the corpus, the runners and the
+latest results.
+
 ## What is pinned
 
 | Input | Pinned by | The run is refused when |
@@ -205,13 +209,13 @@ checkout with full history (not a shallow clone) it checks that the record's
 `oasb.commit` is an ancestor of `HEAD`. For a v2 run it also checks that the `nanomindUse` counts in the summary and the record
 are the sums of the prediction lines, and that no daemon answered. The test
 fails when no committed run says what scored its samples: a run whose schema
-is not v1 and whose record holds `nanomindUse`. It also fails when `README.md`
+is not v1 and whose record holds `nanomindUse`. It also fails when this page
 or `BENCHMARK-RESULTS.md` does not name the newest run of record (the latest
 `startedAt`) or does not state its count for each corpus adapter and for the
 DVAA scenarios, written `192/270` or `192 of 270`, so committing a run means
 reporting it where the scanner figures are read. The checks loop over the runs
 inside a fixed set of tests, so committing a run does not change the test
-totals the README states.
+totals the [test catalog](test-catalog.md#what-gets-tested) states.
 
 | Run | Schema | hackmyagent | DVAA commit | NanoMind manifest sha256 |
 |---|---|---|---|---|
@@ -255,3 +259,78 @@ sibling `hackmyagent` and `damn-vulnerable-ai-agent` checkouts, which are not
 pinned, so their numbers are not figures of record. They run only with
 `--unpinned`, print their results, and write a file only to a new path given
 with `--out=<file>`.
+
+## Skills Security Benchmark
+
+A scoring engine for scanners that judge AI agent skills and configurations, in `src/benchmark/` and exported as `benchmark`. It defines:
+
+- **9 attack categories** (`src/benchmark/types.ts`): `supply_chain`, `prompt_injection`, `credential_exfiltration`, `heartbeat_rce`, `unicode_stego`, `privilege_escalation`, `persistence`, `social_engineering`, `data_exfiltration`.
+- **11 controls** (`src/benchmark/controls.ts`): SS-01 to SS-10 and SEC-021, each assigned to compliance level L1 (Basic), L2 (Standard) or L3 (Advanced).
+- **Tiers** (`TIER_THRESHOLDS` in `src/benchmark/scoring.ts`): platinum, gold, silver or listed, assigned from F1, false-positive rate, category coverage and, for platinum, Cohen's kappa against HackMyAgent. No tier is published for the corpus below, because F1 and false-positive rate on it are withdrawn.
+
+### Benchmark Corpus (v2.0)
+
+4,245 ground-truth labeled samples for scanner evaluation:
+
+| | Count | Description |
+|---|---|---|
+| Malicious | 270 | 30 per attack category (9 categories), all written by us: ARIA 89, DVAA 91, HackMyAgent test payloads 90 |
+| Benign | 3,881 | 3,704 labeled benign from the scanner under test's own registry scan results (see below), 177 hand-authored |
+| Edge cases | 94 | Security tools, defensive governance, broad-permission configs |
+
+> The published results below were produced on this 4,245-sample categorized set. The corpus file (`corpus/v2.json`) also holds 225 uncategorized malicious samples, which it already held when both published runs excluded them; the `--categorized-only` flag used by the runner pins evaluation to the 270 categorized malicious samples (30 × 9) so the numbers are reproducible.
+
+### Benchmark Runner
+
+```bash
+npx tsx scripts/run-pinned-benchmark.ts --pins ../pins.json --hma <dir> --dvaa <dir>  # Pinned run: corpus and DVAA, writes results/<date>-<runid>/
+npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only --limit=100          # Development run on the sibling hackmyagent checkout
+npx tsx scripts/run-dvaa-benchmark.ts --unpinned                                      # Development run (needs ../damn-vulnerable-ai-agent)
+```
+
+A pinned run takes hackmyagent by npm version and tarball integrity, DVAA by
+commit and the NanoMind models by manifest sha256. It checks those inputs and
+the OASB checkout before it scans anything, refuses the run when one fails its
+check, and never overwrites a results file. It does not verify the scanner's
+dependencies or each place the scanner can take a model result from;
+[docs/pinned-benchmark.md](#what-a-run-does-not-verify) lists what a run checks
+and what it does not. The development runners load whatever sibling checkouts
+are present, so their numbers are not figures of record.
+
+### Latest Results (pinned run 2026-10-10; 2026-06-05 run partially withdrawn 2026-08-09)
+
+**F1, precision, false-positive rate and flag rate are withdrawn.** The benign class of this corpus
+was labeled by the scanner under test: the labeling rule in `scripts/export-registry-corpus.mjs`
+(`row.verdict === 'warning' && row.overall_score >= 70`, as reported by HackMyAgent itself) assigns
+samples to the benign class, and 3,704 of the 3,881 benign samples came from that rule. Anything
+HackMyAgent would have flagged was excluded from the benign class by construction, so a near-zero
+false-positive rate was guaranteed before a single scan ran. Those figures are not restated here,
+and no replacement figure is offered.
+
+**Recall is retained**, because it reads only the malicious class, and both runs below exclude the
+225 registry samples labeled malicious by that same rule (`--categorized-only`). The most recent
+measurement of record is the pinned run in `results/2026-10-10-2a89ce5d/`: hackmyagent 0.33.2, the
+npm release current on 2026-10-10, on inputs the run checked and recorded (see
+[Runs of record](#runs-of-record)). The 2026-06-05 run measured hackmyagent
+0.23.8 with the earlier runners, which loaded unpinned sibling checkouts and did not record their
+inputs, so it is not a baseline for the pinned run and the difference between the two is not traced
+to a cause.
+
+| Scanner | Recall, pinned run 2026-10-10 (hackmyagent 0.33.2) | Recall, 2026-06-05 (hackmyagent 0.23.8) | F1 / Precision / FPR / Flag rate |
+|---------|----------------------------------------------------|-----------------------------------------|----------------------------------|
+| HMA Full Pipeline | **71.1%** (192/270) | 82.6% (223/270) | withdrawn |
+| HMA Static (regex) | 51.1% (138/270) | 51.1% | withdrawn |
+| NanoMind TME, model only (ablation) | 93.0% (251/270) | 93.0% (classifier v0.5.0) | withdrawn |
+
+Read these figures with their denominator: all 270 attack fixtures are ones we wrote. Excluding
+HackMyAgent's own payloads, the full pipeline detects 70.6% (127/180) in the pinned run and detected
+82.2% (148/180) on 2026-06-05. Scored over all 495 samples the corpus calls malicious, including the
+225 self-labeled ones, the 2026-06-05 run gives 47.3% (234/495); the pinned run scans only the
+categorized set. This is detection against a fixed fixture set we authored, not a measure of
+detection in the wild, and not comparable to another scanner's number on another corpus. On the full
+DVAA scenario repository, which includes behavioral and natural-language attacks, the full pipeline
+detects 17 of 86 scenarios in the pinned run; it detected 25 of 86 on 2026-06-05.
+
+[BENCHMARK-RESULTS.md](../BENCHMARK-RESULTS.md) has the per-category counts, the posture-vs-attack verdict
+methodology and its 2026-08-27 correction, the DVAA breakdown, and the comparison with Holzbauer et al.
+(arXiv:2603.16572). The pinned run's per-category counts are in its `summary.json`.

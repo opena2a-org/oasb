@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compareCounts, liveCounts, readmeStatements } from './check-test-counts.mjs';
-import { STATEMENTS, readFailure } from './readme-counts.mjs';
+import { README_PAGES, STATEMENTS, readFailure } from './readme-counts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'check-test-counts.mjs');
@@ -724,15 +724,53 @@ test('a scenario file that stops citing its technique is drift in every ATLAS co
   ]);
 });
 
-test('the repository README carries every statement and states each count once', () => {
-  const readme = readFileSync(join(here, '..', 'README.md'), 'utf8');
-  const { statements, rows, missing } = readmeStatements(readme);
+test('the repository README and the pages that took its text carry every statement and state each count once', () => {
+  const documents = [
+    { name: 'README', text: readFileSync(join(here, '..', 'README.md'), 'utf8') },
+    ...README_PAGES.map(page => ({ name: page, text: readFileSync(join(here, '..', page), 'utf8') })),
+  ];
+  const { statements, rows, missing } = readmeStatements(documents);
   assert.deepEqual(missing, []);
   assert.ok(rows.length >= 10, `${rows.length} table rows`);
   const byKey = new Map();
   for (const s of statements) byKey.set(s.key, [...(byKey.get(s.key) ?? []), s]);
   for (const [key, list] of byKey) {
-    assert.equal(new Set(list.map(s => s.stated)).size, 1, `${key}: ${list.map(s => `line ${s.line} says ${s.stated}`).join(', ')}`);
+    assert.equal(new Set(list.map(s => s.stated)).size, 1, `${key}: ${list.map(s => `${s.doc} line ${s.line} says ${s.stated}`).join(', ')}`);
+  }
+});
+
+test('a count on a page that took README text is compared, and its drift names the page', () => {
+  // The README keeps the badge and the introduction; the page holds the rest.
+  const split = README.indexOf('npm test                    # Full suite');
+  const documents = [
+    { name: 'README', text: README.slice(0, split) },
+    { name: 'docs/test-catalog.md', text: README.slice(split) },
+  ];
+  const { drift, compared } = compareCounts(suite(), documents, source);
+  assert.deepEqual(drift, []);
+  assert.equal(compared, compareCounts(suite(), README, source).compared);
+  const changed = [documents[0], { ...documents[1], text: documents[1].text.replace('| Pinned benchmark harness tests | 4 |', '| Pinned benchmark harness tests | 5 |') }];
+  assert.deepEqual(compareCounts(suite(), changed, source).drift, [
+    'docs/test-catalog.md line 22 (test table, Pinned benchmark harness tests) states 5 tests in src/benchmark/pinned; the suite has 4',
+  ]);
+  const removed = [documents[0], { ...documents[1], text: documents[1].text.replace(/^npm test .*$/m, 'npm test') }];
+  assert.match(compareCounts(suite(), removed, source).drift[0], /^could not find the README's Quick Start comment /);
+});
+
+test('the command reads the counts on the pages beside the README', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'check-test-counts-pages-'));
+  try {
+    const split = README.indexOf('npm test                    # Full suite');
+    mkdirSync(join(dir, 'docs'));
+    writeFileSync(join(dir, 'results.json'), JSON.stringify(suite()));
+    writeFileSync(join(dir, 'README.md'), README.slice(0, split));
+    writeFileSync(join(dir, 'docs', 'test-catalog.md'), README.slice(split).replace('**19 tests**', '**20 tests**'));
+    writeSources(dir);
+    const bad = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README.md')], { encoding: 'utf8' });
+    assert.equal(bad.status, 1);
+    assert.match(bad.stderr, /^DRIFT: docs\/test-catalog\.md line 5 \(Counts note\) states 20 tests in total; the suite has 19$/m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

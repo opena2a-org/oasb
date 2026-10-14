@@ -729,12 +729,62 @@ test('a note inside a code block or inline code does not mark a dated page', () 
   assert.match(r.stderr, /it must say "as of 2026-06-03" and link to the README for the current figures; /);
 });
 
-test('the dated pages this repository\'s README links say "as of" their date and link to the README', () => {
-  const readme = readFileSync(join(repo, 'README.md'), 'utf8');
-  assert.match(readme, /\]\(docs\/AUDIT-2026-06-03\.md\)/, 'the README no longer links the 2026-06-03 audit');
+test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {
+  const gaps = readFileSync(join(repo, 'docs', 'known-gaps.md'), 'utf8');
+  assert.match(gaps, /\]\(AUDIT-2026-06-03\.md\)/, 'docs/known-gaps.md no longer links the 2026-06-03 audit');
   const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
   assert.doesNotMatch(r.stderr, /is a dated page/);
   assert.equal(r.status, 0, r.stderr);
+});
+
+test('a dated page linked from a page that took README text is checked, and named by that page', () => {
+  const r = check('See [the gaps](docs/known-gaps.md).\n', {
+    'docs/known-gaps.md': '# Gaps\n\nThe audit: [audit](AUDIT-2026-06-03.md).\n',
+    ...datedPage('The audit of that day.\n'),
+  });
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^README: docs\/known-gaps\.md line 3: "AUDIT-2026-06-03\.md" is a dated page, so above its first H2 it must say "as of 2026-06-03" and link to the README for the current figures; /m,
+  );
+});
+
+test('a link on a page that took README text resolves from that page', () => {
+  const r = check('See [the catalog](docs/test-catalog.md).\n', {
+    'docs/test-catalog.md': '# Catalog\n\n[guide](guide.md#setup-steps), [README](../README.md#guide), [missing](nope.md) and [here](#nowhere).\n',
+  });
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.trim().split('\n'), [
+    'README: docs/test-catalog.md line 3: link target "nope.md" does not exist.',
+    'README: docs/test-catalog.md line 3: anchor "#nowhere" has no matching heading in docs/test-catalog.md.',
+  ]);
+});
+
+test('a page that took README text offers the Scanner Benchmark only as a recall-only comparison', () => {
+  const page = (text) => check('See [adapters](docs/adapters.md).\n', { 'docs/adapters.md': `# Adapters\n\n${text}\n` });
+  const offered = page('The Scanner Benchmark compares results across products.');
+  assert.equal(offered.status, 1);
+  assert.match(offered.stderr, /^README: docs\/adapters\.md line 3: the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison\./m);
+  assert.equal(page('The Scanner Benchmark gives a recall-only comparison across products.').status, 0);
+});
+
+test('the counts and the What Gets Tested table on a page that took README text are compared with the suite', () => {
+  const at = COUNTED.indexOf('## What Gets Tested');
+  const readme = COUNTED.slice(0, at);
+  const catalog = COUNTED.slice(at);
+  const ok = checkCounts(readme, SUITE, report(SUITE), { ...SOURCES, 'docs/test-catalog.md': catalog });
+  assert.equal(ok.status, 0, ok.stderr);
+  const bad = checkCounts(readme, SUITE, report(SUITE), {
+    ...SOURCES,
+    'docs/test-catalog.md': catalog.replace('| Pinned benchmark harness tests | 3 |', '| Pinned benchmark harness tests | 4 |').replace('Of the 10 tests', 'Of the 11 tests'),
+  });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /^README: docs\/test-catalog\.md line 13: the "Pinned benchmark harness tests" row says 4; the test report has 3 tests in src\/benchmark\/pinned\.$/m);
+  assert.match(bad.stderr, /^README: docs\/test-catalog\.md line 18: the MITRE ATLAS Coverage line says 11; the test report has 10 attack-scenario tests /m);
+  const gone = checkCounts(readme, SUITE, report(SUITE), SOURCES);
+  assert.equal(gone.status, 1);
+  assert.match(gone.stderr, /^README: the "What Gets Tested" table was not found; /m);
+  assert.match(gone.stderr, /^README: the MITRE ATLAS Coverage line \(.*\) was not found; /m);
 });
 
 // The tests in scripts/ are not vitest tests, so `npm test` reaches them
