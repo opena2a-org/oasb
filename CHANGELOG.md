@@ -792,9 +792,15 @@ stay on record here with the reason they changed.
   `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
   still does not fail it. No file under `src/` has either form. The check
   finds the first `expect` on a line once and looks for a matcher call
-  after it, so its time grows with the length of the line. Its pattern
-  looked back for `expect` from every `.`, in time that grew with the
-  square of that length: over 3 seconds on a line of 80,000 `.` characters.
+  after it, and finds the first `meta` word once and looks for a
+  `detected` key after it, so its time grows with the length of the line.
+  Its patterns took time that grew with the square of that length: the
+  matcher pattern looked back for `expect` from every `.`, over 3 seconds
+  on a line of 80,000 `.` characters, and the key pattern ran on from every
+  `meta` word to the end of the line, over 1 second on a line of 120,000
+  characters of `meta` words, and tried every split of a run of spaces
+  after `detected` between the spaces it allows before and after a `]`,
+  over 7 seconds on a run of 120,000 spaces.
   `fileEventFor` read an event without a path as the text
   `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
   matched such an event; it now matches only an event whose path contains

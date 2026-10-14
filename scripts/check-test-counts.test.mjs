@@ -343,8 +343,14 @@ const DETECTED_ASSIGNED = [
 const DETECTED_NAMED = /(['"\x60])detected\1\s*,/;
 // Object.assign(ctx.task.meta, { detected: true }), with the key quoted or
 // computed as well ({ 'detected': true }, { ['detected']: true }), in
-// shorthand ({ detected }), or a new meta object.
-const DETECTED_KEY = /\bmeta\b.*(?<![\w$])(['"\x60]?)detected\1\s*\]?\s*[:,}]/;
+// shorthand ({ detected }), or a new meta object: a `detected` key after a
+// `meta` word on the line, which hasDetectedKey looks for. The spaces
+// around the `]` of a computed key are matched as `\s*(?:\]\s*)?`: as
+// `\s*\]?\s*`, a run of spaces with no `]` can be split between the two
+// `\s*` in every way, and the pattern tries each split, in time that grows
+// with the square of the run's length.
+const META = /\bmeta\b/;
+const DETECTED_KEY = /(?<![\w$])(['"\x60]?)detected\1\s*(?:\]\s*)?[:,}]/g;
 // The call of an expect matcher: `.toEqual(`, `.toHaveProperty(`, after
 // `expect` on its line. A test reads the mark in its arguments, as in
 // `.toEqual({ detected: true })` and `.toHaveProperty('detected', true)`.
@@ -365,6 +371,19 @@ function beforeMatcher(line) {
   return call ? line.slice(0, expectAt + call.index) : line;
 }
 
+// Whether `line` has a DETECTED_KEY after a `meta` word. The first `meta`
+// word is found once and the key is searched for after it, so the time
+// grows with the length of the line: a pattern that runs on from each `meta`
+// word to the end of the line and back takes time that grows with its
+// square. The search starts after that word but reads the whole line, so
+// the key's look-behind still sees the character before the key.
+function hasDetectedKey(line) {
+  const metaAt = line.search(META);
+  if (metaAt < 0) return false;
+  DETECTED_KEY.lastIndex = metaAt + 'meta'.length;
+  return DETECTED_KEY.test(line);
+}
+
 // The lines of `text`, outside comments, that write a property named
 // `detected`, as markDetected writes it to a task's meta. An assignment
 // counts anywhere on a line. The quoted name before a comma, and an object
@@ -379,7 +398,7 @@ function detectedWrites(text) {
     .split('\n')
     .map((l, i) => `line ${i + 1}: ${l.trim()}`)
     .filter(l => !/^line \d+: (?:\/\/|\*)/.test(l)
-      && (DETECTED_ASSIGNED.some(re => re.test(l)) || [DETECTED_NAMED, DETECTED_KEY].some(re => re.test(beforeMatcher(l)))));
+      && (DETECTED_ASSIGNED.some(re => re.test(l)) || DETECTED_NAMED.test(beforeMatcher(l)) || hasDetectedKey(beforeMatcher(l))));
 }
 
 // A read of the mark that detectedWrites takes as a write, as CHANGELOG.md
@@ -537,16 +556,26 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
   for (const { written } of UNSEEN_MARKS) assert.deepEqual(detectedWrites(marked(written)), [], written);
 });
 
-test('the check of the mark reads a line of 120,000 characters in under a second, with `expect` on it or not', () => {
+test('the check of the mark reads a line of 120,000 characters in under a second, with `expect` or `meta` on it or not', () => {
   // A line of `.` characters: a matcher pattern that looks back for `expect`
   // from each `.` scans to the start of the line every time, and took over
-  // 3 seconds on 80,000 of them.
+  // 3 seconds on 80,000 of them. A line of `meta` words: a key pattern that
+  // runs on from each `meta` word to the end of the line and back took over
+  // a second on 120,000 characters of them. A run of spaces after
+  // `detected`: a key pattern with spaces allowed both before and after an
+  // optional `]` tries each split of the run between the two, and took over
+  // 7 seconds on 120,000 spaces.
   const dots = '.'.repeat(120_000);
+  const metas = 'meta '.repeat(24_000);
+  const spaces = ' '.repeat(120_000);
   for (const [line, writes] of [
     [dots, 0],
     [`expect(1)${dots}`, 0],
     [`${dots} expect(ctx.task.meta).toEqual({ detected: true });`, 0],
     [`${dots} Object.assign(ctx.task.meta, { detected: true });`, 1],
+    [metas, 0],
+    [`${metas}Object.assign(ctx.task.meta, { detected: true });`, 1],
+    [`Object.assign(ctx.task.meta, { detected${spaces}x });`, 0],
   ]) {
     const started = process.hrtime.bigint();
     const found = detectedWrites(line);
