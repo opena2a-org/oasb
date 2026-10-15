@@ -204,6 +204,12 @@ README's test counts do not include them.
   type-checks `src/` with its test files; fails on any type error it
   reports, or when `tsconfig.test.json` takes in no test file under
   `src/atomic`, `src/integration` or `src/e2e`.
+- `scripts/hmaignore.test.mjs`: the rules of `.hmaignore` that each leave
+  one `hackmyagent secure` check out of one file. Fails when such a rule
+  names a file that does not exist or gives no reason, when
+  `src/benchmark/pinned/inputs.ts` has no NEMO-002 rule, or when a negated
+  tarball digest comparison in that file is not followed by
+  `throw new PinError(`.
 
 ## The README checks on every pull request
 

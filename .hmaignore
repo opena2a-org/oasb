@@ -20,3 +20,4 @@ package.json:AIM-001 # OASB is a benchmark library, not an agent, so it has no a
 scripts/check-documented-commands.test.mjs:NEMO-009 # new Function() compiles what placeholdersToChecks returns for a code string written in the test itself
 results/2026-10-10-2a89ce5d/record.json:AST-CRED-003 # the flagged value is oasb.commit, the git commit the pinned run measured
 results/2026-10-10-d8306ef8/record.json:AST-CRED-003 # the flagged value is oasb.commit, the git commit the pinned run measured
+src/benchmark/pinned/inputs.ts:NEMO-002 # the flagged line throws PinError when a tarball's hash differs from the integrity package-lock.json names, and an entry with no integrity throws PinError before it, so no digest check is skipped
