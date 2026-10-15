@@ -933,6 +933,20 @@ stay on record here with the reason they changed.
   name carries a date (`docs/AUDIT-2026-06-03.md`) and, with the counts
   checked, on one in the README's MITRE ATLAS Coverage section; it does not
   read such a directory as a page.
+- `src/benchmark/pinned/runs-of-record.test.ts` leaves out a fenced code
+  block inside a list item or block quote when it looks for the newest run's
+  counts. It found fences with a pattern that matched only a fence starting
+  a line after at most three spaces, so with the HMA Full Pipeline row
+  deleted from the Latest Results table of `docs/pinned-benchmark.md` and a
+  numbered list item appended whose fenced block, indented four spaces,
+  holds `hma-pipeline`, a blank line and `192/270`, the test passed (8 of
+  8); it now fails on that edit (1 failed, 7 passed). It now finds fenced
+  blocks while it follows block quotes and list items, as it does for
+  indented code, and a fenced block ends with the list item or block quote
+  that holds it. A line that starts with three backticks and holds another
+  backtick is read as text with a code span; it opened a fenced block that
+  ran to a closing fence or to the end of the page. The file still holds 8
+  tests.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

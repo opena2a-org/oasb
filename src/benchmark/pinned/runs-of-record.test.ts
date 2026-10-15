@@ -85,19 +85,25 @@ function readJsonl<T>(path: string): T[] {
 }
 
 /**
- * The document with the text of its indented code blocks removed. A line's
- * text is indented code when it starts four or more columns past the content
- * of the block quote or list item it is in, or past the margin outside them,
- * and does not continue paragraph text. A block quote's content starts after
- * its `>` and the space that may follow it; a list item's after its marker and
- * the one to four spaces that follow it, and after five or more the text is
- * indented code. A tab advances to the next multiple of four columns.
+ * The document with the text of its fenced and indented code blocks removed.
+ * A line's text is indented code when it starts four or more columns past the
+ * content of the block quote or list item it is in, or past the margin outside
+ * them, and does not continue paragraph text. A block quote's content starts
+ * after its `>` and the space that may follow it; a list item's after its
+ * marker and the one to four spaces that follow it, and after five or more the
+ * text is indented code. A tab advances to the next multiple of four columns.
+ * A fenced code block opens on a line whose text starts with three or more
+ * backticks (and holds no other backtick) or three or more tildes, indented at
+ * most three columns past that content. It closes at a line holding only that
+ * character, as many times or more, and spaces, indented at most three columns
+ * past that content, or when the block quote or list item that holds it ends.
  */
-function withoutIndentedCode(markdown: string): string {
+function withoutCodeBlocks(markdown: string): string {
   // The open block quotes ('>') and list items (the column their content
   // starts at), outermost first.
   const open: Array<number | '>'> = [];
   let paragraph = false; // the line before is paragraph text the next line can continue
+  let fence: { mark: string; length: number } | undefined; // the open fenced code block's fence
   return markdown.split('\n').map(line => {
     let text = '';
     for (const ch of line) text += ch === '\t' ? ' '.repeat(4 - (text.length % 4)) : ch;
@@ -114,6 +120,17 @@ function withoutIndentedCode(markdown: string): string {
         column = block;
       }
       matched++;
+    }
+    if (fence) {
+      if (matched === open.length) {
+        const spaces = spacesAt(column);
+        const closing = /^(`{3,}|~{3,}) *$/.exec(text.slice(column + spaces));
+        if (spaces < 4 && closing && closing[1][0] === fence.mark && closing[1].length >= fence.length) fence = undefined;
+        return text.slice(0, column);
+      }
+      // A line that does not continue the block quote or list item holding
+      // the fence ends it, and the fenced block with it.
+      fence = undefined;
     }
     for (;;) {
       const spaces = spacesAt(column);
@@ -136,6 +153,13 @@ function withoutIndentedCode(markdown: string): string {
         column = at + (rest[1] === ' ' ? 2 : 1);
         paragraph = false;
         continue;
+      }
+      const opening = /^(?:`{3,}(?=[^`]*$)|~{3,})/.exec(rest);
+      if (opening) {
+        open.length = matched;
+        fence = { mark: opening[0][0], length: opening[0].length };
+        paragraph = false;
+        return text.slice(0, column);
       }
       const continues = paragraph && matched === open.length;
       if (/^(?:#{1,6}(?: |$)|([-*_])(?: *\1){2,} *$)/.test(rest) || (continues && /^(?:=+|-+) *$/.test(rest))) {
@@ -173,8 +197,7 @@ function withoutIndentedCode(markdown: string): string {
  * not one the page reports.
  */
 function outsideCode(markdown: string): string {
-  const unfenced = markdown.replace(/^ {0,3}((`|~)\2{2,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1\2*[ \t]*$|(?![\s\S]))/gm, '');
-  return withoutIndentedCode(unfenced).replace(/(?<!`)(`+)(?!`)(?:(?!\n[ \t]*\n)[\s\S])*?(?<!`)\1(?!`)/g, ' ');
+  return withoutCodeBlocks(markdown).replace(/(?<!`)(`+)(?!`)(?:(?!\n[ \t]*\n)[\s\S])*?(?<!`)\1(?!`)/g, ' ');
 }
 
 /** True when the document states the count outside code, written "192/270" or "192 of 270". */
@@ -244,8 +267,21 @@ describe('committed pinned runs', () => {
     expect(statesCount('written `192/270` or `192 of 270`, so', 192, 270)).toBe(false);
     expect(statesCount('```\n192/270\n```\n', 192, 270)).toBe(false);
     // A blank line ends an inline code span, so the code-span pattern leaves
-    // this block whole: only the fenced-block pattern removes its count.
+    // these blocks whole: only removing fenced code blocks removes their
+    // count, including a fence in a list item, which may be indented four or
+    // more columns from the margin.
     expect(statesCount('```text\nhma-pipeline\n\n192/270\n```\n', 192, 270)).toBe(false);
+    expect(statesCount('1. Counts:\n\n    ```\n    hma-pipeline\n\n    192/270\n    ```\n', 192, 270)).toBe(false);
+    // A fence with no closing line leaves the code-span pattern no closing
+    // backticks; the block runs to the end of the block quote that holds it.
+    expect(statesCount('> ```\n> 192/270\n', 192, 270)).toBe(false);
+    // The fenced block ends with the list item that holds it; a line indented
+    // four or more columns past the item's content is not a fence; and a line
+    // that starts with three backticks and holds another backtick is text with
+    // a code span, not a fence.
+    expect(statesCount('- ```\n  hma-pipeline\n\n192/270\n', 192, 270)).toBe(true);
+    expect(statesCount('- Text.\n\n      ```\n  192/270\n', 192, 270)).toBe(true);
+    expect(statesCount('``` `a` ```\n192/270\n', 192, 270)).toBe(true);
     // So is an indented code block; a line indented as far that continues
     // paragraph text, or that is text of a list item, is not code.
     expect(statesCount('Text.\n\n    hma-pipeline 192/270\n', 192, 270)).toBe(false);
