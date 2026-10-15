@@ -25,7 +25,10 @@ function check(body, pages = {}) {
   try {
     mkdirSync(join(dir, 'docs'));
     writeFileSync(join(dir, 'docs', 'guide.md'), '# Guide\n\n## Setup steps\n');
-    for (const [path, text] of Object.entries(pages)) writeFileSync(join(dir, path), text);
+    for (const [path, text] of Object.entries(pages)) {
+      mkdirSync(join(dir, dirname(path)), { recursive: true });
+      writeFileSync(join(dir, path), text);
+    }
     writeFileSync(join(dir, 'README.md'), HEAD + body);
     const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
     return { status: r.status, stderr: r.stderr };
@@ -279,6 +282,12 @@ test('a link with a malformed %-escape in the MITRE ATLAS Coverage section is na
   const r = checkCounts(withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](100%.md).'));
   assert.equal(r.status, 1);
   assert.equal(r.stderr.trim(), 'README: line 41: link target "100%.md" has a malformed %-escape; write a literal % as %25.');
+});
+
+test('a directory whose name ends in .md in the MITRE ATLAS Coverage section is not read as a page', () => {
+  const sources = { ...SOURCES, 'atlas.md/README.md': '# Mapping\n' };
+  const r = checkCounts(withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](atlas.md).'), SUITE, report(SUITE), sources);
+  assert.equal(r.status, 0, r.stderr);
 });
 
 // "constructor" and "toString" are inherited by every object, so a lookup
@@ -684,6 +693,18 @@ test('a link that writes a literal % as %25 resolves', () => {
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('an anchor in a link to a directory whose name ends in .md is named by its line, with no stack trace', () => {
+  const pages = { 'x.md/README.md': '# X\n\n## Setup\n' };
+  const r = check('See [a](x.md#100%) and [b](x.md#setup).\n', pages);
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.trim().split('\n'), [
+    'README: line 11: link target "x.md#100%" is a directory, so its anchor names no heading; link the page in x.md that holds the heading.',
+    'README: line 11: link target "x.md#setup" is a directory, so its anchor names no heading; link the page in x.md that holds the heading.',
+  ]);
+  const advised = check('See [a](x.md/README.md#setup) and [b](x.md).\n', pages);
+  assert.equal(advised.status, 0, advised.stderr);
+});
+
 const RECALL_ONLY_FAILURE = /the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison/;
 
 test('a paragraph that offers the Scanner Benchmark for comparing products fails until it says recall-only', () => {
@@ -773,6 +794,11 @@ test('a dated page is reported once, at the first line that links it', () => {
   assert.equal(r.status, 1);
   assert.equal(r.stderr.match(/is a dated page/g).length, 1, r.stderr);
   assert.match(r.stderr, DATED);
+});
+
+test('a directory whose name carries a date and ends in .md is not read as a dated page', () => {
+  const r = check(DATED_LINK, { 'docs/AUDIT-2026-06-03.md/README.md': '# Audit\n' });
+  assert.equal(r.status, 0, r.stderr);
 });
 
 test('a dated page that says "as of" its date and links to the README passes, on one line or wrapped', () => {

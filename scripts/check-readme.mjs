@@ -19,7 +19,10 @@
 //      a literal % as %25; a heading's anchor holds no %, so for an anchor it
 //      says to drop the %, and names the anchor that then matches a heading
 //      when one does (#100%-coverage, with a heading "100% coverage", is
-//      told to write #100-coverage).
+//      told to write #100-coverage). A link with an #anchor to a directory
+//      whose name ends in .md (x.md#setup) fails with its line, since a
+//      directory has no headings; checks 7 and 9 do not read such a
+//      directory as a page.
 //   5. every test count the README states equals the suite: the Quick Start
 //      comment, the Counts note, the per-group `npm run test:*`
 //      comments, the scenario counts in the prose, the MITRE ATLAS counts
@@ -77,7 +80,7 @@
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
 
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUALIFIERS, README_PAGES, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
@@ -244,6 +247,12 @@ function malformedAnchorAdvice(anchor, ids, where) {
   return `a heading's anchor has no %, so drop the % and link a heading in ${where}.`;
 }
 
+// Whether a link target is a page that can be read: a file, and not a
+// directory whose name ends in .md.
+function isPage(file) {
+  return statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
 const anchorCache = new Map();
 function anchorsOf(file) {
   if (!anchorCache.has(file)) anchorCache.set(file, anchors(parse(readFileSync(file, 'utf8'))));
@@ -292,13 +301,15 @@ for (const { file: doc, prefix, lines } of documents) {
       if (anchor && /\.md$/i.test(file)) {
         const id = decoded(anchor);
         const where = pathPart || prefix.trim() || 'README.md';
-        if (id === null) {
+        if (!isPage(file)) {
+          fail(`${prefix}line ${n}: link target "${target}" is a directory, so its anchor names no heading; link the page in ${pathPart} that holds the heading.`);
+        } else if (id === null) {
           fail(`${prefix}line ${n}: anchor "#${anchor}" has a malformed %-escape; ${malformedAnchorAdvice(anchor, anchorsOf(file), where)}`);
         } else if (!anchorsOf(file).has(id.toLowerCase())) {
           fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${where}.`);
         }
       }
-      if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file)) {
+      if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file) && isPage(file)) {
         datedPages.set(file, { at: `${prefix}line ${n}`, shown: pathPart });
       }
     }
@@ -557,7 +568,8 @@ function checkSkippedCoverage(tests) {
       const path = decoded(pathPart);
       if (path === null) continue; // a malformed %-escape is reported by the link check
       const file = resolve(dirname(readmePath), path);
-      if (seen.has(file) || !existsSync(file)) continue; // a missing page is reported by the link check
+      // A missing page is reported by the link check; a directory is not a page.
+      if (seen.has(file) || !isPage(file)) continue;
       seen.add(file);
       pages.push({ lines: parse(readFileSync(file, 'utf8')), prefix: `${pathPart} ` });
     }

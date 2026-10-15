@@ -925,6 +925,14 @@ stay on record here with the reason they changed.
   (`scripts/readme-counts.mjs`) has no tests badge entry, and
   `npm run check:readme` fails on a static shields.io badge in the README's
   prose whose message starts with a digit, such as `tests-404%20passing`.
+- `npm run check:readme` reports a link with an anchor to a directory whose
+  name ends in `.md`, such as `[a](x.md#setup)` or `[a](x.md#100%)`, by its
+  line and says to link the page in that directory that holds the heading;
+  on such a link it ended with `Error: EISDIR` and a stack trace. It ended
+  with the same error on a link without an anchor to such a directory whose
+  name carries a date (`docs/AUDIT-2026-06-03.md`) and, with the counts
+  checked, on one in the README's MITRE ATLAS Coverage section; it does not
+  read such a directory as a page.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
