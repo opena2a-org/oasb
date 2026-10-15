@@ -85,16 +85,96 @@ function readJsonl<T>(path: string): T[] {
 }
 
 /**
- * The text of a Markdown document outside code: fenced code blocks and inline
- * code spans are removed. A page writes examples and syntax as code, and
- * docs/pinned-benchmark.md writes the form of a count in its description of
- * this test as `192/270`, so a count found only in code is not one the page
- * reports.
+ * The document with the text of its indented code blocks removed. A line's
+ * text is indented code when it starts four or more columns past the content
+ * of the block quote or list item it is in, or past the margin outside them,
+ * and does not continue paragraph text. A block quote's content starts after
+ * its `>` and the space that may follow it; a list item's after its marker and
+ * the one to four spaces that follow it, and after five or more the text is
+ * indented code. A tab advances to the next multiple of four columns.
+ */
+function withoutIndentedCode(markdown: string): string {
+  // The open block quotes ('>') and list items (the column their content
+  // starts at), outermost first.
+  const open: Array<number | '>'> = [];
+  let paragraph = false; // the line before is paragraph text the next line can continue
+  return markdown.split('\n').map(line => {
+    let text = '';
+    for (const ch of line) text += ch === '\t' ? ' '.repeat(4 - (text.length % 4)) : ch;
+    const spacesAt = (column: number) => /^ */.exec(text.slice(column))![0].length;
+    let column = 0;
+    let matched = 0;
+    for (const block of open) {
+      if (block === '>') {
+        const quote = /^ {0,3}> ?/.exec(text.slice(column));
+        if (!quote) break;
+        column += quote[0].length;
+      } else if (column + spacesAt(column) < text.length) {
+        if (column + spacesAt(column) < block) break;
+        column = block;
+      }
+      matched++;
+    }
+    for (;;) {
+      const spaces = spacesAt(column);
+      const at = column + spaces;
+      if (at >= text.length) {
+        open.length = matched;
+        paragraph = false;
+        return line;
+      }
+      if (spaces >= 4) {
+        if (paragraph) return line;
+        open.length = matched;
+        return text.slice(0, column);
+      }
+      const rest = text.slice(at);
+      if (rest.startsWith('>')) {
+        open.length = matched;
+        open.push('>');
+        matched++;
+        column = at + (rest[1] === ' ' ? 2 : 1);
+        paragraph = false;
+        continue;
+      }
+      const continues = paragraph && matched === open.length;
+      if (/^(?:#{1,6}(?: |$)|([-*_])(?: *\1){2,} *$)/.test(rest) || (continues && /^(?:=+|-+) *$/.test(rest))) {
+        open.length = matched;
+        paragraph = false;
+        return line;
+      }
+      const marker = /^(?:[-+*]|(\d{1,9})[.)])(?= |$)/.exec(rest);
+      if (marker) {
+        const gap = spacesAt(at + marker[0].length);
+        const empty = at + marker[0].length + gap >= text.length;
+        // A list item starts on a line that continues paragraph text only
+        // when it has text and is a bullet or starts at 1.
+        if (!continues || (!empty && (marker[1] === undefined || Number(marker[1]) === 1))) {
+          open.length = matched;
+          column = at + marker[0].length + (empty || gap > 4 ? 1 : gap);
+          open.push(column);
+          matched++;
+          paragraph = false;
+          continue;
+        }
+      }
+      if (!paragraph) open.length = matched;
+      paragraph = true;
+      return line;
+    }
+  }).join('\n');
+}
+
+/**
+ * The text of a Markdown document outside code: fenced code blocks, indented
+ * code blocks and inline code spans are removed. A page writes examples and
+ * syntax as code, and docs/pinned-benchmark.md writes the form of a count in
+ * its description of this test as `192/270`, so a count found only in code is
+ * not one the page reports.
  */
 function outsideCode(markdown: string): string {
-  return markdown
-    .replace(/^ {0,3}((`|~)\2{2,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1\2*[ \t]*$|(?![\s\S]))/gm, '')
-    .replace(/(?<!`)(`+)(?!`)(?:(?!\n[ \t]*\n)[\s\S])*?(?<!`)\1(?!`)/g, ' ');
+  const unfenced = markdown.replace(/^ {0,3}((`|~)\2{2,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1\2*[ \t]*$|(?![\s\S]))/gm, '');
+  return withoutIndentedCode(unfenced).replace(/(?<!`)(`+)(?!`)(?:(?!\n[ \t]*\n)[\s\S])*?(?<!`)\1(?!`)/g, ' ');
 }
 
 /** True when the document states the count outside code, written "192/270" or "192 of 270". */
@@ -163,6 +243,15 @@ describe('committed pinned runs', () => {
     // docs/pinned-benchmark.md writes it, is not a count the page states.
     expect(statesCount('written `192/270` or `192 of 270`, so', 192, 270)).toBe(false);
     expect(statesCount('```\n192/270\n```\n', 192, 270)).toBe(false);
+    // So is an indented code block; a line indented as far that continues
+    // paragraph text, or that is text of a list item, is not code.
+    expect(statesCount('Text.\n\n    hma-pipeline 192/270\n', 192, 270)).toBe(false);
+    expect(statesCount('## Counts\n\thma-pipeline 192/270\n', 192, 270)).toBe(false);
+    expect(statesCount('- A run:\n\n      192/270\n', 192, 270)).toBe(false);
+    expect(statesCount('-     192/270\n', 192, 270)).toBe(false);
+    expect(statesCount('> Counts:\n>\n>     192/270\n', 192, 270)).toBe(false);
+    expect(statesCount('The full pipeline detects\n    192/270 fixtures.\n', 192, 270)).toBe(true);
+    expect(statesCount('1. The full pipeline\n\n    detects 192/270.\n', 192, 270)).toBe(true);
     expect(statesCount('| HMA Full Pipeline | **71.1%** (192/270) |', 192, 270)).toBe(true);
     expect(statesCount('`aria` 58/89 and 17 of 86 `dvaa`', 17, 86)).toBe(true);
     expect(runs.length).toBeGreaterThan(0);

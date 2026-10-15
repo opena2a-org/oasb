@@ -889,6 +889,16 @@ stay on record here with the reason they changed.
   as `%25`; on such a link it ended with an uncaught `URIError` and a stack
   trace. This holds in the README, on the pages that took its text and, with
   the counts checked, in the README's MITRE ATLAS Coverage section.
+- `src/benchmark/pinned/runs-of-record.test.ts` also leaves out indented code
+  blocks when it looks for the newest run's counts on
+  `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md`: text that starts
+  four or more columns past the margin, or past the content of the list item
+  or block quote it is in, and does not continue paragraph text. With the HMA
+  Full Pipeline row deleted from the page's Latest Results table and
+  `hma-pipeline 192/270` added at the end of the page as an indented code
+  block, the test passed (8 of 8); it now fails on that edit. The page says a
+  count written only in a code block does not count. The file still holds 8
+  tests.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
