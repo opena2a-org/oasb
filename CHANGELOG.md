@@ -899,6 +899,14 @@ stay on record here with the reason they changed.
   block, the test passed (8 of 8); it now fails on that edit. The page says a
   count written only in a code block does not count. The file still holds 8
   tests.
+- `src/benchmark/pinned/runs-of-record.test.ts` checks that a count in a
+  fenced code block holding a blank line, a `text` block of `hma-pipeline`,
+  a blank line and `192/270`, is not a stated count. Its one fenced-block
+  case had no blank line, so the code-span pattern of `outsideCode` removed
+  that block too, and with the fenced-block pattern deleted the file still
+  passed (8 of 8). The code-span pattern does not cross a blank line, so
+  the new case fails on that edit (1 failed, 7 passed). The file still
+  holds 8 tests.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

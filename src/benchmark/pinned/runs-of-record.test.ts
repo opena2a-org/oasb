@@ -243,6 +243,9 @@ describe('committed pinned runs', () => {
     // docs/pinned-benchmark.md writes it, is not a count the page states.
     expect(statesCount('written `192/270` or `192 of 270`, so', 192, 270)).toBe(false);
     expect(statesCount('```\n192/270\n```\n', 192, 270)).toBe(false);
+    // A blank line ends an inline code span, so the code-span pattern leaves
+    // this block whole: only the fenced-block pattern removes its count.
+    expect(statesCount('```text\nhma-pipeline\n\n192/270\n```\n', 192, 270)).toBe(false);
     // So is an indented code block; a line indented as far that continues
     // paragraph text, or that is text of a list item, is not code.
     expect(statesCount('Text.\n\n    hma-pipeline 192/270\n', 192, 270)).toBe(false);
