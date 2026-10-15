@@ -8,7 +8,7 @@
 
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { connect } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -183,8 +183,13 @@ export interface VerifiedHackmyagent {
   version: string;
   integrity: string;
   tarballSha256: string;
-  /** sha256 of package-lock.json in the --hma directory, when present. */
-  dependencyLockSha256: string | null;
+  /** sha256 of package-lock.json in the --hma directory. */
+  dependencyLockSha256: string;
+  /**
+   * The packages of package-lock.json whose installed files were compared
+   * with their tarballs (hackmyagent included), and the number of files.
+   */
+  dependencies: { packages: number; files: number };
   /** Absolute path of the installed package directory the harness loads. */
   packageDir: string;
 }
@@ -206,9 +211,13 @@ function integrityOf(bytes: Buffer, algorithm: string): string {
  * The --hma directory holds `hackmyagent-<version>.tgz` (from `npm pack`) and
  * `node_modules/hackmyagent` (from `npm install ./hackmyagent-<version>.tgz`).
  * The tarball must match the pinned integrity, and every file of the installed
- * package must be the file in that tarball, with no files added.
+ * package must be the file in that tarball, with no files added. The rest of
+ * the install is checked by verifyDependencies.
  */
-export function verifyHackmyagent(hmaDir: string, pin: HackmyagentPin): VerifiedHackmyagent {
+export function verifyHackmyagent(
+  hmaDir: string,
+  pin: HackmyagentPin,
+): Omit<VerifiedHackmyagent, 'dependencyLockSha256' | 'dependencies'> {
   const tarball = join(hmaDir, tarballName(pin.version));
   if (!existsSync(tarball)) {
     throw new PinError(
@@ -276,14 +285,224 @@ export function verifyHackmyagent(hmaDir: string, pin: HackmyagentPin): Verified
     rmSync(scratch, { recursive: true, force: true });
   }
 
-  const lock = join(hmaDir, 'package-lock.json');
   return {
     version: pin.version,
     integrity: pin.integrity,
     tarballSha256: sha256Hex(bytes),
-    dependencyLockSha256: existsSync(lock) ? sha256Hex(readFileSync(lock)) : null,
     packageDir,
   };
+}
+
+/** The npm cache directory (`npm config get cache`), as npm resolves it in `hmaDir`. */
+export function defaultNpmCacheDir(hmaDir: string): string {
+  let dir = '';
+  try {
+    dir = execFileSync('npm', ['config', 'get', 'cache'], {
+      // A missing --hma directory is reported by the hackmyagent check.
+      cwd: existsSync(hmaDir) ? hmaDir : undefined,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    dir = '';
+  }
+  if (!dir) {
+    throw new PinError(
+      'unpinned input: `npm config get cache` did not name the npm cache directory, which holds the tarballs ' +
+        'the installed dependencies are compared with',
+    );
+  }
+  return dir;
+}
+
+interface LockEntry {
+  resolved?: unknown;
+  integrity?: unknown;
+  link?: unknown;
+  inBundle?: unknown;
+  optional?: unknown;
+}
+
+/** The algorithms an integrity value can use, strongest first. */
+const INTEGRITY_ALGORITHMS: readonly string[] = ['sha512', 'sha384', 'sha256', 'sha1'];
+
+/** The hashes of an integrity value, strongest algorithm first. */
+function integrityHashes(integrity: string): Array<{ algorithm: string; digest: Buffer }> {
+  const hashes: Array<{ algorithm: string; digest: Buffer }> = [];
+  for (const part of integrity.trim().split(/\s+/)) {
+    const m = /^(sha512|sha384|sha256|sha1)-([A-Za-z0-9+/]+={0,2})(\?.*)?$/.exec(part);
+    if (m) hashes.push({ algorithm: m[1], digest: Buffer.from(m[2], 'base64') });
+  }
+  return hashes.sort((a, b) => INTEGRITY_ALGORITHMS.indexOf(a.algorithm) - INTEGRITY_ALGORITHMS.indexOf(b.algorithm));
+}
+
+/** Where npm's cache keeps the content with this hash (`_cacache/content-v2`). */
+function cachedContentPath(npmCacheDir: string, algorithm: string, digest: Buffer): string {
+  const hex = digest.toString('hex');
+  return join(npmCacheDir, '_cacache', 'content-v2', algorithm, hex.slice(0, 2), hex.slice(2, 4), hex.slice(4));
+}
+
+/**
+ * Every file under `<hmaDir>/node_modules` except the `.bin` directories npm
+ * writes command links into and npm's own `node_modules/.package-lock.json`,
+ * as paths relative to `hmaDir`, sorted by byte order.
+ */
+function installedFiles(hmaDir: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, rel: string) => {
+    for (const entry of readdirSync(dir)) {
+      const relPath = `${rel}/${entry}`;
+      if (relPath === 'node_modules/.package-lock.json') continue;
+      const abs = join(dir, entry);
+      if (lstatSync(abs).isDirectory()) {
+        if (!(entry === '.bin' && rel.split('/').pop() === 'node_modules')) walk(abs, relPath);
+      } else {
+        out.push(relPath);
+      }
+    }
+  };
+  if (existsSync(join(hmaDir, 'node_modules'))) walk(join(hmaDir, 'node_modules'), 'node_modules');
+  return out.sort(byPath);
+}
+
+/**
+ * package-lock.json in the --hma directory names each installed package and
+ * the integrity of its tarball. Each tarball is read (a `file:` tarball from
+ * the --hma directory, any other from the npm cache by its integrity), its
+ * hash is compared with that integrity, and each regular file in it must be
+ * the installed file. A file under node_modules that is in none of these
+ * tarballs is refused, and so is a missing lockfile. A package npm marks
+ * optional and did not install is left out. The files of a bundled package
+ * are checked as part of the tarball that bundles it.
+ */
+export function verifyDependencies(
+  hmaDir: string,
+  pin: HackmyagentPin,
+  npmCacheDir: string,
+): Pick<VerifiedHackmyagent, 'dependencyLockSha256' | 'dependencies'> {
+  const lockPath = join(hmaDir, 'package-lock.json');
+  if (!existsSync(lockPath)) {
+    throw new PinError(
+      'unpinned input: the --hma directory has no package-lock.json, so the installed dependencies cannot be ' +
+        `compared with the tarballs npm installed them from; install with: npm install ./${tarballName(pin.version)}`,
+    );
+  }
+  const lockBytes = readFileSync(lockPath);
+  let lock: { packages?: unknown };
+  try {
+    lock = JSON.parse(lockBytes.toString('utf-8'));
+  } catch {
+    throw new PinError('unpinned input: package-lock.json in the --hma directory is not valid JSON');
+  }
+  const packages = lock?.packages;
+  if (!packages || typeof packages !== 'object' || Array.isArray(packages)) {
+    throw new PinError(
+      'unpinned input: package-lock.json in the --hma directory has no "packages" map (npm 7 and later write ' +
+        `one); install with: npm install ./${tarballName(pin.version)}`,
+    );
+  }
+
+  // Find the tarball of every package first, so one refusal names all the
+  // tarballs the npm cache is missing.
+  const tarballs: Array<{ key: string; tarball: string; hash: { algorithm: string; digest: Buffer } }> = [];
+  const notCached: string[] = [];
+  for (const [key, value] of Object.entries(packages as Record<string, LockEntry>)) {
+    if (!key.startsWith('node_modules/')) continue;
+    const entry = (value ?? {}) as LockEntry;
+    if (entry.inBundle) continue;
+    if (entry.link) {
+      throw new PinError(
+        `unpinned input: package-lock.json installs ${key} as a link to ${String(entry.resolved)}, ` +
+          'not from a tarball whose integrity it names',
+      );
+    }
+    if (entry.optional && !existsSync(join(hmaDir, key))) continue;
+    const hashes = typeof entry.integrity === 'string' ? integrityHashes(entry.integrity) : [];
+    if (hashes.length === 0) {
+      throw new PinError(
+        `unpinned input: package-lock.json names no integrity for ${key}, so its installed files cannot be ` +
+          'compared with a tarball',
+      );
+    }
+    if (typeof entry.resolved === 'string' && entry.resolved.startsWith('file:')) {
+      const tarball = resolve(hmaDir, entry.resolved.slice('file:'.length));
+      if (!existsSync(tarball)) {
+        throw new PinError(`unpinned input: ${entry.resolved}, which package-lock.json installs ${key} from, does not exist`);
+      }
+      tarballs.push({ key, tarball, hash: hashes[0] });
+      continue;
+    }
+    const cached = hashes
+      .map(hash => ({ key, tarball: cachedContentPath(npmCacheDir, hash.algorithm, hash.digest), hash }))
+      .find(c => existsSync(c.tarball));
+    if (cached) tarballs.push(cached);
+    else notCached.push(key);
+  }
+  if (notCached.length > 0) {
+    throw new PinError(
+      `unpinned input: the npm cache at ${npmCacheDir} holds no tarball with the integrity package-lock.json ` +
+        `names for ${shortList(notCached)}; reinstall in the --hma directory with: npm ci, which fetches them ` +
+        'into the cache',
+    );
+  }
+
+  const expected = new Set<string>();
+  const changed: string[] = [];
+  let compared = 0;
+  const scratch = mkdtempSync(join(tmpdir(), 'oasb-deps-'));
+  try {
+    for (const { key, tarball, hash } of tarballs) {
+      const bytes = readFileSync(tarball);
+      if (!createHash(hash.algorithm).update(bytes).digest().equals(hash.digest)) {
+        throw new PinError(
+          `pinned input mismatch: the tarball read for ${key} (${tarball}) does not have the integrity ` +
+            `package-lock.json names, ${hash.algorithm}-${hash.digest.toString('base64')}`,
+        );
+      }
+
+      // The bytes whose hash was just compared are the ones unpacked. npm
+      // drops the top directory of each tarball path, and so does this.
+      const unpacked = join(scratch, String(compared));
+      mkdirSync(unpacked);
+      try {
+        execFileSync('tar', ['-xzf', '-', '-C', unpacked, '--strip-components=1'], {
+          input: bytes,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } catch {
+        throw new PinError(`pinned input mismatch: the tarball read for ${key} (${tarball}) is not a readable npm tarball`);
+      }
+      // Only regular files are compared: a link in the install is not a file
+      // of any tarball, so it is refused below as an added file.
+      for (const rel of listFiles(unpacked).filter(r => lstatSync(join(unpacked, r)).isFile())) {
+        const path = `${key}/${rel}`;
+        expected.add(path);
+        const installed = join(hmaDir, path);
+        if (!existsSync(installed) || !lstatSync(installed).isFile() || !readFileSync(installed).equals(readFileSync(join(unpacked, rel)))) {
+          changed.push(path);
+        }
+      }
+      rmSync(unpacked, { recursive: true, force: true });
+      compared++;
+    }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+
+  if (changed.length > 0) {
+    throw new PinError(
+      `dirty input tree: installed dependency files differ from the tarballs package-lock.json names ` +
+        `(${shortList(changed.sort(byPath))}); reinstall in the --hma directory with: npm ci`,
+    );
+  }
+  const added = installedFiles(hmaDir).filter(rel => !expected.has(rel));
+  if (added.length > 0) {
+    throw new PinError(
+      `dirty input tree: the install in the --hma directory has files that are in none of the tarballs ` +
+        `package-lock.json names (${shortList(added)}); reinstall in the --hma directory with: npm ci`,
+    );
+  }
+  return { dependencyLockSha256: sha256Hex(lockBytes), dependencies: { packages: compared, files: expected.size } };
 }
 
 /** Read the version and integrity of the single hackmyagent tarball in `hmaDir`. */

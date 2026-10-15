@@ -4,7 +4,9 @@ A pinned run measures one hackmyagent release against the OASB v2 corpus and
 the DVAA scenarios (each directory under `scenarios/` that has an
 `expected-checks.json`, except `examples`). Before it scans anything it checks
 four inputs: the hackmyagent package, the DVAA checkout and the NanoMind model
-directory against a pin file, and the OASB checkout against its own commit. It
+directory against a pin file, and the OASB checkout against its own commit.
+It also compares the packages npm installed in the hackmyagent directory with
+the tarballs whose integrity `package-lock.json` names. It
 refuses to start when one of them fails its check, or when the scanner could
 take results from a model source the pin file does not cover, and it writes a
 new results directory whose run record names the versions and hashes it
@@ -28,6 +30,7 @@ latest results.
 | Input | Pinned by | The run is refused when |
 |---|---|---|
 | hackmyagent | npm version and tarball integrity | the tarball is missing or its integrity differs from the pin; a file of the installed package was changed, removed or added |
+| hackmyagent's dependencies | the integrity values in `package-lock.json` in the `--hma` directory | `package-lock.json` is missing or has no `packages` map; a package it names has no integrity value or is installed as a link; the npm cache holds no tarball with that integrity, or the tarball read does not have it; a file under `node_modules` differs from the file in its tarball, is missing, or is in none of the tarballs. An optional package npm did not install is left out, a bundled package is compared as part of the tarball that bundles it, and the `.bin` directories directly under a `node_modules` directory and `node_modules/.package-lock.json` are not compared |
 | DVAA | full commit id | HEAD is another commit; the checkout has modified or untracked files; a file the scenario loader reads is not the committed file (this catches git-ignored files); the commit has no `scenarios/` directory or an `expected-checks.json` that is not valid JSON |
 | NanoMind models | manifest sha256 of `~/.nanomind/models` | a model file was added, removed or changed; the directory is missing or empty; the scanner's classifier reports a model or tokenizer file that is not a file of that directory; the classifier model does not load, so the scanner would score every sample with its word list; the classifier has no `load`, `ensureReady`, `classify` or `onnxSession` member, so the harness cannot tell whether the model or the word list scores a sample (exit 2); after the scan, the classifier's model session is not the one it loaded when the run started, or the classifier no longer reports its model ready (exit 3, nothing written) |
 | OASB scoring code and corpus | the OASB commit | the checkout has uncommitted changes outside `results/`; `corpus/v2.json` is not tracked, or the bytes read from it are not the committed file; a tracked file is marked skip-worktree or assume-unchanged, which hides a change from `git status` |
@@ -49,8 +52,9 @@ checked.
 A version range, tag, branch name, short commit id or placeholder value in the
 pin file is refused. Every check runs before anything is scanned. After the
 scan the hackmyagent check, the NanoMind check (the files the classifier
-reports included), the DVAA commit and status check and the other model
-sources check run again, and a run that fails one of them writes nothing. The
+reports included), the DVAA commit and status check, the other model
+sources check and the dependency check run again, and a run that fails one of
+them writes nothing. The
 OASB checkout and the per-file DVAA comparison are not checked a second time.
 
 The daemon address is checked again after the scan, but a daemon can come up
@@ -94,17 +98,15 @@ that release has `neuralInferences` 0.
 The checks cover the inputs in the table above. They do not cover everything
 the scanner reads:
 
-- **The scanner's dependencies.** The packages npm installs for hackmyagent
-  (the other directories under `node_modules` in the `--hma` directory, and a
-  `node_modules` directory inside the installed package) are not compared
-  with anything. The run records the sha256 of `package-lock.json` in the
-  `--hma` directory when the file exists, and nothing else about them. npm
+- **The dependency lockfile.** The installed dependencies are compared with
+  the tarballs `package-lock.json` names, but the pin file does not cover
+  `package-lock.json` itself: a lockfile that names other tarballs passes
+  when the npm cache holds them. The run records the sha256 of
+  `package-lock.json` and the number of packages and files it compared. npm
   writes the name of the `--hma` directory into the top-level `name` field of
   that file, so the sha256 also depends on the directory name: the same
   tarball installed in a directory with another name gives another value.
-  The steps below name it `hma-<version>`. The
-  one check among them is the second classifier check above, which looks in
-  three directories of `node_modules/nanomind`.
+  The steps below name it `hma-<version>`.
 - **The runtime.** The Node.js version, platform and architecture are
   recorded in `record.json`, not pinned.
 
@@ -122,6 +124,16 @@ mkdir hma-<version> && cd hma-<version>
 npm pack hackmyagent@<version>              # writes hackmyagent-<version>.tgz
 npm install ./hackmyagent-<version>.tgz     # writes node_modules/hackmyagent
 ```
+
+`npm install` also writes `package-lock.json` and keeps each dependency
+tarball in the npm cache (`npm config get cache`), where the run reads it.
+Keep both. Outside the entries the table above leaves out, a file under
+`node_modules` that is in no tarball (one a package's install script wrote,
+for example) or that was changed after the install is refused. When the
+cache no longer holds a tarball, or the install was changed, `npm ci` in
+that directory installs again from `package-lock.json` and fetches the
+tarballs into the cache. With npm 11.19.0 and hackmyagent 0.33.2, an install made
+with these steps passes the check: 132 packages and 6255 files compared.
 
 DVAA: a clone of [damn-vulnerable-ai-agent](https://github.com/opena2a-org/damn-vulnerable-ai-agent)
 checked out at the commit you will pin, with no local changes.
@@ -142,8 +154,8 @@ run from a directory that has no `models/` directory.
 ## Write the pin file
 
 `--observe` prints the pin values the inputs have now and the problems it
-finds in the hackmyagent install, the DVAA checkout, the model directory and
-the scanner's other model sources. It does not load the scanner, so it does
+finds in the hackmyagent install and its dependencies, the DVAA checkout, the
+model directory and the scanner's other model sources. It does not load the scanner, so it does
 not report which model files the classifier would load. It scans nothing and
 writes nothing. Run it from the OASB checkout and write its output to a file
 outside the checkout:
@@ -181,7 +193,7 @@ creation, so a run never writes over an earlier result.
 | `corpus-predictions.jsonl` | one line per corpus sample and adapter: sample id, label, category, source, artifact type, verdict, predicted category, and what scored it (`nanomind`) |
 | `dvaa-predictions.jsonl` | one line per DVAA scenario: detected or not, attack findings, the verdict for each vulnerable file, and what scored it (`nanomind`) |
 | `summary.json` | detection over the malicious class per adapter and per category, the DVAA-sourced corpus samples, the DVAA scenarios, and what scored the samples per adapter and for DVAA (`nanomindUse`). The adapters that use NanoMind name the model by the `version` in `nanomind-version.json` of the verified model directory, or, when the directory has no version, by its manifest sha256 |
-| `record.json` | the hackmyagent version, tarball integrity and tarball sha256, the dependency lockfile sha256, the DVAA commit, the NanoMind manifest sha256 and file list, the OASB commit and corpus sha256, the other model sources checked, what scored samples over the whole run (`nanomindUse`), and the Node.js version |
+| `record.json` | the hackmyagent version, tarball integrity and tarball sha256, the dependency lockfile sha256 and the number of packages and files compared with their tarballs (`dependencies`), the DVAA commit, the NanoMind manifest sha256 and file list, the OASB commit and corpus sha256, the other model sources checked, what scored samples over the whole run (`nanomindUse`), and the Node.js version |
 
 The record schema is `oasb-pinned-run/v2`. A `oasb-pinned-run/v1` run, such as
 `results/2026-10-10-d8306ef8/`, does not record what scored its samples.
@@ -292,8 +304,9 @@ npx tsx scripts/run-dvaa-benchmark.ts --unpinned                                
 A pinned run takes hackmyagent by npm version and tarball integrity, DVAA by
 commit and the NanoMind models by manifest sha256. It checks those inputs and
 the OASB checkout before it scans anything, refuses the run when one fails its
-check, and never overwrites a results file. It does not verify the scanner's
-dependencies or each place the scanner can take a model result from;
+check, and never overwrites a results file. It compares the scanner's
+installed dependencies with the tarballs its lockfile names, and does not
+verify everything the scanner reads;
 [docs/pinned-benchmark.md](#what-a-run-does-not-verify) lists what a run checks
 and what it does not. The development runners load whatever sibling checkouts
 are present, so their numbers are not figures of record.

@@ -23,19 +23,24 @@ stay on record here with the reason they changed.
   unpinned model sources present (`nanomind-tme.bin` and `tokenizer.json` in
   `~/.opena2a/nanomind/models` or in `models-tme-v3`, `models-tme-v2` or
   `models-tme` under `node_modules/nanomind/training` in the `--hma`
-  directory, or anything accepting a connection at `127.0.0.1:47200`). Each
+  directory, or anything accepting a connection at `127.0.0.1:47200`). It
+  also exits 2 when `package-lock.json` is missing from the `--hma` directory,
+  or when a file under its `node_modules` is not the file in the tarball
+  whose integrity that lockfile names (read from the npm cache) or is in none
+  of those tarballs. Each
   run writes a
   new `results/<date>-<runid>/` holding
   per-sample predictions, a summary of detection over the malicious class and
   a run record naming the versions and hashes of the inputs it checked, and
   never writes to an existing file. A run writes nothing and exits 3 when the
-  hackmyagent install, the model directory, the DVAA checkout or the other
-  model sources check fails again after the scan. `--observe` prints the pin
+  hackmyagent install, the model directory, the DVAA checkout, the other
+  model sources or the installed dependencies check fails again after the
+  scan. `--observe` prints the pin
   values of a set of inputs on stdout and, on stderr, the `npm view` command
   whose output must equal the printed integrity; it reports a tarball whose
   name does not carry an exact version (`hackmyagent-<x.y.z>.tgz`) as a
-  problem (exit 2) and prints no command for it. A pinned run does not verify
-  the scanner's dependencies (it records the sha256 of their lockfile);
+  problem (exit 2) and prints no command for it, and it reports an installed
+  dependency file that differs from its tarball as a problem.
   `docs/pinned-benchmark.md` lists what a run checks and what it does not.
 - `results/2026-10-10-d8306ef8/` is the first pinned run of record:
   hackmyagent 0.33.2, the npm release current on 2026-10-10, on the v2 corpus

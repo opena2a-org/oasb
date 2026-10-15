@@ -14,8 +14,9 @@
  * NanoMind daemon) must be absent. The scanner must load its classifier model,
  * and the daemon address must answer no request while the run scans. An
  * unpinned, mismatched or dirty input stops the run before anything is
- * scanned. The scanner's dependencies are not checked; docs/pinned-benchmark.md
- * lists what a run verifies and what it does not. The run writes a new
+ * scanned. The scanner's installed dependencies are compared with the tarballs
+ * whose integrity package-lock.json names; docs/pinned-benchmark.md lists what
+ * a run verifies and what it does not. The run writes a new
  * `results/<date>-<runid>/` directory holding per-sample predictions, a
  * summary and a run record, and never writes to an existing file or
  * directory. Each prediction says what scored the sample: the classifier
@@ -39,9 +40,11 @@ import {
 import type { ScannerAdapter } from '../runner.js';
 import { ATTACK_CATEGORIES, type BenchmarkDataset, type BenchmarkSample, type ScannerResult } from '../types.js';
 import {
+  defaultNpmCacheDir,
   defaultOtherModelSources,
   SECOND_CLASSIFIER_FILES,
   verifyCorpus,
+  verifyDependencies,
   verifyDvaa,
   verifyDvaaFiles,
   verifyHackmyagent,
@@ -75,6 +78,11 @@ export interface PinnedRunOptions {
   pinsPath: string;
   /** Directory holding hackmyagent-<version>.tgz and node_modules/hackmyagent. */
   hmaDir: string;
+  /**
+   * npm cache directory the dependency tarballs are read from. Default: what
+   * `npm config get cache` prints in the --hma directory.
+   */
+  npmCacheDir?: string;
   /** damn-vulnerable-ai-agent checkout. */
   dvaaDir: string;
   /**
@@ -191,7 +199,7 @@ function count(total: number, detected: number): DetectionCount {
 interface AllInputs {
   pins: BenchmarkPins;
   corpus: ReturnType<typeof verifyCorpus>;
-  hma: VerifiedHackmyagent;
+  hma: ReturnType<typeof verifyHackmyagent>;
   nanomind: NanomindManifest;
   dvaaCommit: string;
   dvaaObjectFormat: 'sha1' | 'sha256';
@@ -253,6 +261,10 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
   const inputs = verifyAll(opts);
   const otherModelSources = opts.otherModelSources ?? defaultOtherModelSources();
   await verifyNoOtherModelSources(otherModelSources, inputs.hma.packageDir);
+  // After the other model sources, so second classifier files placed under
+  // node_modules are reported as those, not as files of no tarball.
+  const npmCacheDir = opts.npmCacheDir ?? defaultNpmCacheDir(opts.hmaDir);
+  const dependencies = verifyDependencies(opts.hmaDir, inputs.pins.hackmyagent, npmCacheDir);
   let loaded: ReturnType<typeof loadDVAAScenarios>;
   try {
     loaded = loadDVAAScenarios(opts.dvaaDir, inputs.dvaaObjectFormat);
@@ -393,6 +405,7 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
       verifyLoadedModel(tme, opts.nanomindModelsDir, verifyNanomind(opts.nanomindModelsDir, inputs.pins.nanomind));
       verifyDvaa(opts.dvaaDir, inputs.pins.dvaa);
       await verifyNoOtherModelSources(otherModelSources, inputs.hma.packageDir);
+      verifyDependencies(opts.hmaDir, inputs.pins.hackmyagent, npmCacheDir);
       trace.check();
     } catch (err) {
       if (err instanceof PinError) {
@@ -457,7 +470,7 @@ export async function runPinnedBenchmark(opts: PinnedRunOptions): Promise<Pinned
         samplesScanned: samples.length,
       },
     },
-    hackmyagent,
+    hackmyagent: { ...hackmyagent, ...dependencies },
     dvaa: { commit: inputs.dvaaCommit, scenarios: scenarios.length, filesVerified: readFiles.length },
     nanomind: inputs.nanomind,
     otherModelSources: {

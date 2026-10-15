@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import * as diagnosticsChannel from 'node:diagnostics_channel';
 import {
   appendFileSync,
+  copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -21,6 +22,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
@@ -243,6 +245,8 @@ interface Fixture {
   hma: string;
   installed: string;
   tarball: string;
+  /** Stands in for the npm cache directory; holds the dependency tarballs by integrity. */
+  npmCache: string;
   dvaa: string;
   models: string;
   /** Stands in for ~/.opena2a/nanomind/models, one of the second classifier's directories. Not created. */
@@ -278,7 +282,23 @@ function makeFixture(): Fixture {
   });
   const installed = join(hma, 'node_modules', 'hackmyagent');
   cpSync(join(stage, 'package'), installed, { recursive: true });
-  write(join(hma, 'package-lock.json'), '{"lockfileVersion":3}\n');
+  writeLock(hma, {
+    name: 'hma',
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      '': { dependencies: { hackmyagent: 'file:hackmyagent-9.9.9.tgz' } },
+      'node_modules/hackmyagent': { version: '9.9.9', resolved: 'file:hackmyagent-9.9.9.tgz', integrity: integrityOf(tarball) },
+      // An optional package npm did not install on this platform; its tarball is not in the cache either.
+      'node_modules/fake-optional': {
+        version: '1.0.0',
+        resolved: 'https://registry.example.invalid/fake-optional/-/fake-optional-1.0.0.tgz',
+        integrity: `sha512-${createHash('sha512').update('fake-optional').digest('base64')}`,
+        optional: true,
+      },
+    },
+  });
+  const npmCache = join(root, 'npm-cache');
 
   const dvaa = join(root, 'dvaa');
   mkdirSync(dvaa);
@@ -309,7 +329,71 @@ function makeFixture(): Fixture {
 
   const otherModels = join(root, 'opena2a-models');
 
-  return { root, oasb, hma, installed, tarball, dvaa, models, otherModels, classifier, pinsPath, pins };
+  const fx: Fixture = { root, oasb, hma, installed, tarball, npmCache, dvaa, models, otherModels, classifier, pinsPath, pins };
+  // A dependency from the registry, with the command link and the copy of
+  // the lockfile npm writes under node_modules.
+  installDependency(fx, 'node_modules/fake-dep', {
+    'package.json': '{"name":"fake-dep","version":"1.0.0","bin":"index.js"}\n',
+    'index.js': 'module.exports = 1;\n',
+  });
+  mkdirSync(join(hma, 'node_modules', '.bin'));
+  symlinkSync(join('..', 'fake-dep', 'index.js'), join(hma, 'node_modules', '.bin', 'fake-dep'));
+  cpSync(join(hma, 'package-lock.json'), join(hma, 'node_modules', '.package-lock.json'));
+  return fx;
+}
+
+/** sha512 integrity of a file, as package-lock.json writes it. */
+function integrityOf(path: string): string {
+  return `sha512-${createHash('sha512').update(readFileSync(path)).digest('base64')}`;
+}
+
+/** Where the npm cache keeps the content with this sha512 integrity. */
+function cachePath(npmCache: string, integrity: string): string {
+  const hex = Buffer.from(integrity.slice('sha512-'.length), 'base64').toString('hex');
+  return join(npmCache, '_cacache', 'content-v2', 'sha512', hex.slice(0, 2), hex.slice(2, 4), hex.slice(4));
+}
+
+function readLock(hma: string): { packages: Record<string, Record<string, unknown>> } {
+  return JSON.parse(readFileSync(join(hma, 'package-lock.json'), 'utf-8'));
+}
+
+function writeLock(hma: string, lock: unknown): void {
+  writeFileSync(join(hma, 'package-lock.json'), JSON.stringify(lock, null, 2) + '\n');
+}
+
+/**
+ * Pack `files` as a registry tarball, put it in the fixture's npm cache,
+ * install it at `key` (a path under node_modules) and add it to
+ * package-lock.json, as npm install does. Returns the tarball integrity.
+ */
+function installDependency(
+  fx: Pick<Fixture, 'root' | 'hma' | 'npmCache'>,
+  key: string,
+  files: Record<string, string>,
+  entry: Record<string, unknown> = {},
+): string {
+  const stage = mkdtempSync(join(fx.root, 'dep-'));
+  for (const [rel, text] of Object.entries(files)) write(join(stage, 'package', rel), text);
+  const tgz = join(stage, 'dep.tgz');
+  execFileSync('tar', ['-czf', tgz, '-C', stage, 'package'], {
+    env: { ...process.env, COPYFILE_DISABLE: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const integrity = integrityOf(tgz);
+  mkdirSync(dirname(cachePath(fx.npmCache, integrity)), { recursive: true });
+  copyFileSync(tgz, cachePath(fx.npmCache, integrity));
+  cpSync(join(stage, 'package'), join(fx.hma, key), { recursive: true });
+  rmSync(stage, { recursive: true, force: true });
+  const name = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+  const lock = readLock(fx.hma);
+  lock.packages[key] = {
+    version: '1.0.0',
+    resolved: `https://registry.example.invalid/${name}/-/${name}-1.0.0.tgz`,
+    integrity,
+    ...entry,
+  };
+  writeLock(fx.hma, lock);
+  return integrity;
 }
 
 /** Rebuild the hackmyagent tarball with this package.json, install it and pin its integrity. */
@@ -422,6 +506,7 @@ async function run(fx: Fixture, extraOverrides: Record<string, unknown> = {}, ar
     oasbRoot: fx.oasb,
     nanomindModelsDir: fx.models,
     otherModelSources: { modelsDir: fx.otherModels, daemon: { host: '127.0.0.1', port: closedPort } },
+    npmCacheDir: fx.npmCache,
     ...extraOverrides,
   };
   // The stand-in compiler sends low-confidence samples to the daemon address the run checks.
@@ -587,6 +672,8 @@ describe('pinned run', () => {
       integrity: fx.pins.hackmyagent.integrity,
       tarballSha256: sha256(readFileSync(fx.tarball)),
       dependencyLockSha256: sha256(readFileSync(join(fx.hma, 'package-lock.json'))),
+      // hackmyagent (3 files) and fake-dep (2 files); fake-optional is not installed.
+      dependencies: { packages: 2, files: 5 },
     });
     expect(record.dvaa).toEqual({ commit: fx.pins.dvaa.commit, scenarios: 2, filesVerified: 4 });
     expect(record.nanomind.manifestSha256).toBe(fx.pins.nanomind.manifestSha256);
@@ -719,14 +806,27 @@ describe('pinned run', () => {
       write(join(fx.models, '.DS_Store'), 'finder');
       write(join(fx.models, 'tme', '.DS_Store'), 'finder');
     }],
+    // A package npm installs inside the hackmyagent directory, with the
+    // command link npm writes beside it.
     ['the installed hackmyagent has its own node_modules', () => {
-      write(join(fx.installed, 'node_modules', 'dep', 'index.js'), 'module.exports = 1;\n');
+      installDependency(fx, 'node_modules/hackmyagent/node_modules/dep', { 'index.js': 'module.exports = 1;\n' });
+      mkdirSync(join(fx.installed, 'node_modules', '.bin'));
+      symlinkSync(join('..', 'dep', 'index.js'), join(fx.installed, 'node_modules', '.bin', 'dep'));
     }],
     ['only one of the second classifier files is present', () => {
       write(join(fx.otherModels, 'tokenizer.json'), '{}');
     }],
     ['only one of the second classifier files is beside the installed scanner', () => {
-      write(join(fx.hma, 'node_modules', 'nanomind', 'training', 'models-tme-v3', 'nanomind-tme.bin'), 'weights');
+      installDependency(fx, 'node_modules/nanomind', { 'training/models-tme-v3/nanomind-tme.bin': 'weights' });
+    }],
+    ['a dependency bundles a package whose files are in its tarball', () => {
+      installDependency(fx, 'node_modules/fake-bundler', {
+        'index.js': 'module.exports = require("bundled");\n',
+        'node_modules/bundled/index.js': 'module.exports = 1;\n',
+      });
+      const lock = readLock(fx.hma);
+      lock.packages['node_modules/fake-bundler/node_modules/bundled'] = { version: '1.0.0', inBundle: true };
+      writeLock(fx.hma, lock);
     }],
   ])('accepts the run when %s', async (_name, arrange) => {
     arrange();
@@ -1241,6 +1341,147 @@ describe('refusals before scanning', () => {
     const r = await run(fx, {}, ['--hma', fx.hma, '--dvaa', fx.dvaa]);
     expect(r.code).toBe(2);
     expect(g.__oasbFakeScans).toBe(0);
+  });
+});
+
+describe('installed dependencies', () => {
+  const depFile = () => join(fx.hma, 'node_modules', 'fake-dep', 'index.js');
+  const differ = /dirty input tree: installed dependency files differ from the tarballs package-lock\.json names \(node_modules\/fake-dep\/index\.js\); reinstall in the --hma directory with: npm ci/;
+  const added = (path: string) =>
+    new RegExp(
+      `dirty input tree: the install in the --hma directory has files that are in none of the tarballs ` +
+        `package-lock\\.json names \\(${path.replace(/[.]/g, '\\.')}\\)`,
+    );
+  const setEntry = (key: string, change: (entry: Record<string, unknown>) => void) => {
+    const lock = readLock(fx.hma);
+    change(lock.packages[key]);
+    writeLock(fx.hma, lock);
+  };
+  const fakeDepTarball = () => cachePath(fx.npmCache, readLock(fx.hma).packages['node_modules/fake-dep'].integrity as string);
+
+  it.each<[string, () => void, RegExp]>([
+    ['a comment line is appended to a dependency file', () => appendFileSync(depFile(), '// appended\n'), differ],
+    ['a dependency file is removed', () => rmSync(depFile()), differ],
+    [
+      'a dependency that is not optional is not installed',
+      () => rmSync(dirname(depFile()), { recursive: true }),
+      /installed dependency files differ from the tarballs package-lock\.json names \(node_modules\/fake-dep\/index\.js, node_modules\/fake-dep\/package\.json\)/,
+    ],
+    [
+      'a dependency file is replaced by a link to an identical file',
+      () => {
+        copyFileSync(depFile(), join(fx.root, 'same.js'));
+        rmSync(depFile());
+        symlinkSync(join(fx.root, 'same.js'), depFile());
+      },
+      differ,
+    ],
+    [
+      'a package that package-lock.json does not name is under node_modules',
+      () => write(join(fx.hma, 'node_modules', 'extra', 'index.js'), 'module.exports = 1;\n'),
+      added('node_modules/extra/index.js'),
+    ],
+    [
+      'a file is added inside a dependency',
+      () => write(join(fx.hma, 'node_modules', 'fake-dep', 'extra.js'), 'module.exports = 2;\n'),
+      added('node_modules/fake-dep/extra.js'),
+    ],
+    [
+      'a file is added in a .bin directory that is not directly under node_modules',
+      () => write(join(fx.hma, 'node_modules', 'fake-dep', '.bin', 'tool'), 'echo\n'),
+      added('node_modules/fake-dep/.bin/tool'),
+    ],
+    [
+      'a .package-lock.json is inside a dependency',
+      () => write(join(fx.hma, 'node_modules', 'fake-dep', '.package-lock.json'), '{}\n'),
+      added('node_modules/fake-dep/.package-lock.json'),
+    ],
+    [
+      'package-lock.json is missing',
+      () => rmSync(join(fx.hma, 'package-lock.json')),
+      /unpinned input: the --hma directory has no package-lock\.json, so the installed dependencies cannot be compared/,
+    ],
+    [
+      'package-lock.json has no packages map',
+      () => writeLock(fx.hma, { lockfileVersion: 1 }),
+      /unpinned input: package-lock\.json in the --hma directory has no "packages" map/,
+    ],
+    [
+      'package-lock.json names no integrity for a dependency',
+      () => setEntry('node_modules/fake-dep', e => delete e.integrity),
+      /unpinned input: package-lock\.json names no integrity for node_modules\/fake-dep/,
+    ],
+    [
+      'package-lock.json installs a dependency as a link',
+      () => setEntry('node_modules/fake-dep', e => Object.assign(e, { link: true, resolved: '../fake-dep-source' })),
+      /unpinned input: package-lock\.json installs node_modules\/fake-dep as a link to \.\.\/fake-dep-source/,
+    ],
+    [
+      'the npm cache does not hold a dependency tarball',
+      () => rmSync(fakeDepTarball()),
+      /unpinned input: the npm cache at .* holds no tarball with the integrity package-lock\.json names for node_modules\/fake-dep; reinstall in the --hma directory with: npm ci/,
+    ],
+    [
+      'the npm cache holds other bytes under the integrity of a dependency tarball',
+      () => copyFileSync(fx.tarball, fakeDepTarball()),
+      /pinned input mismatch: the tarball read for node_modules\/fake-dep .* does not have the integrity package-lock\.json names/,
+    ],
+    [
+      'the content package-lock.json names for a dependency is not a gzip tarball',
+      () => {
+        const notTarball = join(fx.root, 'not-a-tarball');
+        writeFileSync(notTarball, 'plain text, not gzip\n');
+        const integrity = integrityOf(notTarball);
+        mkdirSync(dirname(cachePath(fx.npmCache, integrity)), { recursive: true });
+        copyFileSync(notTarball, cachePath(fx.npmCache, integrity));
+        setEntry('node_modules/fake-dep', e => (e.integrity = integrity));
+      },
+      /pinned input mismatch: the tarball read for node_modules\/fake-dep .* is not a readable npm tarball/,
+    ],
+  ])('exits 2 when %s', async (_name, arrange, message) => {
+    arrange();
+    const before = snapshot(fx.oasb);
+    const r = await run(fx);
+    expect(r.code).toBe(2);
+    expect(r.err.join('\n')).toMatch(message);
+    expect(r.err.join('\n')).toMatch(/Nothing was scanned and nothing was written/);
+    expect(g.__oasbFakeScans).toBe(0);
+    expect(runDirs(fx)).toEqual(['2026-01-01-00000000']);
+    expect(snapshot(fx.oasb)).toEqual(before);
+  });
+
+  it('writes nothing and exits 3 when a dependency file changes during the run', async () => {
+    g.__oasbFakeDuringRun = () => appendFileSync(depFile(), '// edited during the run\n');
+    const r = await run(fx);
+    expect(r.code).toBe(3);
+    expect(r.err.join('\n')).toMatch(/an input changed during the run/);
+    expect(r.err.join('\n')).toMatch(differ);
+    expect(g.__oasbFakeScans).toBeGreaterThan(0);
+    expect(runDirs(fx)).toEqual(['2026-01-01-00000000']);
+  });
+
+  it('--observe reports an edited dependency file and exits 2', async () => {
+    appendFileSync(depFile(), '// appended\n');
+    const r = await run(fx, {}, ['--observe', '--hma', fx.hma, '--dvaa', fx.dvaa]);
+    expect(r.code).toBe(2);
+    expect(r.err.join('\n')).toMatch(new RegExp(`problem: ${differ.source}`));
+  });
+
+  it('reads the tarballs from the npm cache that npm config get cache names when none is given', async () => {
+    const saved = process.env.npm_config_cache;
+    process.env.npm_config_cache = fx.npmCache;
+    try {
+      const r = await run(fx, { npmCacheDir: undefined });
+      expect(r.err).toEqual([]);
+      expect(r.code).toBe(0);
+      rmSync(fakeDepTarball());
+      const refused = await run(fx, { npmCacheDir: undefined });
+      expect(refused.code).toBe(2);
+      expect(refused.err.join('\n')).toContain(`the npm cache at ${fx.npmCache} holds no tarball`);
+    } finally {
+      if (saved === undefined) delete process.env.npm_config_cache;
+      else process.env.npm_config_cache = saved;
+    }
   });
 });
 

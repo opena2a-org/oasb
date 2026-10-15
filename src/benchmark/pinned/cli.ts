@@ -17,17 +17,19 @@ import { join, resolve } from 'node:path';
 import { loadDVAAScenarios } from '../dvaa-suite.js';
 import { InputDriftError, ResultsExistError, runPinnedBenchmark, type PinnedRunOptions } from './harness.js';
 import {
+  defaultNpmCacheDir,
   defaultOtherModelSources,
   hackmyagentPackageDir,
   nanomindManifest,
   observeDvaa,
   observeHackmyagent,
+  verifyDependencies,
   verifyDvaaFiles,
   verifyHackmyagent,
   verifyNoOtherModelSources,
   type OtherModelSources,
 } from './inputs.js';
-import { PinError } from './pins.js';
+import { PinError, type HackmyagentPin } from './pins.js';
 
 export const USAGE = `OASB pinned benchmark harness
 
@@ -38,8 +40,9 @@ Usage:
 Options:
   --pins <file>   Pin file naming the hackmyagent version and tarball integrity,
                   the DVAA commit and the NanoMind manifest sha256
-  --hma <dir>     Directory holding hackmyagent-<version>.tgz (npm pack) and
-                  node_modules/hackmyagent installed from that tarball
+  --hma <dir>     Directory holding hackmyagent-<version>.tgz (npm pack), and
+                  node_modules/hackmyagent and package-lock.json from
+                  npm install ./hackmyagent-<version>.tgz
   --dvaa <dir>    damn-vulnerable-ai-agent checkout at the pinned commit
   --observe       Print the pin values of the given inputs and stop; scans nothing
   --help          Show this help
@@ -60,6 +63,12 @@ harness then cannot tell whether the model or the word list scores a sample.
 A run writes nothing when, after the scan, the classifier's model session is
 not the one it loaded when the run started, or the classifier no longer
 reports its model ready.
+
+The installed dependencies under node_modules in the --hma directory are
+compared with the tarballs whose integrity package-lock.json names, read from
+the npm cache (npm config get cache). A run is refused when package-lock.json
+is missing, a tarball is not in the cache, or an installed file differs from
+its tarball or is in none of them.
 
 Keep the pin file and the --hma directory outside the OASB checkout: a run
 is refused while the checkout has uncommitted or untracked files. Results are
@@ -95,6 +104,7 @@ async function observe(
   dvaaDir: string,
   modelsDir: string,
   otherModelSources: OtherModelSources,
+  npmCacheDir: string | undefined,
   io: CliIo,
 ): Promise<number> {
   const problems: string[] = [];
@@ -111,6 +121,7 @@ async function observe(
   } catch (err) {
     problems.push((err as Error).message);
   }
+  const hmaPin = pins.hackmyagent as HackmyagentPin | undefined;
 
   try {
     const dvaa = observeDvaa(dvaaDir);
@@ -137,6 +148,14 @@ async function observe(
     problems.push((err as Error).message);
   }
 
+  if (hmaPin) {
+    try {
+      verifyDependencies(hmaDir, hmaPin, npmCacheDir ?? defaultNpmCacheDir(hmaDir));
+    } catch (err) {
+      problems.push((err as Error).message);
+    }
+  }
+
   io.out(JSON.stringify(pins, null, 2));
   const version = (pins.hackmyagent as { version?: string } | undefined)?.version;
   // An instruction for the operator, not a step of this command: --observe
@@ -157,7 +176,7 @@ export async function runCli(
   argv: string[],
   io: CliIo = defaultIo,
   overrides: Partial<
-    Pick<PinnedRunOptions, 'oasbRoot' | 'nanomindModelsDir' | 'otherModelSources' | 'runId' | 'now'>
+    Pick<PinnedRunOptions, 'oasbRoot' | 'nanomindModelsDir' | 'otherModelSources' | 'npmCacheDir' | 'runId' | 'now'>
   > = {},
 ): Promise<number> {
   const args = argv.filter(a => a !== '--');
@@ -180,7 +199,7 @@ export async function runCli(
   }
 
   if (args.includes('--observe')) {
-    return observe(resolve(hmaDir), resolve(dvaaDir), nanomindModelsDir, otherModelSources, io);
+    return observe(resolve(hmaDir), resolve(dvaaDir), nanomindModelsDir, otherModelSources, overrides.npmCacheDir, io);
   }
 
   try {
@@ -190,6 +209,7 @@ export async function runCli(
       dvaaDir: resolve(dvaaDir),
       nanomindModelsDir,
       otherModelSources,
+      npmCacheDir: overrides.npmCacheDir,
       oasbRoot,
       runId: overrides.runId,
       now: overrides.now,
