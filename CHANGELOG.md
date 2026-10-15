@@ -875,6 +875,14 @@ stay on record here with the reason they changed.
   guard read the test counts, the What Gets Tested table and the links on
   those pages as they read the README's (`README_PAGES` in
   `scripts/readme-counts.mjs`), and a message about a page names it.
+- `src/benchmark/pinned/runs-of-record.test.ts` looks for the newest run's
+  counts on `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md` outside
+  code spans and code blocks. The page's description of that test writes
+  the form of a count as code, `192/270`, which is the full-pipeline count
+  of `results/2026-10-10-2a89ce5d/`, so with the HMA Full Pipeline row
+  deleted from the page's Latest Results table the test still passed (8 of
+  8); it now fails on that edit. The page says a count written only as code
+  does not count. The file still holds 8 tests.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

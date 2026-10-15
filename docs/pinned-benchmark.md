@@ -212,10 +212,11 @@ fails when no committed run says what scored its samples: a run whose schema
 is not v1 and whose record holds `nanomindUse`. It also fails when this page
 or `BENCHMARK-RESULTS.md` does not name the newest run of record (the latest
 `startedAt`) or does not state its count for each corpus adapter and for the
-DVAA scenarios, written `192/270` or `192 of 270`, so committing a run means
-reporting it where the scanner figures are read. The checks loop over the runs
-inside a fixed set of tests, so committing a run does not change the test
-totals the [test catalog](test-catalog.md#what-gets-tested) states.
+DVAA scenarios, written `192/270` or `192 of 270` outside code, so committing
+a run means reporting it where the scanner figures are read. A count written
+only in a code span or a code block, as the two forms above are, does not
+count. The checks loop over the runs inside a fixed set of tests, so
+committing a run does not change the test totals the [test catalog](test-catalog.md#what-gets-tested) states.
 
 | Run | Schema | hackmyagent | DVAA commit | NanoMind manifest sha256 |
 |---|---|---|---|---|

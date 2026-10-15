@@ -84,6 +84,24 @@ function readJsonl<T>(path: string): T[] {
   return text.slice(0, -1).split('\n').map(line => JSON.parse(line) as T);
 }
 
+/**
+ * The text of a Markdown document outside code: fenced code blocks and inline
+ * code spans are removed. A page writes examples and syntax as code, and
+ * docs/pinned-benchmark.md writes the form of a count in its description of
+ * this test as `192/270`, so a count found only in code is not one the page
+ * reports.
+ */
+function outsideCode(markdown: string): string {
+  return markdown
+    .replace(/^ {0,3}((`|~)\2{2,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1\2*[ \t]*$|(?![\s\S]))/gm, '')
+    .replace(/(?<!`)(`+)(?!`)(?:(?!\n[ \t]*\n)[\s\S])*?(?<!`)\1(?!`)/g, ' ');
+}
+
+/** True when the document states the count outside code, written "192/270" or "192 of 270". */
+function statesCount(markdown: string, detected: number, total: number): boolean {
+  return new RegExp(`(?<![\\d.])${detected}(?:/| of )${total}(?!\\d|\\.\\d)`).test(outsideCode(markdown));
+}
+
 function count(total: number, detected: number) {
   return { total, detected, recall: total > 0 ? Math.round((detected / total) * 1e4) / 1e4 : 0 };
 }
@@ -139,8 +157,14 @@ describe('committed pinned runs', () => {
   // A reader of docs/pinned-benchmark.md or BENCHMARK-RESULTS.md must find the most recent
   // measurement of record: the newest run's directory and, for every corpus
   // adapter and for the DVAA scenarios, its count written "192/270" or
-  // "192 of 270".
+  // "192 of 270" outside code.
   it('the documents that report scanner figures state the newest run of record', () => {
+    // A count written only as code, as the description of this test on
+    // docs/pinned-benchmark.md writes it, is not a count the page states.
+    expect(statesCount('written `192/270` or `192 of 270`, so', 192, 270)).toBe(false);
+    expect(statesCount('```\n192/270\n```\n', 192, 270)).toBe(false);
+    expect(statesCount('| HMA Full Pipeline | **71.1%** (192/270) |', 192, 270)).toBe(true);
+    expect(statesCount('`aria` 58/89 and 17 of 86 `dvaa`', 17, 86)).toBe(true);
     expect(runs.length).toBeGreaterThan(0);
     const startedAt = (name: string) => readRecord(join(RESULTS_ROOT, name)).startedAt;
     const newest = runs.reduce((a, b) => (startedAt(b) > startedAt(a) ? b : a));
@@ -154,8 +178,8 @@ describe('committed pinned runs', () => {
       // Booleans, so a failure names what is missing instead of printing the document.
       expect(text.includes(`results/${newest}/`), `${doc} names results/${newest}/`).toBe(true);
       for (const [what, { detected, total }] of figures) {
-        const stated = new RegExp(`(?<![\\d.])${detected}(?:/| of )${total}(?!\\d|\\.\\d)`).test(text);
-        expect(stated, `${doc} states ${detected}/${total} for ${what} in results/${newest}/`).toBe(true);
+        const stated = statesCount(text, detected, total);
+        expect(stated, `${doc} states ${detected}/${total} outside code for ${what} in results/${newest}/`).toBe(true);
       }
     }
   });
