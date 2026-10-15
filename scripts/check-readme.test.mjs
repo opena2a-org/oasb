@@ -275,6 +275,12 @@ test('a page linked from outside the MITRE ATLAS Coverage section is not read fo
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('a link with a malformed %-escape in the MITRE ATLAS Coverage section is named once, with no stack trace', () => {
+  const r = checkCounts(withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](100%.md).'));
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), 'README: line 41: link target "100%.md" has a malformed %-escape; write a literal % as %25.');
+});
+
 // "constructor" and "toString" are inherited by every object, so a lookup
 // that is not limited to the counts' own keys finds a function for them.
 for (const key of ['nosuchkey', 'constructor', 'toString']) {
@@ -612,6 +618,24 @@ test('links inside inline code and fenced blocks are ignored', () => {
       '```html\n<a href="docs/missing.html">x</a>\n```\n\n' +
       '```md\n[x]: docs/nowhere.md\n```\n',
   );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('a link path or anchor with a malformed %-escape is named by its line, with no stack trace', () => {
+  const r = check('See [the plan](100%.md) and [setup](docs/guide.md#100%).\n', {
+    'docs/how-it-works.md': '# How it works\n\nSee [the plan](100%.md) and [here](#50%off).\n',
+  });
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.trim().split('\n'), [
+    'README: line 11: link target "100%.md" has a malformed %-escape; write a literal % as %25.',
+    'README: line 11: anchor "#100%" has a malformed %-escape; write a literal % as %25.',
+    'README: docs/how-it-works.md line 3: link target "100%.md" has a malformed %-escape; write a literal % as %25.',
+    'README: docs/how-it-works.md line 3: anchor "#50%off" has a malformed %-escape; write a literal % as %25.',
+  ]);
+});
+
+test('a link that writes a literal % as %25 resolves', () => {
+  const r = check('See [the plan](docs/100%25.md).\n', { 'docs/100%.md': '# Plan\n' });
   assert.equal(r.status, 0, r.stderr);
 });
 

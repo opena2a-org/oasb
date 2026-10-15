@@ -13,7 +13,9 @@
 //      a reference definition `[label]: target` at the start of a line
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
 //      `href='target'` attribute. Other forms, such as an unquoted href or a
-//      definition inside a list item, are not read.
+//      definition inside a list item, are not read. A link whose path, or
+//      whose anchor in a link to a .md file, has a malformed %-escape
+//      (100%.md) fails with its line.
 //   5. every test count the README states equals the suite: the badge, the
 //      Quick Start comment, the Counts note, the per-group `npm run test:*`
 //      comments, the scenario counts in the prose, the MITRE ATLAS counts
@@ -210,6 +212,17 @@ if (commandLine === null) {
 }
 
 // 4. Relative links and anchors resolve.
+
+// A link path or anchor with its %-escapes decoded, or null when an escape is
+// malformed (100%.md), which names no file or heading.
+function decoded(part) {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return null;
+  }
+}
+
 const anchorCache = new Map();
 function anchorsOf(file) {
   if (!anchorCache.has(file)) anchorCache.set(file, anchors(parse(readFileSync(file, 'utf8'))));
@@ -245,13 +258,23 @@ for (const { file: doc, prefix, lines } of documents) {
       if (!target) continue;
       if (ABSOLUTE.test(target)) continue;
       const [pathPart, anchor] = target.split('#');
-      const file = pathPart ? resolve(dirname(doc), decodeURIComponent(pathPart)) : doc;
+      const path = pathPart ? decoded(pathPart) : '';
+      if (path === null) {
+        fail(`${prefix}line ${n}: link target "${target}" has a malformed %-escape; write a literal % as %25.`);
+        continue;
+      }
+      const file = path ? resolve(dirname(doc), path) : doc;
       if (!existsSync(file)) {
         fail(`${prefix}line ${n}: link target "${target}" does not exist.`);
         continue;
       }
-      if (anchor && /\.md$/i.test(file) && !anchorsOf(file).has(decodeURIComponent(anchor).toLowerCase())) {
-        fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${pathPart || prefix.trim() || 'README.md'}.`);
+      if (anchor && /\.md$/i.test(file)) {
+        const id = decoded(anchor);
+        if (id === null) {
+          fail(`${prefix}line ${n}: anchor "#${anchor}" has a malformed %-escape; write a literal % as %25.`);
+        } else if (!anchorsOf(file).has(id.toLowerCase())) {
+          fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${pathPart || prefix.trim() || 'README.md'}.`);
+        }
       }
       if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file)) {
         datedPages.set(file, { at: `${prefix}line ${n}`, shown: pathPart });
@@ -509,7 +532,9 @@ function checkSkippedCoverage(tests) {
       if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
       const pathPart = target.split('#')[0];
       if (!pathPart || !/\.md$/i.test(pathPart)) continue;
-      const file = resolve(dirname(readmePath), decodeURIComponent(pathPart));
+      const path = decoded(pathPart);
+      if (path === null) continue; // a malformed %-escape is reported by the link check
+      const file = resolve(dirname(readmePath), path);
       if (seen.has(file) || !existsSync(file)) continue; // a missing page is reported by the link check
       seen.add(file);
       pages.push({ lines: parse(readFileSync(file, 'utf8')), prefix: `${pathPart} ` });
@@ -620,11 +645,8 @@ for (const [file, { at, shown }] of datedPages) {
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
     if (!pathPart || ABSOLUTE.test(target)) return false;
-    try {
-      return resolve(dirname(file), decodeURIComponent(pathPart)) === readmePath;
-    } catch {
-      return false; // a malformed %-escape names no file
-    }
+    const path = decoded(pathPart);
+    return path !== null && resolve(dirname(file), path) === readmePath;
   };
   const missing = [];
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {

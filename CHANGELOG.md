@@ -883,6 +883,12 @@ stay on record here with the reason they changed.
   deleted from the page's Latest Results table the test still passed (8 of
   8); it now fails on that edit. The page says a count written only as code
   does not count. The file still holds 8 tests.
+- `npm run check:readme` reports a link whose path, or whose anchor in a
+  link to a `.md` file, has a malformed %-escape, such as
+  `[the plan](100%.md)`, by its page and line and says to write a literal %
+  as `%25`; on such a link it ended with an uncaught `URIError` and a stack
+  trace. This holds in the README, on the pages that took its text and, with
+  the counts checked, in the README's MITRE ATLAS Coverage section.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
