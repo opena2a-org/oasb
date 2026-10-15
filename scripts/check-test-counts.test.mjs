@@ -70,7 +70,7 @@ function suite(files = FILES, skipped = 1) {
 
 // Every statement the guard reads, with the counts FILES gives.
 const README = [
-  '[![Tests](https://img.shields.io/badge/tests-18%20passing-brightgreen)](#)',
+  '[![CI](https://github.com/opena2a-org/oasb/actions/workflows/ci.yml/badge.svg)](#)',
   '',
   "13 standardized attack scenarios that evaluate a runtime security tool. 10 of them, in 5 files, map to MITRE ATLAS (4 techniques); the other 3 test the product's defensive response.",
   '',
@@ -105,7 +105,7 @@ const README = [
 test('a README whose counts match the suite passes', () => {
   const { drift, compared } = compareCounts(suite(), README, source);
   assert.deepEqual(drift, []);
-  assert.equal(compared, 42);
+  assert.equal(compared, 41);
 });
 
 test('every key of the shared statement list is a count the guard measures', () => {
@@ -139,9 +139,9 @@ test('a changed pinned row and Quick Start comment are drift', () => {
   ]);
 });
 
-test('a badge lower than the passing count is drift', () => {
-  const { drift } = compareCounts(suite(), README.replace('tests-18%20passing', 'tests-17%20passing'), source);
-  assert.deepEqual(drift, ['README line 1 (tests badge) states 17 passing tests; the suite has 18']);
+test('a Counts note passing count lower than the suite is drift', () => {
+  const { drift } = compareCounts(suite(), README.replace('(18 passing, 1 skipped)', '(17 passing, 1 skipped)'), source);
+  assert.deepEqual(drift, ['README line 9 (Counts note) states 17 passing tests; the suite has 18']);
 });
 
 test('a new pinned test without a README edit is drift', () => {
@@ -177,7 +177,7 @@ test('a test skipped at run time without the inconclusive marker is drift', () =
   for (const meta of [{}, undefined, { inconclusive: true }, { inconclusive: null }]) {
     const { drift, live } = compareCounts(withRunTimeSkip(meta), README, source);
     assert.deepEqual(live.inconclusive, [], JSON.stringify(meta));
-    assert.ok(drift.includes('README line 1 (tests badge) states 18 passing tests; the suite has 17'), drift.join('\n'));
+    assert.ok(drift.includes('README line 9 (Counts note) states 18 passing tests; the suite has 17'), drift.join('\n'));
     assert.ok(drift.includes('README line 5 (Quick Start comment) states 1 skipped tests; the suite has 2'), drift.join('\n'));
   }
 });
@@ -195,7 +195,7 @@ test('the command lists the tests skipped as inconclusive and exits 0 when the c
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^ {3}total=19 passed=18 skipped=1 /m);
   assert.match(r.stdout, /^ {3}1 skipped as inconclusive, counted with the passing tests:\n {5}src\/e2e\/E2E-001\.live-filesystem\.test\.ts > E2E-001 detects a write$/m);
-  assert.match(r.stdout, /42 README counts match the live suite\./);
+  assert.match(r.stdout, /41 README counts match the live suite\./);
 });
 
 // suite() with both E2E-001 cases skipped as inconclusive, as when the host
@@ -740,7 +740,7 @@ test('the repository README and the pages that took its text carry every stateme
 });
 
 test('a count on a page that took README text is compared, and its drift names the page', () => {
-  // The README keeps the badge and the introduction; the page holds the rest.
+  // The README keeps the introduction; the page holds the rest.
   const split = README.indexOf('npm test                    # Full suite');
   const documents = [
     { name: 'README', text: README.slice(0, split) },
@@ -783,7 +783,7 @@ test('the command exits 1 on drift and 0 when every count matches', () => {
     writeSources(dir);
     const ok = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README.md')], { encoding: 'utf8' });
     assert.equal(ok.status, 0, ok.stderr);
-    assert.match(ok.stdout, /42 README counts match the live suite\./);
+    assert.match(ok.stdout, /41 README counts match the live suite\./);
     const bad = spawnSync(process.execPath, [script, join(dir, 'results.json'), join(dir, 'README-drift.md')], { encoding: 'utf8' });
     assert.equal(bad.status, 1);
     assert.match(bad.stderr, /^DRIFT: README line 9 \(Counts note\) states 20 tests in total; the suite has 19$/m);

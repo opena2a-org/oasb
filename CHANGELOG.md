@@ -914,6 +914,17 @@ stay on record here with the reason they changed.
   It said to write the % as `%25`, and `[x](#100%25-coverage)` then failed
   with `anchor "#100%25-coverage" has no matching heading in README.md`. A
   link path with a malformed %-escape is still told to write `%25`.
+- The README header shows the CI status badge in place of the tests badge
+  and the MITRE ATLAS badge, whose counts were typed into their URLs. The
+  two sentences of the description that stated the scenario and MITRE ATLAS
+  counts moved, as written, to the What Gets Tested section of
+  `docs/test-catalog.md`, a page both count checks read; the README keeps
+  the first of them without its count. The line
+  "MITRE ATT&CK Evaluations, but for AI agent security products." moved to
+  `docs/how-it-works.md`. The count list both checks read
+  (`scripts/readme-counts.mjs`) has no tests badge entry, and
+  `npm run check:readme` fails on a static shields.io badge in the README's
+  prose whose message starts with a digit, such as `tests-404%20passing`.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

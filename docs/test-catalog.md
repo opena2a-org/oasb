@@ -7,6 +7,8 @@ has the first run.
 
 ## What Gets Tested
 
+223 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 166 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](mitre-atlas-mapping.md#mitre-atlas-coverage).
+
 Each test simulates a specific attack technique and checks whether the security product under evaluation detects it, classifies it correctly, and responds appropriately.
 
 Counts below are the live test totals (`npm test`); each maps to a source directory so they are reproducible. Per-test detail for every category is in the [test catalog](#atomic-tests-srcatomic).

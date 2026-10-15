@@ -20,8 +20,8 @@
 //      says to drop the %, and names the anchor that then matches a heading
 //      when one does (#100%-coverage, with a heading "100% coverage", is
 //      told to write #100-coverage).
-//   5. every test count the README states equals the suite: the badge, the
-//      Quick Start comment, the Counts note, the per-group `npm run test:*`
+//   5. every test count the README states equals the suite: the Quick Start
+//      comment, the Counts note, the per-group `npm run test:*`
 //      comments, the scenario counts in the prose, the MITRE ATLAS counts
 //      (a scenario file under the README's directory maps to ATLAS when it
 //      cites a technique ID), and each row of the
@@ -61,6 +61,12 @@
 //      "as of <that date>" and links to the README above its first H2. Its
 //      counts are those of that day and are not compared with the suite, so
 //      the page itself sends the reader to the README for the current ones.
+//  10. no static img.shields.io badge in the README's prose has a message
+//      that starts with a digit, as `tests-404%20passing` and
+//      `MITRE%20ATLAS-15%20techniques` did. Such a number is typed into the
+//      badge's URL, and check 5 does not read it; the counts are stated on
+//      the pages that check reads, and the CI status badge shows the result
+//      of the latest CI run, which runs the suite.
 //
 // Checks 4, 5, 6 and 8 read the pages that took text moved out of the README
 // (README_PAGES in scripts/readme-counts.mjs) as they read the README, so the
@@ -675,6 +681,34 @@ for (const [file, { at, shown }] of datedPages) {
     fail(
       `${at}: "${shown}" is a dated page, so above its first H2 it must ${missing.join(' and ')}; ` +
         `its counts are those of ${date} and are not compared with the suite.`,
+    );
+  }
+}
+
+// 10. A badge that states a number typed into its URL. A static shields.io
+// badge is /badge/<label>-<message>-<color> or /badge/<message>-<color>, with
+// "--" for a dash in the text.
+const STATIC_BADGE = /https?:\/\/img\.shields\.io\/badge\/([^/?#)\s"']+)/g;
+const badgeText = (part) => {
+  const text = part.replace(/\0/g, '-');
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text; // a malformed %-escape: read the text as written
+  }
+};
+for (const { n, line, inFence } of readme) {
+  if (inFence) continue;
+  for (const [, path] of line.matchAll(STATIC_BADGE)) {
+    const parts = path.replace(/--/g, '\0').split('-');
+    if (parts.length < 2) continue;
+    const message = badgeText(parts[parts.length - 2]).trim();
+    if (!/^\d/.test(message)) continue;
+    const label = badgeText(parts.slice(0, -2).join('-')).trim();
+    fail(
+      `line ${n}: the badge "${label ? `${label}: ` : ''}${message}" states a number typed into its URL, which the count ` +
+        'check does not read; state the count on a page the count check reads, such as docs/test-catalog.md, and ' +
+        'show the CI status badge, which shows the result of the latest CI run of the suite.',
     );
   }
 }

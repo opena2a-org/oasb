@@ -2,8 +2,8 @@
 // README test-count drift guard.
 //
 // Compares every test count the README states with a vitest JSON report of
-// the full suite: the tests badge, the Quick Start comment, the Counts note,
-// the per-group `npm run test:*` comments, the scenario counts in the prose,
+// the full suite: the Quick Start comment, the Counts note, the per-group
+// `npm run test:*` comments, the scenario counts in the prose,
 // the MITRE ATLAS counts in the introduction and in MITRE ATLAS Coverage, and
 // every row of the What Gets Tested table. The ATLAS counts are read from the
 // scenario files under the README's directory: a file maps to ATLAS when it

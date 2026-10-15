@@ -40,7 +40,6 @@ export const README_PAGES = [
 // not listed here; each check counts them per directory, in the README or the
 // page that holds the table (docs/test-catalog.md).
 export const STATEMENTS = [
-  { where: 'tests badge', re: /tests-(\d+)%20passing/g, keys: ['passed'] },
   { where: 'introduction', re: /^(\d+) standardized attack scenarios/gm, keys: ['scenarios'] },
   {
     where: 'introduction',

@@ -41,9 +41,9 @@ the claims this repository publishes:
    per-file results of the JSON reporter and compares every test count the
    README in the clone and the pages of `README_PAGES` beside it state with
    them (the committed files, so an uncommitted edit is not what the smoke
-   measures; most of the counts are in `docs/test-catalog.md`): the tests badge,
-   the Quick Start comment, the Counts note (total, passing, skipped, attack
-   scenarios, scoring-engine and pinned harness tests), the per-group
+   measures; most of the counts are in `docs/test-catalog.md`): the Quick Start
+   comment, the Counts note (total, passing, skipped, attack scenarios,
+   scoring-engine and pinned harness tests), the per-group
    `npm run test:*` comments, the scenario counts in the prose, the
    scenario-file count under MITRE ATLAS Coverage, and every row of the What
    Gets Tested table, whose source rows must add up to the suite total. An

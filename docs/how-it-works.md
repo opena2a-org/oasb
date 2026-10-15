@@ -6,6 +6,8 @@ page describes the files that run the suite against a security product.
 
 ## What OASB Is (and Isn't)
 
+**MITRE ATT&CK Evaluations, but for AI agent security products.**
+
 OASB evaluates **security products**, not agents. It answers: "does your runtime protection actually catch these attacks?"
 
 | | OASB | [HackMyAgent](https://github.com/opena2a-org/hackmyagent) |

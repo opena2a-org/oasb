@@ -67,7 +67,7 @@ const source = (path) => SOURCES[path];
 const COUNTED = [
   '# OASB',
   '',
-  '[![Tests](https://img.shields.io/badge/tests-14%20passing-brightgreen)](https://example.com/oasb)',
+  '[![CI](https://github.com/opena2a-org/oasb/actions/workflows/ci.yml/badge.svg)](https://example.com/oasb)',
   '',
   "10 standardized attack scenarios that evaluate a security product. 8 of them, in 6 files, map to MITRE ATLAS (4 techniques); the other 2 test the product's defensive response.",
   '',
@@ -193,10 +193,10 @@ test('with --tests a case skipped at run time without the inconclusive marker is
     const skipped = withRunTimeSkip(meta);
     const r = checkCounts(COUNTED, SUITE, skipped);
     assert.equal(r.status, 1, JSON.stringify(meta));
-    assert.match(r.stderr, /^README: line \d+: the tests badge says 14; the test report has 13 passing tests\.$/m);
+    assert.match(r.stderr, /^README: line \d+: the Quick Start comment says 14; the test report has 13 passing tests\.$/m);
     assert.doesNotMatch(r.stdout, /skipped as inconclusive/);
     const { drift } = compareCounts(skipped, COUNTED, source);
-    assert.ok(drift.some((d) => / \(tests badge\) states 14 passing tests; the suite has 13$/.test(d)), drift.join('\n'));
+    assert.ok(drift.some((d) => / \(Quick Start comment\) states 14 passing tests; the suite has 13$/.test(d)), drift.join('\n'));
   }
 });
 
@@ -317,7 +317,7 @@ test('every count the README states is compared by this check and by the drift g
   const counts = [...COUNTED.matchAll(/\b\d+\b/g)].filter(
     (m) => !notCounts.some(([start, end]) => m.index >= start && m.index < end),
   );
-  assert.equal(counts.length, 42);
+  assert.equal(counts.length, 41);
   for (const m of counts) {
     const line = lineOf(COUNTED, m.index);
     const stated = Number(m[0]) + 1;
@@ -467,15 +467,44 @@ test(
   },
 );
 
-test('a badge below the passing count, the Quick Start comment and the scoring-engine and pinned counts are each checked', () => {
+test('a badge whose message starts with a number fails, also without the count check', () => {
+  const r = check(
+    '[![Tests](https://img.shields.io/badge/tests-14%20passing-brightgreen)](https://example.com/oasb)\n' +
+      '[![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-teal)](https://atlas.mitre.org/)\n' +
+      '![count](https://img.shields.io/badge/12-scenarios)\n',
+  );
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^README: line 11: the badge "tests: 14 passing" states a number typed into its URL, which the count check does not read; /m);
+  assert.match(r.stderr, /^README: line 12: the badge "MITRE ATLAS: 15 techniques" states a number typed into its URL/m);
+  assert.match(r.stderr, /^README: line 13: the badge "12" states a number typed into its URL/m);
+  assert.match(r.stderr, /show the CI status badge, which shows the result of the latest CI run of the suite\.$/m);
+});
+
+test('a badge whose message is text, the CI status badge and a badge in a code block pass', () => {
+  const r = check(
+    '[![Status: stable](https://img.shields.io/badge/status-stable-green)](docs/guide.md)\n' +
+      '[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)\n' +
+      '![a dash](https://img.shields.io/badge/node-built--in-blue)\n' +
+      '[![CI](https://github.com/opena2a-org/oasb/actions/workflows/ci.yml/badge.svg)](https://example.com/oasb)\n' +
+      '\n```md\n![Tests](https://img.shields.io/badge/tests-14%20passing-brightgreen)\n```\n',
+  );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("this repository's README has no badge that states a number and shows the CI status badge", () => {
+  const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
+  assert.doesNotMatch(r.stderr, /states a number typed into its URL/);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(readFileSync(join(repo, 'README.md'), 'utf8'), /\(https:\/\/github\.com\/opena2a-org\/oasb\/actions\/workflows\/ci\.yml\/badge\.svg\)/);
+});
+
+test('the Quick Start comment and the scoring-engine and pinned counts are each checked', () => {
   const r = checkCounts(
-    COUNTED.replace('tests-14%20passing', 'tests-12%20passing')
-      .replace('Full suite: 15 tests (14 pass', 'Full suite: 13 tests (12 pass')
+    COUNTED.replace('Full suite: 15 tests (14 pass', 'Full suite: 13 tests (12 pass')
       .replace('**2 scoring-engine unit tests**', '**1 scoring-engine unit tests**')
       .replace('| Pinned benchmark harness tests | 3 |', '| Pinned benchmark harness tests | 2 |'),
   );
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /line 3: the tests badge says 12; the test report has 14 passing tests\./);
   assert.match(r.stderr, /line 10: the Quick Start comment says 13; the test report has 15 tests\./);
   assert.match(r.stderr, /line 10: the Quick Start comment says 12; the test report has 14 passing tests\./);
   assert.match(r.stderr, /line 15: the Counts note says 1; the test report has 2 scoring-engine tests/);
@@ -527,7 +556,7 @@ test('this repository\'s README shows no OpenA2A CLI command the CLI does not ha
 test('a failing test is not counted as passing', () => {
   const r = checkCounts(COUNTED, { ...SUITE, 'src/baseline/BL-001.profile.test.ts': [0, 1, 0] });
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /line 3: the tests badge says 14; the test report has 13 passing tests\./);
+  assert.match(r.stderr, /line 10: the Quick Start comment says 14; the test report has 13 passing tests\./);
   assert.match(r.stderr, /the "npm test total" row says 14; the test report has 13 passing tests\./);
 });
 
@@ -549,7 +578,7 @@ test('a count whose wording changed is reported as not found, not skipped', () =
 test('a README without the stated counts fails unless --no-counts is given', () => {
   const r = checkCounts(HEAD + 'Body.\n');
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /the tests badge .* was not found/);
+  assert.match(r.stderr, /the introduction .* was not found/);
   assert.equal(check('Body.\n').status, 0);
 });
 
