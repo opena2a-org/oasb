@@ -98,6 +98,15 @@ stay on record here with the reason they changed.
   found, and the library example stopped on `Cannot find module 'arp-guard'`.
   The entries under Changed below correct them, and the smoke now fails if
   any of them fails again. Its tests run with `npm run test:scripts`.
+- `docs/adapters.md` lists the tests that fail with `OASB_ADAPTER=llm-guard`
+  and with `OASB_ADAPTER=rebuff`, each with the assertion it fails on: 9 in
+  AT-AI-001 and 3 in AT-AI-005, the two scenario suites those adapters run.
+  Both suites assert the reference adapter's pattern catalog: under each
+  adapter, 6 of the AT-AI-001 tests detect the input and fail on its
+  reference pattern id, and 3 do not detect the input. INT-007 reports N/A
+  under both adapters. `scripts/adapter-gating.test.mjs` fails when the tests
+  that fail under either adapter are not the ones the page lists, or when one
+  fails on an assertion that does not hold the code its row quotes.
 
 ### Removed
 

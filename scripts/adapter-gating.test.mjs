@@ -1,6 +1,8 @@
 // Tests that every scenario test runs against the adapter OASB_ADAPTER selects
 // and is N/A when that adapter lacks a capability the suite needs, so a
-// product's scorecard holds its own results and not the reference adapter's.
+// product's scorecard holds its own results and not the reference adapter's,
+// and that the tests that fail under llm-guard and rebuff are the ones
+// docs/adapters.md records, each on the assertion its row quotes.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -9,7 +11,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,6 +29,10 @@ const PROMPT_ONLY = ['prompt-input-scanning', 'pattern-scanning'];
 
 // The title describeWithCapability gives a suite it skips.
 const REQUIRES = /\[requires: ([^\]]+)\]$/;
+
+// The section of docs/adapters.md that records the tests failing under the
+// two prompt-only stubs.
+const STUB_FAILURES_HEADING = '## Tests that fail under llm-guard and rebuff';
 
 /** The scenario test files under dir, as repo-relative paths. */
 function testFiles(dir) {
@@ -79,6 +85,56 @@ function noCapability() {
   return noCapabilityReport;
 }
 
+// One vitest run per stub, shared by the tests that read it.
+const stubReports = new Map();
+function stubReport(stub) {
+  if (!stubReports.has(stub)) stubReports.set(stub, runScenarios(stub));
+  return stubReports.get(stub);
+}
+
+/**
+ * The rows of the table under STUB_FAILURES_HEADING in docs/adapters.md as
+ * { file, title, code }: the scenario file whose name starts with the row's
+ * suite ID, the test's title and the code its "Failing assertion" cell quotes.
+ */
+function documentedStubFailures() {
+  const lines = readFileSync(join(repo, 'docs', 'adapters.md'), 'utf8').split('\n');
+  const start = lines.indexOf(STUB_FAILURES_HEADING);
+  assert.notEqual(start, -1, `docs/adapters.md has no "${STUB_FAILURES_HEADING}" heading`);
+  const end = lines.findIndex((line, i) => i > start && line.startsWith('## '));
+  const scenarioFiles = SCENARIO_DIRS.flatMap(testFiles);
+  const rows = [];
+  for (const line of lines.slice(start + 1, end === -1 ? lines.length : end)) {
+    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
+    // The header row and the delimiter row have no suite ID in the first cell.
+    if (cells.length !== 4 || !/^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+$/.test(cells[0])) continue;
+    const file = scenarioFiles.find((f) => basename(f).startsWith(`${cells[0]}.`));
+    assert.ok(file, `docs/adapters.md: no scenario file starts with ${cells[0]}: ${line}`);
+    const code = cells[2].match(/^`([^`]+)`$/)?.[1];
+    assert.ok(code, `docs/adapters.md: the "Failing assertion" cell quotes no code: ${line}`);
+    rows.push({ file, title: cells[1], code });
+  }
+  assert.ok(rows.length > 0, `docs/adapters.md: no test rows under "${STUB_FAILURES_HEADING}"`);
+  return rows;
+}
+
+/**
+ * The expect() statement a failed test stopped at: the lines of the test
+ * file from the nearest one at or above the line its failure message points
+ * at that holds `expect(`, through that line. null when the message points
+ * at no line of the file.
+ */
+function failedStatement(file, message) {
+  const name = basename(file).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const at = message.match(new RegExp(`${name}:(\\d+):\\d+`));
+  if (!at) return null;
+  const lines = readFileSync(join(repo, file), 'utf8').split('\n');
+  const last = Number(at[1]) - 1;
+  let first = last;
+  while (first > 0 && !lines[first].includes('expect(')) first--;
+  return lines.slice(first, last + 1).join('\n');
+}
+
 test('an adapter that declares no capabilities gets N/A on every scenario test', () => {
   const report = noCapability();
   const expected = SCENARIO_DIRS.flatMap(testFiles).sort();
@@ -99,7 +155,7 @@ for (const stub of ['llm-guard', 'rebuff']) {
     // With no capabilities, each suite's title names every capability it needs.
     const needs = new Map(files(noCapability()).map((f) => [f.file, f.suite.match(REQUIRES)?.[1].split(', ')]));
     const wrong = [];
-    for (const f of files(runScenarios(stub))) {
+    for (const f of files(stubReport(stub))) {
       if (!needs.get(f.file)) {
         wrong.push(`${f.file} is not gated by describeWithCapability`);
         continue;
@@ -109,6 +165,33 @@ for (const stub of ['llm-guard', 'rebuff']) {
       const allSkipped = REQUIRES.test(f.suite) && !f.tests.some(ran);
       if (expectRun && !didRun) wrong.push(`${f.file} needs only ${needs.get(f.file).join(', ')} but did not run`);
       if (!expectRun && !allSkipped) wrong.push(`${f.file} needs ${needs.get(f.file).join(', ')} but was not N/A`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  test(`${stub} fails the tests docs/adapters.md records, each on the assertion its row quotes, and no other`, () => {
+    const documented = documentedStubFailures();
+    const got = files(stubReport(stub));
+    assert.deepEqual(got.filter((f) => f.loadError).map((f) => `${f.file}: ${f.loadError}`), [], 'scenario files failed to load');
+
+    const key = (t) => `${t.file} :: ${t.title}`;
+    const failed = got.flatMap((f) =>
+      f.tests
+        .filter((t) => t.status === 'failed')
+        .map((t) => ({ file: f.file, title: t.title, message: t.failureMessages.join('\n') })),
+    );
+    assert.deepEqual(
+      failed.map(key).sort(),
+      documented.map(key).sort(),
+      `the tests that fail with OASB_ADAPTER=${stub} are not the ones docs/adapters.md records`,
+    );
+
+    const wrong = [];
+    for (const t of failed) {
+      const { code } = documented.find((d) => key(d) === key(t));
+      const statement = failedStatement(t.file, t.message);
+      if (statement === null) wrong.push(`${key(t)}: the failure names no line of its file`);
+      else if (!statement.includes(code)) wrong.push(`${key(t)} failed at ${JSON.stringify(statement.trim())}, which does not hold \`${code}\``);
     }
     assert.deepEqual(wrong, []);
   });

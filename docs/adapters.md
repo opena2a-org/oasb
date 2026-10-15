@@ -1,7 +1,8 @@
 # Adapters
 
-The adapters the suite runs against, the surfaces each one declares, and
-where cross-product detection numbers come from. The
+The adapters the suite runs against, the surfaces each one declares, the
+tests that fail under llm-guard and rebuff, and where cross-product detection
+numbers come from. The
 [README](../README.md#evaluating-other-products) shows how to select an adapter
 with `OASB_ADAPTER`; the [test harness](test-harness.md) page lists the adapter
 files.
@@ -25,6 +26,25 @@ Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a 
 | Pattern scanning | ✓ | ✓ | ✓ |
 | Process / network / filesystem monitoring | ✓ | N/A | N/A |
 | Anomaly detection, budget control, enforcement | ✓ | N/A | N/A |
+
+## Tests that fail under llm-guard and rebuff
+
+llm-guard and rebuff declare prompt input scanning and pattern scanning, so the prompt input scanning suite (AT-AI-001) and the pattern coverage suite (AT-AI-005) run against them. Those suites assert the reference adapter's pattern catalog: AT-AI-001 expects the reference pattern id for each attack input, such as `PI-001`, and AT-AI-005 expects the reference adapter's patterns and a payload for each. The two adapters name their patterns `LLMG-...` and `RBUF-...`, and the tests below fail under each of them. They are recorded here instead of marked N/A, because the adapter declares the surface they test. A row whose failing assertion is a pattern id is not a detection miss: the test's assertion before it, `result.detected`, passed. `scripts/adapter-gating.test.mjs` runs the scenario tests under each of the two adapters and fails when the tests that fail are not the ones below, or when one of them fails on an assertion that does not hold the code its row quotes.
+
+| Suite | Test | Failing assertion | What it shows |
+|-------|------|-------------------|---------------|
+| AT-AI-001 | should detect instruction override (PI-001) | `m.pattern.id === 'PI-001'` | The adapter detects the input under its own pattern id |
+| AT-AI-001 | should detect delimiter escape (PI-002) | `m.pattern.id === 'PI-002'` | The adapter detects the input under its own pattern id |
+| AT-AI-001 | should detect tag injection (PI-003) | `m.pattern.id === 'PI-003'` | The adapter detects the input under its own pattern id |
+| AT-AI-001 | should detect DAN mode jailbreak (JB-001) | `m.pattern.id === 'JB-001'` | The adapter detects the input under its own pattern id |
+| AT-AI-001 | should detect roleplay bypass (JB-002) | `m.pattern.id === 'JB-002'` | The adapter detects the input under its own pattern id |
+| AT-AI-001 | should detect system prompt extraction (DE-001) | `m.pattern.id === 'DE-001'` | The adapter detects the input under its own pattern id |
+| AT-AI-001 | should detect credential extraction (DE-002) | `result.detected` | The adapter does not detect the input |
+| AT-AI-001 | should detect false memory injection (CM-001) | `result.detected` | The adapter does not detect the input |
+| AT-AI-001 | should detect context reset (CM-002) | `result.detected` | The adapter does not detect the input |
+| AT-AI-005 | every pattern the scanner exposes should have a known payload | `uncovered` | The test holds no payload for the adapter's pattern ids |
+| AT-AI-005 | should have patterns in all scanning categories | `PATTERN_SETS.outputPatterns.length` | The adapter's output pattern set is empty, as are its MCP and A2A sets |
+| AT-AI-005 | each pattern should detect its known payload | `matched` | The adapter's matches for the first payload do not hold its reference pattern id, `PI-001` |
 
 ## Comparing products
 

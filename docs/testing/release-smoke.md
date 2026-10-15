@@ -166,7 +166,9 @@ README's test counts do not include them.
 - `scripts/adapter-gating.test.mjs`: the scenario tests' capability gating.
   It runs the scenario tests with vitest against an adapter that declares no
   capabilities and against the llm-guard and rebuff adapters, and checks
-  that a suite runs only when the adapter has every capability it needs.
+  that a suite runs only when the adapter has every capability it needs and
+  that the tests failing under llm-guard and rebuff are the ones
+  `docs/adapters.md` records, each on the assertion its row quotes.
 - `scripts/scenario-report.test.mjs`: the report `npm run report` writes
   (`scripts/scenario-report.mjs`).
 - `scripts/library-entry.test.mjs`: the package entry point as a library
