@@ -78,7 +78,12 @@ the claims this repository publishes:
    passing counts with the tests that passed, counting a case skipped as
    inconclusive with them as the drift guard does; a report written in
    another checkout is read by each file's path from its `src/` directory,
-   as the drift guard reads it.
+   as the drift guard reads it. It holds the capture under Quick Start to
+   the same suite: the command named in "What `<command>` prints" must be a
+   `vitest run` that a code block above it shows, each `✓` line must name a
+   test of a file that command selects and that is not skipped, and the
+   `Test Files` and `Tests` lines must state the passed, failed and skipped
+   counts and the total of the files and tests it selects.
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.
@@ -116,8 +121,8 @@ the claims this repository publishes:
 them after `npm ci` (step 1) and `npm test` runs them before the suite; the
 README's test counts do not include them.
 
-- `scripts/check-readme.test.mjs`: the README layout, link and test-count
-  check (`scripts/check-readme.mjs`). One of its tests runs
+- `scripts/check-readme.test.mjs`: the README layout, link, test-count and
+  capture check (`scripts/check-readme.mjs`). One of its tests runs
   `npm run check:readme` on this README, which collects the suite with
   vitest.
 - `scripts/check-test-counts.test.mjs`: the drift guard

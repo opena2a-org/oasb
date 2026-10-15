@@ -956,6 +956,18 @@ stay on record here with the reason they changed.
   backtick is read as text with a code span; it opened a fenced block that
   ran to a closing fence or to the end of the page. The file still holds 8
   tests.
+- `npm run check:readme` holds the README's first-run capture to the suite.
+  The capture under Quick Start, of
+  `npx vitest run AT-AI-001 --reporter=verbose`, states 11 tests in 1 file
+  and names tests by their full names, and no check read it, so a renamed
+  test or a changed count left it stale. The check now fails when the
+  command the capture names is not a `vitest run` that a code block above it
+  shows, when a `✓` line names a test that the command does not select or
+  that is skipped, or when a `Test Files` or `Tests` line states a passed,
+  failed, skipped or total count other than that of the files and tests the
+  command selects. On this README it prints
+  "capture of `npx vitest run AT-AI-001 --reporter=verbose` matches the
+  collected suite: 11 tests in 1 test file".
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

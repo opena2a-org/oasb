@@ -70,6 +70,18 @@
 //      badge's URL, and check 5 does not read it; the counts are stated on
 //      the pages that check reads, and the CI status badge shows the result
 //      of the latest CI run, which runs the suite.
+//  11. a capture of a vitest run is what that run prints on the suite. A
+//      code block that holds a summary line ("Tests  11 passed (11)") is a
+//      capture; the line above it must name the command as
+//      "What `<command>` prints", the command must be a `vitest run` that a
+//      code block above that line shows, and its file filters select the
+//      test files whose path contains one of them, ignoring case, as vitest
+//      selects them. Each "✓ <file> > <name>" line must name a test of a
+//      selected file that is not skipped (with --tests: that passed), and
+//      each "Tests" and "Test Files" line must state the passed, failed and
+//      skipped counts and the total of the selected tests and files. A
+//      capture may leave lines out. Like the counts, this reads the suite,
+//      so --no-counts skips it.
 //
 // Checks 4, 5, 6 and 8 read the pages that took text moved out of the README
 // (README_PAGES in scripts/readme-counts.mjs) as they read the README, so the
@@ -345,6 +357,8 @@ async function suiteTests() {
     return reportFiles(report).flatMap((file) =>
       file.assertionResults.map((t) => ({
         file: repoPath(file.name),
+        // The name vitest prints: its describe blocks and title, joined by " > ".
+        name: typeof t.title === 'string' ? [...(Array.isArray(t.ancestorTitles) ? t.ancestorTitles : []), t.title].join(' > ') : undefined,
         state: t.status === 'passed' || t.status === 'failed' ? t.status : isInconclusiveSkip(t) ? 'passed' : 'skipped',
         inconclusive: isInconclusiveSkip(t),
       })),
@@ -363,7 +377,7 @@ async function suiteTests() {
     for (const m of testModules) {
       for (const e of m.errors()) fail(`vitest could not collect ${repoPath(m.moduleId)}: ${e.message}`);
       for (const t of m.children.allTests()) {
-        tests.push({ file: repoPath(m.moduleId), state: t.result().state === 'skipped' ? 'skipped' : 'collected' });
+        tests.push({ file: repoPath(m.moduleId), name: t.fullName, state: t.result().state === 'skipped' ? 'skipped' : 'collected' });
       }
     }
     return tests;
@@ -590,6 +604,129 @@ function checkSkippedCoverage(tests) {
   }
 }
 
+// 11. A capture of a vitest run: a code block holding a summary line such as
+// "Tests  11 passed (11)". The line above it names the command, as
+// What `npx vitest run AT-AI-001 --reporter=verbose` prints, trimmed:
+const CAPTURE_INTRO = /^What `([^`]+)` prints\b/;
+const SUMMARY = /^\s*(Test Files|Tests)\s+(\S.*?)\s+\((\d+)\)\s*$/;
+const PASSED_TEST = /^\s*✓\s+(\S+)\s+>\s+(.+?)(?:\s+\d+(?:\.\d+)?m?s)?\s*$/;
+const RESULT_STATES = ['passed', 'failed', 'skipped'];
+
+// The test file filters of a `vitest run` command: the words after `run`
+// that are not options. An option is read as one word, so its value is
+// written after "=" (--reporter=verbose). Null for another command.
+function vitestFilters(command) {
+  const words = command.trim().split(/\s+/);
+  const at = words.indexOf('vitest');
+  if (at < 0 || words[at + 1] !== 'run') return null;
+  return words.slice(at + 2).filter((w) => !w.startsWith('-'));
+}
+
+function checkCaptures(tests) {
+  const ran = Boolean(reportPath);
+  const source = ran ? 'the test report' : 'the suite';
+  const passing = (t) => (ran ? t.state === 'passed' : t.state !== 'skipped');
+  const captures = [];
+  for (const { prefix, lines } of documents) {
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].fenceOpen) continue;
+      let end = i + 1;
+      while (end < lines.length && lines[end].inFence) end++;
+      const body = lines.slice(i + 1, end);
+      const at = `${prefix}line ${lines[i].n}`;
+      const open = i;
+      i = end;
+      if (!body.some((l) => SUMMARY.test(l.line))) continue;
+
+      let j = open - 1;
+      while (j >= 0 && !lines[j].inFence && !lines[j].fenceClose && lines[j].line.trim() === '') j--;
+      const intro = j >= 0 && !lines[j].inFence && !lines[j].fenceClose ? lines[j].line.trim().match(CAPTURE_INTRO) : null;
+      if (!intro) {
+        fail(
+          `${at}: the code block shows what a vitest run prints, but the line above it does not name the command; ` +
+            'introduce it with "What `<command>` prints", so the check can hold it to the suite.',
+        );
+        continue;
+      }
+      const command = intro[1].trim();
+      const filters = vitestFilters(command);
+      if (filters === null) {
+        fail(`${prefix}line ${lines[j].n}: the capture is of \`${command}\`; the check reads the capture of a \`vitest run\` command only.`);
+        continue;
+      }
+      const shown = lines
+        .slice(0, j)
+        .some((l) => l.inFence && l.line.replace(/\s#.*$/, '').trim().replace(/^\$\s*/, '') === command);
+      if (!shown) fail(`${prefix}line ${lines[j].n}: the capture names \`${command}\`, which no code block above it runs.`);
+
+      // vitest runs the test files whose path contains a filter, ignoring case.
+      const wanted = filters.map((f) => f.replace(/^\.\//, '').toLowerCase());
+      const selected = tests.filter((t) => wanted.length === 0 || wanted.some((f) => t.file.toLowerCase().includes(f)));
+      const files = [...new Set(selected.map((t) => t.file))];
+      if (files.length === 0) {
+        fail(`${at}: \`${command}\` selects no test file of ${source}, so its capture cannot be what it prints.`);
+        continue;
+      }
+      const live = {
+        Tests: {
+          unit: 'tests',
+          total: selected.length,
+          passed: selected.filter(passing).length,
+          failed: selected.filter((t) => t.state === 'failed').length,
+          skipped: selected.filter((t) => t.state === 'skipped').length,
+        },
+        'Test Files': { unit: 'test files', total: files.length, passed: 0, failed: 0, skipped: 0 },
+      };
+      for (const file of files) {
+        const states = selected.filter((t) => t.file === file).map((t) => t.state);
+        const state = states.includes('failed') ? 'failed' : states.every((s) => s === 'skipped') ? 'skipped' : 'passed';
+        live['Test Files'][state]++;
+      }
+
+      for (const { n, line } of body) {
+        const test = line.match(PASSED_TEST);
+        if (test) {
+          const [, file, name] = test;
+          const named = selected.filter((t) => t.file === file && t.name === name);
+          if (!files.includes(file)) {
+            fail(`${prefix}line ${n}: the capture shows a test of ${file}, which \`${command}\` does not run.`);
+          } else if (named.length === 0) {
+            fail(`${prefix}line ${n}: the capture shows "${name}" passing in ${file}; ${source} has no test of that name there.`);
+          } else if (!named.some(passing)) {
+            fail(`${prefix}line ${n}: the capture shows "${name}" passing in ${file}; ${source} has it ${named[0].state}.`);
+          }
+          continue;
+        }
+        const summary = line.match(SUMMARY);
+        if (!summary) continue;
+        const [, kind, parts, total] = summary;
+        const counts = live[kind];
+        const stated = {};
+        for (const part of parts.split('|').map((p) => p.trim())) {
+          const m = part.match(/^(\d+) (passed|failed|skipped)$/);
+          if (m) stated[m[2]] = Number(m[1]);
+          else fail(`${prefix}line ${n}: the capture's "${kind}" line says "${part}"; the check reads passed, failed and skipped counts.`);
+        }
+        if (Number(total) !== counts.total) {
+          const unit = counts.total === 1 ? counts.unit.slice(0, -1) : counts.unit;
+          fail(`${prefix}line ${n}: the capture's "${kind}" line says ${total} in all; \`${command}\` selects ${counts.total} ${unit} of ${source}.`);
+        }
+        for (const state of RESULT_STATES) {
+          const said = stated[state] ?? 0;
+          if (said === counts[state]) continue;
+          const label = state === 'passed' && !ran ? 'not skipped (collected, not run)' : state;
+          fail(
+            `${prefix}line ${n}: the capture's "${kind}" line says ${said} ${state}; ` +
+              `of the ${counts.unit} \`${command}\` selects, ${source} has ${counts[state]} ${label}.`,
+          );
+        }
+      }
+      captures.push({ prefix, command, tests: live.Tests.total, files: files.length });
+    }
+  }
+  return captures;
+}
+
 // 8. The Scanner Benchmark is offered for comparing products only as a
 // recall-only comparison.
 const NAMES_BENCHMARK = /\]\(#skills-security-benchmark\)|\b(?:Scanner|Skills Security) Benchmark\b/;
@@ -630,6 +767,7 @@ for (const { n, text, prefix } of documents.flatMap((d) => blocks(d.lines).map((
 }
 
 let counted = null;
+let captures = [];
 let inconclusive = 0;
 if (!noCounts) {
   let tests = null;
@@ -641,6 +779,7 @@ if (!noCounts) {
   if (tests) {
     counted = checkCounts(tests);
     checkSkippedCoverage(tests);
+    captures = checkCaptures(tests);
     inconclusive = tests.filter((t) => t.inconclusive).length;
   }
 }
@@ -738,4 +877,10 @@ if (counted) {
       `${counted.scoringEngine[0]} scoring-engine, ${counted.pinned[0]} pinned.`,
   );
   if (inconclusive > 0) console.log(`   ${inconclusive} skipped as inconclusive, counted with the passing tests.`);
+}
+for (const { prefix, command, tests, files } of captures) {
+  console.log(
+    `   ${prefix || 'README '}capture of \`${command}\` matches ${reportPath ? 'the test report' : 'the collected suite'}: ` +
+      `${tests} tests in ${files} test file${files === 1 ? '' : 's'}.`,
+  );
 }

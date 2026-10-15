@@ -203,6 +203,133 @@ test('with --tests a case skipped at run time without the inconclusive marker is
   }
 });
 
+// COUNTED with a run of one scenario file and what it prints: the two tests
+// of AT-PROC-001 in the SUITE.
+const CAPTURE_COMMAND = 'npx vitest run AT-PROC-001 --reporter=verbose';
+const CAPTURE_FILE = 'src/atomic/process/AT-PROC-001.spawn.test.ts';
+const CAPTURED = [
+  COUNTED,
+  '## First run',
+  '',
+  '```bash',
+  `${CAPTURE_COMMAND}   # one scenario file`,
+  '```',
+  '',
+  `What \`${CAPTURE_COMMAND}\` prints, trimmed:`,
+  '',
+  '```text',
+  ` ✓ ${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a spawn 3ms`,
+  '...',
+  ' Test Files  1 passed (1)',
+  '      Tests  2 passed (2)',
+  '```',
+  '',
+].join('\n');
+
+const lineWith = (text, needle) => lineOf(text, text.indexOf(needle));
+
+// report(SUITE) with the names vitest writes for the two AT-PROC-001 tests;
+// `statuses` replaces their statuses.
+function namedReport(statuses = ['passed', 'passed']) {
+  const named = report(SUITE);
+  const file = named.testResults.find((f) => f.name.endsWith(CAPTURE_FILE));
+  ['detects a spawn', 'detects a shell'].forEach((title, i) => {
+    Object.assign(file.assertionResults[i], { ancestorTitles: ['AT-PROC-001: Spawn'], title, status: statuses[i] });
+  });
+  return named;
+}
+
+test('a capture of a vitest run that equals the test report passes', () => {
+  const r = checkCounts(CAPTURED, SUITE, namedReport());
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {3}README capture of `npx vitest run AT-PROC-001 --reporter=verbose` matches the test report: 2 tests in 1 test file\.$/m);
+});
+
+test('a capture whose summary lines differ from the run fails on each count', () => {
+  const stale = CAPTURED.replace('Test Files  1 passed (1)', 'Test Files  2 passed (2)').replace('Tests  2 passed (2)', 'Tests  3 passed (3)');
+  const r = checkCounts(stale, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  const files = lineWith(stale, 'Test Files  2');
+  const tests = lineWith(stale, 'Tests  3');
+  const cmd = '`npx vitest run AT-PROC-001 --reporter=verbose`';
+  assert.match(r.stderr, new RegExp(`^README: line ${files}: the capture's "Test Files" line says 2 in all; ${cmd} selects 1 test file of the test report\\.$`, 'm'));
+  assert.match(r.stderr, new RegExp(`^README: line ${files}: the capture's "Test Files" line says 2 passed; of the test files ${cmd} selects, the test report has 1 passed\\.$`, 'm'));
+  assert.match(r.stderr, new RegExp(`^README: line ${tests}: the capture's "Tests" line says 3 in all; ${cmd} selects 2 tests of the test report\\.$`, 'm'));
+  assert.match(r.stderr, new RegExp(`^README: line ${tests}: the capture's "Tests" line says 3 passed; of the tests ${cmd} selects, the test report has 2 passed\\.$`, 'm'));
+});
+
+test('a capture that states a skipped count the run does not have, or leaves out one it has, fails', () => {
+  const split = CAPTURED.replace('Tests  2 passed (2)', 'Tests  1 passed | 1 skipped (2)');
+  const r = checkCounts(split, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  const at = lineWith(split, 'Tests  1 passed');
+  assert.match(r.stderr, new RegExp(`^README: line ${at}: the capture's "Tests" line says 1 passed; .* the test report has 2 passed\\.$`, 'm'));
+  assert.match(r.stderr, new RegExp(`^README: line ${at}: the capture's "Tests" line says 1 skipped; .* the test report has 0 skipped\\.$`, 'm'));
+
+  const skipped = checkCounts(CAPTURED, SUITE, namedReport(['passed', 'skipped']));
+  assert.equal(skipped.status, 1);
+  const tests = lineWith(CAPTURED, 'Tests  2');
+  assert.match(skipped.stderr, new RegExp(`^README: line ${tests}: the capture's "Tests" line says 2 passed; .* the test report has 1 passed\\.$`, 'm'));
+  assert.match(skipped.stderr, new RegExp(`^README: line ${tests}: the capture's "Tests" line says 0 skipped; .* the test report has 1 skipped\\.$`, 'm'));
+});
+
+test('a capture line that shows a test the run does not pass fails', () => {
+  const at = lineWith(CAPTURED, ' ✓ ');
+  const cases = [
+    [
+      CAPTURED.replace('detects a spawn 3ms', 'detects a fork 3ms'),
+      namedReport(),
+      `the capture shows "AT-PROC-001: Spawn > detects a fork" passing in ${CAPTURE_FILE}; the test report has no test of that name there.`,
+    ],
+    [
+      CAPTURED.replace(`${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a spawn`, 'src/atomic/network/AT-NET-001.connect.test.ts > AT-NET-001 > connects'),
+      namedReport(),
+      'the capture shows a test of src/atomic/network/AT-NET-001.connect.test.ts, which `npx vitest run AT-PROC-001 --reporter=verbose` does not run.',
+    ],
+    [
+      CAPTURED,
+      namedReport(['skipped', 'passed']),
+      `the capture shows "AT-PROC-001: Spawn > detects a spawn" passing in ${CAPTURE_FILE}; the test report has it skipped.`,
+    ],
+  ];
+  for (const [readme, testReport, message] of cases) {
+    const r = checkCounts(readme, SUITE, testReport);
+    assert.equal(r.status, 1, message);
+    assert.ok(r.stderr.split('\n').includes(`README: line ${at}: ${message}`), r.stderr);
+  }
+});
+
+test('a capture names a vitest run that a code block above it shows', () => {
+  const noIntro = CAPTURED.replace(`What \`${CAPTURE_COMMAND}\` prints, trimmed:`, 'It prints:');
+  let r = checkCounts(noIntro, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    new RegExp(`^README: line ${lineWith(noIntro, '```text')}: the code block shows what a vitest run prints, but the line above it does not name the command; `, 'm'),
+  );
+
+  const notRun = CAPTURED.replace(`${CAPTURE_COMMAND}   # one scenario file`, 'npx vitest run AT-NET-001');
+  r = checkCounts(notRun, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    new RegExp(`^README: line ${lineWith(notRun, 'What `')}: the capture names \`npx vitest run AT-PROC-001 --reporter=verbose\`, which no code block above it runs\\.$`, 'm'),
+  );
+
+  const other = CAPTURED.replace(`What \`${CAPTURE_COMMAND}\``, 'What `npm test`');
+  r = checkCounts(other, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^README: line \d+: the capture is of `npm test`; the check reads the capture of a `vitest run` command only\.$/m);
+
+  const none = CAPTURED.replaceAll('AT-PROC-001 --reporter', 'AT-NONE-404 --reporter');
+  r = checkCounts(none, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    new RegExp(`^README: line ${lineWith(none, '```text')}: \`npx vitest run AT-NONE-404 --reporter=verbose\` selects no test file of the test report, `, 'm'),
+  );
+});
+
 test('a README that says every scenario maps to ATLAS fails while a scenario file cites no technique', () => {
   const r = checkCounts(COUNTED.replace('8 of them, in 6 files,', '10 of them, in 8 files,').replace('the other 2 test', 'the other 0 test'));
   assert.equal(r.status, 1);
@@ -434,6 +561,7 @@ test(
       });
       assert.equal(r.status, 0, r.stderr);
       assert.match(r.stdout, /README test counts match the collected suite: \d+ tests, \d+ not skipped/);
+      assert.match(r.stdout, /^ {3}README capture of `npx vitest run [^`]+` matches the collected suite: \d+ tests? in \d+ test files?\.$/m);
       assert.deepEqual(
         readdirSync(tmp).filter((name) => /^(arp|llmg|rbuf)-lab-/.test(name)),
         [],
