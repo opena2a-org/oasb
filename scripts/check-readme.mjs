@@ -15,7 +15,11 @@
 //      `href='target'` attribute. Other forms, such as an unquoted href or a
 //      definition inside a list item, are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
-//      (100%.md) fails with its line.
+//      (100%.md) fails with its line. For a path the message says to write
+//      a literal % as %25; a heading's anchor holds no %, so for an anchor it
+//      says to drop the %, and names the anchor that then matches a heading
+//      when one does (#100%-coverage, with a heading "100% coverage", is
+//      told to write #100-coverage).
 //   5. every test count the README states equals the suite: the badge, the
 //      Quick Start comment, the Counts note, the per-group `npm run test:*`
 //      comments, the scenario counts in the prose, the MITRE ATLAS counts
@@ -223,6 +227,17 @@ function decoded(part) {
   }
 }
 
+// What to do about an anchor with a malformed %-escape. A heading's anchor
+// holds no % (slug() drops it), so writing the % as %25 cannot match one.
+// With each % that starts no escape dropped, the anchor is named when it then
+// matches a heading in `ids`; otherwise the advice names the page `where`.
+function malformedAnchorAdvice(anchor, ids, where) {
+  const stripped = anchor.replace(/%(?![0-9a-f]{2})/gi, '');
+  const id = decoded(stripped);
+  if (id !== null && ids.has(id.toLowerCase())) return `a heading's anchor has no %, so write "#${stripped}".`;
+  return `a heading's anchor has no %, so drop the % and link a heading in ${where}.`;
+}
+
 const anchorCache = new Map();
 function anchorsOf(file) {
   if (!anchorCache.has(file)) anchorCache.set(file, anchors(parse(readFileSync(file, 'utf8'))));
@@ -270,10 +285,11 @@ for (const { file: doc, prefix, lines } of documents) {
       }
       if (anchor && /\.md$/i.test(file)) {
         const id = decoded(anchor);
+        const where = pathPart || prefix.trim() || 'README.md';
         if (id === null) {
-          fail(`${prefix}line ${n}: anchor "#${anchor}" has a malformed %-escape; write a literal % as %25.`);
+          fail(`${prefix}line ${n}: anchor "#${anchor}" has a malformed %-escape; ${malformedAnchorAdvice(anchor, anchorsOf(file), where)}`);
         } else if (!anchorsOf(file).has(id.toLowerCase())) {
-          fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${pathPart || prefix.trim() || 'README.md'}.`);
+          fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${where}.`);
         }
       }
       if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file)) {

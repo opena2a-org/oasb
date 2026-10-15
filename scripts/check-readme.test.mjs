@@ -628,10 +628,26 @@ test('a link path or anchor with a malformed %-escape is named by its line, with
   assert.equal(r.status, 1);
   assert.deepEqual(r.stderr.trim().split('\n'), [
     'README: line 11: link target "100%.md" has a malformed %-escape; write a literal % as %25.',
-    'README: line 11: anchor "#100%" has a malformed %-escape; write a literal % as %25.',
+    `README: line 11: anchor "#100%" has a malformed %-escape; a heading's anchor has no %, so drop the % and link a heading in docs/guide.md.`,
     'README: docs/how-it-works.md line 3: link target "100%.md" has a malformed %-escape; write a literal % as %25.',
-    'README: docs/how-it-works.md line 3: anchor "#50%off" has a malformed %-escape; write a literal % as %25.',
+    `README: docs/how-it-works.md line 3: anchor "#50%off" has a malformed %-escape; a heading's anchor has no %, so drop the % and link a heading in docs/how-it-works.md.`,
   ]);
+});
+
+test('an anchor with a malformed %-escape is told the anchor of the heading it names, and that anchor passes', () => {
+  const heading = '## 100% coverage\n\n## Café 100%\n\n';
+  const r = check(heading + 'See [x](#100%-coverage) and [y](#caf%C3%A9-100%).\n');
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.trim().split('\n'), [
+    `README: line 15: anchor "#100%-coverage" has a malformed %-escape; a heading's anchor has no %, so write "#100-coverage".`,
+    `README: line 15: anchor "#caf%C3%A9-100%" has a malformed %-escape; a heading's anchor has no %, so write "#caf%C3%A9-100".`,
+  ]);
+  // Writing the % as %25 names no heading, since a heading's anchor has no %.
+  const escaped = check(heading + 'See [x](#100%25-coverage).\n');
+  assert.equal(escaped.status, 1);
+  assert.match(escaped.stderr, /anchor "#100%25-coverage" has no matching heading in README\.md/);
+  const advised = check(heading + 'See [x](#100-coverage) and [y](#caf%C3%A9-100).\n');
+  assert.equal(advised.status, 0, advised.stderr);
 });
 
 test('a link that writes a literal % as %25 resolves', () => {

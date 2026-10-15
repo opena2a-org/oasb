@@ -907,6 +907,13 @@ stay on record here with the reason they changed.
   passed (8 of 8). The code-span pattern does not cross a blank line, so
   the new case fails on that edit (1 failed, 7 passed). The file still
   holds 8 tests.
+- For an anchor with a malformed %-escape, `npm run check:readme` now says
+  to drop the %, since a heading's anchor has none, and names the anchor to
+  write when dropping it matches a heading: `[x](#100%-coverage)` under the
+  heading `## 100% coverage` is told to write `#100-coverage`, which passes.
+  It said to write the % as `%25`, and `[x](#100%25-coverage)` then failed
+  with `anchor "#100%25-coverage" has no matching heading in README.md`. A
+  link path with a malformed %-escape is still told to write `%25`.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
