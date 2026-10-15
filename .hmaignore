@@ -13,3 +13,10 @@ corpus/
 src/harness/dvaa-manager.ts
 src/harness/dvaa-client.ts
 scripts/run-dvaa-benchmark.ts
+
+# False positives of `hackmyagent secure` 0.33.2. Each rule below leaves out
+# one check on one file; every other check still runs on that file.
+package.json:AIM-001 # OASB is a benchmark library, not an agent, so it has no agent identity to declare
+scripts/check-documented-commands.test.mjs:NEMO-009 # new Function() compiles what placeholdersToChecks returns for a code string written in the test itself
+results/2026-10-10-2a89ce5d/record.json:AST-CRED-003 # the flagged value is oasb.commit, the git commit the pinned run measured
+results/2026-10-10-d8306ef8/record.json:AST-CRED-003 # the flagged value is oasb.commit, the git commit the pinned run measured
