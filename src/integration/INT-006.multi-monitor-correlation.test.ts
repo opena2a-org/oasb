@@ -114,7 +114,7 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-
     // All injected events share the same attackId (correlation events may not)
     const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(5); // 3 injected + 2 cross-monitor correlation
-    const injectedEvents = allEvents.filter((e) => e.data.attackId === 'coordinated-001');
+    const injectedEvents = allEvents.filter((e) => e.data!.attackId === 'coordinated-001');
     expect(injectedEvents.length).toBe(3);
   });
 
@@ -179,8 +179,8 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-
     expect(collectedEvents.length).toBe(5); // 3 injected + 2 cross-monitor correlation
 
     for (let i = 0; i < collectedEvents.length - 1; i++) {
-      const t1 = new Date(collectedEvents[i].timestamp).getTime();
-      const t2 = new Date(collectedEvents[i + 1].timestamp).getTime();
+      const t1 = new Date(collectedEvents[i].timestamp!).getTime();
+      const t2 = new Date(collectedEvents[i + 1].timestamp!).getTime();
       expect(t2).toBeGreaterThanOrEqual(t1);
     }
   });

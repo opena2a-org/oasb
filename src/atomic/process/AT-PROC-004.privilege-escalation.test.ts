@@ -43,7 +43,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-004: Privilege Escalation 
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
-    expect(violations[0].data.user).toBe('root');
+    expect(violations[0].data!.user).toBe('root');
     expect(violations[0].source).toBe('process');
   });
 
@@ -64,7 +64,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-004: Privilege Escalation 
 
     const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(1);
-    expect(normals[0].data.user).toBe(currentUser);
+    expect(normals[0].data!.user).toBe(currentUser);
     expect(normals[0].severity).toBe('info');
     expect(normals[0].category).toBe('normal');
 
@@ -105,13 +105,13 @@ describeWithCapability('process-monitoring', 'AT-PROC-004: Privilege Escalation 
 
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
-    expect(violations[0].data.user).toBe('root');
-    expect(violations[0].data.pid).toBe(40004);
+    expect(violations[0].data!.user).toBe('root');
+    expect(violations[0].data!.pid).toBe(40004);
 
     const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(2);
     for (const event of normals) {
-      expect(event.data.user).toBe(currentUser);
+      expect(event.data!.user).toBe(currentUser);
     }
   });
 });

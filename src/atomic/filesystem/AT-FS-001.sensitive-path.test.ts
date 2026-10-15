@@ -38,7 +38,7 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-001: Sensitive Path Acces
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
-    expect(violations[0].data.path).toContain('.ssh/id_rsa');
+    expect(violations[0].data!.path).toContain('.ssh/id_rsa');
   });
 
   it('should detect access to .aws/credentials as a high-severity violation', async () => {
@@ -57,7 +57,7 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-001: Sensitive Path Acces
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
-    expect(violations[0].data.path).toContain('.aws/credentials');
+    expect(violations[0].data!.path).toContain('.aws/credentials');
   });
 
   it('should detect access to .gnupg/secring.gpg as a high-severity violation', async () => {
@@ -76,7 +76,7 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-001: Sensitive Path Acces
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
     expect(violations[0].severity).toBe('high');
-    expect(violations[0].data.path).toContain('.gnupg/secring.gpg');
+    expect(violations[0].data!.path).toContain('.gnupg/secring.gpg');
   });
 
   it('should capture all three sensitive path accesses', async () => {
@@ -105,17 +105,17 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-001: Sensitive Path Acces
 
     for (const violation of violations) {
       expect(violation.severity).toBe('high');
-      expect(violation.data.sensitive).toBe(true);
+      expect(violation.data!.sensitive).toBe(true);
     }
 
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.ssh/id_rsa'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.ssh/id_rsa'))
     ).toBe(true);
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.aws/credentials'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.aws/credentials'))
     ).toBe(true);
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.gnupg/secring.gpg'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.gnupg/secring.gpg'))
     ).toBe(true);
   });
 });

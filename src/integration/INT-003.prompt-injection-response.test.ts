@@ -178,7 +178,7 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'enforcement
     const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].severity).toBe('high');
-    expect(threats[0].data.detectionMethod).toBe('pattern-match');
+    expect(threats[0].data!.detectionMethod).toBe('pattern-match');
 
     const alertActions = arp.getEnforcementsByAction('alert');
     expect(alertActions.length).toBe(1);
@@ -237,6 +237,6 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'enforcement
 
     const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
-    expect(threats[0].data.dvaaAvailable).toBe(true);
+    expect(threats[0].data!.dvaaAvailable).toBe(true);
   });
 });

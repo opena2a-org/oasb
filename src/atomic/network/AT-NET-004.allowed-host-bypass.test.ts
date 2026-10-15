@@ -28,7 +28,7 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
     await arp.injectEvent({
       source: 'network-monitor',
       category: 'anomaly',
-      severity: 'warning',
+      severity: 'medium',
       description: 'Connection to host mimicking allowed host via suffix match',
       data: {
         remoteAddr: 'evil-api.example.com',
@@ -42,11 +42,11 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
 
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
-    expect(anomalies[0].data.remoteAddr).toBe('evil-api.example.com');
-    expect(anomalies[0].data.matchResult).toBe('rejected');
+    expect(anomalies[0].data!.remoteAddr).toBe('evil-api.example.com');
+    expect(anomalies[0].data!.matchResult).toBe('rejected');
 
     // Verify it was NOT treated as a normal connection
-    const normalConnections = arp.getEventsByCategory('connection');
+    const normalConnections = arp.getEventsByCategory('normal');
     expect(normalConnections.length).toBe(0);
   });
 
@@ -55,7 +55,7 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
     // (preceded by a dot separator)
     await arp.injectEvent({
       source: 'network-monitor',
-      category: 'connection',
+      category: 'normal',
       severity: 'info',
       description: 'Connection to proper subdomain of allowed host',
       data: {
@@ -68,10 +68,10 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
       },
     });
 
-    const connections = arp.getEventsByCategory('connection');
+    const connections = arp.getEventsByCategory('normal');
     expect(connections.length).toBe(1);
-    expect(connections[0].data.remoteAddr).toBe('sub.api.example.com');
-    expect(connections[0].data.matchResult).toBe('accepted');
+    expect(connections[0].data!.remoteAddr).toBe('sub.api.example.com');
+    expect(connections[0].data!.matchResult).toBe('accepted');
     expect(connections[0].severity).toBe('info');
   });
 
@@ -80,7 +80,7 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
     await arp.injectEvent({
       source: 'network-monitor',
       category: 'anomaly',
-      severity: 'warning',
+      severity: 'medium',
       description: 'Suffix-match bypass: evil-api.example.com',
       data: {
         remoteAddr: 'evil-api.example.com',
@@ -95,7 +95,7 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
     // Inject the legitimate subdomain
     await arp.injectEvent({
       source: 'network-monitor',
-      category: 'connection',
+      category: 'normal',
       severity: 'info',
       description: 'Proper subdomain: sub.api.example.com',
       data: {
@@ -115,7 +115,7 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
     expect(
       arp.getEvents().some(
         (e) =>
-          e.data.remoteAddr === 'evil-api.example.com' &&
+          e.data!.remoteAddr === 'evil-api.example.com' &&
           e.category === 'anomaly'
       )
     ).toBe(true);
@@ -124,8 +124,8 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
     expect(
       arp.getEvents().some(
         (e) =>
-          e.data.remoteAddr === 'sub.api.example.com' &&
-          e.category === 'connection'
+          e.data!.remoteAddr === 'sub.api.example.com' &&
+          e.category === 'normal'
       )
     ).toBe(true);
   });

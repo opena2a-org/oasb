@@ -75,14 +75,14 @@ describeWithCapability('process-monitoring', 'AT-PROC-001: Spawn Child Process D
     const event = await arp.waitForEvent(
       (e) =>
         e.source === 'process' &&
-        typeof e.data.pid === 'number' &&
-        e.data.pid === childPid,
+        typeof e.data!.pid === 'number' &&
+        e.data!.pid === childPid,
       5000,
     );
 
     expect(event).toBeDefined();
     expect(event.source).toBe('process');
-    expect(event.data.pid).toBe(childPid);
+    expect(event.data!.pid).toBe(childPid);
     expect(event.category).toBe('normal');
     expect(event.severity).toBe('info');
   });
@@ -114,15 +114,15 @@ describeWithCapability('process-monitoring', 'AT-PROC-001: Spawn Child Process D
     const event = await arp.waitForEvent(
       (e) =>
         e.source === 'process' &&
-        typeof e.data.pid === 'number' &&
-        e.data.pid === childPid,
+        typeof e.data!.pid === 'number' &&
+        e.data!.pid === childPid,
       5000,
     );
 
     // The process monitor includes command, user, cpu, mem in event data
-    expect(event.data.command).toBeDefined();
-    expect(typeof event.data.command).toBe('string');
-    expect((event.data.command as string)).toContain('node');
+    expect(event.data!.command).toBeDefined();
+    expect(typeof event.data!.command).toBe('string');
+    expect((event.data!.command as string)).toContain('node');
   });
 
   // Monitor status is not part of SecurityProductAdapter. Only the reference
@@ -131,7 +131,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-001: Spawn Child Process D
   it.skipIf(!(createAdapter() instanceof ArpWrapper))('should verify the process monitor is actively running', async () => {
     // The process monitor should be running after start()
     const status = (arp as ArpWrapper).getInstance().getStatus();
-    const processMonitor = status.monitors.find((m) => m.type === 'process');
+    const processMonitor = status.monitors.find((m: { type: string }) => m.type === 'process');
 
     expect(processMonitor).toBeDefined();
     expect(processMonitor!.running).toBe(true);

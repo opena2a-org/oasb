@@ -51,13 +51,13 @@ describeWithCapability('process-monitoring', 'E2E-002: Live Process Detection', 
 
     // Wait for the process monitor to detect the new child
     const event = await arp.waitForEvent(
-      (e) => e.source === 'process' && e.data.pid === child.pid,
+      (e) => e.source === 'process' && e.data!.pid === child.pid,
       10000,
     );
 
     expect(event).toBeDefined();
     expect(event.source).toBe('process');
-    expect(event.data.pid).toBe(child.pid);
+    expect(event.data!.pid).toBe(child.pid);
   });
 
   it('should detect a suspicious binary (curl) as a violation', async () => {
@@ -72,15 +72,15 @@ describeWithCapability('process-monitoring', 'E2E-002: Live Process Detection', 
       (e) =>
         e.source === 'process' &&
         e.category === 'violation' &&
-        e.data.binary === 'curl',
+        e.data!.binary === 'curl',
       10000,
     );
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
     expect(event.severity).toBe('high');
-    expect(event.data.binary).toBe('curl');
-    expect(event.data.pid).toBe(child.pid);
+    expect(event.data!.binary).toBe('curl');
+    expect(event.data!.pid).toBe(child.pid);
   });
 
   it('should detect process termination', async () => {
@@ -90,7 +90,7 @@ describeWithCapability('process-monitoring', 'E2E-002: Live Process Detection', 
 
     // Wait for the initial detection
     await arp.waitForEvent(
-      (e) => e.source === 'process' && e.data.pid === child.pid,
+      (e) => e.source === 'process' && e.data!.pid === child.pid,
       10000,
     );
 
@@ -98,12 +98,12 @@ describeWithCapability('process-monitoring', 'E2E-002: Live Process Detection', 
     const termEvent = await arp.waitForEvent(
       (e) =>
         e.source === 'process' &&
-        e.data.pid === child.pid &&
-        e.data.action === 'terminated',
+        e.data!.pid === child.pid &&
+        e.data!.action === 'terminated',
       10000,
     );
 
     expect(termEvent).toBeDefined();
-    expect(termEvent.data.action).toBe('terminated');
+    expect(termEvent.data!.action).toBe('terminated');
   });
 });

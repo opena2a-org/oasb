@@ -109,12 +109,12 @@ describeWithCapability('network-monitoring', 'E2E-003: Live Network Detection', 
     const event = await arp.waitForEvent(
       (e) =>
         e.source === 'network' &&
-        e.data.remotePort === serverPort,
+        e.data!.remotePort === serverPort,
       15000,
     );
 
     expect(event).toBeDefined();
     expect(event.source).toBe('network');
-    expect(event.data.remotePort).toBe(serverPort);
+    expect(event.data!.remotePort).toBe(serverPort);
   });
 });

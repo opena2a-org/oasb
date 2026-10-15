@@ -51,13 +51,13 @@ describeWithCapability('process-monitoring', 'E2E-004: Process Interceptor', () 
 
     const events = arp.getEvents();
     const echoEvent = events.find(
-      (e: { source: string; data: Record<string, unknown> }) =>
-        e.source === 'process' && e.data.binary === 'echo',
+      (e) =>
+        e.source === 'process' && e.data!.binary === 'echo',
     );
 
     expect(echoEvent).toBeDefined();
-    expect(echoEvent!.data.intercepted).toBe(true);
-    expect(echoEvent!.data.command).toContain('echo');
+    expect(echoEvent!.data!.intercepted).toBe(true);
+    expect(echoEvent!.data!.command).toContain('echo');
   });
 
   it('should detect suspicious binary via interceptor', async () => {
@@ -68,15 +68,15 @@ describeWithCapability('process-monitoring', 'E2E-004: Process Interceptor', () 
 
     const events = arp.getEvents();
     const curlEvent = events.find(
-      (e: { source: string; category: string; data: Record<string, unknown> }) =>
-        e.source === 'process' && e.data.binary === 'curl',
+      (e) =>
+        e.source === 'process' && e.data!.binary === 'curl',
     );
 
     expect(curlEvent).toBeDefined();
     expect(curlEvent!.category).toBe('violation');
     expect(curlEvent!.severity).toBe('high');
-    expect(curlEvent!.data.suspicious).toBe(true);
-    expect(curlEvent!.data.intercepted).toBe(true);
+    expect(curlEvent!.data!.suspicious).toBe(true);
+    expect(curlEvent!.data!.intercepted).toBe(true);
   });
 
   it('should intercept exec() shell commands', async () => {
@@ -87,14 +87,14 @@ describeWithCapability('process-monitoring', 'E2E-004: Process Interceptor', () 
 
     const events = arp.getEvents();
     const execEvent = events.find(
-      (e: { source: string; data: Record<string, unknown> }) =>
+      (e) =>
         e.source === 'process' &&
-        typeof e.data.command === 'string' &&
-        e.data.command.includes('echo test-exec'),
+        typeof e.data!.command === 'string' &&
+        e.data!.command.includes('echo test-exec'),
     );
 
     expect(execEvent).toBeDefined();
-    expect(execEvent!.data.intercepted).toBe(true);
+    expect(execEvent!.data!.intercepted).toBe(true);
   });
 
   it('should detect suspicious binary in exec() command', async () => {
@@ -105,8 +105,8 @@ describeWithCapability('process-monitoring', 'E2E-004: Process Interceptor', () 
 
     const events = arp.getEvents();
     const curlEvent = events.find(
-      (e: { source: string; data: Record<string, unknown> }) =>
-        e.source === 'process' && e.data.binary === 'curl',
+      (e) =>
+        e.source === 'process' && e.data!.binary === 'curl',
     );
 
     expect(curlEvent).toBeDefined();

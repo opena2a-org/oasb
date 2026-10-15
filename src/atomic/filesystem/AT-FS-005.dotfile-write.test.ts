@@ -48,9 +48,9 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-005: Shell Config Dotfile
       const violations = arp.getEventsByCategory('violation');
       expect(violations.length).toBe(1);
       expect(violations[0].severity).toBe('high');
-      expect(violations[0].data.path).toBe(path);
-      expect(violations[0].data.operation).toBe('write');
-      expect(violations[0].data.shellConfig).toBe(true);
+      expect(violations[0].data!.path).toBe(path);
+      expect(violations[0].data!.operation).toBe('write');
+      expect(violations[0].data!.shellConfig).toBe(true);
     });
   }
 
@@ -76,15 +76,15 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-005: Shell Config Dotfile
     for (const violation of violations) {
       expect(violation.severity).toBe('high');
       expect(violation.category).toBe('violation');
-      expect(violation.data.operation).toBe('write');
-      expect(violation.data.shellConfig).toBe(true);
+      expect(violation.data!.operation).toBe('write');
+      expect(violation.data!.shellConfig).toBe(true);
     }
   });
 
   it('should distinguish read access from write violations on dotfiles', async () => {
     await arp.injectEvent({
       source: 'filesystem-monitor',
-      category: 'connection',
+      category: 'normal',
       severity: 'info',
       description: 'Read access to .bashrc',
       data: {
@@ -112,11 +112,11 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-005: Shell Config Dotfile
 
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
-    expect(violations[0].data.operation).toBe('write');
+    expect(violations[0].data!.operation).toBe('write');
 
     const highSeverity = arp.getEvents().filter((e) => e.severity === 'high');
     expect(highSeverity.length).toBe(1);
-    expect(highSeverity[0].data.operation).toBe('write');
+    expect(highSeverity[0].data!.operation).toBe('write');
   });
 
   it('should verify newly-added sensitive paths from ARP fix are covered', async () => {
@@ -145,13 +145,13 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-005: Shell Config Dotfile
     expect(violations.length).toBe(3);
 
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.bash_profile'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.bash_profile'))
     ).toBe(true);
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.profile') && !e.data.path.includes('.bash_profile'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.profile') && !(e.data!.path as string).includes('.bash_profile'))
     ).toBe(true);
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.gitconfig'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.gitconfig'))
     ).toBe(true);
   });
 });

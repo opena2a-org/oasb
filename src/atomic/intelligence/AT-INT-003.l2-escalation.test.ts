@@ -49,13 +49,13 @@ describeWithCapability(['enforcement-alert', 'enforcement-kill'], 'AT-INT-003: L
     });
 
     // SEC-021: event carries LLM review telemetry but is not deferred
-    expect(emitted.data._llmReviewRequested).toBe(true);
-    expect(emitted.data._initialAction).toBe('kill');
+    expect(emitted.data!._llmReviewRequested).toBe(true);
+    expect(emitted.data!._initialAction).toBe('kill');
 
     // Deprecated deferral fields must not be set (pre-CR-002 behavior)
-    expect(emitted.data._pendingConfirmation).toBeUndefined();
-    expect(emitted.data._pendingAction).toBeUndefined();
-    expect(emitted.data._pendingRule).toBeUndefined();
+    expect(emitted.data!._pendingConfirmation).toBeUndefined();
+    expect(emitted.data!._pendingAction).toBeUndefined();
+    expect(emitted.data!._pendingRule).toBeUndefined();
   });
 
   it('should fire enforcement immediately even when LLM confirmation is required', async () => {
@@ -121,8 +121,8 @@ describeWithCapability(['enforcement-alert', 'enforcement-kill'], 'AT-INT-003: L
     });
 
     // SEC-021: kill fires immediately, event is tagged for review
-    expect(reviewed.data._llmReviewRequested).toBe(true);
-    expect(reviewed.data._pendingConfirmation).toBeUndefined();
+    expect(reviewed.data!._llmReviewRequested).toBe(true);
+    expect(reviewed.data!._pendingConfirmation).toBeUndefined();
 
     const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBeGreaterThanOrEqual(1);

@@ -68,13 +68,13 @@ describeWithCapability('network-monitoring', 'E2E-005: Network Interceptor', () 
     const connEvent = events.find(
       (e) =>
         e.source === 'network' &&
-        e.data.remotePort === serverPort,
+        e.data!.remotePort === serverPort,
     );
 
     expect(connEvent).toBeDefined();
-    expect(connEvent!.data.intercepted).toBe(true);
-    expect(connEvent!.data.remoteAddr).toBe('127.0.0.1');
-    expect(connEvent!.data.remotePort).toBe(serverPort);
+    expect(connEvent!.data!.intercepted).toBe(true);
+    expect(connEvent!.data!.remoteAddr).toBe('127.0.0.1');
+    expect(connEvent!.data!.remotePort).toBe(serverPort);
   });
 
   it('should classify connections to allowed hosts as normal', async () => {
@@ -92,12 +92,12 @@ describeWithCapability('network-monitoring', 'E2E-005: Network Interceptor', () 
 
     const events = arp.getEvents();
     const connEvent = events.find(
-      (e) => e.source === 'network' && e.data.remotePort === serverPort,
+      (e) => e.source === 'network' && e.data!.remotePort === serverPort,
     );
 
     expect(connEvent).toBeDefined();
     expect(connEvent!.category).toBe('normal');
-    expect(connEvent!.data.allowed).toBe(true);
+    expect(connEvent!.data!.allowed).toBe(true);
   });
 
   it('should classify connections to non-allowed hosts as anomaly', async () => {
@@ -115,13 +115,13 @@ describeWithCapability('network-monitoring', 'E2E-005: Network Interceptor', () 
 
     const events = arp.getEvents();
     const connEvent = events.find(
-      (e) => e.source === 'network' && e.data.remotePort === serverPort,
+      (e) => e.source === 'network' && e.data!.remotePort === serverPort,
     );
 
     expect(connEvent).toBeDefined();
     expect(connEvent!.category).toBe('anomaly');
     expect(connEvent!.severity).toBe('medium');
-    expect(connEvent!.data.allowed).toBe(false);
+    expect(connEvent!.data!.allowed).toBe(false);
   });
 
   it('should restore net.Socket after stop', async () => {

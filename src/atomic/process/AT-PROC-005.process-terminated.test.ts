@@ -41,8 +41,8 @@ describeWithCapability('process-monitoring', 'AT-PROC-005: Process Terminated De
     expect(events.length).toBe(1);
     expect(events[0].source).toBe('process');
     expect(events[0].category).toBe('normal');
-    expect(events[0].data.action).toBe('terminated');
-    expect(events[0].data.pid).toBe(50001);
+    expect(events[0].data!.action).toBe('terminated');
+    expect(events[0].data!.pid).toBe(50001);
   });
 
   it('should capture both terminated and respawned events in sequence', async () => {
@@ -78,13 +78,13 @@ describeWithCapability('process-monitoring', 'AT-PROC-005: Process Terminated De
 
     // First event: termination
     const terminated = events[0];
-    expect(terminated.data.action).toBe('terminated');
-    expect(terminated.data.pid).toBe(50002);
+    expect(terminated.data!.action).toBe('terminated');
+    expect(terminated.data!.pid).toBe(50002);
 
     // Second event: respawn
     const respawned = events[1];
-    expect(respawned.data.pid).toBe(50003);
-    expect(respawned.data.command).toBe('node worker.js');
+    expect(respawned.data!.pid).toBe(50003);
+    expect(respawned.data!.command).toBe('node worker.js');
   });
 
   it('should capture multiple rapid respawn cycles', async () => {
@@ -114,10 +114,10 @@ describeWithCapability('process-monitoring', 'AT-PROC-005: Process Terminated De
     expect(events.length).toBe(4);
 
     // Verify the alternating terminate/spawn pattern
-    const terminated = events.filter((e) => e.data.action === 'terminated');
+    const terminated = events.filter((e) => e.data!.action === 'terminated');
     expect(terminated.length).toBe(2);
 
-    const spawned = events.filter((e) => e.data.command !== undefined);
+    const spawned = events.filter((e) => e.data!.command !== undefined);
     expect(spawned.length).toBe(2);
 
     // All should be from the process source
@@ -130,7 +130,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-005: Process Terminated De
   it('should use waitForEvent to detect a termination event', async () => {
     // Start waiting before injecting
     const waitPromise = arp.waitForEvent(
-      (e) => e.source === 'process' && e.data.action === 'terminated',
+      (e) => e.source === 'process' && e.data!.action === 'terminated',
       5000,
     );
 
@@ -147,7 +147,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-005: Process Terminated De
 
     const event = await waitPromise;
     expect(event).toBeDefined();
-    expect(event.data.action).toBe('terminated');
-    expect(event.data.pid).toBe(50020);
+    expect(event.data!.action).toBe('terminated');
+    expect(event.data!.pid).toBe(50020);
   });
 });

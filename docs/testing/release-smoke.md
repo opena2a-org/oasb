@@ -200,6 +200,10 @@ README's test counts do not include them.
   test that catches it runs only there. It does not check the workflow's
   concurrency settings, under which a later run can cancel one before its
   scan finishes, or which version of the checkout action the job uses.
+- `scripts/typecheck-tests.test.mjs`: `npm run typecheck:tests`, which
+  type-checks `src/` with its test files; fails on any type error it
+  reports, or when `tsconfig.test.json` takes in no test file under
+  `src/atomic`, `src/integration` or `src/e2e`.
 
 ## The README checks on every pull request
 

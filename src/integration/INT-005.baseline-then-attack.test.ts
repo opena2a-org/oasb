@@ -208,8 +208,8 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-
     expect(recentEvents.length).toBe(35);
 
     // Verify event ordering: baseline first, then attack
-    const baselineInBuffer = recentEvents.filter((e) => e.data.phase === 'baseline');
-    const attackInBuffer = recentEvents.filter((e) => e.data.phase === 'attack');
+    const baselineInBuffer = recentEvents.filter((e) => e.data!.phase === 'baseline');
+    const attackInBuffer = recentEvents.filter((e) => e.data!.phase === 'attack');
     expect(baselineInBuffer.length).toBe(30);
     expect(attackInBuffer.length).toBe(5);
   });
@@ -244,8 +244,8 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-
     }
 
     const allEvents = arp.getEvents();
-    const baselineEvents = allEvents.filter((e) => e.data.phase === 'baseline');
-    const attackEvents = allEvents.filter((e) => e.data.phase === 'attack');
+    const baselineEvents = allEvents.filter((e) => e.data!.phase === 'baseline');
+    const attackEvents = allEvents.filter((e) => e.data!.phase === 'attack');
 
     // All baseline events should be info severity
     for (const event of baselineEvents) {

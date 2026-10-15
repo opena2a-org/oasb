@@ -29,7 +29,7 @@ describeWithCapability('network-monitoring', 'AT-NET-003: Connection Burst Detec
       await arp.injectEvent({
         source: 'network-monitor',
         category: 'anomaly',
-        severity: 'warning',
+        severity: 'medium',
         description: `Rapid connection burst event ${i + 1}/${BURST_COUNT}`,
         data: {
           remoteAddr: `target-${i}.example.com`,
@@ -50,7 +50,7 @@ describeWithCapability('network-monitoring', 'AT-NET-003: Connection Burst Detec
       await arp.injectEvent({
         source: 'network-monitor',
         category: 'anomaly',
-        severity: 'warning',
+        severity: 'medium',
         description: `Rapid connection burst event ${i + 1}/${BURST_COUNT}`,
         data: {
           remoteAddr: `target-${i}.example.com`,
@@ -65,8 +65,8 @@ describeWithCapability('network-monitoring', 'AT-NET-003: Connection Burst Detec
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(BURST_COUNT);
 
-    const warnings = arp.getEvents().filter((e) => e.severity === 'warning');
-    expect(warnings.length).toBe(BURST_COUNT);
+    const mediumSeverity = arp.getEvents().filter((e) => e.severity === 'medium');
+    expect(mediumSeverity.length).toBe(BURST_COUNT);
   });
 
   it('should preserve event ordering within a burst', async () => {
@@ -74,7 +74,7 @@ describeWithCapability('network-monitoring', 'AT-NET-003: Connection Burst Detec
       await arp.injectEvent({
         source: 'network-monitor',
         category: 'anomaly',
-        severity: 'warning',
+        severity: 'medium',
         description: `Rapid connection burst event ${i + 1}/${BURST_COUNT}`,
         data: {
           remoteAddr: `target-${i}.example.com`,
@@ -88,7 +88,7 @@ describeWithCapability('network-monitoring', 'AT-NET-003: Connection Burst Detec
 
     const events = arp.getEvents();
     for (let i = 0; i < BURST_COUNT; i++) {
-      expect(events[i].data.burstIndex).toBe(i);
+      expect(events[i].data!.burstIndex).toBe(i);
     }
   });
 });

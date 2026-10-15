@@ -17,7 +17,12 @@
 
 // ─── Core Event Types ───────────────────────────────────────────────
 
-export type EventCategory = 'normal' | 'activity' | 'threat' | 'violation';
+/**
+ * 'anomaly' is the category arp-guard gives, for example, a connection to a
+ * host outside its allowed hosts; the atomic and integration tests inject it
+ * and write rules on it.
+ */
+export type EventCategory = 'normal' | 'activity' | 'anomaly' | 'threat' | 'violation';
 export type EventSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type MonitorSource = 'process' | 'network' | 'filesystem' | 'prompt' | 'mcp-protocol' | 'a2a-protocol' | string;
 export type EnforcementAction = 'log' | 'alert' | 'pause' | 'kill' | 'resume';
@@ -39,12 +44,20 @@ export interface EnforcementResult {
   reason: string;
   event: SecurityEvent;
   pid?: number;
+  /** The process a pause or kill acted on; the reference adapter leaves it unset for log and alert */
+  targetPid?: number;
 }
 
 export interface AlertRule {
   name: string;
   condition: AlertCondition;
   action: EnforcementAction;
+  /**
+   * Have the intelligence layer review the matched event. The reference
+   * adapter does not wait for that review: it acts at once and marks the
+   * event's data with _llmReviewRequested.
+   */
+  requireLlmConfirmation?: boolean;
 }
 
 export interface AlertCondition {
@@ -52,6 +65,11 @@ export interface AlertCondition {
   category?: EventCategory;
   minSeverity?: EventSeverity;
   descriptionContains?: string;
+  /**
+   * Match only when at least `count` events (from `source`, when the
+   * condition names one) arrived in the last `windowMs` milliseconds
+   */
+  threshold?: { count: number; windowMs: number };
 }
 
 // ─── Scanner Types ──────────────────────────────────────────────────
@@ -161,7 +179,8 @@ export interface EventEngine {
 // ─── Enforcement Interface ──────────────────────────────────────────
 
 export interface EnforcementEngine {
-  execute(action: EnforcementAction, event: SecurityEvent): Promise<EnforcementResult>;
+  /** targetPid, when given, is the process to act on instead of the event's data.pid */
+  execute(action: EnforcementAction, event: SecurityEvent, targetPid?: number): Promise<EnforcementResult>;
   pause(pid: number): boolean;
   resume(pid: number): boolean;
   kill(pid: number, signal?: string): boolean;

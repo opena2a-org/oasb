@@ -71,8 +71,8 @@ describeWithCapability(['process-monitoring', 'filesystem-monitoring', 'enforcem
     expect(violations.length).toBe(1);
     expect(violations[0].source).toBe('filesystem');
     expect(violations[0].severity).toBe('high');
-    expect(violations[0].data.path).toBe('/etc/passwd');
-    expect(violations[0].data.tool).toBe('read_file');
+    expect(violations[0].data!.path).toBe('/etc/passwd');
+    expect(violations[0].data!.tool).toBe('read_file');
   });
 
   it('should detect command injection via process monitor', async () => {
@@ -95,8 +95,8 @@ describeWithCapability(['process-monitoring', 'filesystem-monitoring', 'enforcem
     expect(violations.length).toBe(1);
     expect(violations[0].source).toBe('process');
     expect(violations[0].severity).toBe('high');
-    expect(violations[0].data.binary).toBe('sh');
-    expect(violations[0].data.injectionType).toBe('command-injection');
+    expect(violations[0].data!.binary).toBe('sh');
+    expect(violations[0].data!.injectionType).toBe('command-injection');
   });
 
   it('should trigger enforcement for both path traversal and command injection', async () => {

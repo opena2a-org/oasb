@@ -49,8 +49,8 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-003: Credential File Acce
       const violations = arp.getEventsByCategory('violation');
       expect(violations.length).toBe(1);
       expect(violations[0].severity).toBe('high');
-      expect(violations[0].data.path).toBe(path);
-      expect(violations[0].data.credentialFile).toBe(true);
+      expect(violations[0].data!.path).toBe(path);
+      expect(violations[0].data!.credentialFile).toBe(true);
     });
   }
 
@@ -76,7 +76,7 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-003: Credential File Acce
     for (const violation of violations) {
       expect(violation.severity).toBe('high');
       expect(violation.category).toBe('violation');
-      expect(violation.data.credentialFile).toBe(true);
+      expect(violation.data!.credentialFile).toBe(true);
     }
   });
 
@@ -106,13 +106,13 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-003: Credential File Acce
     expect(violations.length).toBe(3);
 
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.env'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.env'))
     ).toBe(true);
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.netrc'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.netrc'))
     ).toBe(true);
     expect(
-      arp.getEvents().some((e) => e.data.path.includes('.pgpass'))
+      arp.getEvents().some((e) => (e.data!.path as string).includes('.pgpass'))
     ).toBe(true);
   });
 });

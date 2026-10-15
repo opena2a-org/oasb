@@ -48,11 +48,11 @@ describeWithCapability('network-monitoring', 'AT-NET-005: Exfiltration Destinati
       const threats = arp.getEventsByCategory('threat');
       expect(threats.length).toBeGreaterThanOrEqual(1);
 
-      const exfilThreat = threats.find((e) => e.data.remoteAddr === host);
+      const exfilThreat = threats.find((e) => e.data!.remoteAddr === host);
       expect(exfilThreat).toBeDefined();
       expect(exfilThreat!.severity).toBe('critical');
       expect(exfilThreat!.category).toBe('threat');
-      expect(exfilThreat!.data.threatType).toBe('exfiltration');
+      expect(exfilThreat!.data!.threatType).toBe('exfiltration');
     }
   );
 
@@ -83,7 +83,7 @@ describeWithCapability('network-monitoring', 'AT-NET-005: Exfiltration Destinati
       expect(
         arp.getEvents().some(
           (e) =>
-            e.data.remoteAddr === host && e.data.threatType === 'exfiltration'
+            e.data!.remoteAddr === host && e.data!.threatType === 'exfiltration'
         )
       ).toBe(true);
     }
@@ -108,7 +108,7 @@ describeWithCapability('network-monitoring', 'AT-NET-005: Exfiltration Destinati
 
     const allEvents = arp.getEvents();
     const exfilEvents = allEvents.filter(
-      (e) => e.data.threatType === 'exfiltration'
+      (e) => e.data!.threatType === 'exfiltration'
     );
     expect(exfilEvents.length).toBe(exfilDestinations.length);
 

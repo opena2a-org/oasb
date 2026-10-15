@@ -64,8 +64,8 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-004: Mass File Creation D
     expect(allEvents.length).toBe(fileCount);
 
     for (let i = 0; i < fileCount; i++) {
-      expect(allEvents[i].data.index).toBe(i);
-      expect(allEvents[i].data.path).toBe(`/tmp/output/file-${i}.txt`);
+      expect(allEvents[i].data!.index).toBe(i);
+      expect(allEvents[i].data!.path).toBe(`/tmp/output/file-${i}.txt`);
     }
   });
 

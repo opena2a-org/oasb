@@ -47,7 +47,7 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
       const threats = arp.getEventsByCategory('threat');
       expect(threats.length).toBeGreaterThanOrEqual(1);
 
-      const hostThreat = threats.find((e) => e.data.remoteAddr === host);
+      const hostThreat = threats.find((e) => e.data!.remoteAddr === host);
       expect(hostThreat).toBeDefined();
       expect(hostThreat!.severity).toBe('critical');
       expect(hostThreat!.category).toBe('threat');
@@ -78,7 +78,7 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
 
     for (const { host } of suspiciousHosts) {
       expect(
-        arp.getEvents().some((e) => e.data.remoteAddr === host)
+        arp.getEvents().some((e) => e.data!.remoteAddr === host)
       ).toBe(true);
     }
   });

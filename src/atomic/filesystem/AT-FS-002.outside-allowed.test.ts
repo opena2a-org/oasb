@@ -38,8 +38,8 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-002: Access Outside Allow
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].severity).toBe('medium');
-    expect(anomalies[0].data.path).toBe('/etc/passwd');
-    expect(anomalies[0].data.allowed).toBe(false);
+    expect(anomalies[0].data!.path).toBe('/etc/passwd');
+    expect(anomalies[0].data!.allowed).toBe(false);
   });
 
   it('should detect access to /etc/shadow outside allowed paths', async () => {
@@ -58,14 +58,14 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-002: Access Outside Allow
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].severity).toBe('medium');
-    expect(anomalies[0].data.path).toBe('/etc/shadow');
-    expect(anomalies[0].data.allowed).toBe(false);
+    expect(anomalies[0].data!.path).toBe('/etc/shadow');
+    expect(anomalies[0].data!.allowed).toBe(false);
   });
 
   it('should not flag access to paths within allowed directories', async () => {
     await arp.injectEvent({
       source: 'filesystem-monitor',
-      category: 'connection',
+      category: 'normal',
       severity: 'info',
       description: 'File access within allowed paths: /workspace/project/src/index.ts',
       data: {
@@ -80,13 +80,13 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-002: Access Outside Allow
 
     const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(1);
-    expect(allEvents[0].data.allowed).toBe(true);
+    expect(allEvents[0].data!.allowed).toBe(true);
   });
 
   it('should distinguish allowed from disallowed access in mixed events', async () => {
     await arp.injectEvent({
       source: 'filesystem-monitor',
-      category: 'connection',
+      category: 'normal',
       severity: 'info',
       description: 'File access within allowed paths',
       data: {
@@ -113,13 +113,13 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-002: Access Outside Allow
 
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
-    expect(anomalies[0].data.path).toBe('/etc/passwd');
+    expect(anomalies[0].data!.path).toBe('/etc/passwd');
 
     expect(
-      arp.getEvents().some((e) => e.data.allowed === false)
+      arp.getEvents().some((e) => e.data!.allowed === false)
     ).toBe(true);
     expect(
-      arp.getEvents().some((e) => e.data.allowed === true)
+      arp.getEvents().some((e) => e.data!.allowed === true)
     ).toBe(true);
   });
 });

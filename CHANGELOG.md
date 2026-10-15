@@ -765,6 +765,23 @@ stay on record here with the reason they changed.
   `data` no longer fails a detection case. On 2026-10-12 the command
   reports 259 errors in 34 other scenario test files, which this entry
   does not fix, and `npm test` does not run it.
+- Those 259 errors are fixed, and `npm test` runs the check: its
+  `pretest` script runs `scripts/typecheck-tests.test.mjs`, which fails
+  when `npm run typecheck:tests` reports a type error or when
+  `tsconfig.test.json` takes in no scenario test file. The adapter
+  interface gains, as optional additions, what the reference adapter
+  implements and the tests use: the `anomaly` event category,
+  `requireLlmConfirmation` on `AlertRule`, `threshold` on `AlertCondition`,
+  and `targetPid` as a third argument of `EnforcementEngine.execute()` and
+  as a field of `EnforcementResult`; `activity` stays. The tests read an
+  event's optional `data` with `!`, which leaves what they run unchanged.
+  Events the tests inject with the `connection` category or the `warning`
+  severity, which neither the interface nor the reference adapter defines,
+  now use `normal`, the category the reference adapter gives a connection
+  to an allowed host and a file write it does not flag, and `medium`, the
+  severity it gives a connection to a host that is not allowed. With the
+  reference adapter, the 148 tests in those 34 files have the same results
+  before and after: 147 pass, 1 is skipped.
 - The code that reads an E2E-001 case moves from the test file to
   `src/harness/filesystem-watch.ts`, where unit tests cover it:
   `detectWrite` awaits the product's event for a write, fails the case on

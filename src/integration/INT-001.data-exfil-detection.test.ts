@@ -89,8 +89,8 @@ describeWithCapability(['network-monitoring', 'enforcement-kill'], 'INT-001: Dat
     const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].severity).toBe('critical');
-    expect(threats[0].data.remoteAddr).toBe('webhook.site');
-    expect(threats[0].data.threatType).toBe('exfiltration');
+    expect(threats[0].data!.remoteAddr).toBe('webhook.site');
+    expect(threats[0].data!.threatType).toBe('exfiltration');
   });
 
   it('should trigger kill enforcement on exfiltration event', async () => {
@@ -162,7 +162,7 @@ describeWithCapability(['network-monitoring', 'enforcement-kill'], 'INT-001: Dat
     // Enforcement triggered only for the exfiltration
     const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);
-    expect(killActions[0].event.data.step).toBe('data-exfil');
+    expect(killActions[0].event.data!.step).toBe('data-exfil');
   });
 
   it('should optionally verify against live DVAA if available', async () => {
@@ -194,7 +194,7 @@ describeWithCapability(['network-monitoring', 'enforcement-kill'], 'INT-001: Dat
 
       const threats = arp.getEventsByCategory('threat');
       expect(threats.length).toBe(1);
-      expect(threats[0].data.dvaaAvailable).toBe(false);
+      expect(threats[0].data!.dvaaAvailable).toBe(false);
       return;
     }
 
@@ -222,7 +222,7 @@ describeWithCapability(['network-monitoring', 'enforcement-kill'], 'INT-001: Dat
 
     const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
-    expect(threats[0].data.dvaaAvailable).toBe(true);
+    expect(threats[0].data!.dvaaAvailable).toBe(true);
 
     const killActions = arp.getEnforcementsByAction('kill');
     expect(killActions.length).toBe(1);

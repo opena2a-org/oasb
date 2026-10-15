@@ -229,11 +229,11 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'enforcement
 
     const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(1);
-    expect(normalEvents[0].data.eventAfterKill).toBe(true);
+    expect(normalEvents[0].data!.eventAfterKill).toBe(true);
 
     const violations = arp.getEventsByCategory('violation');
     expect(violations.length).toBe(1);
-    expect(violations[0].data.newThreat).toBe(true);
+    expect(violations[0].data!.newThreat).toBe(true);
 
     // Enforcement still works after kill
     const alertActions = arp.getEnforcementsByAction('alert');
@@ -317,6 +317,6 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'enforcement
     // Collector should capture the heartbeat
     const heartbeats = arp.getEvents().filter((e) => e.source === 'heartbeat');
     expect(heartbeats.length).toBe(1);
-    expect(heartbeats[0].data.systemCheck).toBe(true);
+    expect(heartbeats[0].data!.systemCheck).toBe(true);
   });
 });

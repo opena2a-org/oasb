@@ -137,7 +137,7 @@ describeWithCapability(['budget-management', 'process-monitoring', 'network-moni
     const threats = arp.getEventsByCategory('threat');
     expect(threats.length).toBe(1);
     expect(threats[0].severity).toBe('critical');
-    expect(threats[0].data.budgetExhausted).toBe(true);
+    expect(threats[0].data!.budgetExhausted).toBe(true);
 
     // L0 kill rule still triggers enforcement
     const killActions = arp.getEnforcementsByAction('kill');

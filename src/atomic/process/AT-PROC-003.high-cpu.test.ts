@@ -41,7 +41,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-003: High CPU Detection', 
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
     expect(anomalies[0].severity).toBe('medium');
-    expect(anomalies[0].data.cpu).toBe(95);
+    expect(anomalies[0].data!.cpu).toBe(95);
     expect(anomalies[0].source).toBe('process');
   });
 
@@ -60,7 +60,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-003: High CPU Detection', 
 
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
-    expect(anomalies[0].data.cpu).toBe(100);
+    expect(anomalies[0].data!.cpu).toBe(100);
   });
 
   it('should not flag normal CPU usage as an anomaly', async () => {
@@ -82,7 +82,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-003: High CPU Detection', 
 
     const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(1);
-    expect(normals[0].data.cpu).toBe(25);
+    expect(normals[0].data!.cpu).toBe(25);
   });
 
   it('should distinguish between high and low CPU events', async () => {
@@ -115,7 +115,7 @@ describeWithCapability('process-monitoring', 'AT-PROC-003: High CPU Detection', 
 
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
-    expect(anomalies[0].data.pid).toBe(30006);
+    expect(anomalies[0].data!.pid).toBe(30006);
 
     const normals = arp.getEventsByCategory('normal');
     expect(normals.length).toBe(2);

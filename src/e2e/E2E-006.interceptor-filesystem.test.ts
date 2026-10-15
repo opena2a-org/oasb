@@ -54,17 +54,17 @@ describeWithCapability('filesystem-monitoring', 'E2E-006: Filesystem Interceptor
 
     const events = arp.getEvents();
     const writeEvent = events.find(
-      (e: { source: string; data: Record<string, unknown> }) =>
+      (e) =>
         e.source === 'filesystem' &&
-        e.data.intercepted === true &&
-        String(e.data.path).includes('.env'),
+        e.data!.intercepted === true &&
+        String(e.data!.path).includes('.env'),
     );
 
     expect(writeEvent).toBeDefined();
     expect(writeEvent!.category).toBe('violation');
     expect(writeEvent!.severity).toBe('high');
-    expect(writeEvent!.data.sensitive).toBe(true);
-    expect(writeEvent!.data.operation).toBe('writeFileSync');
+    expect(writeEvent!.data!.sensitive).toBe(true);
+    expect(writeEvent!.data!.operation).toBe('writeFileSync');
   });
 
   it('should intercept readFileSync on sensitive .ssh path', async () => {
@@ -80,16 +80,16 @@ describeWithCapability('filesystem-monitoring', 'E2E-006: Filesystem Interceptor
 
     const events = arp.getEvents();
     const readEvent = events.find(
-      (e: { source: string; data: Record<string, unknown> }) =>
+      (e) =>
         e.source === 'filesystem' &&
-        e.data.operation === 'read' &&
-        String(e.data.path).includes('.ssh'),
+        e.data!.operation === 'read' &&
+        String(e.data!.path).includes('.ssh'),
     );
 
     expect(readEvent).toBeDefined();
     expect(readEvent!.category).toBe('violation');
     expect(readEvent!.severity).toBe('high');
-    expect(readEvent!.data.sensitive).toBe(true);
+    expect(readEvent!.data!.sensitive).toBe(true);
   });
 
   it('should intercept normal file writes without marking as violation', async () => {
@@ -100,10 +100,10 @@ describeWithCapability('filesystem-monitoring', 'E2E-006: Filesystem Interceptor
 
     const events = arp.getEvents();
     const writeEvent = events.find(
-      (e: { source: string; data: Record<string, unknown> }) =>
+      (e) =>
         e.source === 'filesystem' &&
-        e.data.intercepted === true &&
-        String(e.data.path).includes('output.json'),
+        e.data!.intercepted === true &&
+        String(e.data!.path).includes('output.json'),
     );
 
     expect(writeEvent).toBeDefined();
@@ -119,9 +119,9 @@ describeWithCapability('filesystem-monitoring', 'E2E-006: Filesystem Interceptor
 
     const events = arp.getEvents();
     const bashrcEvent = events.find(
-      (e: { source: string; data: Record<string, unknown> }) =>
+      (e) =>
         e.source === 'filesystem' &&
-        String(e.data.path).includes('.bashrc'),
+        String(e.data!.path).includes('.bashrc'),
     );
 
     expect(bashrcEvent).toBeDefined();

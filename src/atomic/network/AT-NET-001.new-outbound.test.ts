@@ -25,7 +25,7 @@ describeWithCapability('network-monitoring', 'AT-NET-001: New Outbound Connectio
   it('should capture normal outbound connections without flagging them', async () => {
     await arp.injectEvent({
       source: 'network-monitor',
-      category: 'connection',
+      category: 'normal',
       severity: 'info',
       description: 'New outbound connection to localhost:443',
       data: {
@@ -36,17 +36,17 @@ describeWithCapability('network-monitoring', 'AT-NET-001: New Outbound Connectio
       },
     });
 
-    const events = arp.getEventsByCategory('connection');
+    const events = arp.getEventsByCategory('normal');
     expect(events.length).toBe(1);
     expect(events[0].severity).toBe('info');
-    expect(events[0].data.remoteAddr).toBe('localhost');
+    expect(events[0].data!.remoteAddr).toBe('localhost');
   });
 
   it('should capture anomalous outbound connections to unknown hosts', async () => {
     await arp.injectEvent({
       source: 'network-monitor',
       category: 'anomaly',
-      severity: 'warning',
+      severity: 'medium',
       description: 'New outbound connection to unknown-host:8080',
       data: {
         remoteAddr: 'unknown-host',
@@ -58,15 +58,15 @@ describeWithCapability('network-monitoring', 'AT-NET-001: New Outbound Connectio
 
     const anomalies = arp.getEventsByCategory('anomaly');
     expect(anomalies.length).toBe(1);
-    expect(anomalies[0].severity).toBe('warning');
-    expect(anomalies[0].data.remoteAddr).toBe('unknown-host');
-    expect(anomalies[0].data.remotePort).toBe(8080);
+    expect(anomalies[0].severity).toBe('medium');
+    expect(anomalies[0].data!.remoteAddr).toBe('unknown-host');
+    expect(anomalies[0].data!.remotePort).toBe(8080);
   });
 
   it('should distinguish normal connections from anomalous ones', async () => {
     await arp.injectEvent({
       source: 'network-monitor',
-      category: 'connection',
+      category: 'normal',
       severity: 'info',
       description: 'New outbound connection to localhost:443',
       data: {
@@ -80,7 +80,7 @@ describeWithCapability('network-monitoring', 'AT-NET-001: New Outbound Connectio
     await arp.injectEvent({
       source: 'network-monitor',
       category: 'anomaly',
-      severity: 'warning',
+      severity: 'medium',
       description: 'New outbound connection to unknown-host:8080',
       data: {
         remoteAddr: 'unknown-host',
@@ -93,14 +93,14 @@ describeWithCapability('network-monitoring', 'AT-NET-001: New Outbound Connectio
     const allEvents = arp.getEvents();
     expect(allEvents.length).toBe(2);
 
-    const normalEvents = arp.getEventsByCategory('connection');
+    const normalEvents = arp.getEventsByCategory('normal');
     expect(normalEvents.length).toBe(1);
 
     const anomalyEvents = arp.getEventsByCategory('anomaly');
     expect(anomalyEvents.length).toBe(1);
 
     expect(
-      arp.getEvents().some((e) => e.data.remoteAddr === 'unknown-host')
+      arp.getEvents().some((e) => e.data!.remoteAddr === 'unknown-host')
     ).toBe(true);
   });
 });

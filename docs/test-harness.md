@@ -23,4 +23,4 @@ The harness wraps a security product via an adapter interface and provides event
 | `dvaa-manager.ts` | DVAA process lifecycle (spawn, health check, teardown) |
 | `metrics.ts` | Detection rate, false positive rate, P95 latency computation |
 
-`npm run build` compiles `src/` without its test files, and vitest does not check types. `npm run typecheck:tests` type-checks `src/` with them (`tsconfig.test.json`, no output). It reports type errors in scenario test files that are not fixed yet, and `npm test` does not run it.
+`npm run build` compiles `src/` without its test files, and vitest does not check types. `npm run typecheck:tests` type-checks `src/` with them (`tsconfig.test.json`, no output). `npm test` runs it through `scripts/typecheck-tests.test.mjs`, one of the tests its `pretest` script runs, which fails on any type error it reports.
