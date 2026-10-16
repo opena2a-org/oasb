@@ -1003,6 +1003,24 @@ stay on record here with the reason they changed.
   a `hackmyagent secure` line with `-b oasb-1`, names OASB-1 levels other
   than those up to the level the line gives with `--level` (or `-l` for
   hackmyagent), or than L1 when it gives none.
+- The README's capture under Quick Start links its full output,
+  `docs/captures/quick-start.txt`, and `docs/captures/quick-start.json`
+  beside it records the command, the environment (`CI=true`, `NO_COLOR=1`),
+  the exit code, the vitest and Node.js versions and the date of the run.
+  The full output is what that run printed, with the RUN banner, which names
+  the vitest version and the absolute path of the checkout, replaced by
+  `...` and without the trailing blank line. The two timings in the
+  README's capture that differed from it were re-taken from that run.
+  `npm run check:readme` now holds a full output that the line above a
+  capture links as `[full output](<file>)` to the suite as it holds the
+  capture, and fails when the full output leaves out a test the command
+  selects that is not skipped (with `--tests`: that passed) or a
+  `Test Files` or `Tests` line, when the capture shows a line, other than a
+  blank or `...` line, that the full output does not have, or when the
+  `.json` file beside it is missing or names another command or another
+  full output. On this README it prints "Its full output
+  docs/captures/quick-start.txt shows the 11 tests not skipped and holds
+  each line of the capture".
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

@@ -330,6 +330,105 @@ test('a capture names a vitest run that a code block above it shows', () => {
   );
 });
 
+// CAPTURED with its intro linking the full output of the run, which
+// fullSources writes beside the README with the .json that describes it.
+const FULL_PATH = 'docs/captures/run.txt';
+const META_PATH = 'docs/captures/run.json';
+const WITH_FULL = CAPTURED.replace(
+  `What \`${CAPTURE_COMMAND}\` prints, trimmed:`,
+  `What \`${CAPTURE_COMMAND}\` prints, trimmed ([full output](${FULL_PATH})):`,
+);
+const FULL_RUN = [
+  '',
+  '...',
+  '',
+  ` ✓ ${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a spawn 3ms`,
+  ` ✓ ${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a shell 1ms`,
+  '',
+  ' Test Files  1 passed (1)',
+  '      Tests  2 passed (2)',
+  '   Duration  1.00s',
+  '',
+].join('\n');
+const META = JSON.stringify({ command: CAPTURE_COMMAND, outputs: { capture: FULL_PATH } });
+const fullSources = (output = FULL_RUN, meta = META) => ({ ...SOURCES, [FULL_PATH]: output, ...(meta === null ? {} : { [META_PATH]: meta }) });
+const errors = (r) => r.stderr.split('\n');
+
+test('a capture whose full output shows the run passes, and the check names the full output', () => {
+  const r = checkCounts(WITH_FULL, SUITE, namedReport(), fullSources());
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {3}README capture of `npx vitest run AT-PROC-001 --reporter=verbose` matches the test report: 2 tests in 1 test file\.$/m);
+  assert.match(r.stdout, /^ {3}Its full output docs\/captures\/run\.txt shows the 2 tests that passed and holds each line of the capture\.$/m);
+});
+
+test('a full output that leaves out a test the run passes, or a summary line, fails', () => {
+  const cmd = `\`${CAPTURE_COMMAND}\``;
+  const noShell = FULL_RUN.replace(` ✓ ${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a shell 1ms\n`, '');
+  let r = checkCounts(WITH_FULL, SUITE, namedReport(), fullSources(noShell));
+  assert.equal(r.status, 1);
+  assert.ok(
+    errors(r).includes(
+      `README: ${FULL_PATH}: the full output of ${cmd} does not show "AT-PROC-001: Spawn > detects a shell" in ${CAPTURE_FILE}, which the test report has passed.`,
+    ),
+    r.stderr,
+  );
+
+  const noFiles = FULL_RUN.replace(' Test Files  1 passed (1)\n', '');
+  r = checkCounts(WITH_FULL, SUITE, namedReport(), fullSources(noFiles));
+  assert.equal(r.status, 1);
+  assert.ok(errors(r).includes(`README: ${FULL_PATH}: the full output of ${cmd} has no "Test Files" line.`), r.stderr);
+  assert.ok(
+    errors(r).includes(
+      `README: line ${lineWith(WITH_FULL, ' Test Files')}: the capture shows a line that its full output ${FULL_PATH} does not have: "Test Files  1 passed (1)".`,
+    ),
+    r.stderr,
+  );
+});
+
+test('a full output is held to the run as the capture is', () => {
+  const fork = FULL_RUN.replace('detects a shell 1ms', 'detects a fork 1ms').replace('Tests  2 passed (2)', 'Tests  3 passed (3)');
+  const r = checkCounts(WITH_FULL, SUITE, namedReport(), fullSources(fork));
+  assert.equal(r.status, 1);
+  const at = (needle) => lineOf(fork, fork.indexOf(needle));
+  for (const message of [
+    `${FULL_PATH} line ${at('detects a fork')}: the capture shows "AT-PROC-001: Spawn > detects a fork" passing in ${CAPTURE_FILE}; the test report has no test of that name there.`,
+    `${FULL_PATH} line ${at('Tests  3')}: the capture's "Tests" line says 3 in all; \`${CAPTURE_COMMAND}\` selects 2 tests of the test report.`,
+    `${FULL_PATH} line ${at('Tests  3')}: the capture's "Tests" line says 3 passed; of the tests \`${CAPTURE_COMMAND}\` selects, the test report has 2 passed.`,
+    `line ${lineWith(WITH_FULL, '      Tests  2')}: the capture shows a line that its full output ${FULL_PATH} does not have: "Tests  2 passed (2)".`,
+  ]) {
+    assert.ok(errors(r).includes(`README: ${message}`), `${message}\n${r.stderr}`);
+  }
+});
+
+test('a capture line that its full output does not have fails; a "..." line is not read', () => {
+  const retimed = WITH_FULL.replace('detects a spawn 3ms', 'detects a spawn 9ms');
+  const r = checkCounts(retimed, SUITE, namedReport(), fullSources());
+  assert.equal(r.status, 1);
+  assert.deepEqual(errors(r).filter(Boolean), [
+    `README: line ${lineWith(retimed, ' ✓ ')}: the capture shows a line that its full output ${FULL_PATH} does not have: "✓ ${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a spawn 9ms".`,
+  ]);
+});
+
+test('a full output needs a .json beside it that names its command and its path', () => {
+  const intro = lineWith(WITH_FULL, 'What `');
+  let r = checkCounts(WITH_FULL, SUITE, namedReport(), fullSources(FULL_RUN, null));
+  assert.equal(r.status, 1);
+  assert.deepEqual(errors(r).filter(Boolean), [
+    `README: line ${intro}: the full output ${FULL_PATH} has no ${META_PATH} beside it to record the command it is of.`,
+  ]);
+
+  r = checkCounts(WITH_FULL, SUITE, namedReport(), fullSources(FULL_RUN, JSON.stringify({ command: 'npm test', outputs: { capture: 'run.txt' } })));
+  assert.equal(r.status, 1);
+  assert.deepEqual(errors(r).filter(Boolean), [
+    `README: ${META_PATH}: "command" is "npm test"; the capture it describes is of \`${CAPTURE_COMMAND}\`.`,
+    `README: ${META_PATH}: "outputs.capture" is "run.txt"; the full output it describes is ${FULL_PATH}.`,
+  ]);
+
+  r = checkCounts(WITH_FULL, SUITE, namedReport(), fullSources(FULL_RUN, 'command: npx vitest run'));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^README: docs\/captures\/run\.json: cannot read it as JSON: /m);
+});
+
 test('a README that says every scenario maps to ATLAS fails while a scenario file cites no technique', () => {
   const r = checkCounts(COUNTED.replace('8 of them, in 6 files,', '10 of them, in 8 files,').replace('the other 2 test', 'the other 0 test'));
   assert.equal(r.status, 1);
@@ -562,6 +661,7 @@ test(
       assert.equal(r.status, 0, r.stderr);
       assert.match(r.stdout, /README test counts match the collected suite: \d+ tests, \d+ not skipped/);
       assert.match(r.stdout, /^ {3}README capture of `npx vitest run [^`]+` matches the collected suite: \d+ tests? in \d+ test files?\.$/m);
+      assert.match(r.stdout, /^ {3}Its full output docs\/captures\/quick-start\.txt shows the \d+ tests? not skipped and holds each line of the capture\.$/m);
       assert.deepEqual(
         readdirSync(tmp).filter((name) => /^(arp|llmg|rbuf)-lab-/.test(name)),
         [],

@@ -80,8 +80,14 @@
 //      selected file that is not skipped (with --tests: that passed), and
 //      each "Tests" and "Test Files" line must state the passed, failed and
 //      skipped counts and the total of the selected tests and files. A
-//      capture may leave lines out. Like the counts, this reads the suite,
-//      so --no-counts skips it.
+//      capture may leave lines out. When the line above it links
+//      "[full output](<file>)", that file is held to the run the same way,
+//      must show a ✓ line for each selected test that is not skipped (with
+//      --tests: that passed) and both summary lines, must hold each line of
+//      the capture other than a "..." line, and must have a .json file of
+//      the same name beside it whose "command" is the command and whose
+//      "outputs.capture" is the file's path from the README's directory.
+//      Like the counts, this reads the suite, so --no-counts skips it.
 //  12. a shell comment on an `opena2a benchmark` line, or on a
 //      `hackmyagent secure` line with `-b oasb-1`, in a code block, that
 //      names OASB-1 levels (L1, L2, L3) names the levels that command
@@ -617,6 +623,12 @@ const CAPTURE_INTRO = /^What `([^`]+)` prints\b/;
 const SUMMARY = /^\s*(Test Files|Tests)\s+(\S.*?)\s+\((\d+)\)\s*$/;
 const PASSED_TEST = /^\s*✓\s+(\S+)\s+>\s+(.+?)(?:\s+\d+(?:\.\d+)?m?s)?\s*$/;
 const RESULT_STATES = ['passed', 'failed', 'skipped'];
+// The full output the line above a capture may link, as in
+// What `<command>` prints, trimmed ([full output](docs/captures/quick-start.txt)):
+// A line that is only "..." marks lines left out.
+const FULL_OUTPUT = /\[full output\]\(([^)\s#]+)\)/;
+const ELISION = /^\s*\.\.\.\s*$/;
+const SUMMARY_KINDS = ['Test Files', 'Tests'];
 
 // The test file filters of a `vitest run` command: the words after `run`
 // that are not options. An option is read as one word, so its value is
@@ -633,7 +645,7 @@ function checkCaptures(tests) {
   const source = ran ? 'the test report' : 'the suite';
   const passing = (t) => (ran ? t.state === 'passed' : t.state !== 'skipped');
   const captures = [];
-  for (const { prefix, lines } of documents) {
+  for (const { file: doc, prefix, lines } of documents) {
     for (let i = 0; i < lines.length; i++) {
       if (!lines[i].fenceOpen) continue;
       let end = i + 1;
@@ -689,45 +701,110 @@ function checkCaptures(tests) {
         live['Test Files'][state]++;
       }
 
-      for (const { n, line } of body) {
-        const test = line.match(PASSED_TEST);
-        if (test) {
-          const [, file, name] = test;
-          const named = selected.filter((t) => t.file === file && t.name === name);
-          if (!files.includes(file)) {
-            fail(`${prefix}line ${n}: the capture shows a test of ${file}, which \`${command}\` does not run.`);
-          } else if (named.length === 0) {
-            fail(`${prefix}line ${n}: the capture shows "${name}" passing in ${file}; ${source} has no test of that name there.`);
-          } else if (!named.some(passing)) {
-            fail(`${prefix}line ${n}: the capture shows "${name}" passing in ${file}; ${source} has it ${named[0].state}.`);
+      // Hold each ✓ line and each summary line of `text`, a list of
+      // { n, line } in the document `where` names, to the run. Returns the
+      // tests the ✓ lines show, as "<file> > <name>", and the summary kinds.
+      const hold = (where, text) => {
+        const seen = { tests: new Set(), kinds: new Set() };
+        for (const { n, line } of text) {
+          const test = line.match(PASSED_TEST);
+          if (test) {
+            const [, file, name] = test;
+            seen.tests.add(`${file} > ${name}`);
+            const named = selected.filter((t) => t.file === file && t.name === name);
+            if (!files.includes(file)) {
+              fail(`${where}line ${n}: the capture shows a test of ${file}, which \`${command}\` does not run.`);
+            } else if (named.length === 0) {
+              fail(`${where}line ${n}: the capture shows "${name}" passing in ${file}; ${source} has no test of that name there.`);
+            } else if (!named.some(passing)) {
+              fail(`${where}line ${n}: the capture shows "${name}" passing in ${file}; ${source} has it ${named[0].state}.`);
+            }
+            continue;
           }
-          continue;
+          const summary = line.match(SUMMARY);
+          if (!summary) continue;
+          const [, kind, parts, total] = summary;
+          seen.kinds.add(kind);
+          const counts = live[kind];
+          const stated = {};
+          for (const part of parts.split('|').map((p) => p.trim())) {
+            const m = part.match(/^(\d+) (passed|failed|skipped)$/);
+            if (m) stated[m[2]] = Number(m[1]);
+            else fail(`${where}line ${n}: the capture's "${kind}" line says "${part}"; the check reads passed, failed and skipped counts.`);
+          }
+          if (Number(total) !== counts.total) {
+            const unit = counts.total === 1 ? counts.unit.slice(0, -1) : counts.unit;
+            fail(`${where}line ${n}: the capture's "${kind}" line says ${total} in all; \`${command}\` selects ${counts.total} ${unit} of ${source}.`);
+          }
+          for (const state of RESULT_STATES) {
+            const said = stated[state] ?? 0;
+            if (said === counts[state]) continue;
+            const label = state === 'passed' && !ran ? 'not skipped (collected, not run)' : state;
+            fail(
+              `${where}line ${n}: the capture's "${kind}" line says ${said} ${state}; ` +
+                `of the ${counts.unit} \`${command}\` selects, ${source} has ${counts[state]} ${label}.`,
+            );
+          }
         }
-        const summary = line.match(SUMMARY);
-        if (!summary) continue;
-        const [, kind, parts, total] = summary;
-        const counts = live[kind];
-        const stated = {};
-        for (const part of parts.split('|').map((p) => p.trim())) {
-          const m = part.match(/^(\d+) (passed|failed|skipped)$/);
-          if (m) stated[m[2]] = Number(m[1]);
-          else fail(`${prefix}line ${n}: the capture's "${kind}" line says "${part}"; the check reads passed, failed and skipped counts.`);
+        return seen;
+      };
+      hold(prefix, body);
+
+      // The full output the intro links, if it links one: held to the run
+      // as the capture is, it shows every test the run passes and both
+      // summary lines, holds each line of the capture other than "...", and
+      // has a .json file of the same name beside it that names the command
+      // and the full output. A link to a file that does not exist is
+      // reported by check 4.
+      const link = lines[j].line.replace(/`[^`]*`/g, '').match(FULL_OUTPUT);
+      const fullFile = link ? resolve(dirname(doc), decodeURIComponent(link[1])) : null;
+      let full = null;
+      if (fullFile && existsSync(fullFile)) {
+        full = relative(dirname(readmePath), fullFile).split(sep).join('/');
+        let text;
+        try {
+          text = readFileSync(fullFile, 'utf8');
+        } catch (err) {
+          fail(`${prefix}line ${lines[j].n}: cannot read the full output ${full}: ${readFailure(err)}`);
         }
-        if (Number(total) !== counts.total) {
-          const unit = counts.total === 1 ? counts.unit.slice(0, -1) : counts.unit;
-          fail(`${prefix}line ${n}: the capture's "${kind}" line says ${total} in all; \`${command}\` selects ${counts.total} ${unit} of ${source}.`);
+        if (text !== undefined) {
+          const fullLines = text.split('\n').map((line, k) => ({ n: k + 1, line }));
+          const seen = hold(`${full} `, fullLines);
+          for (const kind of SUMMARY_KINDS) {
+            if (!seen.kinds.has(kind)) fail(`${full}: the full output of \`${command}\` has no "${kind}" line.`);
+          }
+          for (const t of selected.filter(passing)) {
+            if (seen.tests.has(`${t.file} > ${t.name}`)) continue;
+            fail(`${full}: the full output of \`${command}\` does not show "${t.name}" in ${t.file}, which ${source} has ${ran ? 'passed' : 'not skipped'}.`);
+          }
+          const have = new Set(fullLines.map(({ line }) => line.trimEnd()));
+          for (const { n, line } of body) {
+            if (line.trim() === '' || ELISION.test(line) || have.has(line.trimEnd())) continue;
+            fail(`${prefix}line ${n}: the capture shows a line that its full output ${full} does not have: "${line.trim()}".`);
+          }
         }
-        for (const state of RESULT_STATES) {
-          const said = stated[state] ?? 0;
-          if (said === counts[state]) continue;
-          const label = state === 'passed' && !ran ? 'not skipped (collected, not run)' : state;
-          fail(
-            `${prefix}line ${n}: the capture's "${kind}" line says ${said} ${state}; ` +
-              `of the ${counts.unit} \`${command}\` selects, ${source} has ${counts[state]} ${label}.`,
-          );
+        const metaFile = fullFile.replace(/(\.[^./\\]*)?$/, '.json');
+        const metaName = relative(dirname(readmePath), metaFile).split(sep).join('/');
+        if (!existsSync(metaFile)) {
+          fail(`${prefix}line ${lines[j].n}: the full output ${full} has no ${metaName} beside it to record the command it is of.`);
+        } else {
+          let meta;
+          try {
+            meta = JSON.parse(readFileSync(metaFile, 'utf8'));
+          } catch (err) {
+            fail(`${metaName}: cannot read it as JSON: ${readFailure(err)}`);
+          }
+          if (meta !== undefined) {
+            if (meta?.command !== command) {
+              fail(`${metaName}: "command" is ${JSON.stringify(meta?.command)}; the capture it describes is of \`${command}\`.`);
+            }
+            if (meta?.outputs?.capture !== full) {
+              fail(`${metaName}: "outputs.capture" is ${JSON.stringify(meta?.outputs?.capture)}; the full output it describes is ${full}.`);
+            }
+          }
         }
       }
-      captures.push({ prefix, command, tests: live.Tests.total, files: files.length });
+      captures.push({ prefix, command, tests: live.Tests.total, files: files.length, full, shown: selected.filter(passing).length });
     }
   }
   return captures;
@@ -917,9 +994,15 @@ if (counted) {
   );
   if (inconclusive > 0) console.log(`   ${inconclusive} skipped as inconclusive, counted with the passing tests.`);
 }
-for (const { prefix, command, tests, files } of captures) {
+for (const { prefix, command, tests, files, full, shown } of captures) {
   console.log(
     `   ${prefix || 'README '}capture of \`${command}\` matches ${reportPath ? 'the test report' : 'the collected suite'}: ` +
       `${tests} tests in ${files} test file${files === 1 ? '' : 's'}.`,
   );
+  if (full) {
+    console.log(
+      `   Its full output ${full} shows the ${shown} test${shown === 1 ? '' : 's'} ${reportPath ? 'that passed' : 'not skipped'} ` +
+        'and holds each line of the capture.',
+    );
+  }
 }

@@ -1,0 +1,23 @@
+{
+  "command": "npx vitest run AT-AI-001 --reporter=verbose",
+  "directory": "the repository root, after npm ci",
+  "environment": {
+    "CI": "true",
+    "NO_COLOR": "1"
+  },
+  "exitCode": 0,
+  "versions": {
+    "vitest": "3.2.7",
+    "node": "26.7.0"
+  },
+  "capturedOnUtc": "2026-10-16",
+  "elided": [
+    {
+      "line": 2,
+      "was": "the RUN banner, which names the vitest version and the absolute path of the checkout"
+    }
+  ],
+  "outputs": {
+    "capture": "docs/captures/quick-start.txt"
+  }
+}

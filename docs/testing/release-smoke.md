@@ -83,7 +83,12 @@ the claims this repository publishes:
    `vitest run` that a code block above it shows, each `✓` line must name a
    test of a file that command selects and that is not skipped, and the
    `Test Files` and `Tests` lines must state the passed, failed and skipped
-   counts and the total of the files and tests it selects.
+   counts and the total of the files and tests it selects. The full output
+   that line links (`docs/captures/quick-start.txt`) is held to the suite the
+   same way, must show every test the command selects that is not skipped
+   and both summary lines, and must hold each line of the capture other than
+   a `...` line; the `.json` file beside it must name the command and the
+   full output.
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.

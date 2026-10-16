@@ -1,0 +1,19 @@
+
+...
+
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect instruction override (PI-001) 6ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect delimiter escape (PI-002) 2ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect tag injection (PI-003) 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect DAN mode jailbreak (JB-001) 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect roleplay bypass (JB-002) 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect system prompt extraction (DE-001) 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect credential extraction (DE-002) 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect false memory injection (CM-001) 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect context reset (CM-002) 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should not flag benign input 0ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should not flag technical questions about security 0ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  18:55:39
+   Duration  1.36s (transform 238ms, setup 0ms, collect 524ms, tests 10ms, environment 0ms, prepare 252ms)

@@ -18,12 +18,12 @@ cd oasb && npm ci
 npx vitest run AT-AI-001 --reporter=verbose   # one scenario file: prompt input scanning, against the reference adapter
 ```
 
-What `npx vitest run AT-AI-001 --reporter=verbose` prints, trimmed:
+What `npx vitest run AT-AI-001 --reporter=verbose` prints, trimmed ([full output](docs/captures/quick-start.txt)):
 
 ```text
 ...
- ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect instruction override (PI-001) 3ms
- ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect delimiter escape (PI-002) 1ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect instruction override (PI-001) 6ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect delimiter escape (PI-002) 2ms
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect tag injection (PI-003) 0ms
 ...
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should not flag benign input 0ms
