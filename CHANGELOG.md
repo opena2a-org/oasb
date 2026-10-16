@@ -125,6 +125,9 @@ stay on record here with the reason they changed.
   subtree from every consumer's install closure and changes no behavior. If
   you were relying on `@opena2a/oasb` to pull `hackmyagent` transitively,
   install it directly at 0.32.0 or later.
+- The benchmark runner no longer carries `telemetry-bridge`, an unused module
+  that `runBenchmark` called after each submission and that tried to load a
+  module which does not exist. The library's exports are unchanged.
 
 ### Changed
 

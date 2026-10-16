@@ -184,6 +184,9 @@ README's test counts do not include them.
 - `scripts/library-entry.test.mjs`: the package entry point as a library
   install sees it, built where arp-guard cannot be resolved, as after
   `npm install @opena2a/oasb` on its own.
+- `scripts/runner-loads-no-sibling-module.test.mjs`: `runBenchmark`, built
+  and copied into a library install and into a clone, loads no module from
+  a `hackmyagent` directory beside the package.
 - `scripts/doc-facts.test.mjs`: statements in `README.md`,
   `BENCHMARK-RESULTS.md` and `docs/pinned-benchmark.md` that must match the
   corpus and scripts they describe, and that `docs/demo.tape` states no test

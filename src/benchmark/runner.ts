@@ -16,7 +16,6 @@ import type {
   LeaderboardEntry,
   AttackCategory,
 } from './types.js';
-import { reportBenchmarkTelemetry } from './telemetry-bridge.js';
 
 // ============================================================================
 // Scanner Adapters
@@ -243,9 +242,6 @@ export async function runBenchmark(
       datasetVersion: 'v1.0',
       results,
     });
-
-    // Report telemetry (fire-and-forget, never blocks benchmark).
-    reportBenchmarkTelemetry(results, adapter.id, adapter.version).catch(() => {});
   }
 
   // First HMA-family adapter in submission order becomes the shared kappa
