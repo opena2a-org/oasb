@@ -1,6 +1,6 @@
-// Tests that statements in README.md, BENCHMARK-RESULTS.md and
-// docs/pinned-benchmark.md match the corpus and scripts they describe, and
-// that docs/demo.tape states no count.
+// Tests that statements in README.md, BENCHMARK-RESULTS.md,
+// docs/pinned-benchmark.md and docs/test-catalog.md match the corpus and
+// scripts they describe, and that docs/demo.tape states no count.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -76,6 +76,47 @@ test('the README does not say opena2a benchmark and hackmyagent secure -b oasb-1
   const end = text.indexOf('\n## ', start + heading.length + 1);
   const section = (end < 0 ? text.slice(start) : text.slice(start, end)).replace(/\s+/g, ' ');
   assert.ok(!/the same controls/i.test(section), `"${heading}" says "the same controls"`);
+});
+
+// The commands that write the scorecard, from the Usage lines of the
+// generator's header, and the file the header says it writes.
+const usage = (() => {
+  const header = read('scripts/generate-report.ts').split('\n');
+  const start = header.findIndex((l) => l.trim() === '* Usage:');
+  const commands = [];
+  for (const l of header.slice(start + 1)) {
+    const command = l.replace(/^\s*\*\s*/, '');
+    if (!command) break;
+    commands.push(command);
+  }
+  return { commands, output: header.join('\n').match(/Writes (\S+\.md)/)?.[1] };
+})();
+
+test('the generator header names the commands that write the scorecard and its output file', () => {
+  assert.equal(usage.commands.length, 2, 'scripts/generate-report.ts no longer has two Usage lines; update this test');
+  assert.ok(usage.commands[0].includes('--reporter=json --outputFile='), usage.commands[0]);
+  assert.ok(usage.commands[1].startsWith('npm run report'), usage.commands[1]);
+  assert.equal(usage.output, 'REPORT.generated.md');
+});
+
+for (const doc of ['README.md', 'docs/test-catalog.md']) {
+  test(`${doc} runs npm run report on the JSON report of the suite, in one code block`, () => {
+    const blocks = read(doc).split(/^```.*$/m).filter((_, i) => i % 2 === 1);
+    const block = blocks.find((b) => b.includes('npm run report'));
+    assert.ok(block, `${doc} has no code block with npm run report, the command that writes the scorecard`);
+    const lines = block.split('\n').map((l) => l.replace(/\s+#.*$/, '').trim()).filter(Boolean);
+    const at = usage.commands.map((c) => lines.indexOf(c));
+    assert.ok(at.every((i) => i !== -1), `the code block does not hold ${usage.commands.join(' then ')}:\n${block}`);
+    assert.ok(at[0] < at[1], 'npm run report comes before the vitest run that writes its input');
+    assert.ok(block.includes(usage.output), `the code block does not name ${usage.output}, the file npm run report writes`);
+  });
+}
+
+test('the README names the scorecard command where Evaluating Other Products runs the suite', () => {
+  const section = read('README.md').split(/^## /m).find((s) => s.startsWith('Evaluating Other Products'));
+  assert.ok(section, 'the README has no Evaluating Other Products section');
+  assert.ok(section.includes('npm run report'), 'Evaluating Other Products does not name npm run report');
+  assert.ok(section.includes('REPORT.md'), 'Evaluating Other Products does not say what REPORT.md, the tracked report, is');
 });
 
 test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {

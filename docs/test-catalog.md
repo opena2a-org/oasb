@@ -50,6 +50,16 @@ npm run test:baseline       # 12 false-positive / baseline tests
 npm run test:e2e            # 23 E2E tests (real OS detection; E2E-003 currently skipped)
 ```
 
+Write the scorecard from a JSON report of the suite:
+
+```bash
+npx vitest run --reporter=json --outputFile=test-results.json   # the suite, with a JSON report
+npm run report -- test-results.json                             # writes REPORT.generated.md, the scorecard
+```
+
+The [README](../README.md#evaluating-other-products) says what the scorecard
+holds and how to score another product.
+
 ## Atomic Tests (`src/atomic/`)
 
 Discrete tests that exercise individual detection capabilities. Each test injects a single attack event and verifies the product detects it with the correct classification and severity.

@@ -112,6 +112,15 @@ stay on record here with the reason they changed.
   under both adapters. `scripts/adapter-gating.test.mjs` fails when the tests
   that fail under either adapter are not the ones the page lists, or when one
   fails on an assertion that does not hold the code its row quotes.
+- The README's Evaluating Other Products section and `docs/test-catalog.md`
+  name the commands that write the scorecard: `npx vitest run
+  --reporter=json --outputFile=test-results.json`, then `npm run report --
+  test-results.json`, which writes `REPORT.generated.md`. The README says
+  what that file holds and that `REPORT.md` is a recorded run, not its
+  output. Before, the README promised a scorecard and only the header of
+  `scripts/generate-report.ts` named the command. `scripts/doc-facts.test.mjs`
+  fails when either page no longer runs the two Usage lines of that header in
+  one code block.
 
 ### Removed
 

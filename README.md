@@ -57,6 +57,15 @@ Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a 
 
 To evaluate your own product: implement `SecurityProductAdapter` from `src/harness/adapter.ts`, declare its capabilities, point `OASB_ADAPTER` at your module, and run the full suite. The interface defines event types, scanner interfaces, and enforcement contracts - no dependency on any specific product.
 
+The scorecard is written from a JSON report of the suite. Set `OASB_ADAPTER` on the first line to score a product other than the reference adapter:
+
+```bash
+npx vitest run --reporter=json --outputFile=test-results.json   # the suite, with a JSON report
+npm run report -- test-results.json                             # writes REPORT.generated.md, the scorecard
+```
+
+`REPORT.generated.md` holds a summary of the run (total, passed, failed and skipped tests, and the pass rate), the status of each scenario file (PASS, FAIL or SKIP, and N/A for a file the JSON report does not hold) with the MITRE ATLAS techniques it maps to, the ATLAS techniques covered, the OWASP Agentic Top 10 categories and the documented known gaps. [REPORT.md](REPORT.md) is the 2026-03-23 run kept as recorded, not the output of this command.
+
 ## Use as a library
 
 The suite is also published as [`@opena2a/oasb`](https://www.npmjs.com/package/@opena2a/oasb) for building adapters and consuming the scoring engine programmatically:
