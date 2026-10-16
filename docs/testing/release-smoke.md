@@ -180,6 +180,10 @@ README's test counts do not include them.
   `docs/adapters.md` records, each on the assertion its row quotes.
 - `scripts/scenario-report.test.mjs`: the report `npm run report` writes
   (`scripts/scenario-report.mjs`).
+- `scripts/dev-run-summary.test.mjs`: what the unpinned development runner
+  (`scripts/run-benchmark-v2.ts`) prints for each adapter and in its
+  comparison summary (`scripts/dev-run-summary.mjs`): recall, and precision,
+  F1, FPR and flag rate named as withdrawn with no value.
 - `scripts/library-entry.test.mjs`: the package entry point as a library
   install sees it, built where arp-guard cannot be resolved, as after
   `npm install @opena2a/oasb` on its own, and the version each adapter's

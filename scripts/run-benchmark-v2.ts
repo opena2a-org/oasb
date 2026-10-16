@@ -2,7 +2,9 @@
  * OASB Benchmark Runner v2
  *
  * Runs real HMA pipeline adapters against the full v2 corpus.
- * Outputs: per-category metrics, flag rates, timing, and comparison data.
+ * Prints recall, per-category detection, timing and a comparison summary. It
+ * names precision, F1, FPR and flag rate as withdrawn instead of printing them
+ * (scripts/dev-run-summary.mjs); the --out file keeps their values.
  *
  * This is the unpinned development runner: it loads the sibling hackmyagent
  * checkout, so its numbers are not figures of record. Figures of record come
@@ -237,17 +239,14 @@ const METHODOLOGY_NOTE =
   'measure of coverage. Excluding the wildcard posture finding also drops the handful of malicious configs ' +
   'whose ONLY signal was wildcard access (genuinely indistinguishable from a benign over-permissioned server).';
 
-function printDetailedResults(detailed: DetailedResult): void {
+// The lines printed for one adapter's run (scripts/dev-run-summary.mjs).
+type AdapterLines = (detailed: DetailedResult) => string[];
+
+function printDetailedResults(detailed: DetailedResult, adapterLines: AdapterLines): void {
   console.log(`\n${'='.repeat(80)}`);
   console.log(`Scanner: ${detailed.adapterName} (${detailed.adapterId})`);
   console.log(`${'='.repeat(80)}`);
-  console.log(`Samples: ${detailed.totalSamples} (${detailed.totalMalicious} malicious, ${detailed.totalBenign} benign)`);
-  console.log(`Flagged: ${detailed.flagged} (${(detailed.flagRate * 100).toFixed(1)}% flag rate)`);
-  console.log(`TP: ${detailed.truePositives}  FP: ${detailed.falsePositives}  FN: ${detailed.falseNegatives}  TN: ${detailed.trueNegatives}`);
-  console.log(`Precision: ${(detailed.precision * 100).toFixed(1)}%  Recall: ${(detailed.recall * 100).toFixed(1)}%  F1: ${(detailed.f1 * 100).toFixed(1)}%  FPR: ${(detailed.fpr * 100).toFixed(2)}%`);
-  if (detailed.avgScanTimeMs > 0) {
-    console.log(`Avg scan time: ${detailed.avgScanTimeMs.toFixed(1)}ms`);
-  }
+  for (const line of adapterLines(detailed)) console.log(line);
 
   console.log(`\nPer-Category Detection (recall = detected / total):`);
   console.log(`${'Category'.padEnd(28)} | Total | Detected | Recall`);
@@ -306,6 +305,8 @@ async function main() {
     process.exitCode = 2;
     return;
   }
+
+  const { adapterLines, comparisonLines } = await import('./dev-run-summary.mjs');
 
   const limitArg = args.find(a => a.startsWith('--limit='));
   const adapterArg = args.find(a => a.startsWith('--adapter='));
@@ -390,7 +391,7 @@ async function main() {
     console.log(`  [${adapter.id}] completed in ${elapsed}s`);
     allDetailed.push(detailed);
     resultsByAdapter[adapter.id] = results;
-    printDetailedResults(detailed);
+    printDetailedResults(detailed, adapterLines);
   }
 
   // Build provenance: the loaded HMA build + classifier versions the adapters
@@ -433,13 +434,7 @@ async function main() {
   console.log(`\n${'='.repeat(80)}`);
   console.log('COMPARISON SUMMARY');
   console.log('='.repeat(80));
-  console.log(`${'Scanner'.padEnd(42)} | F1     | Prec   | Recall | FPR    | Flag Rate`);
-  console.log('-'.repeat(95));
-  for (const d of allDetailed.sort((a, b) => b.f1 - a.f1)) {
-    console.log(
-      `${d.adapterName.padEnd(42)} | ${(d.f1 * 100).toFixed(1).padEnd(6)}% | ${(d.precision * 100).toFixed(1).padEnd(6)}% | ${(d.recall * 100).toFixed(1).padEnd(6)}% | ${(d.fpr * 100).toFixed(2).padEnd(6)}% | ${(d.flagRate * 100).toFixed(1)}%`
-    );
-  }
+  for (const line of comparisonLines(allDetailed)) console.log(line);
 }
 
 main().catch(err => {

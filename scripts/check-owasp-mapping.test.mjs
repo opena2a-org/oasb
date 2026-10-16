@@ -5,11 +5,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AGENTIC, checkMapping, parseHeader, scenarioHeaders } from './check-owasp-mapping.mjs';
+import { generateReport, readScenarios } from './scenario-report.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'check-owasp-mapping.mjs');
 const repo = join(dirname(script), '..');
@@ -96,8 +97,9 @@ test('every scenario file in this repository names its OWASP Agentic risk and th
 });
 
 test('the lab report lists the Agentic IDs the scenarios name, with their published titles', () => {
-  const report = readFileSync(join(repo, 'scripts', 'scenario-report.mjs'), 'utf8');
-  const listed = Object.fromEntries([...report.matchAll(/'(ASI\d\d)': '([^']+)'/g)].map((m) => [m[1], m[2]]));
+  const report = generateReport({ scenarios: readScenarios(repo), date: '2026-10-16' });
+  const section = report.slice(report.indexOf('## OWASP Agentic Top 10 Coverage')).split(/\n## /)[0];
+  const listed = Object.fromEntries([...section.matchAll(/^\| (ASI\d\d) \| ([^|]+) \|/gm)].map((m) => [m[1], m[2].trim()]));
   const { mapped } = scenarioHeaders(repo);
   const named = [...new Set([...mapped.values()].flatMap((m) => m.ids))].sort();
   assert.deepEqual(Object.keys(listed).sort(), named);

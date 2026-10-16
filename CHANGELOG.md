@@ -1126,6 +1126,24 @@ stay on record here with the reason they changed.
   is computed.
   `scripts/doc-facts.test.mjs` fails when the section says
   "the same controls".
+- The development runner `scripts/run-benchmark-v2.ts` prints, for each
+  adapter, its recall and the malicious samples it detected and missed, and
+  a comparison summary of recall whose `%` signs share one column. It names
+  precision, F1, FPR and flag rate as withdrawn instead of printing their
+  values: each reads the benign class, which its own warning says makes them
+  circular. It printed them in each adapter's block and in summary rows such
+  as `67.5  % | 99.3  % | 51.1  % | 0.03  % | 3.6%`. The results file it
+  writes with `--out` is unchanged.
+- `npm run report` lists, in each row of its OWASP Agentic table, the
+  scenarios whose `// OWASP Agentic:` header names that ID, each with its
+  status in the results file (N/A without one), and names the IDs no
+  scenario covers, ASI04, ASI06 and ASI09 on this tree; each row read "See
+  mapping docs". Its Known Gaps table, headed "Known Gaps (Documented)", is
+  now headed as the reference adapter's (ARP) and says that in a report on
+  another product those gaps describe ARP.
+- `docs/test-catalog.md` gives the test counts in one paragraph and the
+  E2E-001 skips in a note of their own; the first sentence of the counts
+  held the whole E2E-001 skip rule in a parenthetical.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

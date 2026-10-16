@@ -9,6 +9,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AGENTIC, pageMapping } from './check-owasp-mapping.mjs';
 import {
   REPORT_FILE,
   adapterRecordPath,
@@ -117,11 +118,76 @@ test('the Known Gaps of the report are the gaps docs/known-gaps.md documents', (
       .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
   };
   const documented = rows(page, '## Known Detection Gaps').map(([gap, severity, test]) => [gap, severity, test]);
-  const reported = rows(generateReport({ scenarios, date: '2026-10-11' }), '## Known Gaps (Documented)').map(
+  const reported = rows(generateReport({ scenarios, date: '2026-10-11' }), '## Known Gaps of the Reference Adapter (ARP)').map(
     ([, gap, severity, test]) => [gap, severity, test],
   );
   assert.ok(documented.length > 0, 'docs/known-gaps.md documents no gap');
   assert.deepEqual(reported, documented);
+});
+
+test('the Known Gaps of the report are labelled as the reference adapter\'s, not the product\'s under test', () => {
+  const report = generateReport({ scenarios, date: '2026-10-11' });
+  assert.ok(!report.includes('## Known Gaps (Documented)'), 'the gaps keep the heading that reads as the product\'s own');
+  const section = report.slice(report.indexOf('## Known Gaps of the Reference Adapter (ARP)')).split('\n| #')[0];
+  assert.match(section.replace(/\n/g, ' '), /These are gaps of ARP, the reference adapter, .* in a report on another product they describe ARP, not that product\./);
+});
+
+/** The OWASP Agentic rows of a report: ID -> the "<scenario> (<status>)" entries of its Tests cell. */
+function owaspRows(report) {
+  const section = report.slice(report.indexOf('## OWASP Agentic Top 10 Coverage')).split(/\n## /)[0];
+  return new Map(
+    section
+      .split('\n')
+      .filter((line) => /^\| ASI\d\d \|/.test(line))
+      .map((line) => {
+        const [id, , tests] = line.split('|').slice(1, -1).map((cell) => cell.trim());
+        return [id, tests.split(', ')];
+      }),
+  );
+}
+
+test('each OWASP Agentic row lists the scenarios docs/owasp-agentic-mapping.md lists under its ID', () => {
+  const page = pageMapping(readFileSync(join(repo, 'docs', 'owasp-agentic-mapping.md'), 'utf8').replace(/\r\n/g, '\n'));
+  assert.deepEqual(page.fail, []);
+  const report = generateReport({ scenarios, date: '2026-10-11' });
+  assert.ok(!report.includes('See mapping docs'), 'a row still points to the mapping docs instead of naming its scenarios');
+  const reported = owaspRows(report);
+  assert.deepEqual([...reported.keys()].sort(), [...page.listed.keys()].sort());
+  for (const [id, entries] of reported) {
+    assert.deepEqual(
+      entries.map((entry) => entry.replace(/ \(N\/A\)$/, '')).sort(),
+      [...page.listed.get(id)].sort(),
+      `${id} lists other scenarios than docs/owasp-agentic-mapping.md`,
+    );
+    for (const entry of entries) assert.match(entry, / \(N\/A\)$/, `${entry} has a status without a results file`);
+  }
+  const uncovered = [...page.gaps].sort().map((id) => `${id} (${AGENTIC[id]})`);
+  const line = `No scenario covers ${uncovered.join(', ')}. See docs/owasp-agentic-mapping.md.`;
+  assert.ok(report.split('\n').includes(line), `the report has no line "${line}"`);
+});
+
+test('each OWASP Agentic row gives the status of each of its scenarios in a vitest JSON report', () => {
+  const file = (path, ...statuses) => ({
+    name: join(repo, path),
+    status: statuses.includes('failed') ? 'failed' : 'passed',
+    assertionResults: statuses.map((status) => ({ fullName: path, status, duration: 1 })),
+  });
+  const results = {
+    numTotalTests: 3,
+    numPassedTests: 2,
+    numFailedTests: 1,
+    numPendingTests: 0,
+    testResults: [
+      file('src/atomic/process/AT-PROC-001.spawn-child.test.ts', 'passed'),
+      file('src/integration/INT-002.mcp-tool-abuse.test.ts', 'passed', 'failed'),
+    ],
+  };
+  const reported = owaspRows(generateReport({ scenarios, results, date: '2026-10-11' }));
+  const byScenario = (id) => scenarios.find((s) => s.id === id).owasp;
+  assert.ok(byScenario('AT-PROC-001').length > 0 && byScenario('INT-002').length > 0);
+  for (const id of byScenario('AT-PROC-001')) assert.ok(reported.get(id).includes('AT-PROC-001 (PASS)'), `${id} does not show AT-PROC-001 (PASS)`);
+  for (const id of byScenario('INT-002')) assert.ok(reported.get(id).includes('INT-002 (FAIL)'), `${id} does not show INT-002 (FAIL)`);
+  assert.ok([...reported.values()].flat().some((entry) => entry.endsWith(' (N/A)')), 'a scenario the results do not hold has a status');
 });
 
 test('the report with a vitest JSON report shows its totals and the status of each file', () => {

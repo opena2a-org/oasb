@@ -1,16 +1,19 @@
 // The report that `npm run report` (scripts/generate-report.ts) writes to
-// REPORT.generated.md. The MITRE ATLAS mapping is read from the `// ATLAS:` line in the
+// REPORT.generated.md. The MITRE ATLAS mapping is read from the `// ATLAS:` line
+// and the OWASP Agentic mapping from the `// OWASP Agentic:` line in the
 // header comment of each scenario file, so the report cannot drift from the
-// tests; docs/mitre-atlas-mapping.md is the per-technique page those headers
-// must agree with, and scripts/scenario-report.test.mjs checks that they do.
-// The counts and the status of each file come from a vitest JSON report when
-// one is given, and the product under test from the adapter record that
+// tests; docs/mitre-atlas-mapping.md and docs/owasp-agentic-mapping.md are the
+// pages those headers must agree with, and scripts/scenario-report.test.mjs
+// and scripts/check-owasp-mapping.mjs check that they do. The counts and the
+// status of each file come from a vitest JSON report when one is given, and
+// the product under test from the adapter record that
 // scripts/record-adapter.mjs writes beside that report.
 
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AGENTIC, parseHeader } from './check-owasp-mapping.mjs';
 import { SCENARIO_DIRS, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -24,17 +27,7 @@ const SCENARIO_FILE = /^((?:AT-[A-Z]+|INT|BL|E2E)-\d+)\..*\.test\.ts$/;
 // AML.T0050, AML.T0034.002, or T0054 after a slash in AML.T0051/T0054.
 const TECHNIQUE = /^(?:AML\.)?(T\d{4}(?:\.\d{3})?)$/;
 
-// OWASP Top 10 for Agentic Applications (2026) IDs the scenario headers name.
-// docs/owasp-agentic-mapping.md lists the scenarios under each.
-const OWASP_MAP = {
-  'ASI01': 'Agent Goal Hijack',
-  'ASI02': 'Tool Misuse & Exploitation',
-  'ASI03': 'Identity & Privilege Abuse',
-  'ASI05': 'Unexpected Code Execution (RCE)',
-  'ASI07': 'Insecure Inter-Agent Communication',
-  'ASI08': 'Cascading Failures',
-  'ASI10': 'Rogue Agents',
-};
+const OWASP_HEADER = 'OWASP Agentic:';
 
 /**
  * The techniques of an `ATLAS:` header value, each with the name the header
@@ -66,8 +59,9 @@ function testFiles(dir) {
 /**
  * Every scenario file under src/atomic, src/integration, src/baseline and
  * src/e2e: its ID, the title its header gives, its path from the checkout
- * root and the ATLAS techniques its header names (none for a test of the
- * product's response or of its own detection machinery).
+ * root, the ATLAS techniques its header names (none for a test of the
+ * product's response or of its own detection machinery) and the OWASP
+ * Agentic IDs it names (`owasp`).
  */
 export function readScenarios(root = ROOT) {
   return SCENARIO_DIRS.flatMap((dir) =>
@@ -90,7 +84,14 @@ export function readScenarios(root = ROOT) {
             throw new Error(`${file}: its ATLAS header is not readable: ${err.message}`);
           }
         });
-      return { id, title, file, techniques };
+      const owasp = header
+        .filter((line) => line.startsWith(OWASP_HEADER))
+        .flatMap((line) => {
+          const { ids, problems } = parseHeader(line.slice(OWASP_HEADER.length));
+          if (problems.length > 0) throw new Error(`${file}: its OWASP Agentic header is not readable: ${problems.join('; ')}`);
+          return ids;
+        });
+      return { id, title, file, techniques, owasp };
     }),
   );
 }
@@ -267,13 +268,27 @@ export function generateReport({ scenarios, results = null, adapter = null, date
     '',
   );
 
+  // Each Agentic ID with the scenarios whose header names it and their status;
+  // the IDs no scenario names are listed after the table.
   lines.push('## OWASP Agentic Top 10 Coverage', '', '| OWASP ID | Category | Tests |', '|----------|----------|-------|');
-  for (const [id, name] of Object.entries(OWASP_MAP)) lines.push(`| ${id} | ${name} | See mapping docs |`);
+  const uncovered = [];
+  for (const [id, name] of Object.entries(AGENTIC)) {
+    const named = scenarios.filter((s) => s.owasp.includes(id));
+    if (named.length === 0) uncovered.push(`${id} (${name})`);
+    else lines.push(`| ${id} | ${name} | ${named.map((s) => `${s.id} (${status.get(s.file) ?? 'N/A'})`).join(', ')} |`);
+  }
   lines.push('');
+  if (uncovered.length > 0) {
+    lines.push(`No scenario covers ${uncovered.join(', ')}. See docs/owasp-agentic-mapping.md.`, '');
+  }
 
-  // The gaps of the Known Detection Gaps table in docs/known-gaps.md, worded as it words them.
+  // The gaps of the Known Detection Gaps table in docs/known-gaps.md, worded as
+  // it words them. They are ARP's, whichever adapter the results are from.
   lines.push(
-    '## Known Gaps (Documented)',
+    '## Known Gaps of the Reference Adapter (ARP)',
+    '',
+    'These are gaps of ARP, the reference adapter, as docs/known-gaps.md documents them. They are',
+    'not read from the test results: in a report on another product they describe ARP, not that product.',
     '',
     '| # | Gap | Severity | Test Coverage |',
     '|---|-----|----------|--------------|',
