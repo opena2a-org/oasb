@@ -108,10 +108,9 @@ the claims this repository publishes:
    - The "Use as a library" example in a fresh install: it packs the
      checkout, runs the section's `npm install` lines in a new, empty
      project with `@opena2a/oasb` replaced by the tarball, and runs the
-     section's TypeScript block there without `OASB_ADAPTER` set. A call
-     whose argument list is only a comment, such as
-     `benchmark.determineTier(/* aggregate metrics */)`, is a placeholder:
-     the check asserts it names a function instead of calling it.
+     section's TypeScript block there as written, without `OASB_ADAPTER`
+     set. It must exit 0, and `npm run test:scripts` fails when the block
+     has a call whose argument list is only a comment.
 
    It runs every command and lists every failure, naming the command, the
    file and what ran. When one fails, fix the code or correct the README in

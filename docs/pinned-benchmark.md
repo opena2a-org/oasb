@@ -279,7 +279,7 @@ A scoring engine for scanners that judge AI agent skills and configurations, in 
 
 - **9 attack categories** (`src/benchmark/types.ts`): `supply_chain`, `prompt_injection`, `credential_exfiltration`, `heartbeat_rce`, `unicode_stego`, `privilege_escalation`, `persistence`, `social_engineering`, `data_exfiltration`.
 - **11 controls** (`src/benchmark/controls.ts`): SS-01 to SS-10 and SEC-021, each assigned to compliance level L1 (Basic), L2 (Standard) or L3 (Advanced).
-- **Tiers** (`TIER_THRESHOLDS` in `src/benchmark/scoring.ts`): platinum, gold, silver or listed, assigned from F1, false-positive rate, category coverage and, for platinum, Cohen's kappa against HackMyAgent. No tier is published for the corpus below, because F1 and false-positive rate on it are withdrawn.
+- **Tiers** (`TIER_THRESHOLDS` in `src/benchmark/scoring.ts`): platinum, gold, silver or listed, assigned from F1, false-positive rate, category coverage and, for platinum, Cohen's kappa against HackMyAgent. `scoreSubmission(submission, samples)` returns the tier with the metrics, and `determineTier(metrics)` assigns one from the `metrics` of that result. No tier is published for the corpus below, because F1 and false-positive rate on it are withdrawn.
 
 ### Benchmark Corpus (v2.0)
 

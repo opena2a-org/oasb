@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,11 +15,11 @@ import {
   GATED_FILE,
   LIBRARY_HEADING,
   OS_LEVEL_FILE,
+  compileLibraryExample,
   errorLine,
   libraryExampleFailure,
   librarySection,
   notSkipped,
-  placeholdersToChecks,
 } from './check-documented-commands.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'check-documented-commands.mjs');
@@ -75,6 +76,13 @@ test("the README's library section yields its install line and its TypeScript bl
   assert.match(code, /getCapabilityMatrix\(\)/);
 });
 
+test("the README's library example has no call whose argument list is only a comment", () => {
+  // The check runs the block as written, and so does a reader who copies it.
+  const { code } = librarySection(readFileSync(join(repo, 'README.md'), 'utf8'));
+  const placeholders = code.match(/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(\s*\/\*[\s\S]*?\*\/\s*\)/g) ?? [];
+  assert.deepEqual(placeholders, []);
+});
+
 test('install lines keep every package and drop a trailing comment', () => {
   const readme = `${LIBRARY_HEADING}\n\n\`\`\`bash\nnpm install @opena2a/oasb arp-guard   # both\n\`\`\`\n\n\`\`\`ts\nimport { createAdapter } from '@opena2a/oasb';\n\`\`\`\n\n## Next\n\n\`\`\`ts\nimport { other } from '@opena2a/oasb';\n\`\`\`\n`;
   assert.deepEqual(librarySection(readme), {
@@ -95,16 +103,23 @@ test('a README without the library section, its install line or its code block i
   );
 });
 
-test('a call whose argument list is only a comment is checked to be a function, not called', () => {
-  const code = 'createAdapter();\nconst tier = benchmark.determineTier(/* aggregate metrics */);';
-  const out = placeholdersToChecks(code);
-  assert.match(out, /^createAdapter\(\);\nconst tier = __expectFunction\(benchmark\.determineTier, "benchmark\.determineTier"\);/);
-  const run = new Function('createAdapter', 'benchmark', out);
-  let called = false;
-  run(() => {}, { determineTier: () => { called = true; } });
-  assert.equal(called, false);
-  assert.throws(() => run(() => {}, {}), /^TypeError: benchmark\.determineTier is not a function$/);
-  assert.equal(placeholdersToChecks('createAdapter();'), 'createAdapter();');
+test('the library example is compiled as written: a call whose argument list is only a comment is called', () => {
+  const ts = createRequire(join(repo, 'package.json'))('typescript');
+  const code = [
+    "import { benchmark } from '@opena2a/oasb';",
+    'const tier: string = benchmark.determineTier(/* aggregate metrics */);',
+    '',
+  ].join('\n');
+  const out = compileLibraryExample(ts, code);
+  const calls = [];
+  const oasb = { benchmark: { determineTier: (...args) => { calls.push(args); return 'listed'; } } };
+  new Function('require', 'exports', out)((name) => (name === '@opena2a/oasb' ? oasb : undefined), {});
+  assert.deepEqual(calls, [[]]);
+  const missing = { benchmark: { determineTier: (metrics) => metrics.f1 } };
+  assert.throws(
+    () => new Function('require', 'exports', out)(() => missing, {}),
+    /^TypeError: Cannot read properties of undefined \(reading 'f1'\)$/,
+  );
 });
 
 test('a library example that throws is reported with the install lines that ran and the message it threw', () => {

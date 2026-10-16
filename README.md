@@ -75,9 +75,27 @@ import { createAdapter, getCapabilityMatrix, benchmark } from '@opena2a/oasb';
 const adapter = createAdapter();
 console.log(getCapabilityMatrix());
 
-// Scoring engine + scanner-benchmark runner
-const tier = benchmark.determineTier(/* aggregate metrics */);
+// Scoring engine: score a scanner's verdicts against labeled samples.
+// F1, precision, FPR and tier on the bundled corpus are withdrawn: docs/pinned-benchmark.md
+const sample = (id: string): benchmark.BenchmarkSample => ({
+  id, label: 'malicious', category: 'prompt_injection', source: 'dvaa',
+  version: 'example', artifactType: 'skill', content: 'skill text',
+});
+const entry = benchmark.scoreSubmission(
+  {
+    scannerId: 'my-scanner', scannerName: 'My scanner', scannerVersion: '1.0.0',
+    submittedAt: new Date().toISOString(), datasetVersion: 'example',
+    results: [
+      { sampleId: 'm1', verdict: 'malicious' },
+      { sampleId: 'm2', verdict: 'benign' },
+    ],
+  },
+  [sample('m1'), sample('m2')],
+);
+console.log(entry.metrics.recall); // 0.5: one of the two malicious samples flagged
 ```
+
+On the bundled corpus, only recall is a published metric: F1, precision, false-positive rate and tier are withdrawn, because its benign class was labeled by one of the scanners it compares (see [Latest Results](docs/pinned-benchmark.md#latest-results-pinned-run-2026-10-10-2026-06-05-run-partially-withdrawn-2026-08-09)). `benchmark.determineTier` and `benchmark.TIER_THRESHOLDS` stay exported; [Skills Security Benchmark](docs/pinned-benchmark.md#skills-security-benchmark) describes them.
 
 The package exports the adapter contract (`SecurityProductAdapter`, event and enforcement types), capability helpers, the worked adapter examples (`ArpWrapper`, `LLMGuardWrapper`, `RebuffWrapper` - each lazy-loads its underlying product, so none are required to install), harness utilities (`EventCollector`, `MockLLMAdapter`, metrics), and the skills-security scoring engine under `benchmark`. Running the full attack-scenario suite still happens from a repo checkout with `npm test`.
 

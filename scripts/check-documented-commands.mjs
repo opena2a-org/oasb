@@ -16,11 +16,8 @@
 //   3. the README library example in a fresh install: packs the checkout,
 //      runs the `npm install` lines of "Use as a library" in a new, empty
 //      project with `@opena2a/oasb` replaced by the tarball, and runs the
-//      section's TypeScript block there, compiled with the checkout's
-//      TypeScript, without OASB_ADAPTER set. A call whose argument list is
-//      only a comment, such as `benchmark.determineTier(/* aggregate metrics */)`,
-//      is a placeholder: the check asserts it names a function instead of
-//      calling it.
+//      section's TypeScript block there as written, compiled with the
+//      checkout's TypeScript, without OASB_ADAPTER set. It must exit 0.
 //
 // The checkout must be installed (npm ci) and built (npm run build). Step 3
 // installs the tarball's dependencies from the npm registry.
@@ -118,17 +115,13 @@ export function librarySection(readme) {
 }
 
 /**
- * Replaces each call whose argument list is only a comment, a placeholder
- * such as `benchmark.determineTier(/* aggregate metrics *\/)`, with a check
- * that the callee is a function.
+ * The library example compiled to CommonJS with `ts`, the checkout's
+ * TypeScript, as written: every call in it runs, whatever its arguments.
  */
-export function placeholdersToChecks(code) {
-  const rewritten = code.replace(
-    /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\(\s*\/\*[\s\S]*?\*\/\s*\)/g,
-    (_, callee) => `__expectFunction(${callee}, ${JSON.stringify(callee)})`,
-  );
-  if (rewritten === code) return code;
-  return `${rewritten}\n\nfunction __expectFunction(value, name) {\n  if (typeof value !== 'function') throw new TypeError(name + ' is not a function');\n}\n`;
+export function compileLibraryExample(ts, code) {
+  return ts.transpileModule(code, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
+  }).outputText;
 }
 
 function run(command, args, options) {
@@ -216,10 +209,7 @@ function checkLibraryExample(root, work) {
     if (r.status !== 0) return [`${label}: npm ${args.join(' ')} exited ${r.status}: ${errorLine(r.output)}`];
   }
   const ts = createRequire(join(root, 'package.json'))('typescript');
-  const { outputText } = ts.transpileModule(placeholdersToChecks(section.code), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
-  });
-  writeFileSync(join(project, 'example.cjs'), outputText);
+  writeFileSync(join(project, 'example.cjs'), compileLibraryExample(ts, section.code));
   const r = run(process.execPath, ['example.cjs'], { cwd: project, env });
   return r.status === 0 ? [] : [libraryExampleFailure(section.installs, r.status, r.output)];
 }

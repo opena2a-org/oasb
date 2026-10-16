@@ -1063,6 +1063,19 @@ stay on record here with the reason they changed.
   adapter throws; for arp-guard that is the message naming
   `npm install arp-guard` and `OASB_ADAPTER`, as before.
   `scripts/library-entry.test.mjs` holds each case.
+- The README's "Use as a library" example scores a two-sample submission
+  with `benchmark.scoreSubmission` and prints its recall, and says that F1,
+  precision, false-positive rate and tier on the bundled corpus are
+  withdrawn. It ended on `benchmark.determineTier(/* aggregate metrics */)`.
+  Run as written, that line threw
+  `TypeError: Cannot read properties of undefined (reading 'f1')`, and given
+  metrics, `determineTier` assigns a tier from the withdrawn F1 and
+  false-positive rate. It stays exported, and `docs/pinned-benchmark.md`
+  describes it. The documented-command check in `npm run smoke` runs the
+  block as written. It read a call whose argument list is only a comment as
+  a placeholder and checked only that the call named a function, so it
+  passed on that block. `scripts/check-documented-commands.test.mjs` fails
+  when the block has such a call.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
