@@ -9,7 +9,7 @@ files.
 
 ## The adapters
 
-The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](../README.md#evaluating-other-products).
+The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](../README.md#evaluating-other-products). Point `OASB_ADAPTER` at a module that exports the class as its default export, as a named export `Adapter`, or as `module.exports = Class`.
 
 The rebuff adapter runs the package's heuristic detection. rebuff publishes TypeScript sources only, so the adapter compiles them with the `typescript` dev dependency; when either package is missing, each scan fails with an error that names it.
 

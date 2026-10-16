@@ -424,6 +424,23 @@ stay on record here with the reason they changed.
   `src/harness/create-adapter.test.ts` load an adapter from a temporary
   directory by a `./` path, a `../` path and an absolute path, and the README
   counts them in a new Adapter loading row of What Gets Tested.
+- An `OASB_ADAPTER` value that is not `arp`, `llm-guard`, `rebuff`, a path
+  or a module that resolves stops the run with one line that names those
+  values and the class shapes a module may export, with no stack. It died
+  with Node's `Cannot find module` and its require stack. A case variant of
+  a built-in name, such as `ARP` or `Llm-Guard`, gets the same line with the
+  name it differs from (`did you mean "llm-guard"?`) and is never loaded as
+  a package: on a case-insensitive filesystem `Llm-Guard` loaded the
+  llm-guard npm package as a custom module, and the run failed with
+  `adapter.getCapabilities is not a function`.
+- A custom adapter module that assigns its class to `module.exports` loads.
+  It was refused as "does not export an adapter class", while the same class
+  as a default or named export loaded. A module that exports no class now
+  gets the accepted shapes in its message: the default export, a named
+  export `Adapter`, or `module.exports = Class`, which the README and
+  `docs/adapters.md` now state. Four tests in
+  `src/harness/create-adapter.test.ts` hold both entries, and `npm test` runs
+  428 tests (427 passing, 1 skipped).
 - `OASB_ADAPTER=rebuff` now runs the heuristic detection of the rebuff npm
   package, as the README says. rebuff was not a dev dependency, so `npm ci`
   did not install it, and its published package holds TypeScript sources

@@ -49,6 +49,8 @@ OASB_ADAPTER=rebuff npm test          # the rebuff npm package
 OASB_ADAPTER=./my-adapter.js npm test # your own adapter module
 ```
 
+Your module exports its `SecurityProductAdapter` class as the default export, as a named export `Adapter`, or as `module.exports = Class`.
+
 Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL - a prompt-only scanner is not penalized for lacking filesystem monitoring. [docs/adapters.md](docs/adapters.md) lists the surfaces each adapter declares, what the rebuff adapter needs and [the tests that fail under llm-guard and rebuff](docs/adapters.md#tests-that-fail-under-llm-guard-and-rebuff), each with the assertion it fails on.
 
 > **Where cross-product detection numbers come from.** The atomic AI-layer tests assert the reference adapter's own pattern taxonomy, so they verify *conformance to the OASB harness*, not neutral detection quality. Across products, the [Scanner Benchmark](docs/pinned-benchmark.md#skills-security-benchmark) gives a **recall-only comparison**: its benign class was labeled by HackMyAgent, one of the scanners it compares.
