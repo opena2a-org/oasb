@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { EventCollector } from './event-collector';
-import { loadRebuffHeuristic } from './rebuff-loader';
+import { loadRebuffHeuristic, rebuffVersion } from './rebuff-loader';
 import type { RebuffHeuristic } from './rebuff-loader';
 import type {
   SecurityProductAdapter,
@@ -202,7 +202,7 @@ export class RebuffWrapper implements SecurityProductAdapter {
   getCapabilities(): CapabilityMatrix {
     return {
       product: 'rebuff',
-      version: '0.1.0',
+      version: rebuffVersion(),
       capabilities: new Set([
         'prompt-input-scanning',
         'pattern-scanning',

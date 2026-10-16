@@ -183,7 +183,8 @@ README's test counts do not include them.
   (`scripts/scenario-report.mjs`).
 - `scripts/library-entry.test.mjs`: the package entry point as a library
   install sees it, built where arp-guard cannot be resolved, as after
-  `npm install @opena2a/oasb` on its own.
+  `npm install @opena2a/oasb` on its own, and the version each adapter's
+  capability matrix reports for the package a test installs beside it.
 - `scripts/runner-loads-no-sibling-module.test.mjs`: `runBenchmark`, built
   and copied into a library install and into a clone, loads no module from
   a `hackmyagent` directory beside the package.

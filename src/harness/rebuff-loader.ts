@@ -52,18 +52,28 @@ function runSource(file: string, ts: typeof import('typescript'), loaded: Map<st
   return mod.exports;
 }
 
+/** The path of the package.json of the rebuff package that `fromDir` resolves. */
+function rebuffPackageJson(fromDir: string): string {
+  try {
+    return createRequire(path.join(fromDir, 'rebuff-loader.js')).resolve('rebuff/package.json');
+  } catch {
+    throw new Error(`The rebuff adapter needs the rebuff npm package, and it is not installed. ${HOW_TO_INSTALL}`);
+  }
+}
+
+/** The `version` field of the package.json of the rebuff package that `fromDir` resolves. */
+export function rebuffVersion(fromDir: string = __dirname): string {
+  const { version } = JSON.parse(fs.readFileSync(rebuffPackageJson(fromDir), 'utf8'));
+  return typeof version === 'string' ? version : 'unknown (rebuff/package.json has no version)';
+}
+
 /**
  * Returns rebuff's heuristic scorer (0 to 1) from the rebuff package that
  * `fromDir` resolves. Throws an Error that names what is missing when the
  * package, the compiler or the heuristic itself cannot be loaded.
  */
 export function loadRebuffHeuristic(fromDir: string = __dirname): RebuffHeuristic {
-  let root: string;
-  try {
-    root = path.dirname(createRequire(path.join(fromDir, 'rebuff-loader.js')).resolve('rebuff/package.json'));
-  } catch {
-    throw new Error(`The rebuff adapter needs the rebuff npm package, and it is not installed. ${HOW_TO_INSTALL}`);
-  }
+  const root = path.dirname(rebuffPackageJson(fromDir));
 
   let ts: typeof import('typescript');
   try {

@@ -10,7 +10,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -34,17 +34,26 @@ before(() => {
 after(() => rmSync(base, { recursive: true, force: true }));
 
 // A fresh copy of the build for one test, so module-level caches start empty,
-// with the given packages written into its node_modules.
-function install(name, packages = {}) {
+// with the given packages written into its node_modules: a string is the
+// package's index.js, an object maps each of its file names to its content.
+// Each name in `links` is linked from this checkout's node_modules, where
+// `npm ci` installed the devDependencies.
+function install(name, packages = {}, links = []) {
   const dir = join(base, name);
   cpSync(join(base, 'build'), dir, { recursive: true });
+  mkdirSync(join(dir, 'node_modules'), { recursive: true });
   for (const [pkg, source] of Object.entries(packages)) {
     mkdirSync(join(dir, 'node_modules', pkg), { recursive: true });
-    writeFileSync(join(dir, 'node_modules', pkg, 'index.js'), source);
+    const files = typeof source === 'string' ? { 'index.js': source } : source;
+    for (const [file, content] of Object.entries(files)) writeFileSync(join(dir, 'node_modules', pkg, file), content);
   }
+  for (const pkg of links) symlinkSync(join(repo, 'node_modules', pkg), join(dir, 'node_modules', pkg), 'dir');
   delete process.env.OASB_ADAPTER;
   return require(join(dir, 'index.js'));
 }
+
+// The installed version of a devDependency of this checkout.
+const installedVersion = pkg => JSON.parse(readFileSync(join(repo, 'node_modules', pkg, 'package.json'), 'utf8')).version;
 
 test('without arp-guard, the default adapter names the package to install and OASB_ADAPTER', async () => {
   const oasb = install('no-arp-guard');
@@ -61,11 +70,49 @@ test('without arp-guard, the default adapter names the package to install and OA
 });
 
 test('with arp-guard installed, the capability matrix reports its version', () => {
-  const oasb = install('with-arp-guard', { 'arp-guard': "module.exports = { VERSION: '9.9.9' };\n" });
+  // The VERSION export differs from package.json, as in arp-guard 0.3.0.
+  const oasb = install('with-arp-guard', {
+    'arp-guard': {
+      'package.json': '{"name":"arp-guard","version":"9.9.9"}\n',
+      'index.js': "module.exports = { VERSION: '1.3.1' };\n",
+    },
+  });
   const matrix = oasb.getCapabilityMatrix();
   assert.equal(matrix.product, 'arp-guard');
   assert.equal(matrix.version, '9.9.9');
   assert.ok(matrix.capabilities.has('prompt-input-scanning'));
+});
+
+test('the capability matrix reports the version of the installed arp-guard devDependency', () => {
+  const oasb = install('installed-arp-guard', {}, ['arp-guard']);
+  assert.equal(new oasb.ArpWrapper().getCapabilities().version, installedVersion('arp-guard'));
+  assert.equal(oasb.getCapabilityMatrix().version, installedVersion('arp-guard'));
+});
+
+test('when an exports map hides package.json, the matrix reports the VERSION export and says so', () => {
+  const oasb = install('arp-guard-exports', {
+    'arp-guard': {
+      'package.json': '{"name":"arp-guard","version":"9.9.9","exports":{".":"./index.js"}}\n',
+      'index.js': "module.exports = { VERSION: '1.3.1' };\n",
+    },
+  });
+  assert.equal(oasb.getCapabilityMatrix().version, '1.3.1 (VERSION export; package.json not resolvable)');
+});
+
+test('the llm-guard and rebuff adapters report the version of the installed package', () => {
+  const fake = install('fake-llm-guard-rebuff', {
+    'llm-guard': {
+      'package.json': '{"name":"llm-guard","version":"9.9.9"}\n',
+      'index.js': 'module.exports = { LLMGuard: class {} };\n',
+    },
+    rebuff: { 'package.json': '{"name":"rebuff","version":"9.9.8"}\n' },
+  });
+  assert.equal(new fake.LLMGuardWrapper().getCapabilities().version, '9.9.9');
+  assert.equal(new fake.RebuffWrapper().getCapabilities().version, '9.9.8');
+
+  const installed = install('installed-llm-guard-rebuff', {}, ['llm-guard', 'rebuff']);
+  assert.equal(new installed.LLMGuardWrapper().getCapabilities().version, installedVersion('llm-guard'));
+  assert.equal(new installed.RebuffWrapper().getCapabilities().version, installedVersion('rebuff'));
 });
 
 test('a module arp-guard itself cannot load is reported as it is', () => {

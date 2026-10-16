@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { EventCollector } from './event-collector';
+import { packageVersion } from './package-version';
 import type {
   SecurityProductAdapter,
   SecurityEvent,
@@ -37,12 +38,15 @@ import type {
 } from './adapter';
 
 // Lazy-loaded llm-guard
-let _LLMGuard: any;
-function getLLMGuard(): any {
-  if (!_LLMGuard) {
-    _LLMGuard = require('llm-guard').LLMGuard;
+let _llmGuard: any;
+function llmGuard(): any {
+  if (!_llmGuard) {
+    _llmGuard = require('llm-guard');
   }
-  return _LLMGuard;
+  return _llmGuard;
+}
+function getLLMGuard(): any {
+  return llmGuard().LLMGuard;
 }
 
 /** Convert llm-guard result to OASB ScanResult */
@@ -170,7 +174,7 @@ export class LLMGuardWrapper implements SecurityProductAdapter {
   getCapabilities(): CapabilityMatrix {
     return {
       product: 'llm-guard',
-      version: '0.1.8',
+      version: packageVersion('llm-guard', llmGuard),
       capabilities: new Set([
         'prompt-input-scanning',
         'pattern-scanning',

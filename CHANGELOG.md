@@ -1047,6 +1047,22 @@ stay on record here with the reason they changed.
   and says to write a literal % as `%25`, and reads the capture as linking
   no full output; on such a link it ended with an uncaught `URIError` and a
   stack trace.
+- `getCapabilityMatrix()` and the `getCapabilities()` of the reference,
+  llm-guard and rebuff adapters report as `version` the `version` field of
+  the installed package's own `package.json`. The reference adapter
+  reported the `VERSION` export of arp-guard, which arp-guard 0.3.0
+  re-exports from `hackmyagent/arp`: a constant of the installed
+  hackmyagent, not arp-guard's version (`0.2.0` with the arp-guard 0.3.0
+  and hackmyagent 0.23.8 that this checkout's lockfile installs), or
+  `0.3.0` when that export was missing. The llm-guard and rebuff adapters
+  reported `0.1.8` and `0.1.0` whichever version was installed. When an
+  `exports` map hides `package.json`, the reference and llm-guard adapters
+  report the `VERSION` export followed by
+  ` (VERSION export; package.json not resolvable)`. When the package is
+  not installed, `getCapabilities()` throws the error a scan with that
+  adapter throws; for arp-guard that is the message naming
+  `npm install arp-guard` and `OASB_ADAPTER`, as before.
+  `scripts/library-entry.test.mjs` holds each case.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { EventCollector } from './event-collector';
+import { packageVersion } from './package-version';
 import type {
   SecurityProductAdapter,
   SecurityEvent,
@@ -161,7 +162,7 @@ export class ArpWrapper implements SecurityProductAdapter {
     if (anomalyPersistenceSupported()) capabilities.add('baseline-persistence');
     return {
       product: 'arp-guard',
-      version: arp().VERSION || '0.3.0',
+      version: packageVersion('arp-guard', arp),
       capabilities,
     };
   }
