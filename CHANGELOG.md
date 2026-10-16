@@ -597,6 +597,32 @@ stay on record here with the reason they changed.
   matched. It was named for a secret key, which OL-001 does not detect.
 - `npm run report` writes `REPORT.generated.md`, which git ignores. It wrote
   `REPORT.md` and so replaced the 2026-03-23 run kept there as recorded.
+- The Summary of `npm run report` counts the attack scenarios only, the
+  tests under `src/atomic`, `src/integration`, `src/baseline` and `src/e2e`.
+  It counted every test of the run: the scoring-engine, pinned benchmark
+  harness and adapter tests were in "Passed" and the skipped scenarios in
+  the denominator of the pass rate, so a run of AT-AI-001 and
+  `src/benchmark/scoring.test.ts` with an adapter that declares no
+  capabilities read 17 passed and a 60.7% pass rate with every scenario
+  skipped. The table now gives the scenarios, the passed, the failed, the
+  not applicable (in a suite skipped by the product's capability
+  declaration) and the skipped for another reason, and a pass rate over the
+  passed and failed scenarios; with none of those it reads "not measured (0
+  scenarios evaluated)". The other tests are on a "Harness self-tests" line
+  outside the pass rate. A scenario file that vitest marks failed with no
+  failed test, such as one whose adapter threw while it was collected, is
+  FAIL instead of SKIP and is counted in the table. "Unique ATLAS techniques
+  covered" gave the 15 techniques the scenario headers map, whatever the
+  status of their files; that count is now "techniques mapped", and a report
+  with results also gives the techniques covered by a passing scenario.
+- The report `npm run report` writes names the product under test. A vitest
+  run with a JSON report file writes `<report>.adapter.json` beside it
+  (`scripts/record-adapter.mjs`, a global setup in `vitest.config.ts`): the
+  `OASB_ADAPTER` value, `arp` when it is unset, and the product, version and
+  capabilities the adapter's `getCapabilities()` declares. The record holds
+  the SHA-256 of the report it was written for, so a record left beside a
+  report from another run is not read. Without a record the report reads
+  "Product under test: not recorded" and names the command that writes both.
 - The secret scan in the security workflow reads every commit a push to
   `main` adds, from the push's previous head to its new head; it read only
   the head commit, so a push of several commits left all but the last

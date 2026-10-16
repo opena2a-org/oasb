@@ -3,15 +3,21 @@
 // header comment of each scenario file, so the report cannot drift from the
 // tests; docs/mitre-atlas-mapping.md is the per-technique page those headers
 // must agree with, and scripts/scenario-report.test.mjs checks that they do.
-// The totals and the status of each file come from a vitest JSON report when
-// one is given.
+// The counts and the status of each file come from a vitest JSON report when
+// one is given, and the product under test from the adapter record that
+// scripts/record-adapter.mjs writes beside that report.
 
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCENARIO_DIRS, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+// The title describeWithCapability (src/harness/capabilities.ts) gives a
+// suite it skips because the product does not declare a capability.
+const REQUIRES = /\[requires: [^\]]+\]$/;
 
 // AT-PROC-001.spawn-child.test.ts, INT-002.mcp-tool-abuse.test.ts, BL-001..., E2E-001...
 const SCENARIO_FILE = /^((?:AT-[A-Z]+|INT|BL|E2E)-\d+)\..*\.test\.ts$/;
@@ -103,46 +109,132 @@ export function techniqueSummary(scenarios) {
   return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
 }
 
-/** PASS, FAIL or SKIP for the tests of one file in a vitest JSON report. */
-function fileStatus(tests) {
-  if (tests.some((t) => t.status === 'failed')) return 'FAIL';
+/**
+ * PASS, FAIL or SKIP for one file of a vitest JSON report. A file vitest
+ * marks failed with no failed test, such as one that threw while it was
+ * collected, is FAIL.
+ */
+function fileStatus(file) {
+  const tests = file.assertionResults;
+  if (file.status === 'failed' || tests.some((t) => t.status === 'failed')) return 'FAIL';
   if (tests.some((t) => t.status === 'passed')) return 'PASS';
   return 'SKIP';
+}
+
+/** True for a file of a vitest JSON report that holds attack scenarios. */
+function isScenarioFile(file) {
+  const path = sourcePath(file.name);
+  return SCENARIO_DIRS.some((dir) => path.startsWith(`${dir}/`));
+}
+
+/**
+ * The counts of the Summary. Only the tests of the scenario files are
+ * counted as scenarios; the others (the scoring-engine, pinned benchmark
+ * harness and adapter tests) do not exercise the product and are counted
+ * apart as harness self-tests. A scenario that neither passed nor failed is
+ * not applicable when describeWithCapability skipped its suite, and skipped
+ * for another reason otherwise (an it.skip, a case skipped as inconclusive).
+ */
+function summaryCounts(files) {
+  const counts = { scenarios: 0, passed: 0, failed: 0, notApplicable: 0, otherSkipped: 0, brokenFiles: 0 };
+  const harness = { passed: 0, failed: 0, other: 0 };
+  for (const file of files) {
+    const scenario = isScenarioFile(file);
+    if (scenario && file.status === 'failed' && !file.assertionResults.some((t) => t.status === 'failed')) {
+      counts.brokenFiles++;
+    }
+    for (const test of file.assertionResults) {
+      const outcome = test.status === 'passed' ? 'passed' : test.status === 'failed' ? 'failed' : null;
+      if (!scenario) {
+        harness[outcome ?? 'other']++;
+        continue;
+      }
+      counts.scenarios++;
+      if (outcome) counts[outcome]++;
+      else if ((test.ancestorTitles ?? []).some((title) => REQUIRES.test(title))) counts.notApplicable++;
+      else counts.otherSkipped++;
+    }
+  }
+  return { ...counts, harness };
+}
+
+/** The Summary section of a report with results. */
+function summaryLines(files) {
+  const c = summaryCounts(files);
+  const evaluated = c.passed + c.failed;
+  const rate =
+    evaluated > 0
+      ? `${((c.passed / evaluated) * 100).toFixed(1)}% (${c.passed} of ${evaluated} evaluated)`
+      : 'not measured (0 scenarios evaluated)';
+  const dirs = `${SCENARIO_DIRS.slice(0, -1).join(', ')} and ${SCENARIO_DIRS.at(-1)}`;
+  const lines = [
+    '## Summary',
+    '',
+    `Counts of the attack scenarios, the tests under ${dirs}.`,
+    'A scenario whose suite requires a capability the product does not declare is not applicable,',
+    'and the pass rate is over the scenarios that passed or failed.',
+    '',
+    '| Metric | Value |',
+    '|--------|-------|',
+    `| Scenarios | ${c.scenarios} |`,
+    `| Passed | ${c.passed} |`,
+    `| Failed | ${c.failed} |`,
+    `| Not applicable (skipped by the product's capability declaration) | ${c.notApplicable} |`,
+    `| Skipped for another reason | ${c.otherSkipped} |`,
+  ];
+  if (c.brokenFiles > 0) lines.push(`| Scenario files that failed outside a test | ${c.brokenFiles} |`);
+  lines.push(`| Pass rate | ${rate} |`, '');
+  const { passed, failed, other } = c.harness;
+  if (passed + failed + other > 0) {
+    lines.push(
+      `Harness self-tests: ${passed} passed, ${failed} failed${other > 0 ? `, ${other} skipped` : ''}.`,
+      'These are the scoring-engine, pinned benchmark harness and adapter tests: they do not exercise',
+      'the product and are not in the pass rate.',
+      '',
+    );
+  }
+  return lines;
+}
+
+/**
+ * The line that names the product under test. `adapter` is what
+ * readAdapterRecord returns, or null when there is none.
+ */
+function productLines(adapter, results) {
+  if (results === null) return ['Product under test: not recorded (no test results were read)'];
+  if (adapter === null || adapter === undefined) return ['Product under test: not recorded'];
+  if (adapter.unrecorded) return [`Product under test: not recorded (${adapter.unrecorded})`];
+  const lines = [
+    adapter.product
+      ? `Product under test: ${adapter.product}${adapter.version ? ` ${adapter.version}` : ''} (adapter: ${adapter.adapter})`
+      : `Product under test: adapter ${adapter.adapter}; its product and version were not recorded${adapter.error ? ` (${adapter.error})` : ''}`,
+  ];
+  if (Array.isArray(adapter.capabilities)) {
+    lines.push('', `Declared capabilities: ${adapter.capabilities.length > 0 ? adapter.capabilities.join(', ') : 'none'}`);
+  }
+  return lines;
 }
 
 /**
  * The markdown report. `results` is a parsed vitest JSON report
  * (`npx vitest run --reporter=json --outputFile=test-results.json`), or null
- * to report the mapping alone with every status N/A.
+ * to report the mapping alone with every status N/A. `adapter` is the
+ * adapter record of that report (readAdapterRecord), or null.
  *
- * @param {{ scenarios: ReturnType<typeof readScenarios>, results?: any, date: string }} options
+ * @param {{ scenarios: ReturnType<typeof readScenarios>, results?: any, adapter?: any, date: string }} options
  */
-export function generateReport({ scenarios, results = null, date }) {
+export function generateReport({ scenarios, results = null, adapter = null, date }) {
   const status = new Map();
   if (results !== null) {
-    for (const file of reportFiles(results)) status.set(sourcePath(file.name), fileStatus(file.assertionResults));
+    for (const file of reportFiles(results)) status.set(sourcePath(file.name), fileStatus(file));
     for (const field of ['numTotalTests', 'numPassedTests', 'numFailedTests', 'numPendingTests']) {
       if (typeof results[field] !== 'number') throw new Error(`it has no "${field}" count, so it is not a vitest JSON report`);
     }
   }
 
-  const lines = ['# OASB Test Report', '', `Generated: ${date}`, ''];
+  const lines = ['# OASB Test Report', '', `Generated: ${date}`, '', ...productLines(adapter, results), ''];
 
-  if (results !== null) {
-    const rate = results.numTotalTests > 0 ? ((results.numPassedTests / results.numTotalTests) * 100).toFixed(1) : '0.0';
-    lines.push(
-      '## Summary',
-      '',
-      '| Metric | Value |',
-      '|--------|-------|',
-      `| Total Tests | ${results.numTotalTests} |`,
-      `| Passed | ${results.numPassedTests} |`,
-      `| Failed | ${results.numFailedTests} |`,
-      `| Skipped | ${results.numPendingTests} |`,
-      `| Pass Rate | ${rate}% |`,
-      '',
-    );
-  }
+  if (results !== null) lines.push(...summaryLines(results.testResults));
 
   lines.push(
     '## MITRE ATLAS Coverage',
@@ -162,9 +254,13 @@ export function generateReport({ scenarios, results = null, date }) {
   );
 
   const summary = techniqueSummary(scenarios);
+  lines.push(`**Unique ATLAS techniques mapped:** ${summary.length}`, '');
+  if (results !== null) {
+    const passing = new Set(scenarios.filter((s) => status.get(s.file) === 'PASS').map((s) => s.id));
+    const covered = summary.filter((t) => t.tests.some((id) => passing.has(id)));
+    lines.push(`**Unique ATLAS techniques covered by a passing scenario:** ${covered.length}`, '');
+  }
   lines.push(
-    `**Unique ATLAS techniques covered:** ${summary.length}`,
-    '',
     '| ATLAS Technique | ID | Tests |',
     '|-----------------|----|-------|',
     ...summary.map((t) => `| ${t.name} | ${t.id} | ${t.tests.join(', ')} |`),
@@ -216,6 +312,69 @@ export function readResults(path, required) {
   } catch (err) {
     throw new Error(`${path} is not JSON: ${err.message}`);
   }
+}
+
+/**
+ * The adapter record of the vitest JSON report at `resultsPath`: the file
+ * beside it that scripts/record-adapter.mjs writes, test-results.adapter.json
+ * for test-results.json.
+ */
+export function adapterRecordPath(resultsPath) {
+  return `${resultsPath.replace(/\.json$/, '')}.adapter.json`;
+}
+
+/** The SHA-256 of the file at `path` in hex, or null when there is no file. */
+export function fileDigest(path) {
+  if (!existsSync(path)) return null;
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+/**
+ * Write the adapter record of the report at `resultsPath`: `adapter` (the
+ * OASB_ADAPTER value, or arp when it is unset) and either the product,
+ * version and capabilities its getCapabilities() declares or the error that
+ * kept them from being read. The record holds the SHA-256 of the report, so
+ * a record is read only beside the report it was written for.
+ */
+export function writeAdapterRecord(resultsPath, { adapter, product, version, capabilities, error }) {
+  const record = { adapter, product, version, capabilities, error, results: { sha256: fileDigest(resultsPath) } };
+  writeFileSync(adapterRecordPath(resultsPath), `${JSON.stringify(record, null, 2)}\n`);
+}
+
+/**
+ * The adapter record beside the report at `resultsPath`, or `{ unrecorded }`
+ * with the reason the product under test is not known: there is no record,
+ * it cannot be read, it names no adapter or it was written for another
+ * report.
+ */
+export function readAdapterRecord(resultsPath) {
+  const path = adapterRecordPath(resultsPath);
+  const name = basename(path);
+  const rerun = `npx vitest run --reporter=json --outputFile=${resultsPath} writes both`;
+  if (!existsSync(path)) return { unrecorded: `there is no ${name} beside ${basename(resultsPath)}; ${rerun}` };
+  let text;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (err) {
+    return { unrecorded: `${name} cannot be read: ${err.message}` };
+  }
+  let record;
+  try {
+    record = JSON.parse(text);
+  } catch (err) {
+    return { unrecorded: `${name} is not JSON: ${err.message}` };
+  }
+  if (typeof record?.adapter !== 'string' || record.adapter === '') return { unrecorded: `${name} names no adapter; ${rerun}` };
+  if (record.results?.sha256 !== fileDigest(resultsPath)) {
+    return { unrecorded: `${name} was written for another results file than ${basename(resultsPath)}; ${rerun}` };
+  }
+  const read = { adapter: record.adapter };
+  for (const key of ['product', 'version', 'error']) {
+    if (typeof record[key] === 'string' && record[key] !== '') read[key] = record[key];
+  }
+  if (Array.isArray(record.capabilities)) read.capabilities = record.capabilities.filter((c) => typeof c === 'string');
+  read.results = record.results;
+  return read;
 }
 
 // The tracked REPORT.md is a dated run kept as recorded, so a generated

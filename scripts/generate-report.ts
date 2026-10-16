@@ -3,7 +3,8 @@
  * OASB Report Generator
  *
  * Writes REPORT.generated.md in the current directory with:
- * - Test pass/fail summary, when a vitest JSON report is given
+ * - The product under test and the attack-scenario pass/fail summary, when a
+ *   vitest JSON report is given
  * - MITRE ATLAS coverage, read from the `// ATLAS:` header of each scenario file
  * - OWASP Agentic Top 10 coverage table
  * - Known gaps
@@ -11,6 +12,11 @@
  * Usage:
  *   npx vitest run --reporter=json --outputFile=test-results.json
  *   npm run report -- test-results.json
+ *
+ * The product under test is read from test-results.adapter.json, which the
+ * vitest run writes beside its JSON report (scripts/record-adapter.mjs); the
+ * report says "not recorded" when that file is absent or was written for
+ * another results file.
  *
  * Without an argument it reads test-results.json in the current directory, and
  * reports the mapping alone (every status N/A) when that file does not exist.
@@ -24,16 +30,19 @@
 import * as path from 'path';
 
 async function main(): Promise<void> {
-  const { generateReport, readResults, readScenarios, writeReport } = await import('./scenario-report.mjs');
+  const { generateReport, readAdapterRecord, readResults, readScenarios, writeReport } = await import(
+    './scenario-report.mjs'
+  );
 
   const named = process.argv[2];
   const resultsPath = named || path.join(process.cwd(), 'test-results.json');
   const results = readResults(resultsPath, Boolean(named));
+  const adapter = results === null ? null : readAdapterRecord(resultsPath);
 
   const scenarios = readScenarios();
   let report: string;
   try {
-    report = generateReport({ scenarios, results, date: new Date().toISOString().split('T')[0] });
+    report = generateReport({ scenarios, results, adapter, date: new Date().toISOString().split('T')[0] });
   } catch (err) {
     // Only a results file that is not a vitest JSON report makes this throw.
     throw new Error(`${resultsPath}: ${(err as Error).message}`);

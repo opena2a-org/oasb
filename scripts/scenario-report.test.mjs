@@ -11,15 +11,20 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   REPORT_FILE,
+  adapterRecordPath,
   generateReport,
   parseAtlas,
+  readAdapterRecord,
   readResults,
   readScenarios,
   techniqueSummary,
+  writeAdapterRecord,
   writeReport,
 } from './scenario-report.mjs';
+import { adapterRecorder, jsonReportPath } from './record-adapter.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
+const NO_CAPABILITY_ADAPTER = join(repo, 'scripts', 'fixtures', 'no-capability-adapter.cjs');
 // A checkout with CRLF line endings is read with LF ones.
 const mapping = readFileSync(join(repo, 'docs', 'mitre-atlas-mapping.md'), 'utf8').replace(/\r\n/g, '\n');
 const scenarios = readScenarios(repo);
@@ -89,10 +94,12 @@ test('the report without results shows the current mapping and no withdrawn tech
   assert.match(report, /^\| INT-002 \| AML\.T0053 \| MCP Tool Abuse Detection \| N\/A \|$/m);
   assert.match(report, /^\| AT-ENF-001 \| Not mapped \| Log Enforcement Action \| N\/A \|$/m);
   assert.match(report, /^\| E2E-001 \| AML\.T0055, AML\.T0081 \| Live Filesystem Detection \| N\/A \|$/m);
-  assert.match(report, /^\*\*Unique ATLAS techniques covered:\*\* 15$/m);
+  assert.match(report, /^\*\*Unique ATLAS techniques mapped:\*\* 15$/m);
+  assert.ok(!report.includes('covered by a passing scenario'), 'a report without results counts passing scenarios');
   assert.match(report, /^\| Evade AI Model \| AML\.T0015 \| AT-INT-002, INT-005 \|$/m);
   for (const id of WITHDRAWN) assert.ok(!report.includes(id), `the report still names ${id}`);
   assert.ok(!report.includes('## Summary'), 'a report without results has a Summary');
+  assert.match(report, /^Product under test: not recorded \(no test results were read\)$/m);
   assert.equal(report.match(/^\| (?:AT-[A-Z]+|INT|BL|E2E)-\d+ \|/gm).length, scenarios.length);
 });
 
@@ -136,15 +143,121 @@ test('the report with a vitest JSON report shows its totals and the status of ea
     ],
   };
   const report = generateReport({ scenarios, results, date: '2026-10-11' });
-  assert.match(report, /^\| Total Tests \| 7 \|$/m);
+  // The two skipped tests are not under a suite describeWithCapability
+  // skipped, so they are not counted as not applicable.
+  assert.match(report, /^\| Scenarios \| 7 \|$/m);
   assert.match(report, /^\| Passed \| 4 \|$/m);
   assert.match(report, /^\| Failed \| 1 \|$/m);
-  assert.match(report, /^\| Skipped \| 2 \|$/m);
+  assert.match(report, /^\| Not applicable \(skipped by the product's capability declaration\) \| 0 \|$/m);
+  assert.match(report, /^\| Skipped for another reason \| 2 \|$/m);
+  assert.match(report, /^\| Pass rate \| 80\.0% \(4 of 5 evaluated\) \|$/m);
   assert.match(report, /^\| AT-PROC-001 \| [^|]+ \| [^|]+ \| PASS \|$/m);
   assert.match(report, /^\| INT-002 \| [^|]+ \| [^|]+ \| FAIL \|$/m);
   assert.match(report, /^\| E2E-003 \| [^|]+ \| [^|]+ \| SKIP \|$/m);
   assert.match(report, /^\| AT-AI-002 \| [^|]+ \| [^|]+ \| PASS \|$/m);
   assert.match(report, /^\| BL-001 \| [^|]+ \| [^|]+ \| N\/A \|$/m);
+});
+
+/**
+ * A test file of a vitest JSON report, as vitest writes it: `path` from the
+ * checkout root, one test per status, each under the suite `suite`.
+ */
+function resultFile(path, statuses, suite = path) {
+  return {
+    name: join(repo, path),
+    status: statuses.includes('failed') ? 'failed' : 'passed',
+    assertionResults: statuses.map((status, i) => ({
+      ancestorTitles: [suite],
+      title: `test ${i + 1}`,
+      fullName: `${suite} test ${i + 1}`,
+      status,
+      duration: 1,
+      meta: {},
+    })),
+  };
+}
+
+/** A vitest JSON report of `files`, with the totals vitest gives it. */
+function vitestReport(...files) {
+  const tests = files.flatMap((file) => file.assertionResults);
+  const count = (status) => tests.filter((t) => t.status === status).length;
+  return {
+    numTotalTests: tests.length,
+    numPassedTests: count('passed'),
+    numFailedTests: count('failed'),
+    numPendingTests: count('skipped'),
+    testResults: files,
+  };
+}
+
+/** The section of a report under `## heading`, up to the next heading of that level. */
+function reportSection(report, heading) {
+  const start = report.indexOf(`\n## ${heading}\n`);
+  assert.ok(start >= 0, `the report has no "## ${heading}" section`);
+  return report.slice(start + 1).split(/\n(?=## )/)[0];
+}
+
+test('the Summary counts the attack scenarios only, and the ATLAS coverage the passing ones', () => {
+  const results = vitestReport(
+    resultFile('src/atomic/process/AT-PROC-001.spawn-child.test.ts', ['passed']),
+    resultFile(
+      'src/integration/INT-002.mcp-tool-abuse.test.ts',
+      ['skipped', 'skipped'],
+      'INT-002: MCP Tool Abuse Detection [requires: mcp-scanning]',
+    ),
+    resultFile('src/benchmark/scoring.test.ts', ['passed', 'passed', 'passed', 'passed', 'passed']),
+  );
+  const report = generateReport({ scenarios, results, date: '2026-10-16' });
+  const summary = reportSection(report, 'Summary');
+  assert.match(summary, /^\| Scenarios \| 3 \|$/m);
+  assert.match(summary, /^\| Passed \| 1 \|$/m);
+  assert.match(summary, /^\| Failed \| 0 \|$/m);
+  assert.match(summary, /^\| Not applicable \(skipped by the product's capability declaration\) \| 2 \|$/m);
+  assert.match(summary, /^\| Skipped for another reason \| 0 \|$/m);
+  assert.match(summary, /^\| Pass rate \| 100\.0% \(1 of 1 evaluated\) \|$/m);
+  // The five scoring-engine tests are reported on their own line.
+  assert.match(summary, /^Harness self-tests: 5 passed, 0 failed\./m);
+  assert.match(report, /^\| AT-PROC-001 \| AML\.T0050 \| [^|]+ \| PASS \|$/m);
+  assert.match(report, /^\| INT-002 \| AML\.T0053 \| [^|]+ \| SKIP \|$/m);
+  // AML.T0050 is covered; INT-002's AML.T0053 is mapped, but its file was skipped.
+  assert.match(report, /^\*\*Unique ATLAS techniques mapped:\*\* 15$/m);
+  assert.match(report, /^\*\*Unique ATLAS techniques covered by a passing scenario:\*\* 1$/m);
+});
+
+test('a run in which the product evaluated no scenario reports no pass rate', () => {
+  const results = vitestReport(
+    resultFile(
+      'src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts',
+      ['skipped', 'skipped', 'skipped'],
+      'AT-AI-001: Prompt Input Scanning [requires: prompt-input-scanning]',
+    ),
+    resultFile('src/benchmark/scoring.test.ts', ['passed', 'passed']),
+  );
+  const report = generateReport({ scenarios, results, date: '2026-10-16' });
+  const summary = reportSection(report, 'Summary');
+  assert.match(summary, /^\| Scenarios \| 3 \|$/m);
+  assert.match(summary, /^\| Passed \| 0 \|$/m);
+  assert.match(summary, /^\| Not applicable \(skipped by the product's capability declaration\) \| 3 \|$/m);
+  assert.match(summary, /^\| Pass rate \| not measured \(0 scenarios evaluated\) \|$/m);
+  assert.ok(!summary.includes('%'), `the Summary of a run with no scenario evaluated has a percentage:\n${summary}`);
+  assert.match(report, /^\*\*Unique ATLAS techniques covered by a passing scenario:\*\* 0$/m);
+});
+
+test('a scenario file that failed outside its tests is FAIL and is counted in the Summary', () => {
+  // A file whose adapter throws while the file is collected has no test results.
+  const broken = {
+    name: join(repo, 'src/integration/INT-002.mcp-tool-abuse.test.ts'),
+    status: 'failed',
+    message: 'Failed to load the adapter',
+    assertionResults: [],
+  };
+  const results = vitestReport(broken, resultFile('src/benchmark/scoring.test.ts', ['passed']));
+  const report = generateReport({ scenarios, results, date: '2026-10-16' });
+  const summary = reportSection(report, 'Summary');
+  assert.match(report, /^\| INT-002 \| [^|]+ \| [^|]+ \| FAIL \|$/m);
+  assert.match(summary, /^\| Scenario files that failed outside a test \| 1 \|$/m);
+  assert.match(summary, /^\| Pass rate \| not measured \(0 scenarios evaluated\) \|$/m);
+  assert.match(report, /^\*\*Unique ATLAS techniques covered by a passing scenario:\*\* 0$/m);
 });
 
 test('a results file that is not a vitest JSON report is refused', () => {
@@ -300,6 +413,140 @@ test('npm run report exits 1 and writes nothing when the named results file does
     const unnamed = spawnSync(process.execPath, [tsx, script], { cwd: dir, encoding: 'utf8' });
     assert.equal(unnamed.status, 0, unnamed.stderr);
     assert.match(readFileSync(join(dir, REPORT_FILE), 'utf8'), /\| N\/A \|/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the adapter record of a results file sits beside it', () => {
+  assert.equal(adapterRecordPath('/runs/test-results.json'), '/runs/test-results.adapter.json');
+  assert.equal(adapterRecordPath('/runs/results'), '/runs/results.adapter.json');
+});
+
+test('npm run report names the product the adapter record beside the results file gives', () => {
+  const tsx = join(repo, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const script = join(repo, 'scripts', 'generate-report.ts');
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
+  const report = (resultsPath) => {
+    const r = spawnSync(process.execPath, [tsx, script, resultsPath], { cwd: dir, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    return readFileSync(join(dir, REPORT_FILE), 'utf8');
+  };
+  try {
+    const resultsPath = join(dir, 'res.json');
+    const results = vitestReport(resultFile('src/atomic/process/AT-PROC-001.spawn-child.test.ts', ['passed']));
+    writeFileSync(resultsPath, JSON.stringify(results));
+
+    // No record beside the results file.
+    assert.match(
+      report(resultsPath),
+      /^Product under test: not recorded \(there is no res\.adapter\.json beside res\.json; npx vitest run --reporter=json --outputFile=\S+res\.json writes both\)$/m,
+    );
+
+    writeAdapterRecord(resultsPath, {
+      adapter: '/adapters/no-caps.cjs',
+      product: 'no-capability-fixture',
+      version: '0.0.0',
+      capabilities: [],
+    });
+    const named = report(resultsPath);
+    assert.match(named, /^Product under test: no-capability-fixture 0\.0\.0 \(adapter: \/adapters\/no-caps\.cjs\)$/m);
+    assert.match(named, /^Declared capabilities: none$/m);
+
+    writeAdapterRecord(resultsPath, {
+      adapter: 'arp',
+      product: 'arp-guard',
+      version: '0.3.0',
+      capabilities: ['process-monitoring', 'prompt-input-scanning'],
+    });
+    const arp = report(resultsPath);
+    assert.match(arp, /^Product under test: arp-guard 0\.3\.0 \(adapter: arp\)$/m);
+    assert.match(arp, /^Declared capabilities: process-monitoring, prompt-input-scanning$/m);
+
+    // A results file written again after the record is not the one it names.
+    writeFileSync(resultsPath, JSON.stringify(results, null, 2));
+    assert.match(
+      report(resultsPath),
+      /^Product under test: not recorded \(res\.adapter\.json was written for another results file than res\.json; npx vitest run --reporter=json --outputFile=\S+res\.json writes both\)$/m,
+    );
+
+    // An adapter whose capabilities could not be read is named without them.
+    writeAdapterRecord(resultsPath, { adapter: './mine.js', error: 'Cannot find module ./mine.js' });
+    assert.match(
+      report(resultsPath),
+      /^Product under test: adapter \.\/mine\.js; its product and version were not recorded \(Cannot find module \.\/mine\.js\)$/m,
+    );
+
+    writeFileSync(adapterRecordPath(resultsPath), 'not json');
+    assert.match(readAdapterRecord(resultsPath).unrecorded, /^res\.adapter\.json is not JSON: /);
+    writeFileSync(adapterRecordPath(resultsPath), '{"results": {}}');
+    assert.match(readAdapterRecord(resultsPath).unrecorded, /^res\.adapter\.json names no adapter; npx vitest run /);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the JSON report path of a vitest config is the file the json reporter writes', () => {
+  const root = '/checkout';
+  assert.equal(jsonReportPath({ root, reporters: [['json', {}]], outputFile: 'res.json' }), '/checkout/res.json');
+  assert.equal(jsonReportPath({ root, reporters: [['json', {}]], outputFile: { json: '/runs/res.json' } }), '/runs/res.json');
+  assert.equal(jsonReportPath({ root, reporters: [['default', {}], ['json', { outputFile: 'a.json' }]] }), '/checkout/a.json');
+  // The json reporter prints to stdout without an output file.
+  assert.equal(jsonReportPath({ root, reporters: [['json', {}]] }), null);
+  assert.equal(jsonReportPath({ root, reporters: [['json', {}]], outputFile: { junit: 'j.xml' } }), null);
+  assert.equal(jsonReportPath({ root, reporters: [['default', {}]], outputFile: 'res.json' }), null);
+});
+
+test('the adapter is recorded only when the run wrote its JSON report', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
+  try {
+    const resultsPath = join(dir, 'res.json');
+    const describe = async () => ({ adapter: 'llm-guard', product: 'llm-guard', version: '0.1.8', capabilities: [] });
+
+    // A run that wrote no report leaves no record.
+    await adapterRecorder(resultsPath, describe)();
+    assert.equal(existsSync(adapterRecordPath(resultsPath)), false);
+
+    // A report an earlier run left, which this run did not write again, keeps
+    // the record of the run that wrote it.
+    writeFileSync(resultsPath, '{"run": 1}');
+    writeAdapterRecord(resultsPath, { adapter: 'arp', product: 'arp-guard', version: '0.3.0', capabilities: [] });
+    await adapterRecorder(resultsPath, describe)();
+    assert.equal(readAdapterRecord(resultsPath).product, 'arp-guard');
+
+    const teardown = adapterRecorder(resultsPath, describe);
+    writeFileSync(resultsPath, '{"run": 2}');
+    await teardown();
+    assert.deepEqual(
+      { ...readAdapterRecord(resultsPath), results: undefined },
+      { adapter: 'llm-guard', product: 'llm-guard', version: '0.1.8', capabilities: [], results: undefined },
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a vitest run with a JSON report records the adapter it ran with beside the report', () => {
+  const vitest = join(repo, 'node_modules', 'vitest', 'vitest.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
+  try {
+    const out = join(dir, 'res.json');
+    const r = spawnSync(
+      process.execPath,
+      [vitest, 'run', 'src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts', '--reporter=json', `--outputFile=${out}`],
+      { cwd: repo, encoding: 'utf8', env: { ...process.env, OASB_ADAPTER: NO_CAPABILITY_ADAPTER } },
+    );
+    assert.equal(r.status, 0, r.stderr.slice(-2000));
+    const record = readAdapterRecord(out);
+    assert.equal(record.unrecorded, undefined, record.unrecorded);
+    assert.equal(record.adapter, NO_CAPABILITY_ADAPTER);
+    assert.equal(record.product, 'no-capability-fixture');
+    assert.equal(record.version, '0.0.0');
+    assert.deepEqual(record.capabilities, []);
+
+    const report = generateReport({ scenarios, results: readResults(out, true), adapter: record, date: '2026-10-16' });
+    assert.ok(report.includes(`Product under test: no-capability-fixture 0.0.0 (adapter: ${NO_CAPABILITY_ADAPTER})`), report);
+    assert.match(reportSection(report, 'Summary'), /^\| Pass rate \| not measured \(0 scenarios evaluated\) \|$/m);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
