@@ -990,6 +990,19 @@ stay on record here with the reason they changed.
   command selects. On this README it prints
   "capture of `npx vitest run AT-AI-001 --reporter=verbose` matches the
   collected suite: 11 tests in 1 test file".
+- The README's OpenA2A CLI example said that
+  `opena2a benchmark ./my-agent --level L2` checks levels L1, L2 and L3.
+  opena2a-cli 0.10.13 checks the OASB-1 controls of levels L1 and L2 for
+  `--level L2`: it reads them with hackmyagent's `getCheckIdsForLevel`, which
+  takes the controls of the level given and of the levels below it. The
+  comment now says "OASB-1 controls of levels L1 and L2". hackmyagent 0.33.2
+  `secure -b oasb-1` selects levels the same way: on a directory holding a
+  `package.json` and an `index.js` it reports 26 controls, verified and
+  unverified, at L1, 44 at L2 and 46 at L3. `npm run check:readme` now fails
+  when a shell comment in a code block, on an `opena2a benchmark` line or on
+  a `hackmyagent secure` line with `-b oasb-1`, names OASB-1 levels other
+  than those up to the level the line gives with `--level` (or `-l` for
+  hackmyagent), or than L1 when it gives none.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

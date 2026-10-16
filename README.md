@@ -85,7 +85,7 @@ The [OpenA2A CLI](https://github.com/opena2a-org/opena2a) and [HackMyAgent](http
 
 ```bash
 opena2a benchmark ./my-agent                            # OASB-1 controls at level L1
-opena2a benchmark ./my-agent --level L2                 # levels L1, L2 and L3
+opena2a benchmark ./my-agent --level L2                 # OASB-1 controls of levels L1 and L2
 opena2a benchmark ./my-agent --format json              # rating, compliance and control coverage as JSON
 hackmyagent secure ./my-agent -b oasb-1                 # the same controls from HackMyAgent
 hackmyagent secure ./my-agent -b oasb-1 --fail-below 80 # also exit 1 below 80% compliance, for CI

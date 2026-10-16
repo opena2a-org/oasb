@@ -690,6 +690,50 @@ test('this repository\'s README shows no OpenA2A CLI command the CLI does not ha
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('a benchmark command whose comment names levels the command does not select fails', () => {
+  const r = check(
+    '```bash\n' +
+      'opena2a benchmark ./my-agent --level L2   # levels L1, L2 and L3\n' +
+      'opena2a benchmark ./my-agent              # OASB-1 controls at level L2\n' +
+      'hackmyagent secure ./my-agent -b oasb-1 -l L3 # level L3 only\n' +
+      '```\n',
+  );
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^README: line 12: the comment names levels L1, L2 and L3, but `opena2a benchmark` with level L2 checks the OASB-1 controls of levels L1 and L2; /m,
+  );
+  assert.match(
+    r.stderr,
+    /^README: line 13: the comment names level L2, but `opena2a benchmark` with level L1 \(no --level\) checks the OASB-1 controls of level L1; /m,
+  );
+  assert.match(
+    r.stderr,
+    /^README: line 14: the comment names level L3, but `hackmyagent secure -b oasb-1` with level L3 checks the OASB-1 controls of levels L1, L2 and L3; /m,
+  );
+  assert.match(r.stderr, /a level adds its controls to those of the levels below it/);
+});
+
+test('a benchmark command whose comment names the levels it selects, or no level, passes', () => {
+  const r = check(
+    '```bash\n' +
+      'opena2a benchmark ./my-agent                 # OASB-1 controls at level L1\n' +
+      'opena2a benchmark ./my-agent --level=l2      # OASB-1 controls of levels L1 and L2\n' +
+      'opena2a benchmark ./my-agent --format json   # rating, compliance and control coverage as JSON\n' +
+      'hackmyagent secure ./my-agent -b oasb-1 --level L3 # levels L1, L2 and L3\n' +
+      'hackmyagent secure ./my-agent -l L2          # no -b oasb-1: not a benchmark run, L3 not read\n' +
+      '```\n\n' +
+      'In prose, `opena2a benchmark ./my-agent --level L2` is followed by text about L3 that is not a comment.\n',
+  );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("this repository's README names the levels each benchmark command checks", () => {
+  const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
+  assert.doesNotMatch(r.stderr, /the comment names level/);
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test('a failing test is not counted as passing', () => {
   const r = checkCounts(COUNTED, { ...SUITE, 'src/baseline/BL-001.profile.test.ts': [0, 1, 0] });
   assert.equal(r.status, 1);

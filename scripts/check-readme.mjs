@@ -82,6 +82,12 @@
 //      skipped counts and the total of the selected tests and files. A
 //      capture may leave lines out. Like the counts, this reads the suite,
 //      so --no-counts skips it.
+//  12. a shell comment on an `opena2a benchmark` line, or on a
+//      `hackmyagent secure` line with `-b oasb-1`, in a code block, that
+//      names OASB-1 levels (L1, L2, L3) names the levels that command
+//      checks: those up to the level given with --level (hackmyagent also
+//      takes -l), or L1 when none is given. A comment that names no level is
+//      not read.
 //
 // Checks 4, 5, 6 and 8 read the pages that took text moved out of the README
 // (README_PAGES in scripts/readme-counts.mjs) as they read the README, so the
@@ -862,6 +868,39 @@ for (const { n, line, inFence } of readme) {
         'show the CI status badge, which shows the result of the latest CI run of the suite.',
     );
   }
+}
+
+// 12. The levels a benchmark command's comment names. Both CLIs check the
+// OASB-1 controls of the level given and of every level below it, L1 when no
+// level is given; a comment that names other levels tells the reader the
+// command checks controls it does not.
+const OASB_LEVELS = ['L1', 'L2', 'L3'];
+const BENCHMARK_COMMANDS = [
+  { name: 'opena2a benchmark', re: /\bopena2a\s+benchmark\b/, level: /\s--level(?:\s+|=)(\S+)/ },
+  {
+    name: 'hackmyagent secure -b oasb-1',
+    re: /\bhackmyagent\s+secure\b(?=.*\s(?:-b|--benchmark)(?:\s+|=)oasb-1(?:\s|$))/,
+    level: /\s(?:--level|-l)(?:\s+|=)(\S+)/,
+  },
+];
+const levelList = (levels) => `level${levels.length > 1 ? 's' : ''} ${levels.length > 1 ? `${levels.slice(0, -1).join(', ')} and ` : ''}${levels.at(-1)}`;
+for (const { n, line, inFence, prefix } of documents.flatMap((d) => d.lines.map((l) => ({ ...l, prefix: d.prefix })))) {
+  if (!inFence) continue;
+  const hash = line.search(/(?:^|\s)#/);
+  if (hash < 0) continue;
+  const command = line.slice(0, hash);
+  const cli = BENCHMARK_COMMANDS.find(({ re }) => re.test(command));
+  if (!cli) continue;
+  const given = command.match(cli.level)?.[1].toUpperCase();
+  const level = given ?? 'L1';
+  if (!OASB_LEVELS.includes(level)) continue;
+  const named = OASB_LEVELS.filter((l) => new RegExp(`\\b${l}\\b`, 'i').test(line.slice(hash)));
+  const checked = OASB_LEVELS.slice(0, OASB_LEVELS.indexOf(level) + 1);
+  if (named.length === 0 || named.join() === checked.join()) continue;
+  fail(
+    `${prefix}line ${n}: the comment names ${levelList(named)}, but \`${cli.name}\` with level ${level}${given ? '' : ' (no --level)'} ` +
+      `checks the OASB-1 controls of ${levelList(checked)}; a level adds its controls to those of the levels below it.`,
+  );
 }
 
 if (failures.length) {
