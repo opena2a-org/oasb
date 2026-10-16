@@ -15,7 +15,7 @@ The rebuff adapter runs the package's heuristic detection. rebuff publishes Type
 
 ## Capabilities
 
-Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL - a prompt-only scanner is not penalized for lacking filesystem monitoring. This keeps scorecards honest and comparable. A suite that spans several surfaces, such as an integration chain that injects process and network events and expects a kill, runs only when the product declares every one of them.
+Each adapter declares its **capabilities** via `getCapabilities()`. Tests for a surface the product does not support are marked **N/A (skipped)**, not FAIL - a prompt-only scanner is not penalized for lacking filesystem monitoring. This keeps scorecards honest and comparable. A suite that spans several surfaces, such as an integration chain that injects process and network events and expects a kill, runs only when the product declares every one of them. A run in which every selected attack scenario is N/A, such as one under an adapter that declares no capabilities, measured nothing: it ends with `OASB: not measured (0 of <selected> attack scenarios evaluated)` on stderr and exits 2, while a run that evaluated at least one ends with `OASB: <evaluated> of <selected> attack scenarios evaluated` and keeps vitest's exit code.
 
 | Surface | ARP (reference) | llm-guard | rebuff |
 |---------|:---:|:---:|:---:|

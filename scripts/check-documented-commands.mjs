@@ -8,11 +8,13 @@
 //      OS-level one (AT-PROC-003, process monitoring). llm-guard declares
 //      neither surface, and "Evaluating Other Products" says the tests for a
 //      surface the product does not support are N/A (skipped), not FAIL, so
-//      every test in both files must be skipped. The reference adapter runs
-//      the gated file, so its skip shows that the name chose llm-guard;
+//      every test in both files must be skipped, and vitest must exit 2, as
+//      a run that evaluated no attack scenario does. The reference adapter
+//      runs the gated file, so its skip shows that the name chose llm-guard;
 //   2. a product chosen by a relative path: `OASB_ADAPTER=./<dir>/my-adapter.js`
 //      run from the checkout, with an adapter that declares no capabilities,
-//      on the gated file. Every test in it must be skipped;
+//      on the gated file. Every test in it must be skipped, and vitest must
+//      exit 2;
 //   3. the README library example in a fresh install: packs the checkout,
 //      runs the `npm install` lines of "Use as a library" in a new, empty
 //      project with `@opena2a/oasb` replaced by the tarball, and runs the
@@ -163,7 +165,8 @@ function vitestSkips(root, files, env, label, work) {
   const r = run(process.execPath, [vitest, 'run', ...files, '--reporter=json', `--outputFile=${out}`], { cwd: root, env });
   if (!existsSync(out)) return [`${label}: vitest exited ${r.status} without a report: ${errorLine(r.output)}`];
   const failures = notSkipped(JSON.parse(readFileSync(out, 'utf8')), files, label);
-  if (failures.length === 0 && r.status !== 0) failures.push(`${label}: vitest exited ${r.status}: ${errorLine(r.output)}`);
+  // A run that evaluated no attack scenario exits 2 (scripts/scenario-floor.ts).
+  if (failures.length === 0 && r.status !== 2) failures.push(`${label}: vitest exited ${r.status}, not 2: ${errorLine(r.output)}`);
   return failures;
 }
 
