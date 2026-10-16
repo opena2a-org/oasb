@@ -65,6 +65,19 @@ test('docs/demo.tape states no test or scenario count', () => {
   assert.deepEqual(counted, [], 'refer to the counts docs/test-catalog.md states instead');
 });
 
+test('the README does not say opena2a benchmark and hackmyagent secure -b oasb-1 check the same controls', () => {
+  // opena2a benchmark reports check IDs over the level's check-ID set, and
+  // hackmyagent secure -b oasb-1 reports control IDs over verified controls,
+  // so the two percentages are not the same figure.
+  const heading = '## Usage via OpenA2A CLI';
+  const text = read('README.md');
+  const start = text.indexOf(`\n${heading}\n`);
+  assert.ok(start >= 0, `README.md has no "${heading}" section; update this test with the heading`);
+  const end = text.indexOf('\n## ', start + heading.length + 1);
+  const section = (end < 0 ? text.slice(start) : text.slice(start, end)).replace(/\s+/g, ' ');
+  assert.ok(!/the same controls/i.test(section), `"${heading}" says "the same controls"`);
+});
+
 test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {
   const n = samples.filter((s) => s.label === 'malicious' && !s.category).length;
   assert.ok(flat('docs/pinned-benchmark.md').includes(`also holds ${n} uncategorized malicious samples`), `${n} uncategorized malicious samples is not stated`);

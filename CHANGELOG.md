@@ -1076,6 +1076,21 @@ stay on record here with the reason they changed.
   a placeholder and checked only that the call named a function, so it
   passed on that block. `scripts/check-documented-commands.test.mjs` fails
   when the block has such a call.
+- The README's Usage via OpenA2A CLI section no longer says that
+  `hackmyagent secure -b oasb-1` checks "the same controls" as
+  `opena2a benchmark`. The two report different figures: opena2a-cli 0.10.13
+  scores the check IDs of the level's controls, passing over evaluated, and
+  at L1 counts 39 of them, from the catalogue of the hackmyagent 0.25.2 it
+  installs; hackmyagent 0.33.2 scores controls, passed over verified, with
+  unverified and not applicable controls left out, and at L1 counts 26. On
+  the same agent directory the first printed
+  `L1:         13% (8 of 39 controls evaluated)` and the second
+  `Compliance: 5% (1/19 verified controls)`. The section now says the two
+  percentages are not comparable with each other, only each with its own
+  earlier runs, and that neither tool's help text states how its percentage
+  is computed.
+  `scripts/doc-facts.test.mjs` fails when the section says
+  "the same controls".
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
