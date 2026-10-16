@@ -1021,6 +1021,12 @@ stay on record here with the reason they changed.
   full output. On this README it prints "Its full output
   docs/captures/quick-start.txt shows the 11 tests not skipped and holds
   each line of the capture".
+- With the counts checked, `npm run check:readme` reports a
+  `[full output](<file>)` link above a capture whose path has a malformed
+  %-escape, such as `[full output](docs/captures/100%.txt)`, by its line
+  and says to write a literal % as `%25`, and reads the capture as linking
+  no full output; on such a link it ended with an uncaught `URIError` and a
+  stack trace.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

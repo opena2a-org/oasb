@@ -429,6 +429,15 @@ test('a full output needs a .json beside it that names its command and its path'
   assert.match(r.stderr, /^README: docs\/captures\/run\.json: cannot read it as JSON: /m);
 });
 
+test('a full output link with a malformed %-escape is named once by the link check, with no stack trace', () => {
+  const malformed = WITH_FULL.replace(`([full output](${FULL_PATH}))`, '([full output](docs/captures/100%.txt))');
+  const r = checkCounts(malformed, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.deepEqual(errors(r).filter(Boolean), [
+    `README: line ${lineWith(malformed, 'What `')}: link target "docs/captures/100%.txt" has a malformed %-escape; write a literal % as %25.`,
+  ]);
+});
+
 test('a README that says every scenario maps to ATLAS fails while a scenario file cites no technique', () => {
   const r = checkCounts(COUNTED.replace('8 of them, in 6 files,', '10 of them, in 8 files,').replace('the other 2 test', 'the other 0 test'));
   assert.equal(r.status, 1);

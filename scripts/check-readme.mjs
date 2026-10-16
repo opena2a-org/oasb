@@ -754,10 +754,11 @@ function checkCaptures(tests) {
       // as the capture is, it shows every test the run passes and both
       // summary lines, holds each line of the capture other than "...", and
       // has a .json file of the same name beside it that names the command
-      // and the full output. A link to a file that does not exist is
-      // reported by check 4.
+      // and the full output. A link to a file that does not exist, or with
+      // a malformed %-escape, names no file here and is reported by check 4.
       const link = lines[j].line.replace(/`[^`]*`/g, '').match(FULL_OUTPUT);
-      const fullFile = link ? resolve(dirname(doc), decodeURIComponent(link[1])) : null;
+      const linked = link ? decoded(link[1]) : null;
+      const fullFile = linked !== null ? resolve(dirname(doc), linked) : null;
       let full = null;
       if (fullFile && existsSync(fullFile)) {
         full = relative(dirname(readmePath), fullFile).split(sep).join('/');
