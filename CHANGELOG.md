@@ -1171,6 +1171,23 @@ stay on record here with the reason they changed.
   `src/harness/rebuff-wrapper.test.ts` checks both cases against the
   capability check and the scans, with the loader replaced by a stub.
 
+### Fixed
+
+- A vitest run that selects attack scenarios now ends with one line on
+  stderr: `OASB: <evaluated> of <selected> attack scenarios evaluated`,
+  counting the scenario tests that passed or failed. When it evaluated none,
+  as under an adapter that declares no capabilities, the line is
+  `OASB: not measured (0 of <selected> attack scenarios evaluated)` and the
+  run exits 2; it exited 0 with every scenario skipped and said nothing.
+  When the run's results cannot be read, the line is
+  `OASB: not measured (the run's test results could not be read)` and the
+  run exits 2. A run that selects no scenario, such as
+  `npx vitest run src/benchmark/`, and collecting the suite without running
+  it print no line and keep their exit. The JSON report of
+  `--reporter=json --outputFile` is still written. No variable or flag
+  lowers the floor. `scripts/check-documented-commands.mjs` now expects
+  exit 2 from its two runs whose every test must be skipped.
+
 ## Behavioral governance draft withdrawn on 2026-09-09
 
 `docs/oasb-v2-behavioral-governance.md` (2.0.0-draft, 2026-03-03) is withdrawn

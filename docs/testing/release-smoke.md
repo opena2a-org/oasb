@@ -222,6 +222,15 @@ README's test counts do not include them.
   `src/benchmark/pinned/inputs.ts` has no NEMO-002 rule, or when a negated
   tarball digest comparison in that file is not followed by
   `throw new PinError(`.
+- `scripts/scenario-floor.test.mjs`: the line a vitest run of attack
+  scenarios writes to stderr and its exit (`scripts/scenario-floor.ts`).
+  Fails when a run of one scenario file under an adapter that declares no
+  capabilities does not exit 2 with
+  `OASB: not measured (0 of <selected> attack scenarios evaluated)`, with
+  the default or the JSON reporter, when the reference adapter's run does
+  not exit 0 with `OASB: <evaluated> of <selected> attack scenarios
+  evaluated`, when a run of no scenario file or `vitest list` prints a
+  line, or when results that cannot be read do not exit 2.
 
 ## The README checks on every pull request
 
