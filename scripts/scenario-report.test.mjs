@@ -602,7 +602,9 @@ test('a vitest run with a JSON report records the adapter it ran with beside the
       [vitest, 'run', 'src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts', '--reporter=json', `--outputFile=${out}`],
       { cwd: repo, encoding: 'utf8', env: { ...process.env, OASB_ADAPTER: NO_CAPABILITY_ADAPTER } },
     );
-    assert.equal(r.status, 0, r.stderr.slice(-2000));
+    // Every scenario is skipped under this adapter, so the run exits 2
+    // (scripts/scenario-floor.ts); the report and the record are still written.
+    assert.equal(r.status, 2, r.stderr.slice(-2000));
     const record = readAdapterRecord(out);
     assert.equal(record.unrecorded, undefined, record.unrecorded);
     assert.equal(record.adapter, NO_CAPABILITY_ADAPTER);
