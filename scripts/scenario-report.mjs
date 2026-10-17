@@ -96,6 +96,15 @@ export function readScenarios(root = ROOT) {
   );
 }
 
+/**
+ * The `name` and `version` of the package.json of the checkout at `root`:
+ * the benchmark that writes the report.
+ */
+export function readPackage(root = ROOT) {
+  const { name, version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  return { name, version };
+}
+
 /** Each technique the scenarios name, by ID, with its name and the IDs of the scenarios that name it. */
 export function techniqueSummary(scenarios) {
   const byId = new Map();
@@ -220,11 +229,13 @@ function productLines(adapter, results) {
  * The markdown report. `results` is a parsed vitest JSON report
  * (`npx vitest run --reporter=json --outputFile=test-results.json`), or null
  * to report the mapping alone with every status N/A. `adapter` is the
- * adapter record of that report (readAdapterRecord), or null.
+ * adapter record of that report (readAdapterRecord), or null. `benchmark` is
+ * the package that writes the report (readPackage), named on a Benchmark
+ * line after the date; the line is left out when it is null.
  *
- * @param {{ scenarios: ReturnType<typeof readScenarios>, results?: any, adapter?: any, date: string }} options
+ * @param {{ scenarios: ReturnType<typeof readScenarios>, results?: any, adapter?: any, benchmark?: ReturnType<typeof readPackage> | null, date: string }} options
  */
-export function generateReport({ scenarios, results = null, adapter = null, date }) {
+export function generateReport({ scenarios, results = null, adapter = null, benchmark = null, date }) {
   const status = new Map();
   if (results !== null) {
     for (const file of reportFiles(results)) status.set(sourcePath(file.name), fileStatus(file));
@@ -233,7 +244,9 @@ export function generateReport({ scenarios, results = null, adapter = null, date
     }
   }
 
-  const lines = ['# OASB Test Report', '', `Generated: ${date}`, '', ...productLines(adapter, results), ''];
+  const lines = ['# OASB Test Report', '', `Generated: ${date}`, ''];
+  if (benchmark !== null) lines.push(`Benchmark: ${benchmark.name} ${benchmark.version}`, '');
+  lines.push(...productLines(adapter, results), '');
 
   if (results !== null) lines.push(...summaryLines(results.testResults));
 

@@ -16,6 +16,7 @@ import {
   generateReport,
   parseAtlas,
   readAdapterRecord,
+  readPackage,
   readResults,
   readScenarios,
   techniqueSummary,
@@ -547,6 +548,46 @@ test('npm run report names the product the adapter record beside the results fil
     assert.match(readAdapterRecord(resultsPath).unrecorded, /^res\.adapter\.json is not JSON: /);
     writeFileSync(adapterRecordPath(resultsPath), '{"results": {}}');
     assert.match(readAdapterRecord(resultsPath).unrecorded, /^res\.adapter\.json names no adapter; npx vitest run /);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the report names the benchmark it is given on a Benchmark line after the date', () => {
+  const benchmark = { name: '@opena2a/oasb', version: '9.9.9' };
+  assert.deepEqual(generateReport({ scenarios, benchmark, date: '2026-10-17' }).split('\n').slice(0, 7), [
+    '# OASB Test Report',
+    '',
+    'Generated: 2026-10-17',
+    '',
+    'Benchmark: @opena2a/oasb 9.9.9',
+    '',
+    'Product under test: not recorded (no test results were read)',
+  ]);
+  assert.ok(!generateReport({ scenarios, date: '2026-10-17' }).includes('\nBenchmark: '), 'a report given no benchmark names one');
+});
+
+test('readPackage gives the name and version of the package.json of the checkout', () => {
+  const { name, version } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  assert.equal(name, '@opena2a/oasb');
+  assert.deepEqual(readPackage(repo), { name, version });
+  assert.deepEqual(readPackage(), { name, version });
+});
+
+test('npm run report names the @opena2a/oasb version of the checkout before the product under test', () => {
+  const tsx = join(repo, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const script = join(repo, 'scripts', 'generate-report.ts');
+  const { name, version } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
+  try {
+    const resultsPath = join(dir, 'res.json');
+    writeFileSync(resultsPath, JSON.stringify(vitestReport(resultFile('src/atomic/process/AT-PROC-001.spawn-child.test.ts', ['passed']))));
+    const run = spawnSync(process.execPath, [tsx, script, resultsPath], { cwd: dir, encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+    const lines = readFileSync(join(dir, REPORT_FILE), 'utf8').split('\n');
+    const at = lines.indexOf(`Benchmark: ${name} ${version}`);
+    assert.ok(at !== -1, `the report has no "Benchmark: ${name} ${version}" line:\n${lines.slice(0, 8).join('\n')}`);
+    assert.ok(at < lines.findIndex((l) => l.startsWith('Product under test: ')), 'the Benchmark line is not before the Product under test line');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
