@@ -13,8 +13,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { EventCollector } from './event-collector';
 import { packageVersion } from './package-version';
+import { validateNetworkObservation } from './adapter';
 import type {
   SecurityProductAdapter,
+  NetworkObservation,
   SecurityEvent,
   EnforcementResult,
   LabConfig,
@@ -71,8 +73,21 @@ function anomalyPersistenceSupported(): boolean {
     && typeof AnomalyDetector.prototype?.save === 'function';
 }
 
+// The locked product has no public raw-input API. Keep this private acquisition
+// seam explicit and guarded: reuse its complete poll/classifier, never its labels.
+interface NetworkMonitorSeam {
+  getConnections(): Array<Omit<NetworkObservation, 'direction' | 'category' | 'severity'>>;
+  poll(): void;
+}
+
+function rawNetworkSupported(): boolean {
+  const prototype = arp().NetworkMonitor?.prototype;
+  return typeof prototype?.poll === 'function' && typeof prototype?.getConnections === 'function';
+}
+
 export class ArpWrapper implements SecurityProductAdapter {
   private _arpInstance: any = null;
+  private _networkMonitor: { monitor: NetworkMonitorSeam; emitted: Promise<unknown>[] } | null = null;
   private _dataDir: string | null;
   private readonly _labConfig?: LabConfig;
   readonly collector: EventCollector;
@@ -159,6 +174,7 @@ export class ArpWrapper implements SecurityProductAdapter {
       'enforcement-resume',
       'pattern-scanning',
     ]);
+    if (rawNetworkSupported()) capabilities.add('raw-network-observation');
     if (anomalyPersistenceSupported()) capabilities.add('baseline-persistence');
     return {
       product: 'arp-guard',
@@ -174,6 +190,7 @@ export class ArpWrapper implements SecurityProductAdapter {
   async stop(): Promise<void> {
     if (this._arpInstance) await this._arpInstance.stop();
     this.collector.reset();
+    this._networkMonitor = null;
     if (this._dataDir === null) return;
     try {
       fs.rmSync(this._dataDir, { recursive: true, force: true });
@@ -184,6 +201,40 @@ export class ArpWrapper implements SecurityProductAdapter {
 
   async injectEvent(event: Omit<SecurityEvent, 'id' | 'timestamp' | 'classifiedBy'>): Promise<SecurityEvent> {
     return this.getEngine().emit(event);
+  }
+
+  async observeNetwork(observation: NetworkObservation): Promise<void> {
+    validateNetworkObservation(observation);
+    if (!rawNetworkSupported()) {
+      throw new Error('Installed ARP NetworkMonitor has no supported raw-observation acquisition seam');
+    }
+    if (!this._networkMonitor) {
+      const engine = this.getEngine();
+      const emitted: Promise<unknown>[] = [];
+      // poll() does not await EventEngine.emit(). Track the real engine's
+      // promises so this API resolves only after its events are collected.
+      const sink = { emit: (event: SecurityEvent) => {
+        const result = engine.emit(event);
+        emitted.push(Promise.resolve(result));
+        return result;
+      } };
+      const monitor = new (arp().NetworkMonitor)(
+        sink, this._labConfig?.networkIntervalMs, this._labConfig?.networkAllowedHosts,
+      ) as NetworkMonitorSeam;
+      this._networkMonitor = { monitor, emitted };
+    }
+    const { monitor, emitted } = this._networkMonitor;
+    const acquire = monitor.getConnections;
+    // Copy only factual fields. No DNS lookup, socket connection, timer or
+    // benchmark classification: the product poll emits and classifies events.
+    const { remoteAddr, remotePort, protocol, pid } = observation;
+    monitor.getConnections = () => [{ remoteAddr, remotePort, protocol, pid }];
+    try {
+      monitor.poll();
+    } finally {
+      monitor.getConnections = acquire;
+    }
+    await Promise.all(emitted.splice(0));
   }
 
   waitForEvent(predicate: (event: SecurityEvent) => boolean, timeoutMs: number = 10000): Promise<SecurityEvent> {

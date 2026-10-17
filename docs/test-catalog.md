@@ -7,16 +7,16 @@ has the first run.
 
 ## What Gets Tested
 
-223 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 166 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](mitre-atlas-mapping.md#mitre-atlas-coverage).
+224 standardized attack scenarios that evaluate whether a runtime security product can detect and respond to threats against AI agents. 167 of them, in 33 files, map to MITRE ATLAS (15 techniques, including the AI-agent technique family); the other 57 test the product's defensive response and its own detection machinery, which no adversary technique describes, and are [tracked separately](mitre-atlas-mapping.md#mitre-atlas-coverage).
 
-Each test simulates a specific attack technique and checks whether the security product under evaluation detects it, classifies it correctly, and responds appropriately.
+The scenario count includes attacks, benign controls and capability tests. `AT-NET-002` classifies raw observations with paired benign controls. Other synthetic process/network/filesystem and integration steps inject pre-labelled events and check handling/response, not independent detection; see the [measurement contract](test-harness.md#raw-network-classification-suspicious-hosts).
 
 Counts below are the live test totals (`npm test`); each maps to a source directory so they are reproducible. Per-test detail for every category is in the [test catalog](#atomic-tests-srcatomic).
 
 | Category | Tests | Source | What It Evaluates |
 |----------|-------|--------|-------------------|
 | Process detection | 19 | `src/atomic/process` | Child process spawns, suspicious binaries, privilege escalation, CPU anomalies |
-| Network detection | 18 | `src/atomic/network` | Outbound connections, suspicious hosts, exfiltration, subdomain bypass |
+| Network detection | 19 | `src/atomic/network` | Outbound connections, suspicious hosts, exfiltration, subdomain bypass |
 | Filesystem detection | 28 | `src/atomic/filesystem` | Sensitive path access, credential files, dotfile persistence, mass file DoS |
 | Intelligence layers | 21 | `src/atomic/intelligence` | Rule matching, anomaly scoring, LLM escalation, budget exhaustion |
 | Enforcement actions | 18 | `src/atomic/enforcement` | Logging, alerting, process pause (SIGSTOP), kill (SIGTERM/SIGKILL), resume |
@@ -25,28 +25,28 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Baseline behavior | 12 | `src/baseline` | False positive rates, anomaly injection, baseline persistence |
 | Real OS detection | 9 | `src/e2e` (live monitors) | Live filesystem watches, process polling, network monitoring |
 | Application-level hooks | 14 | `src/e2e` (interceptors) | Pre-execution interception of spawn, connect, read/write |
-| **Attack scenarios** | **223** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
+| **Attack scenarios** | **224** | atomic + integration + baseline + E2E | **15 MITRE ATLAS techniques** |
 | Scoring-engine unit tests | 34 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names, analyzer calls of the deprecated AST adapter, the scanner root the AST, pipeline and model-only adapters scan on and the version an adapter reports after a root change |
 | Pinned benchmark harness tests | 118 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
-| Adapter tests | 56 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory, a module that assigns its class to `module.exports` loads, and a value that selects no adapter, a case variant of a built-in name or a module that exports no class stops the run with one line that names what it accepts; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; a missing rebuff package fails the capability check a scenario file makes while it is collected, and a missing `typescript` fails each scan instead; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left; the harness's own control watcher and the rules that read an E2E-001 case against it: a product miss, read when the 5 s window ends (a failure when the host delivered the event, inconclusive when it delivered none), and a product that reported no probe file (the case makes its write when the watcher saw one, and is inconclusive when it saw none); the inconclusive skip of a case where Node.js has no recursive `fs.watch`, the watcher's own error in an inconclusive message, the mark of a case that got the product's own event, the detection predicates, which pass over an event without data, and the end of a case, which closes the watcher and removes the directory also when `stop()` rejects, and passes that rejection on |
-| **`npm test` total** | **431** | (430 pass, 1 skipped on every platform) | |
+| Adapter tests | 72 | `src/harness` | Raw network input rejects labels, reuses the product classifier and rejects echo-only/constant-alarm adapters; capability-absent adapters skip and a declared raw capability without its method fails. `OASB_ADAPTER` module paths: relative paths resolve from the working directory, a module that assigns its class to `module.exports` loads, and a value that selects no adapter, a case variant of a built-in name or a module that exports no class stops the run with one line that names what it accepts; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; a missing rebuff package fails the capability check a scenario file makes while it is collected, and a missing `typescript` fails each scan instead; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left; the harness's own control watcher and the rules that read an E2E-001 case against it: a product miss, read when the 5 s window ends (a failure when the host delivered the event, inconclusive when it delivered none), and a product that reported no probe file (the case makes its write when the watcher saw one, and is inconclusive when it saw none); the inconclusive skip of a case where Node.js has no recursive `fs.watch`, the watcher's own error in an inconclusive message, the mark of a case that got the product's own event, the detection predicates, which pass over an event without data, and the end of a case, which closes the watcher and removes the directory also when `stop()` rejects, and passes that rejection on |
+| **`npm test` total** | **448** | (447 pass, 1 skipped on every platform) | |
 
 ### Counts
 
-> **Counts.** `npm test` runs **431 tests** (430 passing, 1 skipped on every platform: the live network-detection E2E, disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **34 scoring-engine unit tests**, **118 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "430 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
+> **Counts.** `npm test` runs **448 tests** (447 passing, 1 skipped on every platform: the live network-detection E2E, disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **224 attack scenarios** (atomic, integration, baseline, E2E) plus **34 scoring-engine unit tests**, **118 pinned benchmark harness tests** and the adapter tests in `src/harness`. "224" is the scenario count; "447 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
 >
 > **E2E-001 skips.** Besides that one test, E2E-001 cases are skipped only when the harness's own watcher recorded no file event: none for the case's file within its 5 s window, or none for any probe file during the readiness wait of a product that reported none. Each such skip prints the wait, what that watcher saw, the error it reported if it reported one, and the measured load where the platform measures one. Where Node.js has no recursive `fs.watch`, as on Linux before Node.js 19.1.0, that watcher cannot be opened and every E2E-001 case is skipped as inconclusive with a message that says so, which the release smoke reports as the file not measured.
 
 ### Run the suite
 
 ```bash
-npm test                    # Full suite: 431 tests (430 pass, 1 skip)
+npm test                    # Full suite: 448 tests (447 pass, 1 skip)
 ```
 
 Run one group at a time:
 
 ```bash
-npm run test:atomic         # 144 atomic detection tests (no external deps)
+npm run test:atomic         # 145 atomic detection tests (no external deps)
 npm run test:integration    # 44 tests across 8 integration scenarios
 npm run test:baseline       # 12 false-positive / baseline tests
 npm run test:e2e            # 23 E2E tests (real OS detection; E2E-003 currently skipped)

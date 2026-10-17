@@ -24,3 +24,69 @@ The harness wraps a security product via an adapter interface and provides event
 | `metrics.ts` | Detection rate, false positive rate, P95 latency computation |
 
 `npm run build` compiles `src/` without its test files, and vitest does not check types. `npm run typecheck:tests` type-checks `src/` with them (`tsconfig.test.json`, no output). `npm test` runs it through `scripts/typecheck-tests.test.mjs`, one of the tests its `pretest` script runs, which fails on any type error it reports.
+
+## Raw network classification: suspicious hosts
+
+`AT-NET-002` supplies `NetworkObservation` facts through optional
+`observeNetwork()`: remote address/port, protocol, outbound direction, and
+optional PID. Category, severity, descriptions, arbitrary context and expected
+labels are forbidden. `validateNetworkObservation()` rejects extra fields at
+runtime, including for JavaScript callers. An adapter must reject them before
+processing and resolve only after its product's resulting events are collected.
+The scenario never calls `injectEvent()` and retains its expected labels only
+in assertions. Three suspicious-host fixtures are paired with three allowed
+benign hosts, keeping port, direction and protocol the same. A benign case
+requires an actual normal event, rather than passing on silence.
+
+The suite requires both `network-monitoring` and `raw-network-observation`.
+The new method and capability are additive: legacy and prompt-only adapters
+are N/A for this family without implementing network logic. Declaring the raw
+capability without implementing the method fails, rather than skipping.
+Scanner and prompt interfaces are unchanged.
+
+The reference adapter reuses the installed ARP `NetworkMonitor.poll()`.
+ARP currently has no public raw-record classifier method, so the adapter uses
+an explicit guarded private acquisition seam: temporarily replace
+`getConnections()` with factual records and restore it immediately after the
+product poll. It forwards the product's emissions to the real EventEngine and
+awaits them; no host list, severity rule or classifier is copied into OASB.
+This component monitor has no timer and makes no real connection. Live OS
+acquisition is disabled deliberately and is **not measured** by this slice.
+The adapter advertises the raw capability only when the installed methods
+exist. Method signature/behavior changes still require compatibility review;
+the regression tests exercise the locked installed product, not a classifier
+mock. A public upstream product API would remove this private-seam dependency.
+
+### Measurement interpretation
+
+Previously the scenario injected `threat/critical` and read those labels back,
+so a passing run could measure event transport without measuring detection.
+Now it measures the product's classification of raw host observations on these
+policy fixtures. This removes direct target/label leakage from this family and
+improves construct validity: the operational test exercises the claimed
+classification capability.
+
+Ground truth is evaluator-held fixture/policy truth specified before running
+the detector; product output does not decide its own correctness. Nevertheless,
+public suspicious services are not inherently malicious, and these fixtures
+are not an independent threat-intelligence corpus. This remains reference
+policy conformance, not neutral general-purpose detection quality.
+Sensitivity is TP/(TP+FN); specificity is TN/(TN+FP). Paired benign controls
+reject a constant alarm, while malicious controls reject a silent/echo-only
+adapter. Small fixed fixtures do not establish deployment FPR or statistical
+population generalization.
+
+Other atomic network/process/filesystem families and integration chains still
+inject pre-labelled events. Those steps measure event handling and rule response,
+not independent classification. Their migration needs separate raw schemas,
+product entry points and controls, so is separate follow-up work. The scanner
+benchmark and existing scanner interfaces are unchanged.
+
+Methodology sources (principles applied here, not prior studies of OASB):
+
+- [Kapoor and Narayanan, Patterns 2023](https://doi.org/10.1016/j.patter.2023.100804):
+  leakage and invalid performance interpretation.
+- [Arp et al., USENIX Security 2022](https://www.usenix.org/conference/usenixsecurity22/presentation/arp):
+  pitfalls in security evaluation and experimental design.
+- [Bean et al., NeurIPS 2025 Datasets and Benchmarks](https://arxiv.org/abs/2511.04703):
+  construct validity and alignment of claims, tasks and metrics.

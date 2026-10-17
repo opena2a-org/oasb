@@ -38,6 +38,30 @@ export interface SecurityEvent {
   classifiedBy?: string;
 }
 
+/** Raw outbound connection facts; evaluator-held labels must never enter this path. */
+export interface NetworkObservation {
+  remoteAddr: string;
+  remotePort: number;
+  protocol: 'tcp' | 'udp';
+  direction: 'outbound';
+  pid?: number;
+  category?: never;
+  severity?: never;
+}
+
+/** Reject extra fields at runtime too, including labels supplied by JS callers. */
+export function validateNetworkObservation(observation: NetworkObservation): void {
+  const fields = new Set(['remoteAddr', 'remotePort', 'protocol', 'direction', 'pid']);
+  if (!observation || typeof observation !== 'object'
+    || Reflect.ownKeys(observation).some((key) => typeof key !== 'string' || !fields.has(key))
+    || typeof observation.remoteAddr !== 'string' || observation.remoteAddr.length === 0
+    || !Number.isInteger(observation.remotePort) || observation.remotePort < 1 || observation.remotePort > 65535
+    || !['tcp', 'udp'].includes(observation.protocol) || observation.direction !== 'outbound'
+    || (observation.pid !== undefined && (!Number.isInteger(observation.pid) || observation.pid < 0))) {
+    throw new TypeError('NetworkObservation accepts only outbound connection facts, never classification labels');
+  }
+}
+
 export interface EnforcementResult {
   action: EnforcementAction;
   success: boolean;
@@ -199,6 +223,8 @@ export interface EnforcementEngine {
 export type Capability =
   | 'process-monitoring'
   | 'network-monitoring'
+  /** Raw observations reach the product classifier, not the labelled event engine. */
+  | 'raw-network-observation'
   | 'filesystem-monitoring'
   | 'prompt-input-scanning'
   | 'prompt-output-scanning'
@@ -239,6 +265,14 @@ export interface SecurityProductAdapter {
 
   /** Inject a synthetic event for testing */
   injectEvent(event: Omit<SecurityEvent, 'id' | 'timestamp' | 'classifiedBy'>): Promise<SecurityEvent>;
+
+  /**
+   * Optional component-level path for outbound connection facts. Required when
+   * declaring raw-network-observation; resolves after resulting events are collected.
+   * Must classify with the product, never forward a benchmark-supplied label.
+   * Does not promise live OS/network acquisition. Reject unknown/label fields.
+   */
+  observeNetwork?(observation: NetworkObservation): Promise<void>;
 
   /** Wait for an event matching a predicate */
   waitForEvent(predicate: (event: SecurityEvent) => boolean, timeoutMs?: number): Promise<SecurityEvent>;

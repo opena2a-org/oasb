@@ -8,18 +8,24 @@ import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
 import type { SecurityProductAdapter } from '../../harness/adapter';
 
-describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detection', () => {
+describeWithCapability(['network-monitoring', 'raw-network-observation'], 'AT-NET-002: Suspicious Host Detection', () => {
   let arp: SecurityProductAdapter;
 
   const suspiciousHosts = [
-    { host: 'webhook.site', description: 'webhook exfiltration endpoint' },
-    { host: 'pastebin.com', description: 'public paste service' },
-    { host: 'ngrok.io', description: 'tunnel service' },
+    { host: 'webhook.site' },
+    { host: 'pastebin.com' },
+    { host: 'ngrok.io' },
   ];
+
+  const benignHosts = ['example.com', 'localhost', '127.0.0.1'];
 
   beforeEach(async () => {
     arp = createAdapter({
+      // Disable live acquisition: observeNetwork exercises the product classifier
+      // deterministically without contacting any of these hosts.
       monitors: { network: false },
+      networkAllowedHosts: benignHosts,
+      rules: [],
     });
     await arp.start();
   });
@@ -30,18 +36,12 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
 
   it.each(suspiciousHosts)(
     'should flag connection to $host as critical threat',
-    async ({ host, description }) => {
-      await arp.injectEvent({
-        source: 'network-monitor',
-        category: 'threat',
-        severity: 'critical',
-        description: `Connection to suspicious host: ${description}`,
-        data: {
-          remoteAddr: host,
-          remotePort: 443,
-          protocol: 'tcp',
-          direction: 'outbound',
-        },
+    async ({ host }) => {
+      await arp.observeNetwork!({
+        remoteAddr: host,
+        remotePort: 443,
+        protocol: 'tcp',
+        direction: 'outbound',
       });
 
       const threats = arp.getEventsByCategory('threat');
@@ -55,18 +55,12 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
   );
 
   it('should capture all suspicious host connections', async () => {
-    for (const { host, description } of suspiciousHosts) {
-      await arp.injectEvent({
-        source: 'network-monitor',
-        category: 'threat',
-        severity: 'critical',
-        description: `Connection to suspicious host: ${description}`,
-        data: {
-          remoteAddr: host,
-          remotePort: 443,
-          protocol: 'tcp',
-          direction: 'outbound',
-        },
+    for (const { host } of suspiciousHosts) {
+      await arp.observeNetwork!({
+        remoteAddr: host,
+        remotePort: 443,
+        protocol: 'tcp',
+        direction: 'outbound',
       });
     }
 
@@ -81,5 +75,20 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
         arp.getEvents().some((e) => e.data!.remoteAddr === host)
       ).toBe(true);
     }
+  });
+
+  it('should classify paired benign hosts as normal, not threats', async () => {
+    for (const host of benignHosts) {
+      await arp.observeNetwork!({
+        remoteAddr: host, remotePort: 443, protocol: 'tcp', direction: 'outbound',
+      });
+      const event = arp.getEvents().find((e) => e.data?.remoteAddr === host);
+      // A silent detector cannot pass the benign control by producing nothing.
+      expect(event).toBeDefined();
+      expect(event!.category).toBe('normal');
+      expect(event!.severity).toBe('info');
+    }
+    expect(arp.getEventsByCategory('threat')).toHaveLength(0);
+    expect(arp.getEventsByCategory('normal')).toHaveLength(benignHosts.length);
   });
 });

@@ -8,6 +8,14 @@ stay on record here with the reason they changed.
 
 ### Added
 
+- A raw network observation contract and optional adapter method separate
+  connection facts from product classifications in AT-NET-002. The reference
+  adapter calls the installed ARP classifier through a guarded private
+  acquisition seam. Paired benign controls and echo-only/constant-alarm
+  falsifiers check this measurement; other synthetic families are unchanged.
+  This measures classifier conformance, not live network acquisition.
+
+
 - `scripts/run-pinned-benchmark.ts` runs the corpus and DVAA benchmarks on
   pinned inputs: hackmyagent by npm version and tarball integrity, the DVAA
   checkout by commit and the NanoMind model directory by manifest sha256. It
