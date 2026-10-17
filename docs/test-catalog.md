@@ -39,6 +39,8 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 
 ### Run the suite
 
+`npm test` runs the tests in `scripts/` and then the whole suite: every attack scenario, plus the scoring-engine, pinned benchmark harness and adapter tests. The [test catalog](#what-gets-tested) has the totals, which `npm run check:readme` holds to the suite, and a command for each group.
+
 ```bash
 npm test                    # Full suite: 431 tests (430 pass, 1 skip)
 ```
@@ -59,8 +61,10 @@ npx vitest run --reporter=json --outputFile=test-results.json   # the suite, wit
 npm run report -- test-results.json                             # writes REPORT.generated.md, the scorecard
 ```
 
-The [README](../README.md#evaluating-other-products) says what the scorecard
-holds and how to score another product.
+`REPORT.generated.md` starts with a Product under test line, which names the product and its adapter or says which of them was not recorded, followed by the capabilities the product declares when the run recorded them. Its Summary counts the attack scenarios only, the tests under `src/atomic`, `src/integration`, `src/baseline` and `src/e2e`, in the rows Scenarios, Passed, Failed, Not applicable (skipped by the product's capability declaration), Skipped for another reason and Pass rate, the pass rate being over the scenarios that passed or failed; a Scenario files that failed outside a test row is added when a scenario file failed outside a test. The other tests of the run are counted apart on a Harness self-tests line and are not in the pass rate. The report then gives the status of each scenario file (PASS, FAIL or SKIP, and N/A for a file the JSON report does not hold) with the MITRE ATLAS techniques it maps to, the ATLAS techniques covered, the scenarios under each OWASP Agentic Top 10 category and the Known Gaps of the Reference Adapter (ARP), as `docs/known-gaps.md` documents them, which describe ARP whichever product is scored. [REPORT.md](../REPORT.md) is the 2026-03-23 run kept as recorded, not the output of this command.
+
+The [README](../README.md#evaluating-other-products) says how to score another
+product.
 
 ## Atomic Tests (`src/atomic/`)
 
