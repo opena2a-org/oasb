@@ -13,17 +13,15 @@ Standardized attack scenarios that evaluate whether a runtime security tool can 
 ## Quick Start
 
 ```bash
-git clone https://github.com/opena2a-org/oasb.git
-cd oasb && npm ci
-npx vitest run AT-AI-001 --reporter=verbose   # one scenario file: prompt input scanning, against the reference adapter
+npx @opena2a/oasb AT-AI-001   # one scenario file: prompt input scanning, against the reference adapter
 ```
 
-What `npx vitest run AT-AI-001 --reporter=verbose` prints, trimmed ([full output](docs/captures/quick-start.txt)):
+What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/quick-start.txt)):
 
 ```text
 ...
- ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect instruction override (PI-001) 6ms
- ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect delimiter escape (PI-002) 2ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect instruction override (PI-001) 4ms
+ ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect delimiter escape (PI-002) 1ms
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect tag injection (PI-003) 0ms
 ...
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should not flag benign input 0ms
@@ -32,6 +30,17 @@ What `npx vitest run AT-AI-001 --reporter=verbose` prints, trimmed ([full output
  Test Files  1 passed (1)
       Tests  11 passed (11)
 ...
+OASB AT-AI-001 against arp-guard 0.3.0: PASS (11 of 11 tests passed)
+```
+
+The last line is the verdict. The command exits 0 on PASS, 1 on FAIL and 2 on NOT MEASURED, when every test of the file was skipped; `npx @opena2a/oasb --help` lists the scenario IDs.
+
+To run the whole suite, or to change it, work from a clone:
+
+```bash
+git clone https://github.com/opena2a-org/oasb.git
+cd oasb && npm ci
+npx vitest run AT-AI-001 --reporter=verbose   # the same scenario file, from the checkout
 ```
 
 `npm test` runs the whole suite against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. The [test catalog](docs/test-catalog.md#what-gets-tested) has the totals and a command for each group.
@@ -66,8 +75,9 @@ The suite is also published as [`@opena2a/oasb`](https://www.npmjs.com/package/@
 
 ```bash
 npm install @opena2a/oasb
-npm install arp-guard   # the default adapter's product; not needed if you set OASB_ADAPTER
 ```
+
+npm also installs two optional dependencies: arp-guard, the default adapter's product, and vitest, which runs the scenario files. If you select your own adapter and run no scenario file, `npm install @opena2a/oasb --omit=optional` leaves them out.
 
 ```ts
 import type { SecurityProductAdapter } from '@opena2a/oasb';
@@ -104,7 +114,7 @@ The [test harness](docs/test-harness.md) page lists what the package exports.
 
 The [OpenA2A CLI](https://github.com/opena2a-org/opena2a) and [HackMyAgent](https://github.com/opena2a-org/hackmyagent) check an agent directory against the OASB-1 controls: how the agent is configured, not how a security tool detects attacks.
 
-Neither runs the attack scenarios in this repository; those run from a checkout with `npm test` (see [Quick Start](#quick-start)).
+Neither runs the attack scenarios in this repository: `npx @opena2a/oasb <ID>` runs one scenario file of them, and `npm test` in a checkout runs them all (see [Quick Start](#quick-start)).
 
 ```bash
 opena2a benchmark ./my-agent                            # OASB-1 controls at level L1

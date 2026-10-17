@@ -1,20 +1,24 @@
 {
-  "command": "npx vitest run AT-AI-001 --reporter=verbose",
-  "directory": "the repository root, after npm ci",
+  "command": "npx @opena2a/oasb AT-AI-001",
+  "directory": "an empty directory",
+  "package": "the tarball npm pack writes from the checkout, run as npx --yes --package=<tarball> oasb AT-AI-001, because no release on npm had the oasb command yet",
   "environment": {
     "CI": "true",
     "NO_COLOR": "1"
   },
   "exitCode": 0,
   "versions": {
+    "arp-guard": "0.3.0",
+    "hackmyagent": "0.33.2",
     "vitest": "3.2.7",
-    "node": "26.7.0"
+    "node": "26.12.0",
+    "npm": "11.20.0"
   },
-  "capturedOnUtc": "2026-10-16",
+  "capturedOnUtc": "2026-10-17",
   "elided": [
     {
       "line": 2,
-      "was": "the RUN banner, which names the vitest version and the absolute path of the checkout"
+      "was": "the RUN banner, which names the vitest version and the absolute path of the installed package"
     }
   ],
   "outputs": {

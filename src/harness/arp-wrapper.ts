@@ -32,9 +32,10 @@ import type {
   Capability,
 } from './adapter';
 
-// arp-guard is an optional peer dependency, so `npm install @opena2a/oasb`
-// alone does not install it. Name the package and the alternative instead of
-// surfacing a bare "Cannot find module".
+// arp-guard is an optional dependency, so an install that omits optional
+// dependencies (`npm install @opena2a/oasb --omit=optional`) leaves it out.
+// Name the package and the alternative instead of surfacing a bare "Cannot
+// find module".
 const ARP_GUARD_MISSING =
   'The default OASB adapter (OASB_ADAPTER unset or "arp") needs arp-guard, which is not installed. ' +
   'Run "npm install arp-guard", or set OASB_ADAPTER to select another adapter: "llm-guard", ' +

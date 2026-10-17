@@ -73,21 +73,29 @@
 //  11. a capture of a vitest run is what that run prints on the suite. A
 //      code block that holds a summary line ("Tests  11 passed (11)") is a
 //      capture; the line above it must name the command as
-//      "What `<command>` prints", the command must be a `vitest run` that a
-//      code block above that line shows, and its file filters select the
-//      test files whose path contains one of them, ignoring case, as vitest
-//      selects them. Each "✓ <file> > <name>" line must name a test of a
-//      selected file that is not skipped (with --tests: that passed), and
-//      each "Tests" and "Test Files" line must state the passed, failed and
-//      skipped counts and the total of the selected tests and files. A
-//      capture may leave lines out. When the line above it links
-//      "[full output](<file>)", that file is held to the run the same way,
-//      must show a ✓ line for each selected test that is not skipped (with
-//      --tests: that passed) and both summary lines, must hold each line of
-//      the capture other than a "..." line, and must have a .json file of
-//      the same name beside it whose "command" is the command and whose
-//      "outputs.capture" is the file's path from the README's directory.
-//      Like the counts, this reads the suite, so --no-counts skips it.
+//      "What `<command>` prints", and the command must be one that a code
+//      block above that line shows: a `vitest run`, whose file filters
+//      select the test files whose path contains one of them, ignoring
+//      case, as vitest selects them, or `npx @opena2a/oasb <ID>`, which
+//      selects the scenario file whose ID is <ID>, ignoring case, as the
+//      package's oasb command (bin/run-scenario.mjs) selects it. Each
+//      "✓ <file> > <name>" line must name a test of a selected file that is
+//      not skipped (with --tests: that passed), and each "Tests" and
+//      "Test Files" line must state the passed, failed and skipped counts
+//      and the total of the selected tests and files. In the capture of
+//      `npx @opena2a/oasb <ID>`, a line that starts with "OASB " must be the
+//      verdict line the oasb command prints for the selected tests
+//      ("OASB AT-AI-001 against <product>: PASS (11 of 11 tests passed)");
+//      the product it names is not checked. A capture may leave lines out.
+//      When the line above it links "[full output](<file>)", that file is
+//      held to the run the same way, must show a ✓ line for each selected
+//      test that is not skipped (with --tests: that passed) and both
+//      summary lines, and for `npx @opena2a/oasb <ID>` the verdict line,
+//      must hold each line of the capture other than a "..." line, and must
+//      have a .json file of the same name beside it whose "command" is the
+//      command and whose "outputs.capture" is the file's path from the
+//      README's directory. Like the counts, this reads the suite, so
+//      --no-counts skips it.
 //  12. a shell comment on an `opena2a benchmark` line, or on a
 //      `hackmyagent secure` line with `-b oasb-1`, in a code block, that
 //      names OASB-1 levels (L1, L2, L3) names the levels that command
@@ -108,6 +116,7 @@ import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUALIFIERS, README_PAGES, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
+import { findScenario, verdictLine } from '../bin/run-scenario.mjs';
 
 const MAX_LINES = 400;
 const QUICK_START_BY = 25;
@@ -640,6 +649,19 @@ function vitestFilters(command) {
   return words.slice(at + 2).filter((w) => !w.startsWith('-'));
 }
 
+// The ID an `npx @opena2a/oasb <ID>` command gives the package's oasb
+// command, which runs that one scenario file. Null for another command.
+function oasbScenarioId(command) {
+  const words = command.trim().split(/\s+/);
+  const isOasb = words.length === 3 && words[0] === 'npx' && words[1] === '@opena2a/oasb' && !words[2].startsWith('-');
+  return isOasb ? words[2] : null;
+}
+
+// The verdict line the oasb command prints last, as in
+// OASB AT-AI-001 against arp-guard 0.3.0: PASS (11 of 11 tests passed)
+// The second group is the product the adapter declares.
+const VERDICT_LINE = /^OASB (\S+) against (.+?): (?:PASS|FAIL|NOT MEASURED) \(.*\)$/;
+
 function checkCaptures(tests) {
   const ran = Boolean(reportPath);
   const source = ran ? 'the test report' : 'the suite';
@@ -668,8 +690,12 @@ function checkCaptures(tests) {
       }
       const command = intro[1].trim();
       const filters = vitestFilters(command);
-      if (filters === null) {
-        fail(`${prefix}line ${lines[j].n}: the capture is of \`${command}\`; the check reads the capture of a \`vitest run\` command only.`);
+      const oasbId = filters === null ? oasbScenarioId(command) : null;
+      if (filters === null && oasbId === null) {
+        fail(
+          `${prefix}line ${lines[j].n}: the capture is of \`${command}\`; ` +
+            'the check reads the capture of a `vitest run` or `npx @opena2a/oasb <ID>` command only.',
+        );
         continue;
       }
       const shown = lines
@@ -677,9 +703,24 @@ function checkCaptures(tests) {
         .some((l) => l.inFence && l.line.replace(/\s#.*$/, '').trim().replace(/^\$\s*/, '') === command);
       if (!shown) fail(`${prefix}line ${lines[j].n}: the capture names \`${command}\`, which no code block above it runs.`);
 
-      // vitest runs the test files whose path contains a filter, ignoring case.
-      const wanted = filters.map((f) => f.replace(/^\.\//, '').toLowerCase());
-      const selected = tests.filter((t) => wanted.length === 0 || wanted.some((f) => t.file.toLowerCase().includes(f)));
+      let selected;
+      // The scenario file the oasb command runs, as { id, file }; undefined
+      // for a vitest run.
+      let scenario;
+      if (filters !== null) {
+        // vitest runs the test files whose path contains a filter, ignoring case.
+        const wanted = filters.map((f) => f.replace(/^\.\//, '').toLowerCase());
+        selected = tests.filter((t) => wanted.length === 0 || wanted.some((f) => t.file.toLowerCase().includes(f)));
+      } else {
+        // The oasb command runs the scenario file whose ID is the one it is
+        // given, found as the command finds it.
+        const scenarioPaths = [...new Set(tests.map((t) => t.file))].filter((f) => SCENARIO_DIRS.some((dir) => f.startsWith(`${dir}/`)));
+        scenario = findScenario(
+          scenarioPaths.map((file) => ({ id: basename(file).slice(0, basename(file).indexOf('.')), file })),
+          oasbId,
+        );
+        selected = tests.filter((t) => t.file === scenario?.file);
+      }
       const files = [...new Set(selected.map((t) => t.file))];
       if (files.length === 0) {
         fail(`${at}: \`${command}\` selects no test file of ${source}, so its capture cannot be what it prints.`);
@@ -700,13 +741,32 @@ function checkCaptures(tests) {
         const state = states.includes('failed') ? 'failed' : states.every((s) => s === 'skipped') ? 'skipped' : 'passed';
         live['Test Files'][state]++;
       }
+      // The verdict line the oasb command prints for the selected tests,
+      // naming `product` as the product the adapter declares.
+      const expectedVerdict = (product) =>
+        verdictLine(scenario.id, product, {
+          ...live.Tests,
+          result: live.Tests.failed > 0 ? 'FAIL' : live.Tests.passed > 0 ? 'PASS' : 'NOT MEASURED',
+          outside: false,
+        });
 
-      // Hold each ✓ line and each summary line of `text`, a list of
-      // { n, line } in the document `where` names, to the run. Returns the
-      // tests the ✓ lines show, as "<file> > <name>", and the summary kinds.
+      // Hold each ✓ line, each summary line and, in the capture of the oasb
+      // command, each verdict line of `text`, a list of { n, line } in the
+      // document `where` names, to the run. Returns the tests the ✓ lines
+      // show, as "<file> > <name>", the summary kinds and whether a verdict
+      // line was seen.
       const hold = (where, text) => {
-        const seen = { tests: new Set(), kinds: new Set() };
+        const seen = { tests: new Set(), kinds: new Set(), verdict: false };
         for (const { n, line } of text) {
+          if (scenario && line.trim().startsWith('OASB ')) {
+            seen.verdict = true;
+            const said = line.trim();
+            const expected = expectedVerdict(said.match(VERDICT_LINE)?.[2] ?? '<product>');
+            if (said !== expected) {
+              fail(`${where}line ${n}: the capture's verdict line is "${said}"; for the tests \`${command}\` selects, ${source} gives "${expected}".`);
+            }
+            continue;
+          }
           const test = line.match(PASSED_TEST);
           if (test) {
             const [, file, name] = test;
@@ -752,10 +812,11 @@ function checkCaptures(tests) {
 
       // The full output the intro links, if it links one: held to the run
       // as the capture is, it shows every test the run passes and both
-      // summary lines, holds each line of the capture other than "...", and
-      // has a .json file of the same name beside it that names the command
-      // and the full output. A link to a file that does not exist, or with
-      // a malformed %-escape, names no file here and is reported by check 4.
+      // summary lines, and the oasb command's verdict line, holds each line
+      // of the capture other than "...", and has a .json file of the same
+      // name beside it that names the command and the full output. A link
+      // to a file that does not exist, or with a malformed %-escape, names
+      // no file here and is reported by check 4.
       const link = lines[j].line.replace(/`[^`]*`/g, '').match(FULL_OUTPUT);
       const linked = link ? decoded(link[1]) : null;
       const fullFile = linked !== null ? resolve(dirname(doc), linked) : null;
@@ -773,6 +834,9 @@ function checkCaptures(tests) {
           const seen = hold(`${full} `, fullLines);
           for (const kind of SUMMARY_KINDS) {
             if (!seen.kinds.has(kind)) fail(`${full}: the full output of \`${command}\` has no "${kind}" line.`);
+          }
+          if (scenario && !seen.verdict) {
+            fail(`${full}: the full output of \`${command}\` has no verdict line ("OASB ${scenario.id} against <product>: ..."), which the oasb command prints last.`);
           }
           for (const t of selected.filter(passing)) {
             if (seen.tests.has(`${t.file} > ${t.name}`)) continue;

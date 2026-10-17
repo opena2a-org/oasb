@@ -4,7 +4,11 @@
   "description": "Open Agent Security Benchmark \u2014 223 attack scenarios; those that simulate an adversary map to MITRE ATLAS, and each cites the OWASP Top 10 for Agentic Applications (2026), most also the OWASP Top 10 for LLM Applications (2025)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "oasb": "bin/oasb.mjs"
+  },
   "files": [
+    "bin",
     "dist",
     "src",
     "config",
@@ -22,7 +26,7 @@
     "test": "vitest run",
     "smoke": "bash scripts/release-smoke.sh",
     "check:readme": "node scripts/check-readme.mjs",
-    "test:scripts": "node --test scripts/check-readme.test.mjs scripts/check-test-counts.test.mjs scripts/check-owasp-mapping.test.mjs scripts/check-maturity-page.test.mjs scripts/check-documented-commands.test.mjs scripts/changelog-width.test.mjs scripts/adapter-gating.test.mjs scripts/scenario-report.test.mjs scripts/dev-run-summary.test.mjs scripts/library-entry.test.mjs scripts/runner-loads-no-sibling-module.test.mjs scripts/doc-facts.test.mjs scripts/placeholder-credentials.test.mjs scripts/secret-scan-workflow.test.mjs scripts/typecheck-tests.test.mjs scripts/hmaignore.test.mjs scripts/scenario-floor.test.mjs",
+    "test:scripts": "node --test scripts/check-readme.test.mjs scripts/check-test-counts.test.mjs scripts/check-owasp-mapping.test.mjs scripts/check-maturity-page.test.mjs scripts/check-documented-commands.test.mjs scripts/changelog-width.test.mjs scripts/adapter-gating.test.mjs scripts/scenario-report.test.mjs scripts/dev-run-summary.test.mjs scripts/library-entry.test.mjs scripts/runner-loads-no-sibling-module.test.mjs scripts/doc-facts.test.mjs scripts/placeholder-credentials.test.mjs scripts/secret-scan-workflow.test.mjs scripts/typecheck-tests.test.mjs scripts/hmaignore.test.mjs scripts/scenario-floor.test.mjs scripts/oasb-bin.test.mjs",
     "test:atomic": "vitest run src/atomic/",
     "test:integration": "vitest run src/integration/",
     "test:baseline": "vitest run src/baseline/",
@@ -30,23 +34,13 @@
     "test:watch": "vitest",
     "report": "tsx scripts/generate-report.ts"
   },
-  "peerDependencies": {
-    "arp-guard": ">=0.3.0"
-  },
-  "peerDependenciesMeta": {
-    "arp-guard": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "arp-guard": "^0.3.0",
     "llm-guard": "^0.1.8",
     "pg": "^8.20.0",
     "rebuff": "^0.1.0",
     "tsx": "4.23.15",
-    "typescript": "^5.3.3",
-    "vitest": "^3.0.0"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -71,5 +65,9 @@
     "url": "https://github.com/opena2a-org/oasb/issues"
   },
   "author": "OpenA2A",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "optionalDependencies": {
+    "arp-guard": "^0.3.0",
+    "vitest": "^3.0.0"
+  }
 }

@@ -9,7 +9,7 @@ files.
 
 ## The adapters
 
-The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent and is an optional peer dependency: it is installed for running the reference evaluation, and you do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](../README.md#evaluating-other-products). Point `OASB_ADAPTER` at a module that exports the class as its default export, as a named export `Adapter`, or as `module.exports = Class`.
+The suite runs against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. ARP is now part of HackMyAgent. It is an optional dependency of the package: npm installs it, and `npx @opena2a/oasb <ID>` runs against it, unless optional dependencies are omitted (`npm install @opena2a/oasb --omit=optional`). You do not need it if you implement your own adapter. To evaluate your own security product, implement the `SecurityProductAdapter` interface in `src/harness/adapter.ts` and run the same 223 attack scenarios - see [Evaluating Other Products](../README.md#evaluating-other-products). Point `OASB_ADAPTER` at a module that exports the class as its default export, as a named export `Adapter`, or as `module.exports = Class`.
 
 The interface defines event types, scanner interfaces, and enforcement contracts - no dependency on any specific product.
 
