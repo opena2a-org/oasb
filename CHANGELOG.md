@@ -115,12 +115,15 @@ stay on record here with the reason they changed.
 - The README's Evaluating Other Products section and `docs/test-catalog.md`
   name the commands that write the scorecard: `npx vitest run
   --reporter=json --outputFile=test-results.json`, then `npm run report --
-  test-results.json`, which writes `REPORT.generated.md`. The README says
-  what that file holds and that `REPORT.md` is a recorded run, not its
-  output. Before, the README promised a scorecard and only the header of
-  `scripts/generate-report.ts` named the command. `scripts/doc-facts.test.mjs`
-  fails when either page no longer runs the two Usage lines of that header in
-  one code block.
+  test-results.json`, which writes `REPORT.generated.md`.
+  `docs/test-catalog.md` says what that file holds, under Run the suite; the
+  README says that `REPORT.md` is a recorded run, not its output, and links
+  to that section. Before, the README promised a scorecard and only the
+  header of `scripts/generate-report.ts` named the command.
+  `scripts/doc-facts.test.mjs` fails when either page no longer runs the two
+  Usage lines of that header in one code block, and when a 0.4.1 entry says
+  that a page describes `REPORT.generated.md` and that page has no
+  paragraph that does.
 
 ### Removed
 
@@ -1144,18 +1147,19 @@ stay on record here with the reason they changed.
 - `docs/test-catalog.md` gives the test counts in one paragraph and the
   E2E-001 skips in a note of their own; the first sentence of the counts
   held the whole E2E-001 skip rule in a parenthetical.
-- The README's Evaluating Other Products section describes the Summary
-  `npm run report` writes: the Product under test line, the attack-scenario
+- `docs/test-catalog.md` describes the Summary `npm run report` writes, in
+  the paragraph under Run the suite that the README's Evaluating Other
+  Products section links: the Product under test line, the attack-scenario
   rows (Scenarios, Passed, Failed, Not applicable, Skipped for another
   reason, and a Pass rate over the scenarios that passed or failed), the
   separate Harness self-tests line and the Known Gaps of the Reference
-  Adapter (ARP). It said the file held "a summary of the run (total, passed,
-  failed and skipped tests, and the pass rate)", but the Summary counts the
-  attack scenarios only. `scripts/doc-facts.test.mjs` generates a report
-  from a sample run and fails when the README paragraph does not name the
-  product line, the scenario directories, a Summary row, what the pass rate
-  is over, the harness line or the known gaps heading as the report words
-  them.
+  Adapter (ARP). The README said the file held "a summary of the run (total,
+  passed, failed and skipped tests, and the pass rate)", but the Summary
+  counts the attack scenarios only. `scripts/doc-facts.test.mjs` generates a
+  report from a sample run and fails when the test catalog paragraph does
+  not name the product line, the scenario directories, a Summary row, what
+  the pass rate is over, the harness line or the known gaps heading as the
+  report words them.
 - `docs/adapters.md` says that a missing rebuff package fails each scenario
   file while vitest collects it, before any of its tests runs, with the
   error that names the package, and that a missing `typescript` fails each

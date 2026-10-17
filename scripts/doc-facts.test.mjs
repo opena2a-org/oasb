@@ -180,6 +180,22 @@ test('docs/test-catalog.md describes the Summary npm run report writes', () => {
   assert.ok(!/skipped tests/.test(paragraph), 'docs/test-catalog.md counts tests where the Summary counts attack scenarios');
 });
 
+// The paragraph on what REPORT.generated.md holds moved from the README to
+// docs/test-catalog.md; the 0.4.1 entries of CHANGELOG.md name the page that
+// holds it.
+test('CHANGELOG.md names the page that says what REPORT.generated.md holds', () => {
+  const pages = { 'The README': 'README.md', '`docs/test-catalog.md`': 'docs/test-catalog.md' };
+  const holds = (doc) => read(doc).split(/\n\s*\n/).some((p) => p.startsWith('`REPORT.generated.md` starts with'));
+  const entry = read('CHANGELOG.md').split(/^## /m).find((s) => s.startsWith('0.4.1 '))?.replace(/\s+/g, ' ');
+  assert.ok(entry, 'CHANGELOG.md has no 0.4.1 section');
+  for (const says of ['says what that file holds', 'describes the Summary `npm run report` writes']) {
+    const claims = [...entry.matchAll(new RegExp(`(The README|\`docs/test-catalog\\.md\`)(?:'s Evaluating Other Products section)? ${says}`, 'g'))];
+    assert.equal(claims.length, 1, `the 0.4.1 section of CHANGELOG.md does not say once which page ${says}; update this test with the wording`);
+    const [[claim, name]] = claims;
+    assert.ok(holds(pages[name]), `CHANGELOG.md says "${claim}", but ${pages[name]} has no paragraph that starts with \`REPORT.generated.md\` starts with`);
+  }
+});
+
 test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {
   const n = samples.filter((s) => s.label === 'malicious' && !s.category).length;
   assert.ok(flat('docs/pinned-benchmark.md').includes(`also holds ${n} uncategorized malicious samples`), `${n} uncategorized malicious samples is not stated`);
