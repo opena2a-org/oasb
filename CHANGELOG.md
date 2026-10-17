@@ -1144,6 +1144,18 @@ stay on record here with the reason they changed.
 - `docs/test-catalog.md` gives the test counts in one paragraph and the
   E2E-001 skips in a note of their own; the first sentence of the counts
   held the whole E2E-001 skip rule in a parenthetical.
+- The README's Evaluating Other Products section describes the Summary
+  `npm run report` writes: the Product under test line, the attack-scenario
+  rows (Scenarios, Passed, Failed, Not applicable, Skipped for another
+  reason, and a Pass rate over the scenarios that passed or failed), the
+  separate Harness self-tests line and the Known Gaps of the Reference
+  Adapter (ARP). It said the file held "a summary of the run (total, passed,
+  failed and skipped tests, and the pass rate)", but the Summary counts the
+  attack scenarios only. `scripts/doc-facts.test.mjs` generates a report
+  from a sample run and fails when the README paragraph does not name the
+  product line, the scenario directories, a Summary row, what the pass rate
+  is over, the harness line or the known gaps heading as the report words
+  them.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

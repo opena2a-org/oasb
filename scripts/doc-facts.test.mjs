@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { generateReport, readScenarios } from './scenario-report.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFileSync(join(repo, file), 'utf8');
@@ -117,6 +118,60 @@ test('the README names the scorecard command where Evaluating Other Products run
   assert.ok(section, 'the README has no Evaluating Other Products section');
   assert.ok(section.includes('npm run report'), 'Evaluating Other Products does not name npm run report');
   assert.ok(section.includes('REPORT.md'), 'Evaluating Other Products does not say what REPORT.md, the tracked report, is');
+});
+
+// A report npm run report writes, from a run with a passed, a not applicable
+// and an otherwise skipped scenario, a scenario file that failed outside a
+// test and a harness self-test, so that every row of the Summary is written.
+const generated = (() => {
+  const file = (path, statuses, suite = path, status = 'passed') => ({
+    name: join(repo, path),
+    status,
+    assertionResults: statuses.map((s, i) => ({ ancestorTitles: [suite], title: `test ${i + 1}`, status: s })),
+  });
+  const files = [
+    file('src/atomic/process/AT-PROC-001.spawn-child.test.ts', ['passed']),
+    file('src/integration/INT-002.mcp-tool-abuse.test.ts', ['skipped'], 'INT-002 [requires: mcp-scanning]'),
+    file('src/baseline/BL-003.baseline-persistence.test.ts', ['skipped']),
+    file('src/e2e/E2E-001.live-filesystem-detection.test.ts', [], undefined, 'failed'),
+    file('src/benchmark/scoring.test.ts', ['passed']),
+  ];
+  const tests = files.flatMap((f) => f.assertionResults);
+  const count = (s) => tests.filter((t) => t.status === s).length;
+  const results = {
+    numTotalTests: tests.length,
+    numPassedTests: count('passed'),
+    numFailedTests: count('failed'),
+    numPendingTests: count('skipped'),
+    testResults: files,
+  };
+  const adapter = { adapter: 'reference', product: 'arp-guard', version: '0.0.0', capabilities: ['process-monitoring'] };
+  return generateReport({ scenarios: readScenarios(repo), results, adapter, date: '2026-10-17' });
+})();
+
+test('the README describes the Summary npm run report writes', () => {
+  const paragraph = read('README.md')
+    .split(/\n\s*\n/)
+    .find((p) => p.startsWith('`REPORT.generated.md` '))
+    ?.replace(/`/g, '')
+    .replace(/\s+/g, ' ');
+  assert.ok(paragraph, 'the README has no paragraph that starts with `REPORT.generated.md`; update this test with the wording');
+  const summary = generated.slice(generated.indexOf('\n## Summary\n')).split(/\n(?=## )/)[1];
+  const facts = {
+    'the product under test line': generated.match(/^(Product under test): /m)?.[1],
+    'the directories of the attack scenarios': summary.match(/^Counts of the attack scenarios, the tests under (.+)\.$/m)?.[1],
+    'what the pass rate is over': summary.match(/the pass rate is (over [^.]+)\./)?.[1],
+    'the harness self-tests line': summary.match(/^(Harness self-tests): /m)?.[1],
+    'the known gaps heading': generated.match(/^## (Known Gaps.*)$/m)?.[1],
+  };
+  for (const [what, text] of Object.entries(facts)) {
+    assert.ok(text, `the generated report has no ${what}; update this test with its wording`);
+    assert.ok(paragraph.includes(text), `the README does not name ${what}, "${text}"`);
+  }
+  const rows = [...summary.matchAll(/^\| ([^|]+?) \| [^|]+ \|$/gm)].map(([, row]) => row).filter((row) => !/^(Metric|-+)$/.test(row));
+  assert.ok(rows.length > 0, 'the generated Summary has no table rows');
+  for (const row of rows) assert.ok(paragraph.includes(row), `the README does not name the Summary row "${row}"`);
+  assert.ok(!/skipped tests/.test(paragraph), 'the README counts tests where the Summary counts attack scenarios');
 });
 
 test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {
