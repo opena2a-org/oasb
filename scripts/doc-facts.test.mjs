@@ -196,6 +196,25 @@ test('CHANGELOG.md names the page that says what REPORT.generated.md holds', () 
   }
 });
 
+// The sentence on the shapes a custom adapter module may export its class in
+// was removed from the README; docs/adapters.md states them. The 0.4.1 entry
+// on `module.exports = Class` names the page that does.
+test('CHANGELOG.md names the page that states the accepted adapter export shapes', () => {
+  const pages = { 'the README': 'README.md', '`docs/adapters.md`': 'docs/adapters.md' };
+  const shapes = ['default export', 'named export `Adapter`', '`module.exports = Class`'];
+  const entry = read('CHANGELOG.md').split(/^## /m).find((s) => s.startsWith('0.4.1 '))?.replace(/\s+/g, ' ');
+  assert.ok(entry, 'CHANGELOG.md has no 0.4.1 section');
+  const page = '(?:the README|`docs/adapters\\.md`)';
+  const claims = [...entry.matchAll(new RegExp(`\`module\\.exports = Class\`, which (${page}(?: and ${page})?) (?:now )?states?\\b`, 'g'))];
+  assert.equal(claims.length, 1, 'the 0.4.1 section of CHANGELOG.md does not say once which page states the shapes after `module.exports = Class`; update this test with the wording');
+  const [[claim, named]] = claims;
+  for (const name of named.split(' and ')) {
+    const text = flat(pages[name]);
+    const missing = shapes.filter((shape) => !text.includes(shape));
+    assert.deepEqual(missing, [], `CHANGELOG.md says "${claim}", but ${pages[name]} does not state ${missing.join(', ')}`);
+  }
+});
+
 test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {
   const n = samples.filter((s) => s.label === 'malicious' && !s.category).length;
   assert.ok(flat('docs/pinned-benchmark.md').includes(`also holds ${n} uncategorized malicious samples`), `${n} uncategorized malicious samples is not stated`);

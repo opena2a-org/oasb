@@ -450,10 +450,11 @@ stay on record here with the reason they changed.
   It was refused as "does not export an adapter class", while the same class
   as a default or named export loaded. A module that exports no class now
   gets the accepted shapes in its message: the default export, a named
-  export `Adapter`, or `module.exports = Class`, which the README and
-  `docs/adapters.md` now state. Four tests in
-  `src/harness/create-adapter.test.ts` hold both entries, and `npm test` runs
-  428 tests (427 passing, 1 skipped).
+  export `Adapter`, or `module.exports = Class`, which `docs/adapters.md`
+  states under The adapters. `scripts/doc-facts.test.mjs` reads each page
+  this entry names after `module.exports = Class` and fails when it does not
+  state all three shapes. Four tests in `src/harness/create-adapter.test.ts`
+  hold both entries, and `npm test` runs 428 tests (427 passing, 1 skipped).
 - `OASB_ADAPTER=rebuff` now runs the heuristic detection of the rebuff npm
   package, as the README says. rebuff was not a dev dependency, so `npm ci`
   did not install it, and its published package holds TypeScript sources
