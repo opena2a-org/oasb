@@ -4,7 +4,7 @@ Full history of the benchmark, its methodology changes, and its releases.
 Metric revisions are never silently replaced: superseded or withdrawn figures
 stay on record here with the reason they changed.
 
-## 0.4.1 (unreleased)
+## 0.4.1 - 2026-10-17
 
 ### Added
 
@@ -1193,6 +1193,9 @@ stay on record here with the reason they changed.
   `--reporter=json --outputFile` is still written. No variable or flag
   lowers the floor. `scripts/check-documented-commands.mjs` now expects
   exit 2 from its two runs whose every test must be skipped.
+- `LICENSE` holds the full canonical Apache License 2.0 text, 202 lines, in
+  place of the 98-line abridgement that 0.4.0 shipped, which shortened or
+  dropped clauses.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
