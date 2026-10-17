@@ -121,9 +121,10 @@ stay on record here with the reason they changed.
   to that section. Before, the README promised a scorecard and only the
   header of `scripts/generate-report.ts` named the command.
   `scripts/doc-facts.test.mjs` fails when either page no longer runs the two
-  Usage lines of that header in one code block, and when a 0.4.1 entry says
-  that a page describes `REPORT.generated.md` and that page has no
-  paragraph that does.
+  Usage lines of that header in one code block, and when either of the two
+  0.4.1 entries that name the page describing `REPORT.generated.md` does
+  not name it exactly once in the wording the test matches, or names a
+  page with no paragraph that starts with `REPORT.generated.md`.
 
 ### Removed
 
