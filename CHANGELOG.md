@@ -15,6 +15,17 @@ stay on record here with the reason they changed.
   benchmark. `docs/test-catalog.md` describes the line, and
   `scripts/scenario-report.test.mjs` checks it and that it comes before the
   Product under test line.
+- `npx @opena2a/oasb <ID>` runs one scenario file, such as AT-AI-001, from
+  the npm package against the adapter `OASB_ADAPTER` selects, with vitest
+  and its verbose reporter, and prints its verdict on the last line:
+  `OASB AT-AI-001 against arp-guard 0.3.0: PASS (11 of 11 tests passed)`.
+  PASS exits 0, FAIL 1, and NOT MEASURED, when every test of the file was
+  skipped, 2. A missing or unknown ID, a missing vitest and an adapter that
+  cannot be loaded exit 1 with a line that says why; `--help` lists the
+  scenario IDs. The README Quick Start opens with
+  `npx @opena2a/oasb AT-AI-001`, and the clone moves below it, for running
+  the whole suite. `scripts/oasb-bin.test.mjs` runs the command through the
+  `node_modules/.bin` link of an install layout.
 
 ### Changed
 
@@ -24,6 +35,17 @@ stay on record here with the reason they changed.
   packed package in an empty project added 15 packages, `@opena2a/oasb`,
   `pg` and 13 packages `pg` pulls in, and now adds 1. `npm ci` in a clone
   still installs `pg` for that script.
+- arp-guard and vitest are optional dependencies, which npm installs with
+  the package, as `npx @opena2a/oasb` needs them. arp-guard was an optional
+  peer dependency and vitest a devDependency, and npx installs neither kind.
+  `npm install @opena2a/oasb` now also installs arp-guard, with hackmyagent,
+  and vitest: 366 MB on disk on macOS arm64 on 2026-10-17, against 2.2 MB
+  with `--omit=optional`, which leaves them out, and 341 MB for 0.4.0,
+  which depended on hackmyagent. The package entry point loads without them.
+- `npm run check:readme` holds a capture of `npx @opena2a/oasb <ID>` to the
+  suite as it holds one of a `vitest run`: to the tests of the scenario file
+  whose ID is `<ID>`, and its verdict line to the one the command prints for
+  them.
 
 ## 0.4.1 - 2026-10-17
 

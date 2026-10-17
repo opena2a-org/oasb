@@ -80,15 +80,19 @@ the claims this repository publishes:
    another checkout is read by each file's path from its `src/` directory,
    as the drift guard reads it. It holds the capture under Quick Start to
    the same suite: the command named in "What `<command>` prints" must be a
-   `vitest run` that a code block above it shows, each `✓` line must name a
-   test of a file that command selects and that is not skipped, and the
-   `Test Files` and `Tests` lines must state the passed, failed and skipped
-   counts and the total of the files and tests it selects. The full output
-   that line links (`docs/captures/quick-start.txt`) is held to the suite the
-   same way, must show every test the command selects that is not skipped
-   and both summary lines, and must hold each line of the capture other than
-   a `...` line; the `.json` file beside it must name the command and the
-   full output.
+   `vitest run` or `npx @opena2a/oasb <ID>` that a code block above it
+   shows, each `✓` line must name a test of a file that command selects and
+   that is not skipped, and the `Test Files` and `Tests` lines must state
+   the passed, failed and skipped counts and the total of the files and
+   tests it selects. `npx @opena2a/oasb <ID>` selects the scenario file
+   whose ID is `<ID>`, ignoring case, and a line of its capture that starts
+   with `OASB ` must be the verdict line the command prints for those tests;
+   the product that line names is not checked. The full output that line
+   links (`docs/captures/quick-start.txt`) is held to the suite the same
+   way, must show every test the command selects that is not skipped, both
+   summary lines and, for `npx @opena2a/oasb <ID>`, the verdict line, and
+   must hold each line of the capture other than a `...` line; the `.json`
+   file beside it must name the command and the full output.
 4. **Pack check.** `npm pack --dry-run` must include README.md, LICENSE,
    `dist/`, `src/harness/`, and `config/`, and must not include credential
    files or assistant config.
@@ -187,8 +191,9 @@ README's test counts do not include them.
   F1, FPR and flag rate named as withdrawn with no value.
 - `scripts/library-entry.test.mjs`: the package entry point as a library
   install sees it, built where arp-guard cannot be resolved, as after
-  `npm install @opena2a/oasb` on its own, and the version each adapter's
-  capability matrix reports for the package a test installs beside it.
+  `npm install @opena2a/oasb --omit=optional`, and the version each
+  adapter's capability matrix reports for the package a test installs
+  beside it.
 - `scripts/runner-loads-no-sibling-module.test.mjs`: `runBenchmark`, built
   and copied into a library install and into a clone, loads no module from
   a `hackmyagent` directory beside the package.
@@ -232,6 +237,20 @@ README's test counts do not include them.
   not exit 0 with `OASB: <evaluated> of <selected> attack scenarios
   evaluated`, when a run of no scenario file or `vitest list` prints a
   line, or when results that cannot be read do not exit 2.
+- `scripts/oasb-bin.test.mjs`: the oasb command that
+  `npx @opena2a/oasb <ID>` runs (`bin/oasb.mjs`, `bin/run-scenario.mjs`).
+  It builds the package into `node_modules/@opena2a/oasb` of a temporary
+  directory, with the packages `npm ci` installed linked beside it, and runs
+  the command through its `node_modules/.bin` link from a directory of its
+  own. Fails when `package.json` does not name the command, when
+  `npm pack` would not ship it, when vitest or arp-guard is not a
+  dependency or an optional dependency, the two kinds npx installs, or is
+  also a devDependency, when AT-AI-001 against arp-guard does not exit 0
+  with a PASS verdict line or leaves a file in that directory, when an
+  adapter that declares no capabilities does not get NOT MEASURED and exit
+  2, or an adapter given by a relative path whose scanner misses FAIL and
+  exit 1, or when an unknown ID, an adapter that cannot be loaded or a
+  missing vitest does not exit 1 with a line that says so.
 
 ## The README checks on every pull request
 

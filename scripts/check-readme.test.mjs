@@ -319,7 +319,7 @@ test('a capture names a vitest run that a code block above it shows', () => {
   const other = CAPTURED.replace(`What \`${CAPTURE_COMMAND}\``, 'What `npm test`');
   r = checkCounts(other, SUITE, namedReport());
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /^README: line \d+: the capture is of `npm test`; the check reads the capture of a `vitest run` command only\.$/m);
+  assert.match(r.stderr, /^README: line \d+: the capture is of `npm test`; the check reads the capture of a `vitest run` or `npx @opena2a\/oasb <ID>` command only\.$/m);
 
   const none = CAPTURED.replaceAll('AT-PROC-001 --reporter', 'AT-NONE-404 --reporter');
   r = checkCounts(none, SUITE, namedReport());
@@ -438,6 +438,89 @@ test('a full output link with a malformed %-escape is named once by the link che
   ]);
 });
 
+// CAPTURED and WITH_FULL as the capture of the package's oasb command on
+// AT-PROC-001: the same two tests, then the verdict line it prints.
+const OASB_COMMAND = 'npx @opena2a/oasb AT-PROC-001';
+const OASB_VERDICT = 'OASB AT-PROC-001 against some-product 1.0.0: PASS (2 of 2 tests passed)';
+const asOasb = (readme, command = OASB_COMMAND) =>
+  readme.replaceAll(CAPTURE_COMMAND, command).replace('      Tests  2 passed (2)\n', `      Tests  2 passed (2)\n${OASB_VERDICT}\n`);
+const OASB_CAPTURED = asOasb(CAPTURED);
+const OASB_FULL_RUN = `${FULL_RUN}${OASB_VERDICT}\n`;
+const OASB_META = JSON.stringify({ command: OASB_COMMAND, outputs: { capture: FULL_PATH } });
+
+test('a capture of npx @opena2a/oasb <ID> is held to the scenario file whose ID is <ID>, ignoring case', () => {
+  let r = checkCounts(OASB_CAPTURED, SUITE, namedReport());
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {3}README capture of `npx @opena2a\/oasb AT-PROC-001` matches the test report: 2 tests in 1 test file\.$/m);
+
+  r = checkCounts(asOasb(CAPTURED, 'npx @opena2a/oasb at-proc-001'), SUITE, namedReport());
+  assert.equal(r.status, 0, r.stderr);
+
+  // vitest's file filter would select AT-PROC-001 by this prefix; the oasb
+  // command selects a file by its whole ID.
+  const prefix = asOasb(CAPTURED, 'npx @opena2a/oasb AT-PROC-00');
+  r = checkCounts(prefix, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    new RegExp(`^README: line ${lineWith(prefix, '```text')}: \`npx @opena2a/oasb AT-PROC-00\` selects no test file of the test report, `, 'm'),
+  );
+});
+
+test('the verdict line of a capture of npx @opena2a/oasb is the one the oasb command prints for the run', () => {
+  const at = lineWith(OASB_CAPTURED, 'OASB AT-PROC-001');
+  const message = (said, expected) =>
+    `README: line ${at}: the capture's verdict line is "${said}"; for the tests \`${OASB_COMMAND}\` selects, the test report gives "${expected}".`;
+
+  const stale = OASB_CAPTURED.replace('PASS (2 of 2 tests passed)', 'PASS (3 of 3 tests passed)');
+  let r = checkCounts(stale, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.deepEqual(errors(r).filter(Boolean), [
+    message('OASB AT-PROC-001 against some-product 1.0.0: PASS (3 of 3 tests passed)', OASB_VERDICT),
+  ]);
+
+  r = checkCounts(OASB_CAPTURED, SUITE, namedReport(['passed', 'failed']));
+  assert.equal(r.status, 1);
+  assert.ok(
+    errors(r).includes(message(OASB_VERDICT, 'OASB AT-PROC-001 against some-product 1.0.0: FAIL (1 of 2 tests failed, 1 passed)')),
+    r.stderr,
+  );
+
+  r = checkCounts(OASB_CAPTURED, SUITE, namedReport(['skipped', 'skipped']));
+  assert.equal(r.status, 1);
+  assert.ok(
+    errors(r).includes(message(OASB_VERDICT, 'OASB AT-PROC-001 against some-product 1.0.0: NOT MEASURED (0 of 2 tests evaluated)')),
+    r.stderr,
+  );
+
+  const otherId = OASB_CAPTURED.replace('OASB AT-PROC-001 against', 'OASB AT-NET-001 against');
+  r = checkCounts(otherId, SUITE, namedReport());
+  assert.equal(r.status, 1);
+  assert.deepEqual(errors(r).filter(Boolean), [
+    message('OASB AT-NET-001 against some-product 1.0.0: PASS (2 of 2 tests passed)', OASB_VERDICT),
+  ]);
+});
+
+test('the full output of npx @opena2a/oasb holds its verdict line', () => {
+  const readme = asOasb(WITH_FULL);
+  let r = checkCounts(readme, SUITE, namedReport(), fullSources(OASB_FULL_RUN, OASB_META));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {3}Its full output docs\/captures\/run\.txt shows the 2 tests that passed and holds each line of the capture\.$/m);
+
+  r = checkCounts(readme, SUITE, namedReport(), fullSources(FULL_RUN, OASB_META));
+  assert.equal(r.status, 1);
+  assert.ok(
+    errors(r).includes(
+      `README: ${FULL_PATH}: the full output of \`${OASB_COMMAND}\` has no verdict line ("OASB AT-PROC-001 against <product>: ..."), which the oasb command prints last.`,
+    ),
+    r.stderr,
+  );
+  assert.ok(
+    errors(r).includes(`README: line ${lineWith(readme, 'OASB AT-PROC-001')}: the capture shows a line that its full output ${FULL_PATH} does not have: "${OASB_VERDICT}".`),
+    r.stderr,
+  );
+});
+
 test('a README that says every scenario maps to ATLAS fails while a scenario file cites no technique', () => {
   const r = checkCounts(COUNTED.replace('8 of them, in 6 files,', '10 of them, in 8 files,').replace('the other 2 test', 'the other 0 test'));
   assert.equal(r.status, 1);
@@ -529,18 +612,22 @@ test('a directory whose name ends in .md in the MITRE ATLAS Coverage section is 
 // that is not limited to the counts' own keys finds a function for them.
 for (const key of ['nosuchkey', 'constructor', 'toString']) {
   test(`a STATEMENTS key that names no count ("${key}") fails with the key instead of a TypeError`, () => {
-    // A copy of the check beside a readme-counts.mjs whose STATEMENTS has one more entry.
+    // A copy of the check beside a readme-counts.mjs whose STATEMENTS has one
+    // more entry, with the oasb command module it imports from ../bin.
     const dir = mkdtempSync(join(tmpdir(), 'check-readme-keys-'));
     try {
       const counts = pathToFileURL(join(repo, 'scripts', 'readme-counts.mjs')).href;
-      writeFileSync(join(dir, 'check-readme.mjs'), readFileSync(script));
+      mkdirSync(join(dir, 'scripts'));
+      mkdirSync(join(dir, 'bin'));
+      writeFileSync(join(dir, 'scripts', 'check-readme.mjs'), readFileSync(script));
+      writeFileSync(join(dir, 'bin', 'run-scenario.mjs'), `export * from '${pathToFileURL(join(repo, 'bin', 'run-scenario.mjs')).href}';\n`);
       writeFileSync(
-        join(dir, 'readme-counts.mjs'),
+        join(dir, 'scripts', 'readme-counts.mjs'),
         `import { STATEMENTS as REAL } from '${counts}';\n` +
           `export * from '${counts}';\n` +
           `export const STATEMENTS = [...REAL, { where: 'x', re: /(\\d+) tests/g, keys: ['${key}'] }];\n`,
       );
-      const r = checkCounts(COUNTED, SUITE, report(SUITE), SOURCES, join(dir, 'check-readme.mjs'));
+      const r = checkCounts(COUNTED, SUITE, report(SUITE), SOURCES, join(dir, 'scripts', 'check-readme.mjs'));
       assert.equal(r.status, 1);
       assert.doesNotMatch(r.stderr, /TypeError/);
       assert.match(
@@ -669,7 +756,7 @@ test(
       });
       assert.equal(r.status, 0, r.stderr);
       assert.match(r.stdout, /README test counts match the collected suite: \d+ tests, \d+ not skipped/);
-      assert.match(r.stdout, /^ {3}README capture of `npx vitest run [^`]+` matches the collected suite: \d+ tests? in \d+ test files?\.$/m);
+      assert.match(r.stdout, /^ {3}README capture of `npx @opena2a\/oasb AT-AI-001` matches the collected suite: \d+ tests? in \d+ test files?\.$/m);
       assert.match(r.stdout, /^ {3}Its full output docs\/captures\/quick-start\.txt shows the \d+ tests? not skipped and holds each line of the capture\.$/m);
       assert.deepEqual(
         readdirSync(tmp).filter((name) => /^(arp|llmg|rbuf)-lab-/.test(name)),

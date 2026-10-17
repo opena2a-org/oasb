@@ -4,8 +4,8 @@
 //
 // Each test builds src/ with tsc into a temporary directory and requires the
 // built index.js from there. No node_modules sits above that directory, so
-// arp-guard, an optional peer dependency installed here for the suite, cannot
-// be resolved: the same state as `npm install @opena2a/oasb` on its own.
+// arp-guard, an optional dependency installed here for the suite, cannot be
+// resolved: the same state as `npm install @opena2a/oasb --omit=optional`.
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -37,7 +37,7 @@ after(() => rmSync(base, { recursive: true, force: true }));
 // with the given packages written into its node_modules: a string is the
 // package's index.js, an object maps each of its file names to its content.
 // Each name in `links` is linked from this checkout's node_modules, where
-// `npm ci` installed the devDependencies.
+// `npm ci` installed it.
 function install(name, packages = {}, links = []) {
   const dir = join(base, name);
   cpSync(join(base, 'build'), dir, { recursive: true });
@@ -52,7 +52,7 @@ function install(name, packages = {}, links = []) {
   return require(join(dir, 'index.js'));
 }
 
-// The installed version of a devDependency of this checkout.
+// The version of a package `npm ci` installed in this checkout.
 const installedVersion = pkg => JSON.parse(readFileSync(join(repo, 'node_modules', pkg, 'package.json'), 'utf8')).version;
 
 test('without arp-guard, the default adapter names the package to install and OASB_ADAPTER', async () => {
@@ -83,7 +83,7 @@ test('with arp-guard installed, the capability matrix reports its version', () =
   assert.ok(matrix.capabilities.has('prompt-input-scanning'));
 });
 
-test('the capability matrix reports the version of the installed arp-guard devDependency', () => {
+test('the capability matrix reports the version of the arp-guard npm ci installed', () => {
   const oasb = install('installed-arp-guard', {}, ['arp-guard']);
   assert.equal(new oasb.ArpWrapper().getCapabilities().version, installedVersion('arp-guard'));
   assert.equal(oasb.getCapabilityMatrix().version, installedVersion('arp-guard'));
