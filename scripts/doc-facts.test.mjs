@@ -1,7 +1,7 @@
 // Tests that statements in README.md, BENCHMARK-RESULTS.md,
-// docs/pinned-benchmark.md, docs/test-catalog.md and docs/adapters.md match
-// the corpus, scripts and adapters they describe, and that docs/demo.tape
-// states no count.
+// docs/pinned-benchmark.md, docs/test-catalog.md, docs/adapters.md and
+// docs/how-it-works.md match the corpus, scripts and adapters they describe,
+// and that docs/demo.tape states no count.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -67,18 +67,22 @@ test('docs/demo.tape states no test or scenario count', () => {
   assert.deepEqual(counted, [], 'refer to the counts docs/test-catalog.md states instead');
 });
 
-test('the README does not say opena2a benchmark and hackmyagent secure -b oasb-1 check the same controls', () => {
-  // opena2a benchmark reports check IDs over the level's check-ID set, and
-  // hackmyagent secure -b oasb-1 reports control IDs over verified controls,
-  // so the two percentages are not the same figure.
-  const heading = '## Usage via OpenA2A CLI';
-  const text = read('README.md');
-  const start = text.indexOf(`\n${heading}\n`);
-  assert.ok(start >= 0, `README.md has no "${heading}" section; update this test with the heading`);
-  const end = text.indexOf('\n## ', start + heading.length + 1);
-  const section = (end < 0 ? text.slice(start) : text.slice(start, end)).replace(/\s+/g, ' ');
-  assert.ok(!/the same controls/i.test(section), `"${heading}" says "the same controls"`);
-});
+// The README section shows the commands; docs/how-it-works.md took the
+// paragraph that says how each percentage is computed.
+for (const doc of ['README.md', 'docs/how-it-works.md']) {
+  test(`${doc} does not say opena2a benchmark and hackmyagent secure -b oasb-1 check the same controls`, () => {
+    // opena2a benchmark reports check IDs over the level's check-ID set, and
+    // hackmyagent secure -b oasb-1 reports control IDs over verified controls,
+    // so the two percentages are not the same figure.
+    const heading = '## Usage via OpenA2A CLI';
+    const text = read(doc);
+    const start = text.indexOf(`\n${heading}\n`);
+    assert.ok(start >= 0, `${doc} has no "${heading}" section; update this test with the heading`);
+    const end = text.indexOf('\n## ', start + heading.length + 1);
+    const section = (end < 0 ? text.slice(start) : text.slice(start, end)).replace(/\s+/g, ' ');
+    assert.ok(!/the same controls/i.test(section), `${doc}: "${heading}" says "the same controls"`);
+  });
+}
 
 // The commands that write the scorecard, from the Usage lines of the
 // generator's header, and the file the header says it writes.
@@ -150,13 +154,14 @@ const generated = (() => {
   return generateReport({ scenarios: readScenarios(repo), results, adapter, date: '2026-10-17' });
 })();
 
-test('the README describes the Summary npm run report writes', () => {
-  const paragraph = read('README.md')
+// The README links this paragraph from Evaluating Other Products.
+test('docs/test-catalog.md describes the Summary npm run report writes', () => {
+  const paragraph = read('docs/test-catalog.md')
     .split(/\n\s*\n/)
     .find((p) => p.startsWith('`REPORT.generated.md` '))
     ?.replace(/`/g, '')
     .replace(/\s+/g, ' ');
-  assert.ok(paragraph, 'the README has no paragraph that starts with `REPORT.generated.md`; update this test with the wording');
+  assert.ok(paragraph, 'docs/test-catalog.md has no paragraph that starts with `REPORT.generated.md`; update this test with the wording');
   const summary = generated.slice(generated.indexOf('\n## Summary\n')).split(/\n(?=## )/)[1];
   const facts = {
     'the product under test line': generated.match(/^(Product under test): /m)?.[1],
@@ -167,12 +172,12 @@ test('the README describes the Summary npm run report writes', () => {
   };
   for (const [what, text] of Object.entries(facts)) {
     assert.ok(text, `the generated report has no ${what}; update this test with its wording`);
-    assert.ok(paragraph.includes(text), `the README does not name ${what}, "${text}"`);
+    assert.ok(paragraph.includes(text), `docs/test-catalog.md does not name ${what}, "${text}"`);
   }
   const rows = [...summary.matchAll(/^\| ([^|]+?) \| [^|]+ \|$/gm)].map(([, row]) => row).filter((row) => !/^(Metric|-+)$/.test(row));
   assert.ok(rows.length > 0, 'the generated Summary has no table rows');
-  for (const row of rows) assert.ok(paragraph.includes(row), `the README does not name the Summary row "${row}"`);
-  assert.ok(!/skipped tests/.test(paragraph), 'the README counts tests where the Summary counts attack scenarios');
+  for (const row of rows) assert.ok(paragraph.includes(row), `docs/test-catalog.md does not name the Summary row "${row}"`);
+  assert.ok(!/skipped tests/.test(paragraph), 'docs/test-catalog.md counts tests where the Summary counts attack scenarios');
 });
 
 test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {

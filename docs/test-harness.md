@@ -1,7 +1,7 @@
 # Test harness
 
 The files in `src/harness/` that run the suite against a security product,
-and how the sources are built and type-checked. The [README](../README.md) has
+what the npm package exports, and how the sources are built and type-checked. The [README](../README.md) has
 the first run; [adapters.md](adapters.md) describes the adapters.
 
 ## Test Harness
@@ -22,5 +22,7 @@ The harness wraps a security product via an adapter interface and provides event
 | `dvaa-client.ts` | HTTP client for DVAA vulnerable agent endpoints |
 | `dvaa-manager.ts` | DVAA process lifecycle (spawn, health check, teardown) |
 | `metrics.ts` | Detection rate, false positive rate, P95 latency computation |
+
+The package exports the adapter contract (`SecurityProductAdapter`, event and enforcement types), capability helpers, the worked adapter examples (`ArpWrapper`, `LLMGuardWrapper`, `RebuffWrapper` - each lazy-loads its underlying product, so none are required to install), harness utilities (`EventCollector`, `MockLLMAdapter`, metrics), and the skills-security scoring engine under `benchmark`. Running the full attack-scenario suite still happens from a repo checkout with `npm test`.
 
 `npm run build` compiles `src/` without its test files, and vitest does not check types. `npm run typecheck:tests` type-checks `src/` with them (`tsconfig.test.json`, no output). `npm test` runs it through `scripts/typecheck-tests.test.mjs`, one of the tests its `pretest` script runs, which fails on any type error it reports.
