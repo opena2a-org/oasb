@@ -99,12 +99,13 @@ the claims this repository publishes:
      (`AT-AI-002`, prompt output scanning) and an OS-level one
      (`AT-PROC-003`, process monitoring). llm-guard declares neither
      surface, and "Evaluating Other Products" says those tests are N/A
-     (skipped), not FAIL, so every test in both files must be skipped. The
+     (skipped), not FAIL, so every test in both files must be skipped, and
+     vitest must exit 2, as a run that evaluated no attack scenario does. The
      reference adapter runs the gated file, so its skip shows that the name
      chose llm-guard.
    - `OASB_ADAPTER=./<dir>/my-adapter.js`, a relative path run from the
      checkout, with an adapter that declares no capabilities, on the gated
-     file. Every test in it must be skipped.
+     file. Every test in it must be skipped, and vitest must exit 2.
    - The "Use as a library" example in a fresh install: it packs the
      checkout, runs the section's `npm install` lines in a new, empty
      project with `@opena2a/oasb` replaced by the tarball, and runs the
