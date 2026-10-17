@@ -1156,6 +1156,20 @@ stay on record here with the reason they changed.
   product line, the scenario directories, a Summary row, what the pass rate
   is over, the harness line or the known gaps heading as the report words
   them.
+- `docs/adapters.md` says that a missing rebuff package fails each scenario
+  file while vitest collects it, before any of its tests runs, with the
+  error that names the package, and that a missing `typescript` fails each
+  scan. It said each scan fails when either package is missing.
+  `getCapabilities()` of the rebuff adapter reads rebuff's version from its
+  `package.json`, and each scenario file calls it while it is collected:
+  with rebuff moved out of `node_modules`,
+  `OASB_ADAPTER=rebuff npx vitest run src/atomic/ai-layer/AT-AI-001`
+  reported the file failed and no tests; with `typescript` moved out, its
+  11 tests failed with the error that names `typescript`.
+  `scripts/doc-facts.test.mjs` fails when the paragraph says "when either
+  package is missing" or does not state the two cases, and
+  `src/harness/rebuff-wrapper.test.ts` checks both cases against the
+  capability check and the scans, with the loader replaced by a stub.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

@@ -1,6 +1,7 @@
 // Tests that statements in README.md, BENCHMARK-RESULTS.md,
-// docs/pinned-benchmark.md and docs/test-catalog.md match the corpus and
-// scripts they describe, and that docs/demo.tape states no count.
+// docs/pinned-benchmark.md, docs/test-catalog.md and docs/adapters.md match
+// the corpus, scripts and adapters they describe, and that docs/demo.tape
+// states no count.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -177,4 +178,23 @@ test('the README describes the Summary npm run report writes', () => {
 test('docs/pinned-benchmark.md states the uncategorized malicious count corpus/v2.json holds', () => {
   const n = samples.filter((s) => s.label === 'malicious' && !s.category).length;
   assert.ok(flat('docs/pinned-benchmark.md').includes(`also holds ${n} uncategorized malicious samples`), `${n} uncategorized malicious samples is not stated`);
+});
+
+test('docs/adapters.md says a missing rebuff fails each scenario file at collection, and a missing typescript each scan', () => {
+  // getCapabilities() of the rebuff adapter reads rebuff's package.json, and
+  // each scenario file calls it through describeWithCapability while vitest
+  // collects the file, so a missing rebuff fails the file before any of its
+  // tests runs. typescript is loaded by a scan, so a missing typescript fails
+  // each scan. src/harness/rebuff-wrapper.test.ts holds both cases.
+  assert.match(
+    read('src/harness/rebuff-wrapper.ts'),
+    /version: rebuffVersion\(\)/,
+    'getCapabilities() of the rebuff adapter no longer calls rebuffVersion(); update docs/adapters.md and this test',
+  );
+  const paragraph = read('docs/adapters.md').split(/\n\s*\n/).find((p) => p.startsWith('The rebuff adapter runs'));
+  assert.ok(paragraph, 'docs/adapters.md has no paragraph that starts "The rebuff adapter runs"; update this test with the wording');
+  const text = paragraph.replace(/\s+/g, ' ');
+  assert.doesNotMatch(text, /either package is missing/, 'the paragraph says a missing rebuff fails each scan, as a missing typescript does');
+  assert.match(text, /When the rebuff package is missing, each scenario file fails while vitest collects it/);
+  assert.match(text, /When `typescript` is missing, [^.]*each scan fails/);
 });
