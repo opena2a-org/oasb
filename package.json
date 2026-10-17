@@ -42,6 +42,7 @@
     "@types/node": "^20.0.0",
     "arp-guard": "^0.3.0",
     "llm-guard": "^0.1.8",
+    "pg": "^8.20.0",
     "rebuff": "^0.1.0",
     "tsx": "4.23.15",
     "typescript": "^5.3.3",
@@ -70,8 +71,5 @@
     "url": "https://github.com/opena2a-org/oasb/issues"
   },
   "author": "OpenA2A",
-  "license": "Apache-2.0",
-  "dependencies": {
-    "pg": "^8.20.0"
-  }
+  "license": "Apache-2.0"
 }

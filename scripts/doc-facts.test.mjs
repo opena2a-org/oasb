@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateReport, readScenarios } from './scenario-report.mjs';
+import { generateReport, readPackage, readScenarios } from './scenario-report.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFileSync(join(repo, file), 'utf8');
@@ -151,7 +151,7 @@ const generated = (() => {
     testResults: files,
   };
   const adapter = { adapter: 'reference', product: 'arp-guard', version: '0.0.0', capabilities: ['process-monitoring'] };
-  return generateReport({ scenarios: readScenarios(repo), results, adapter, date: '2026-10-17' });
+  return generateReport({ scenarios: readScenarios(repo), results, adapter, benchmark: readPackage(repo), date: '2026-10-17' });
 })();
 
 // The README links this paragraph from Evaluating Other Products.
@@ -164,6 +164,7 @@ test('docs/test-catalog.md describes the Summary npm run report writes', () => {
   assert.ok(paragraph, 'docs/test-catalog.md has no paragraph that starts with `REPORT.generated.md`; update this test with the wording');
   const summary = generated.slice(generated.indexOf('\n## Summary\n')).split(/\n(?=## )/)[1];
   const facts = {
+    'the benchmark line': generated.match(/^(Benchmark): /m)?.[1],
     'the product under test line': generated.match(/^(Product under test): /m)?.[1],
     'the directories of the attack scenarios': summary.match(/^Counts of the attack scenarios, the tests under (.+)\.$/m)?.[1],
     'what the pass rate is over': summary.match(/the pass rate is (over [^.]+)\./)?.[1],

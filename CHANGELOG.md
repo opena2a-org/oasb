@@ -4,6 +4,27 @@ Full history of the benchmark, its methodology changes, and its releases.
 Metric revisions are never silently replaced: superseded or withdrawn figures
 stay on record here with the reason they changed.
 
+## 0.4.2 (unreleased)
+
+### Added
+
+- `REPORT.generated.md` names the benchmark that wrote it, on a line after
+  `Generated:` such as `Benchmark: @opena2a/oasb 0.4.1`: the name and
+  version in the `package.json` of the checkout that holds
+  `scripts/generate-report.ts`. It did not name the version of the
+  benchmark. `docs/test-catalog.md` describes the line, and
+  `scripts/scenario-report.test.mjs` checks it and that it comes before the
+  Product under test line.
+
+### Changed
+
+- `pg` moved from `dependencies` to `devDependencies`, so `@opena2a/oasb`
+  has no `dependencies`. Only `scripts/export-registry-corpus.mjs` imports
+  it, and `scripts/` is not in the published package. `npm install` of the
+  packed package in an empty project added 15 packages, `@opena2a/oasb`,
+  `pg` and 13 packages `pg` pulls in, and now adds 1. `npm ci` in a clone
+  still installs `pg` for that script.
+
 ## 0.4.1 - 2026-10-17
 
 ### Added
@@ -245,16 +266,6 @@ stay on record here with the reason they changed.
   `--out=<file>`. The deprecated `scripts/run-benchmark.ts` now points to the
   pinned harness and to `run-benchmark-v2.ts --unpinned`; it printed a
   `run-benchmark-v2.ts` command without `--unpinned`, which is refused.
-- The README opens with Quick Start (clone, `npm ci`, `npm test`) and is under
-  400 lines. The per-test tables moved to `docs/test-catalog.md`; Contributing
-  and Updates moved below the reference sections. `npm run check:readme` checks
-  that layout and that the relative links it reads resolve, and `npm run smoke`
-  runs it. It reads three link forms, each written within one line: inline
-  links (`[text](path)`, with an optional double-quoted title), reference
-  definitions at the start of a line (`[label]: path`) and quoted HTML `href`
-  attributes. It checks a `#anchor` only in links to `.md` files. Other forms,
-  such as an unquoted `href` or a definition inside a list item, are not
-  checked.
 - `npm run check:readme` compares every test count the README states with
   the suite, each for equality: the badge, the Quick Start comment, the Counts
   note, the `npm run test:*` comments, the scenario counts, including the one
@@ -965,7 +976,19 @@ stay on record here with the reason they changed.
   `docs/updates.md`. `npm run check:readme` and the release smoke's drift
   guard read the test counts, the What Gets Tested table and the links on
   those pages as they read the README's (`README_PAGES` in
-  `scripts/readme-counts.mjs`), and a message about a page names it.
+  `scripts/readme-counts.mjs`), and a message about a page names it. The
+  per-test tables moved to `docs/test-catalog.md` as well, and the
+  Contributing section became a line of the Documentation list.
+  `npm run check:readme` fails when the README has 400 lines or more, when
+  its first H2 heading is not `## Quick Start` or is at line 25 or later,
+  when no shell code block with a command starts before line 30, and when a
+  relative link it reads does not resolve; `npm run smoke` runs these layout
+  and link checks. It reads three link forms, each written within one line:
+  inline links (`[text](path)`, with an optional double-quoted title),
+  reference definitions at the start of a line (`[label]: path`) and quoted
+  HTML `href` attributes. It checks a `#anchor` only in links to `.md`
+  files. Other forms, such as an unquoted `href` or a definition inside a
+  list item, are not checked.
 - `src/benchmark/pinned/runs-of-record.test.ts` looks for the newest run's
   counts on `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md` outside
   code spans and code blocks. The page's description of that test writes

@@ -3,6 +3,8 @@
  * OASB Report Generator
  *
  * Writes REPORT.generated.md in the current directory with:
+ * - The name and version in the package.json of this checkout, on a
+ *   Benchmark line
  * - The product under test and the attack-scenario pass/fail summary, when a
  *   vitest JSON report is given
  * - MITRE ATLAS coverage, read from the `// ATLAS:` header of each scenario file
@@ -31,7 +33,7 @@
 import * as path from 'path';
 
 async function main(): Promise<void> {
-  const { generateReport, readAdapterRecord, readResults, readScenarios, writeReport } = await import(
+  const { generateReport, readAdapterRecord, readPackage, readResults, readScenarios, writeReport } = await import(
     './scenario-report.mjs'
   );
 
@@ -41,9 +43,10 @@ async function main(): Promise<void> {
   const adapter = results === null ? null : readAdapterRecord(resultsPath);
 
   const scenarios = readScenarios();
+  const benchmark = readPackage();
   let report: string;
   try {
-    report = generateReport({ scenarios, results, adapter, date: new Date().toISOString().split('T')[0] });
+    report = generateReport({ scenarios, results, adapter, benchmark, date: new Date().toISOString().split('T')[0] });
   } catch (err) {
     // Only a results file that is not a vitest JSON report makes this throw.
     throw new Error(`${resultsPath}: ${(err as Error).message}`);
