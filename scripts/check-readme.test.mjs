@@ -18,9 +18,9 @@ const USAGE = /^usage: node scripts\/check-readme\.mjs \[--tests <report\.json> 
 const HEAD = '# Title\n\n## Quick Start\n\n```bash\nnpm test\n```\n\n## Guide\n\n';
 
 // Write a README (layout checks pass) plus docs/guide.md and any other pages
-// given by their path from the README's directory, run the check on it
-// without the test count check.
-function check(body, pages = {}) {
+// given by their path from the README's directory, give the pages listed in
+// `unreadable` mode 000, run the check on it without the test count check.
+function check(body, pages = {}, unreadable = []) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
   try {
     mkdirSync(join(dir, 'docs'));
@@ -29,6 +29,7 @@ function check(body, pages = {}) {
       mkdirSync(join(dir, dirname(path)), { recursive: true });
       writeFileSync(join(dir, path), text);
     }
+    for (const path of unreadable) chmodSync(join(dir, path), 0o000);
     writeFileSync(join(dir, 'README.md'), HEAD + body);
     const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
     return { status: r.status, stderr: r.stderr };
@@ -143,8 +144,9 @@ function report(suite, checkout = repo) {
 
 // Run the check (`checkScript`, this repository's by default) with --tests on
 // `readme` and `testReport`, with `sources` written beside the README, where
-// the check reads the scenario files.
-function checkCounts(readme, suite = SUITE, testReport = report(suite), sources = SOURCES, checkScript = script) {
+// the check reads the scenario files, and the sources listed in `unreadable`
+// given mode 000.
+function checkCounts(readme, suite = SUITE, testReport = report(suite), sources = SOURCES, checkScript = script, unreadable = []) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-counts-'));
   try {
     writeFileSync(join(dir, 'README.md'), readme);
@@ -152,6 +154,7 @@ function checkCounts(readme, suite = SUITE, testReport = report(suite), sources 
       mkdirSync(join(dir, dirname(path)), { recursive: true });
       writeFileSync(join(dir, path), text);
     }
+    for (const path of unreadable) chmodSync(join(dir, path), 0o000);
     writeFileSync(join(dir, 'report.json'), JSON.stringify(testReport));
     const r = spawnSync(process.execPath, [checkScript, '--tests', join(dir, 'report.json'), join(dir, 'README.md')], {
       encoding: 'utf8',
@@ -1242,9 +1245,13 @@ test('a link on a page a link leads to resolves from that page, as do the links 
   assert.equal(fixed.status, 0, fixed.stderr);
 });
 
+// A test that gives a page mode 000 is skipped where such a page can still be
+// read: as root, and on Windows.
+const MODE_000 = { skip: (process.platform === 'win32' || process.getuid?.() === 0) && 'a file with mode 000 can still be read here' };
+
 test(
   'a page a link leads to that the check cannot read is named, with no stack trace',
-  { skip: (process.platform === 'win32' || process.getuid?.() === 0) && 'a file with mode 000 can still be read here' },
+  MODE_000,
   () => {
     const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
     try {
@@ -1259,6 +1266,49 @@ test(
     }
   },
 );
+
+const cannotRead = (path) => `README: cannot read ${path}, a page a link leads to: EACCES: permission denied`;
+
+test('a page an anchored link leads to that the check cannot read is named once, as without the anchor, with no stack trace', MODE_000, () => {
+  const contributing = { 'CONTRIBUTING.md': '# Contributing\n' };
+  for (const body of [
+    'See [contributing](CONTRIBUTING.md#contributing).\n',
+    'See [contributing](CONTRIBUTING.md#contributing) and [how to help](CONTRIBUTING.md).\n',
+  ]) {
+    const r = check(body, contributing, ['CONTRIBUTING.md']);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), cannotRead('CONTRIBUTING.md'), body);
+  }
+
+  const fromPage = check(
+    'See [contributing](CONTRIBUTING.md).\n',
+    { 'CONTRIBUTING.md': '# Contributing\n\nRead [what is next](docs/next.md#next).\n', 'docs/next.md': '# Next\n' },
+    ['docs/next.md'],
+  );
+  assert.equal(fromPage.status, 1);
+  assert.equal(fromPage.stderr.trim(), cannotRead('docs/next.md'));
+
+  // The malformed %-escape is reported too; the advice cannot name a heading.
+  const malformed = check('See [contributing](CONTRIBUTING.md#100%-done).\n', contributing, ['CONTRIBUTING.md']);
+  assert.equal(malformed.status, 1);
+  assert.deepEqual(malformed.stderr.trim().split('\n'), [
+    cannotRead('CONTRIBUTING.md'),
+    'README: line 11: anchor "#100%-done" has a malformed %-escape; a heading\'s anchor has no %, so drop the % and link a heading in CONTRIBUTING.md.',
+  ]);
+});
+
+test('a dated page the check cannot read is named once, with no stack trace', MODE_000, () => {
+  const r = check(DATED_LINK, datedPage('Measured from `npm test`.\n'), ['docs/AUDIT-2026-06-03.md']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), cannotRead('docs/AUDIT-2026-06-03.md'));
+});
+
+test('a page the MITRE ATLAS Coverage section links to that the check cannot read is named once, with no stack trace', MODE_000, () => {
+  const readme = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](docs/atlas.md).');
+  const r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'), script, ['docs/atlas.md']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), cannotRead('docs/atlas.md'));
+});
 
 test('a page that took README text offers the Scanner Benchmark only as a recall-only comparison', () => {
   const page = (text) => check('See [adapters](docs/adapters.md).\n', { 'docs/adapters.md': `# Adapters\n\n${text}\n` });

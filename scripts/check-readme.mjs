@@ -114,7 +114,8 @@
 // once, so the links on a page a reader reaches from the README this way
 // must resolve as well. A message about such a page names it by its path
 // from the README's directory; a page the check cannot read fails with the
-// reason.
+// reason, also when a link to it carries an #anchor, which then is not
+// matched with its headings, and checks 7 and 9 skip it.
 //
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
@@ -279,23 +280,45 @@ function decoded(part) {
 // What to do about an anchor with a malformed %-escape. A heading's anchor
 // holds no % (slug() drops it), so writing the % as %25 cannot match one.
 // With each % that starts no escape dropped, the anchor is named when it then
-// matches a heading in `ids`; otherwise the advice names the page `where`.
+// matches a heading in `ids` (null for a page the check cannot read);
+// otherwise the advice names the page `where`.
 function malformedAnchorAdvice(anchor, ids, where) {
   const stripped = anchor.replace(/%(?![0-9a-f]{2})/gi, '');
   const id = decoded(stripped);
-  if (id !== null && ids.has(id.toLowerCase())) return `a heading's anchor has no %, so write "#${stripped}".`;
+  if (id !== null && ids?.has(id.toLowerCase())) return `a heading's anchor has no %, so write "#${stripped}".`;
   return `a heading's anchor has no %, so drop the % and link a heading in ${where}.`;
 }
 
-// Whether a link target is a page that can be read: a file, and not a
-// directory whose name ends in .md.
+// Whether a link target is a page: a file, and not a directory whose name
+// ends in .md. readPage says whether the check can read it.
 function isPage(file) {
   return statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
 }
 
+// The lines of a page a link leads to, read once, or null when the page
+// cannot be read, which fails once with the reason. The README and the pages
+// that took its text are already read.
+const pageLines = new Map(documents.map((d) => [d.file, d.lines]));
+function readPage(file) {
+  if (!pageLines.has(file)) {
+    try {
+      pageLines.set(file, parse(readFileSync(file, 'utf8')));
+    } catch (err) {
+      const path = relative(dirname(readmePath), file).split(sep).join('/');
+      fail(`cannot read ${path}, a page a link leads to: ${readFailure(err)}`);
+      pageLines.set(file, null);
+    }
+  }
+  return pageLines.get(file);
+}
+
+// The anchors of a page's headings, or null when the page cannot be read.
 const anchorCache = new Map();
 function anchorsOf(file) {
-  if (!anchorCache.has(file)) anchorCache.set(file, anchors(parse(readFileSync(file, 'utf8'))));
+  if (!anchorCache.has(file)) {
+    const lines = readPage(file);
+    anchorCache.set(file, lines && anchors(lines));
+  }
   return anchorCache.get(file);
 }
 
@@ -343,7 +366,7 @@ function checkLinks({ file: doc, prefix, lines }, linked) {
           fail(`${prefix}line ${n}: link target "${target}" is a directory, so its anchor names no heading; link the page in ${pathPart} that holds the heading.`);
         } else if (id === null) {
           fail(`${prefix}line ${n}: anchor "#${anchor}" has a malformed %-escape; ${malformedAnchorAdvice(anchor, anchorsOf(file), where)}`);
-        } else if (!anchorsOf(file).has(id.toLowerCase())) {
+        } else if (anchorsOf(file) && !anchorsOf(file).has(id.toLowerCase())) {
           fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${where}.`);
         }
       }
@@ -378,15 +401,10 @@ for (const doc of documents) {
 // Reading a page can list more pages, so the length is read on each pass.
 for (let i = 0; i < linkedPages.length; i++) {
   const file = linkedPages[i];
+  const lines = readPage(file);
+  if (!lines) continue; // readPage has reported it
   const path = relative(dirname(readmePath), file).split(sep).join('/');
-  let text;
-  try {
-    text = readFileSync(file, 'utf8');
-  } catch (err) {
-    fail(`cannot read ${path}, a page a link leads to: ${readFailure(err)}`);
-    continue;
-  }
-  checkLinks({ file, prefix: `${path} `, lines: parse(text) }, follow);
+  checkLinks({ file, prefix: `${path} `, lines }, follow);
 }
 
 // 5. Every stated test count equals the suite. The statements, and the
@@ -646,7 +664,9 @@ function checkSkippedCoverage(tests) {
       // A missing page is reported by the link check; a directory is not a page.
       if (seen.has(file) || !isPage(file)) continue;
       seen.add(file);
-      pages.push({ lines: parse(readFileSync(file, 'utf8')), prefix: `${pathPart} ` });
+      const lines = readPage(file);
+      if (!lines) continue; // readPage has reported it
+      pages.push({ lines, prefix: `${pathPart} ` });
     }
   }
 
@@ -998,7 +1018,8 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // sit in a blockquote; text in a code block or inline code is not the note.
 for (const [file, { at, shown }] of datedPages) {
   const date = basename(file).match(DATE_IN_NAME)[0];
-  const page = parse(readFileSync(file, 'utf8'));
+  const page = readPage(file);
+  if (!page) continue; // readPage has reported it
   const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
   const intro = (h2 === -1 ? page : page.slice(0, h2))
     .filter((l) => !l.inFence && !l.fenceOpen && !l.fenceClose)
