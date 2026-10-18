@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -438,29 +438,27 @@ test('the .gitignore reading decides as git does for a file at the root', () => 
   }
 });
 
-test('a results file named on the command line must exist; the default one may be absent', () => {
+test('a results file that does not exist, or is not JSON, is refused with its path', () => {
   const dir = mkdtempSync(join(tmpdir(), 'scenario-report-'));
   try {
     const missing = join(dir, 'nonexistent-results.json');
-    assert.equal(readResults(missing, false), null);
     assert.throws(
-      () => readResults(missing, true),
+      () => readResults(missing),
       (err) => err.message === `${missing} does not exist; write it with npx vitest run --reporter=json --outputFile=${missing}`,
     );
 
     const results = join(dir, 'test-results.json');
     writeFileSync(results, '{"numTotalTests": 0, "testResults": []}');
-    assert.deepEqual(readResults(results, true), { numTotalTests: 0, testResults: [] });
-    assert.deepEqual(readResults(results, false), { numTotalTests: 0, testResults: [] });
+    assert.deepEqual(readResults(results), { numTotalTests: 0, testResults: [] });
 
     writeFileSync(results, 'not json');
-    assert.throws(() => readResults(results, false), (err) => err.message.startsWith(`${results} is not JSON: `));
+    assert.throws(() => readResults(results), (err) => err.message.startsWith(`${results} is not JSON: `));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('npm run report exits 1 and writes nothing when the named results file does not exist', () => {
+test('npm run report exits 1 and writes nothing when the results file, named or the default, does not exist', () => {
   // Runs scripts/generate-report.ts as npm run report does, through the pinned tsx.
   const tsx = join(repo, 'node_modules', 'tsx', 'dist', 'cli.mjs');
   const script = join(repo, 'scripts', 'generate-report.ts');
@@ -475,11 +473,19 @@ test('npm run report exits 1 and writes nothing when the named results file does
     );
     assert.equal(existsSync(join(dir, REPORT_FILE)), false);
 
-    // Without an argument the absent default test-results.json is not an error,
-    // so the same run in the same directory writes the mapping alone.
+    // Without an argument it reads test-results.json in its working directory,
+    // named by the real path of that directory (on macOS /tmp and /var are
+    // links into /private). That file must exist as well: the run writes no
+    // report of the mapping alone, with no product and every status N/A, and
+    // gives the same hint.
+    const absent = join(realpathSync(dir), 'test-results.json');
     const unnamed = spawnSync(process.execPath, [tsx, script], { cwd: dir, encoding: 'utf8' });
-    assert.equal(unnamed.status, 0, unnamed.stderr);
-    assert.match(readFileSync(join(dir, REPORT_FILE), 'utf8'), /\| N\/A \|/);
+    assert.equal(unnamed.status, 1, unnamed.stderr);
+    assert.equal(
+      unnamed.stderr.trim(),
+      `Report not written: ${absent} does not exist; write it with npx vitest run --reporter=json --outputFile=${absent}`,
+    );
+    assert.equal(existsSync(join(dir, REPORT_FILE)), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -653,7 +659,7 @@ test('a vitest run with a JSON report records the adapter it ran with beside the
     assert.equal(record.version, '0.0.0');
     assert.deepEqual(record.capabilities, []);
 
-    const report = generateReport({ scenarios, results: readResults(out, true), adapter: record, date: '2026-10-16' });
+    const report = generateReport({ scenarios, results: readResults(out), adapter: record, date: '2026-10-16' });
     assert.ok(report.includes(`Product under test: no-capability-fixture 0.0.0 (adapter: ${NO_CAPABILITY_ADAPTER})`), report);
     assert.match(reportSection(report, 'Summary'), /^\| Pass rate \| not measured \(0 scenarios evaluated\) \|$/m);
   } finally {

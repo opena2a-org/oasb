@@ -133,7 +133,9 @@ README's test counts do not include them.
 - `scripts/check-readme.test.mjs`: the README layout, link, test-count and
   capture check (`scripts/check-readme.mjs`). One of its tests runs
   `npm run check:readme` on this README, which collects the suite with
-  vitest.
+  vitest. Another runs the check on the README in the package `npm pack`
+  writes, so each relative link the check reads there must resolve to a
+  file in the package.
 - `scripts/check-test-counts.test.mjs`: the drift guard
   (`scripts/check-test-counts.mjs`, step 3). It also fails when the smoke
   script would run the guard outside its clone, or when a `*.test.ts` file

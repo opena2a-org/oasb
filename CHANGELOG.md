@@ -41,13 +41,49 @@ stay on record here with the reason they changed.
   the package, as `npx @opena2a/oasb` needs them. arp-guard was an optional
   peer dependency and vitest a devDependency, and npx installs neither kind.
   `npm install @opena2a/oasb` now also installs arp-guard, with hackmyagent,
-  and vitest: 366 MB on disk on macOS arm64 on 2026-10-17, against 1.4 MB
+  and vitest: 366 MB on disk on macOS arm64 on 2026-10-17, against 1.6 MB
   with `--omit=optional`, which leaves them out, and 341 MB for 0.4.0,
   which depended on hackmyagent. The package entry point loads without them.
 - `npm run check:readme` holds a capture of `npx @opena2a/oasb <ID>` to the
   suite as it holds one of a `vitest run`: to the tests of the scenario file
   whose ID is `<ID>`, and its verdict line to the one the command prints for
   them.
+- `npm run report` without an argument exits 1 and writes no report when
+  `test-results.json` does not exist, as it does for a named results file
+  that does not exist, and prints the same message: `Report not written:`,
+  the path, and the command that writes the file,
+  `npx vitest run --reporter=json --outputFile=<path>`. It wrote
+  `REPORT.generated.md` with
+  `Product under test: not recorded (no test results were read)` and every
+  status N/A, and exited 0. `scripts/scenario-report.test.mjs` runs both
+  cases.
+- The README says where the vulnerabilities `npm ci` reports are: in
+  vitest, the test runner, and in the products the adapters load. With this
+  lockfile on 2026-10-17, `npm ci` reported 27 (1 low, 9 moderate, 13 high,
+  4 critical): 14 in packages under `arp-guard`, 8 in `rebuff` and packages
+  under it, and 6 in `vitest` and packages under it, `js-yaml` being under
+  both `arp-guard` and `rebuff`. arp-guard and vitest are optional
+  dependencies of the package, so `npm audit --omit=dev` reports their 20
+  (1 low, 8 moderate, 8 high, 3 critical), and the README says so;
+  `npm audit --omit=dev --omit=optional` reports none. The fixes
+  `npm audit` names for the `rebuff` and `vitest` ones are `rebuff@0.0.2`,
+  a lower version, and `vitest@5.0.5`, a major version.
+
+### Fixed
+
+- The package holds the files the README links by a relative path: `files`
+  in `package.json` adds `docs/`, all but the recording of a run
+  (`docs/oasb-demo.gif`, 2,676,739 bytes), and `REPORT.md`, 17 files. With
+  them, `npm install` of the packed package with `--omit=optional` takes
+  1.6 MB on disk, the figure the entry on arp-guard and vitest above states,
+  against 1.4 MB without them, and a default install still takes 366 MB
+  (`du -sh` and `du -sm` of `node_modules`, macOS arm64, npm 11.20.0,
+  2026-10-17). The README in the package linked 13 files the package did
+  not hold. The README links the recording by its address in the
+  repository. A test in `scripts/check-readme.test.mjs` packs the package
+  with `npm pack` and runs `scripts/check-readme.mjs` on the README in it,
+  so a relative link the check reads there, on the README or on a page that
+  took its text, must resolve to a file in the package.
 
 ## 0.4.1 - 2026-10-17
 

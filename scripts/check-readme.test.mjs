@@ -1250,6 +1250,26 @@ test('the counts and the What Gets Tested table on a page that took README text 
   assert.match(gone.stderr, /^README: the MITRE ATLAS Coverage line \(.*\) was not found; /m);
 });
 
+// The README a library install holds in node_modules resolves its relative
+// links against the files of the package, not the repository. npm pack writes
+// the package as npm publish does, and the check runs on the README in it, so
+// each link the check reads there, on the README and on the pages that took
+// its text, must resolve to a file the package holds.
+test('each relative link of the README in the packed package resolves to a file in the package', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-pack-'));
+  try {
+    const pack = spawnSync('npm', ['pack', '--json', '--pack-destination', dir], { cwd: repo, encoding: 'utf8' });
+    assert.equal(pack.status, 0, `npm pack exited ${pack.status}:\n${pack.stderr}`);
+    const tarball = join(dir, JSON.parse(pack.stdout)[0].filename);
+    const untar = spawnSync('tar', ['-xzf', tarball, '-C', dir], { encoding: 'utf8' });
+    assert.equal(untar.status, 0, `tar exited ${untar.status}:\n${untar.stderr}`);
+    const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'package', 'README.md')], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // The tests in scripts/ are not vitest tests, so `npm test` reaches them
 // through its pretest script, and the CI job reaches them through `npm test`.
 const npmScripts = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).scripts;
