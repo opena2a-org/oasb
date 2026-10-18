@@ -95,6 +95,15 @@ stay on record here with the reason they changed.
   fix it reported
   `README: CONTRIBUTING.md line 7: link target "corpus/" does not exist.`
   `scripts/check-readme.mjs` prints how many pages it reached this way.
+- `npm run check:readme` names a `.md` page a link leads to that it cannot
+  read, such as one with mode 000, with the reason on one line,
+  `README: cannot read CONTRIBUTING.md, a page a link leads to: EACCES:
+  permission denied`, also when the link carries an anchor, such as
+  `[contributing](CONTRIBUTING.md#contributing)`; on such a link it ended
+  with `Error: EACCES` and a stack trace. It ended with the same error on a
+  link to such a page whose name carries a date (`docs/AUDIT-2026-06-03.md`)
+  and, with the counts checked, on one in the README's MITRE ATLAS Coverage
+  section.
 
 ## 0.4.1 - 2026-10-17
 
