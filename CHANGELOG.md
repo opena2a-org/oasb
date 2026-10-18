@@ -84,6 +84,17 @@ stay on record here with the reason they changed.
   with `npm pack` and runs `scripts/check-readme.mjs` on the README in it,
   so a relative link the check reads there, on the README or on a page that
   took its text, must resolve to a file in the package.
+- The scenarios link in `CONTRIBUTING.md` names `corpus/` by its address in
+  the repository, `https://github.com/opena2a-org/oasb/tree/main/corpus`, as
+  the README names the recording of a run. It linked `corpus/`, which the
+  package does not hold. `scripts/check-readme.mjs` also reads the links on
+  each `.md` page a link it reads leads to, and on the pages their links
+  lead to, each page once, and names such a page by its path from the
+  README's directory. On the README in the packed package it reads 8 more
+  pages, `CONTRIBUTING.md` among them, and on a package packed before this
+  fix it reported
+  `README: CONTRIBUTING.md line 7: link target "corpus/" does not exist.`
+  `scripts/check-readme.mjs` prints how many pages it reached this way.
 
 ## 0.4.1 - 2026-10-17
 

@@ -17,8 +17,9 @@ the claims this repository publishes:
    which compares the test counts too, see step 3) checks the README layout:
    under 400 lines, "Quick Start" is the first H2
    and starts before line 25, a shell command appears before line 30, and
-   the relative links it reads resolve, in the README and in the pages that
-   took its text (`README_PAGES` in `scripts/readme-counts.mjs`), each link
+   the relative links it reads resolve, in the README, in the pages that
+   took its text (`README_PAGES` in `scripts/readme-counts.mjs`) and in each
+   other `.md` page a reader reaches from them by those links, each link
    from the directory of the file it is in. It reads three link forms, each
    written within one line: inline links (`[text](path)`, with an optional
    double-quoted title), reference definitions at the start of a line

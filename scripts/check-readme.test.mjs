@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -1223,6 +1223,43 @@ test('a link on a page that took README text resolves from that page', () => {
   ]);
 });
 
+test('a link on a page a link leads to resolves from that page, as do the links on the pages it leads to', () => {
+  const pages = {
+    'CONTRIBUTING.md': '# Contributing\n\nRead the [guide](docs/guide.md#setup-steps), the [scenarios](corpus/) and [what is next](docs/next.md).\n',
+    'docs/next.md': '# Next\n\n[README](../README.md#guide), [back](../CONTRIBUTING.md), [missing](gone.md) and [here](#nowhere).\n',
+  };
+  const r = check('See [contributing](CONTRIBUTING.md).\n', pages);
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.trim().split('\n'), [
+    'README: CONTRIBUTING.md line 3: link target "corpus/" does not exist.',
+    'README: docs/next.md line 3: link target "gone.md" does not exist.',
+    'README: docs/next.md line 3: anchor "#nowhere" has no matching heading in docs/next.md.',
+  ]);
+  const fixed = check('See [contributing](CONTRIBUTING.md).\n', {
+    'CONTRIBUTING.md': pages['CONTRIBUTING.md'].replace('(corpus/)', '(https://example.com/oasb/tree/main/corpus)'),
+    'docs/next.md': '# Next\n\n[README](../README.md#guide), [back](../CONTRIBUTING.md) and [here](#next).\n',
+  });
+  assert.equal(fixed.status, 0, fixed.stderr);
+});
+
+test(
+  'a page a link leads to that the check cannot read is named, with no stack trace',
+  { skip: (process.platform === 'win32' || process.getuid?.() === 0) && 'a file with mode 000 can still be read here' },
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+    try {
+      writeFileSync(join(dir, 'README.md'), HEAD + 'See [contributing](CONTRIBUTING.md).\n');
+      writeFileSync(join(dir, 'CONTRIBUTING.md'), '# Contributing\n');
+      chmodSync(join(dir, 'CONTRIBUTING.md'), 0o000);
+      const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+      assert.equal(r.status, 1);
+      assert.equal(r.stderr.trim(), 'README: cannot read CONTRIBUTING.md, a page a link leads to: EACCES: permission denied');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
 test('a page that took README text offers the Scanner Benchmark only as a recall-only comparison', () => {
   const page = (text) => check('See [adapters](docs/adapters.md).\n', { 'docs/adapters.md': `# Adapters\n\n${text}\n` });
   const offered = page('The Scanner Benchmark compares results across products.');
@@ -1253,9 +1290,10 @@ test('the counts and the What Gets Tested table on a page that took README text 
 // The README a library install holds in node_modules resolves its relative
 // links against the files of the package, not the repository. npm pack writes
 // the package as npm publish does, and the check runs on the README in it, so
-// each link the check reads there, on the README and on the pages that took
-// its text, must resolve to a file the package holds.
-test('each relative link of the README in the packed package resolves to a file in the package', () => {
+// each link the check reads there, on the README, on the pages that took its
+// text and on the pages a link leads to, such as CONTRIBUTING.md, must
+// resolve to a file the package holds.
+test('each relative link the check reads in the packed package resolves to a file in the package', () => {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-pack-'));
   try {
     const pack = spawnSync('npm', ['pack', '--json', '--pack-destination', dir], { cwd: repo, encoding: 'utf8' });
@@ -1263,6 +1301,7 @@ test('each relative link of the README in the packed package resolves to a file 
     const tarball = join(dir, JSON.parse(pack.stdout)[0].filename);
     const untar = spawnSync('tar', ['-xzf', tarball, '-C', dir], { encoding: 'utf8' });
     assert.equal(untar.status, 0, `tar exited ${untar.status}:\n${untar.stderr}`);
+    assert.match(readFileSync(join(dir, 'package', 'README.md'), 'utf8'), /\]\(CONTRIBUTING\.md\)/, 'the README no longer links CONTRIBUTING.md');
     const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'package', 'README.md')], { encoding: 'utf8' });
     assert.equal(r.status, 0, r.stderr);
   } finally {
