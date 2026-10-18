@@ -33,13 +33,15 @@ stay on record here with the reason they changed.
   has no `dependencies`. Only `scripts/export-registry-corpus.mjs` imports
   it, and `scripts/` is not in the published package. `npm install` of the
   packed package in an empty project added 15 packages, `@opena2a/oasb`,
-  `pg` and 13 packages `pg` pulls in, and now adds 1. `npm ci` in a clone
-  still installs `pg` for that script.
+  `pg` and 13 packages `pg` pulls in, and now adds 1 with `--omit=optional`.
+  A default install also adds the optional dependencies arp-guard and
+  vitest, with what they pull in, as the next entry describes. `npm ci` in
+  a clone still installs `pg` for that script.
 - arp-guard and vitest are optional dependencies, which npm installs with
   the package, as `npx @opena2a/oasb` needs them. arp-guard was an optional
   peer dependency and vitest a devDependency, and npx installs neither kind.
   `npm install @opena2a/oasb` now also installs arp-guard, with hackmyagent,
-  and vitest: 366 MB on disk on macOS arm64 on 2026-10-17, against 2.2 MB
+  and vitest: 366 MB on disk on macOS arm64 on 2026-10-17, against 1.4 MB
   with `--omit=optional`, which leaves them out, and 341 MB for 0.4.0,
   which depended on hackmyagent. The package entry point loads without them.
 - `npm run check:readme` holds a capture of `npx @opena2a/oasb <ID>` to the
