@@ -12,12 +12,15 @@
     "dist",
     "src",
     "config",
+    "docs",
+    "!docs/oasb-demo.gif",
     "README.md",
     "LICENSE",
     "CONTRIBUTING.md",
     "CHANGELOG.md",
     "STATUS.md",
-    "BENCHMARK-RESULTS.md"
+    "BENCHMARK-RESULTS.md",
+    "REPORT.md"
   ],
   "scripts": {
     "build": "tsc",

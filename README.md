@@ -45,6 +45,8 @@ npx vitest run AT-AI-001 --reporter=verbose   # the same scenario file, from the
 
 `npm test` runs the whole suite against [ARP](https://www.npmjs.com/package/arp-guard) (`arp-guard`), the reference adapter. The [test catalog](docs/test-catalog.md#what-gets-tested) has the totals and a command for each group.
 
+The vulnerabilities `npm ci` reports are in vitest, the test runner, and in the products the adapters load. arp-guard and vitest are optional dependencies of `@opena2a/oasb` as well, so `npm audit --omit=dev` reports the ones in them and in the packages they pull in. The package has no other dependency, and `npm audit --omit=dev --omit=optional` reports none.
+
 ## Evaluating Other Products
 
 To evaluate another tool, implement `SecurityProductAdapter` from `src/harness/adapter.ts`, declare its capabilities, and select it with `OASB_ADAPTER`:
@@ -141,7 +143,7 @@ Each scenario that simulates an adversary maps to a [MITRE ATLAS](https://atlas.
 - [Skills Security Benchmark](docs/pinned-benchmark.md#skills-security-benchmark): the scoring engine, the corpus, the runners, pinned runs and the latest results; only recall is retained.
 - [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md): per-category counts, the verdict methodology and the DVAA breakdown.
 - [MITRE ATLAS](docs/mitre-atlas-mapping.md) and [OWASP Agentic](docs/owasp-agentic-mapping.md) mappings, and the [known detection gaps](docs/known-gaps.md) of the reference adapter.
-- [Updates](docs/updates.md), [CHANGELOG.md](CHANGELOG.md), [STATUS.md](STATUS.md) and a [recording of a run](docs/oasb-demo.gif).
+- [Updates](docs/updates.md), [CHANGELOG.md](CHANGELOG.md), [STATUS.md](STATUS.md) and a [recording of a run](https://github.com/opena2a-org/oasb/blob/main/docs/oasb-demo.gif).
 - [Contributing](CONTRIBUTING.md): co-authors, a second implementation, new attack scenarios and adopters, before OASB goes to an external standards body.
 
 ## License

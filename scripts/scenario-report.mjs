@@ -316,15 +316,12 @@ export function generateReport({ scenarios, results = null, adapter = null, benc
 }
 
 /**
- * The parsed vitest JSON report at `path`. When `required` is false a file
- * that does not exist gives null, so that the report holds the mapping alone;
- * that is for the default test-results.json, which a run may not have written.
- * A file named on the command line is required: one that does not exist, or
- * cannot be read or parsed, throws an error that names `path`. For one that
- * does not exist it also gives the command that writes it.
+ * The parsed vitest JSON report at `path`, the file named on the command line
+ * or else the default test-results.json. One that does not exist, or cannot
+ * be read or parsed, throws an error that names `path`. For one that does not
+ * exist it also gives the command that writes it.
  */
-export function readResults(path, required) {
-  if (!required && !existsSync(path)) return null;
+export function readResults(path) {
   let text;
   try {
     text = readFileSync(path, 'utf8');
