@@ -104,6 +104,15 @@ stay on record here with the reason they changed.
   link to such a page whose name carries a date (`docs/AUDIT-2026-06-03.md`)
   and, with the counts checked, on one in the README's MITRE ATLAS Coverage
   section.
+- `npm run check:readme` names a page that took text from the README and
+  that it cannot read, such as `docs/adapters.md` with mode 000, once:
+  `README: cannot read docs/adapters.md, a page that took text from the
+  README: EACCES: permission denied`. A link to such a page, such as
+  `[adapters](docs/adapters.md)` or `[adapters](docs/adapters.md#adapters)`
+  in the README, made it name the page a second time, as a page a link
+  leads to; so did a link on another page that took the README's text, one
+  on a page a link leads to and, with the counts checked, one in the
+  README's MITRE ATLAS Coverage section.
 
 ## 0.4.1 - 2026-10-17
 

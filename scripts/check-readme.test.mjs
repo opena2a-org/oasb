@@ -1310,6 +1310,44 @@ test('a page the MITRE ATLAS Coverage section links to that the check cannot rea
   assert.equal(r.stderr.trim(), cannotRead('docs/atlas.md'));
 });
 
+const cannotReadMoved = (path) => `README: cannot read ${path}, a page that took text from the README: EACCES: permission denied`;
+const ADAPTERS = { 'docs/adapters.md': '# Adapters\n' };
+
+test('a page that took README text and that the check cannot read is named once, also when the README links it', MODE_000, () => {
+  for (const body of [
+    'See the adapter guide.\n',
+    'See [adapters](docs/adapters.md).\n',
+    'See [adapters](docs/adapters.md#adapters).\n',
+    'See [adapters](docs/adapters.md#adapters) and [how to write one](docs/adapters.md).\n',
+  ]) {
+    const r = check(body, ADAPTERS, ['docs/adapters.md']);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), cannotReadMoved('docs/adapters.md'), body);
+  }
+});
+
+test('a page that took README text and that the check cannot read is named once when another page that took its text, or a page a link leads to, links it', MODE_000, () => {
+  const r = check(
+    'See [contributing](CONTRIBUTING.md).\n',
+    {
+      ...ADAPTERS,
+      'docs/how-it-works.md': '# How it works\n\nSee [adapters](adapters.md).\n',
+      'CONTRIBUTING.md': '# Contributing\n\nRead [adapters](docs/adapters.md#adapters).\n',
+    },
+    ['docs/adapters.md'],
+  );
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), cannotReadMoved('docs/adapters.md'));
+});
+
+test('a page that took README text and that the check cannot read is named once when the MITRE ATLAS Coverage section links it', MODE_000, () => {
+  const readme = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](docs/mitre-atlas-mapping.md).');
+  const sources = { ...SOURCES, 'docs/mitre-atlas-mapping.md': '# Mapping\n' };
+  const r = checkCounts(readme, SUITE, report(SUITE), sources, script, ['docs/mitre-atlas-mapping.md']);
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), cannotReadMoved('docs/mitre-atlas-mapping.md'));
+});
+
 test('a page that took README text offers the Scanner Benchmark only as a recall-only comparison', () => {
   const page = (text) => check('See [adapters](docs/adapters.md).\n', { 'docs/adapters.md': `# Adapters\n\n${text}\n` });
   const offered = page('The Scanner Benchmark compares results across products.');
