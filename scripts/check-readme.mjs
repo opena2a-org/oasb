@@ -109,6 +109,13 @@
 // still checked; a message about one of those pages names it before the
 // line number. A link on a page resolves from the page's directory.
 //
+// Check 4 also reads the links on each other .md page that a link it reads
+// leads to, and on each .md page a link there leads to, and so on, each page
+// once, so the links on a page a reader reaches from the README this way
+// must resolve as well. A message about such a page names it by its path
+// from the README's directory; a page the check cannot read fails with the
+// reason.
+//
 // Usage: node scripts/check-readme.mjs [--tests <report.json> | --no-counts] [path/to/README.md]
 // Exit code 0 when every check passes (and for --help), 1 otherwise. Run by npm run smoke.
 
@@ -307,13 +314,11 @@ function linkTargets(prose) {
 
 const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
 
-// The linked .md pages whose file name carries a date, each with the first
-// line of the README, or else of a page that took its text, that links it.
-// Read by check 9.
-const DATE_IN_NAME = /\d{4}-\d{2}-\d{2}/;
-const datedPages = new Map();
-
-for (const { file: doc, prefix, lines } of documents) {
+// Check 4 on the prose lines of one page. For each link that resolves to a
+// .md page, linked(file, at, shown) is called with that page, the page and
+// line that hold the link as a message names them, and the link's path as
+// written.
+function checkLinks({ file: doc, prefix, lines }, linked) {
   for (const { n, line, inFence } of lines) {
     if (inFence) continue;
     const prose = line.replace(/`[^`]*`/g, '');
@@ -342,11 +347,46 @@ for (const { file: doc, prefix, lines } of documents) {
           fail(`${prefix}line ${n}: anchor "#${anchor}" has no matching heading in ${where}.`);
         }
       }
-      if (/\.md$/i.test(file) && DATE_IN_NAME.test(basename(file)) && !datedPages.has(file) && isPage(file)) {
-        datedPages.set(file, { at: `${prefix}line ${n}`, shown: pathPart });
-      }
+      if (/\.md$/i.test(file) && isPage(file)) linked(file, `${prefix}line ${n}`, pathPart);
     }
   }
+}
+
+// The linked .md pages whose file name carries a date, each with the first
+// line of the README, or else of a page that took its text, that links it.
+// Read by check 9.
+const DATE_IN_NAME = /\d{4}-\d{2}-\d{2}/;
+const datedPages = new Map();
+
+// The other .md pages a link leads to, from the README, from a page that took
+// its text or from a page already on this list, each listed once. Check 4
+// reads the links on each page it lists.
+const linkedPages = [];
+const reached = new Set(documents.map((d) => d.file));
+const follow = (file) => {
+  if (reached.has(file)) return;
+  reached.add(file);
+  linkedPages.push(file);
+};
+
+for (const doc of documents) {
+  checkLinks(doc, (file, at, shown) => {
+    if (DATE_IN_NAME.test(basename(file)) && !datedPages.has(file)) datedPages.set(file, { at, shown });
+    follow(file);
+  });
+}
+// Reading a page can list more pages, so the length is read on each pass.
+for (let i = 0; i < linkedPages.length; i++) {
+  const file = linkedPages[i];
+  const path = relative(dirname(readmePath), file).split(sep).join('/');
+  let text;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch (err) {
+    fail(`cannot read ${path}, a page a link leads to: ${readFailure(err)}`);
+    continue;
+  }
+  checkLinks({ file, prefix: `${path} `, lines: parse(text) }, follow);
 }
 
 // 5. Every stated test count equals the suite. The statements, and the
@@ -1049,7 +1089,11 @@ if (failures.length) {
   for (const f of failures) console.error('README: ' + f);
   process.exit(1);
 }
-console.log(`   README: ${readme.length} lines, Quick Start at line ${firstH2.n}, first command at line ${commandLine}, links resolve, also on the ${documents.length - 1} pages that took its text.`);
+console.log(
+  `   README: ${readme.length} lines, Quick Start at line ${firstH2.n}, first command at line ${commandLine}, links resolve, ` +
+    `also on the ${documents.length - 1} pages that took its text and on ${linkedPages.length} other ` +
+    `page${linkedPages.length === 1 ? '' : 's'} reached by following links.`,
+);
 if (counted) {
   console.log(
     `   README test counts match ${reportPath ? 'the test report' : 'the collected suite'}: ` +

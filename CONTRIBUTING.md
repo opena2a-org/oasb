@@ -4,7 +4,7 @@ The Open Agent Security Benchmark is authored in the open and published with a w
 
 ## What we are looking for
 
-- Review and critique. Read the [methodology](docs/) and [scenarios](corpus/) and tell us where the scoring is ambiguous, where the scenarios leave coverage gaps, or where the MITRE ATLAS and OWASP mappings do not hold up.
+- Review and critique. Read the [methodology](docs/) and [scenarios](https://github.com/opena2a-org/oasb/tree/main/corpus) and tell us where the scoring is ambiguous, where the scenarios leave coverage gaps, or where the MITRE ATLAS and OWASP mappings do not hold up.
 - An independent second implementation of the scoring engine or harness, to prove the methodology is reproducible outside this repository.
 - Security audit and threat modeling of the benchmark itself, not just a product under test.
 - Benchmark and evaluation methodology expertise. We want input from people who have built detection benchmarks, attack corpora, or scoring rubrics, and who can stress-test how OASB measures detection coverage and false-positive rate.
