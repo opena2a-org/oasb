@@ -107,7 +107,9 @@
 // (README_PAGES in scripts/readme-counts.mjs) as they read the README, so the
 // test totals, the "What Gets Tested" table and the links that moved are
 // still checked; a message about one of those pages names it before the
-// line number. A link on a page resolves from the page's directory.
+// line number. A link on a page resolves from the page's directory. One of
+// those pages that the check cannot read fails once, with the reason, also
+// when check 4 or 7 reads a link to it.
 //
 // Check 4 also reads the links on each other .md page that a link it reads
 // leads to, and on each .md page a link there leads to, and so on, each page
@@ -216,8 +218,11 @@ const readme = parse(readmeText);
 // The README and the pages that took its text, each with the prefix that
 // names it in a message: none for the README, its path for a page. A page
 // that does not exist is not read; the README's link to it is reported by
-// check 4, and a count it held by check 5.
+// check 4, and a count it held by check 5. A page that cannot be read fails
+// here with the reason and is listed in `unreadable`, so that readPage does
+// not read it again and check 4 does not follow a link to it.
 const documents = [{ file: readmePath, prefix: '', text: readmeText, lines: readme }];
+const unreadable = [];
 for (const path of README_PAGES) {
   const file = resolve(dirname(readmePath), path);
   if (!existsSync(file)) continue;
@@ -226,6 +231,7 @@ for (const path of README_PAGES) {
     documents.push({ file, prefix: `${path} `, text, lines: parse(text) });
   } catch (err) {
     fail(`cannot read ${path}, a page that took text from the README: ${readFailure(err)}`);
+    unreadable.push(file);
   }
 }
 
@@ -297,8 +303,9 @@ function isPage(file) {
 
 // The lines of a page a link leads to, read once, or null when the page
 // cannot be read, which fails once with the reason. The README and the pages
-// that took its text are already read.
-const pageLines = new Map(documents.map((d) => [d.file, d.lines]));
+// that took its text are already read; a page that took its text and cannot
+// be read has already failed, and is null here.
+const pageLines = new Map([...documents.map((d) => [d.file, d.lines]), ...unreadable.map((file) => [file, null])]);
 function readPage(file) {
   if (!pageLines.has(file)) {
     try {
@@ -385,7 +392,7 @@ const datedPages = new Map();
 // its text or from a page already on this list, each listed once. Check 4
 // reads the links on each page it lists.
 const linkedPages = [];
-const reached = new Set(documents.map((d) => d.file));
+const reached = new Set([...documents.map((d) => d.file), ...unreadable]);
 const follow = (file) => {
   if (reached.has(file)) return;
   reached.add(file);
