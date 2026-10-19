@@ -1284,6 +1284,28 @@ test('link text may wrap onto the next line of its paragraph, but not into anoth
   }
 });
 
+test('link text wraps past a line that starts with | when no delimiter row makes it a table header', () => {
+  for (const body of [
+    'see [the\n|guide| page](docs/nowhere.md)\n',
+    '> see [the\n> | guide | page](docs/nowhere.md)\n',
+    // A delimiter row with a different number of cells does not start a table.
+    'see [the\n| guide | page](docs/nowhere.md)\n| - |\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+  // A link that opens on a | line that is paragraph text wraps onto the next line.
+  const opened = check('| see [the\nguide](docs/nowhere.md) |\n');
+  assert.equal(opened.status, 1);
+  assert.match(opened.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
+  // With a delimiter row, the | line is a table header and the rows below are table rows.
+  for (const body of ['[a\n| t |\n| - |\nb](docs/nowhere.md)\n', '[a\n|t|u|\n|:-|-:|\n| [c | d |\ne](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('link text does not wrap past a setext underline, a thematic break or an HTML block start', () => {
   for (const middle of ['---', '===', '***', '___', '- - -', '<div>', '</p>', '<!-- note -->', '<pre>', '> ---']) {
     const body = `[a\n${middle}\nb](docs/nowhere.md)\n`;
@@ -1421,6 +1443,20 @@ test('an inline link on a line of indented code is not read; one on a paragraph 
   }
 });
 
+test('a line that opens a block quote or list item and then indented code after a | line that is paragraph text holds no inline link', () => {
+  // With no delimiter row after it, the | line is paragraph text. A block
+  // quote or list item interrupts that paragraph, and 4 more columns after
+  // its marker start indented code inside it, shown as written. A line that
+  // goes on with the block quote and the paragraph is paragraph text.
+  for (const body of ['| a\n>     [x](docs/nowhere.md)\n', '| a\n-     [x](docs/nowhere.md)\n', '- | a\n  >     [x](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  const r = check('> | a\n>     [x](docs/nowhere.md)\n');
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
+});
+
 test('a line of ***, --- or ___ and 100,000 spaces or tabs before text is checked in under 2 seconds', () => {
   // The spaces and tabs could be split between the last mark and a [ \t]*
   // after the marks in every way: these three lines took 12.9 seconds.
@@ -1535,6 +1571,28 @@ test('a code span runs on to the lines that go on with its paragraph as link tex
   // A block quote ends the paragraph above it, and a quote inside a quote
   // ends a quoted one, so the span does not run on to the link.
   for (const body of ['a `x\n> [z](docs/nowhere.md) y`\n', '> a `x\n> > [z](docs/nowhere.md) y`\n']) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+});
+
+test('a code span runs on past a line that starts with | when no delimiter row makes it a table header, and not past a header', () => {
+  // No delimiter row with as many cells follows the | line, so it is text of
+  // the paragraph, and the span from the first line holds the link.
+  for (const body of [
+    'a `x\n| [y](docs/nowhere.md) z`\n',
+    'a `x\n|guide|\n[y](docs/nowhere.md) z`\n',
+    '> a `x\n> | [y](docs/nowhere.md) z`\n',
+    '- a `x\n  | [y](docs/nowhere.md) z`\n',
+    'a `x\n| [y](docs/nowhere.md) | z` |\n| - |\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A delimiter row with as many cells makes the | line a table's header
+  // row, which ends the paragraph above it, so the span does not run on.
+  for (const body of ['a `x\n| [z](docs/nowhere.md) y` |\n| - |\n', '> a `x\n> | [z](docs/nowhere.md) y` |\n> | - |\n']) {
     const r = check(body);
     assert.equal(r.status, 1, body);
     assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);

@@ -20,11 +20,13 @@
 //      paragraph and starts 4 or more columns past where the text of the
 //      block quote or list item that holds it starts, a tab moving on to the
 //      next multiple of 4. An href on such a line is read, as the line may
-//      be raw HTML inside an HTML block, where an href is a link. So are the
-//      links on indented code that follows a line whose text starts with |,
-//      with no other line between, as that line may be a paragraph rather
-//      than a table row, which the lines after it may go on with. Links
-//      inside code spans are not read, a
+//      be raw HTML inside an HTML block, where an href is a link. A line
+//      whose text starts with | is a table row when the line above it is
+//      one, or when the line after it is a delimiter row (| - |) with as
+//      many cells, and paragraph text otherwise. The links on indented code
+//      that follows a table row, with no other line between, are read too,
+//      as the row may be a paragraph that the lines after it go on with.
+//      Links inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
 //      holds no definition; a backtick after a backslash (\`) is text and
@@ -677,6 +679,31 @@ function breakStart(text) {
   return start;
 }
 
+// A table's delimiter row, such as | - | :-: |, once its spaces, tabs and >
+// before it and after it are removed.
+const DELIMITER_ROW = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?$/;
+
+// How many cells a table row holds: its text split at each | that no \ comes
+// right before, not counting the empty cell before a leading | or after a
+// trailing one.
+function cellCount(row) {
+  const text = row.trim();
+  const parts = text.split(/(?<!\\)\|/);
+  if (text.startsWith('|')) parts.shift();
+  if (parts.length > 0 && text.endsWith('|') && !text.endsWith('\\|')) parts.pop();
+  return parts.length;
+}
+
+// Whether a line that starts with | (row, from that |) is the header row of
+// a table: in GitHub-flavored Markdown a table starts only where the next
+// line is a delimiter row with as many cells. Without one, the line is
+// paragraph text.
+function tableHeader(row, next) {
+  if (next === undefined) return false;
+  const delimiter = next.replace(/^[ \t>]*/, '').trim();
+  return DELIMITER_ROW.test(delimiter) && cellCount(delimiter) === cellCount(row);
+}
+
 // Columns as CommonMark counts them in the indentation of a line: a tab
 // moves on to the next multiple of 4.
 const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
@@ -702,8 +729,11 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // reading each of `containers`.
 // Returns how many of `containers` the line goes on with, the containers it
 // opens, and whether the rest of it is 'blank', 'code' (indented code), 'row'
-// (a table row), 'block' (one of the other blocks) or 'text', which a
-// paragraph holds.
+// (text that starts with |, as a table row does), 'block' (one of the other
+// blocks) or 'text', which a paragraph holds. A 'row' comes with `row`, the
+// text from its |. Whether it is a table row or paragraph text is the
+// caller's to read, as a table starts only at a header row that a delimiter
+// row follows, which one line does not show.
 function lineStart(line, containers, paragraph, stops) {
   const text = line.endsWith('\r') ? line.slice(0, -1) : line; // \r\n ends a line too
   const breakFrom = breakStart(text);
@@ -779,7 +809,7 @@ function lineStart(line, containers, paragraph, stops) {
     // Whether a block that starts here would interrupt the paragraph above,
     // as the line goes on with every container that holds it.
     const interrupts = paragraph && matched === containers.length && opened.length === 0;
-    if (text[j] === '|') return { matched, opened, rest: 'row' };
+    if (text[j] === '|') return { matched, opened, rest: 'row', row: text.slice(j) };
     if (
       matchAt(ATX_HEADING, text, j) ||
       matchAt(HTML_BLOCK_START, text, j) ||
@@ -821,15 +851,21 @@ function lineStart(line, containers, paragraph, stops) {
 // lineStart(), to the paragraph's last line for those runs. Any other line
 // starts a block, and link text or a code span opened on one that is not
 // paragraph text, such as a heading or a table row, is not carried. A line
-// inside a fence has no links, and a fence ends a paragraph. A line
+// whose text starts with | is a table row when the line above was one, or
+// when the line after it is a delimiter row as tableHeader() reads it;
+// otherwise it is text, which link text and code spans wrap past as past
+// any other line of their paragraph. A line inside a fence has no links,
+// and a fence ends a paragraph. A line
 // that lineStart() reads as indented code has no inline links or
 // definitions, as its text is shown as written. lineStart() does not track
 // HTML blocks, and such a line may be inside one instead: there it is raw
 // HTML, whose inline links and definitions are text as well, but whose
-// hrefs are links. So the hrefs on such a line are read. Nor does
-// lineStart() tell a table row from a paragraph whose text starts with |,
-// which the lines after it may go on with; so on the lines of indented code
-// that follow a table row with no other line between, the inline links and
+// hrefs are links. So the hrefs on such a line are read. Nor does the
+// reader check that a table row and the row above it or the delimiter row
+// after it are in the same block quotes and list items, so a line it reads
+// as a table row may be a paragraph whose text starts with |, which the
+// lines after it may go on with; so on the lines of indented code that
+// follow a table row with no other line between, the inline links and
 // definitions are read as well.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines) {
@@ -839,13 +875,22 @@ function linkReader(lines) {
   const containers = [];
   let stops = [];
   let paragraph = false;
+  let table = false; // whether the line read last was a table row
   let next = 0; // the index in lines of the line read next
-  // Whether a line is text that goes on with the paragraph that
-  // `containers` hold, as the reader reads it below.
-  const goesOn = ({ line, inFence, fenceOpen, fenceClose }) => {
+  // The rest of lines[k] as the reader reads it, lineStart() having read the
+  // line as `start`: a 'row' is a table row when the line above it was one
+  // (rowAbove), or when the line after it is a delimiter row for it, and is
+  // text otherwise.
+  const restOf = (k, start, rowAbove) =>
+    start.rest !== 'row' || rowAbove || tableHeader(start.row, lines[k + 1]?.line) ? start.rest : 'text';
+  // Whether lines[k] is text that goes on with the paragraph that
+  // `containers` hold, as the reader reads it below. The line above it is
+  // text of that paragraph, so it is not a table row.
+  const goesOn = (k) => {
+    const { line, inFence, fenceOpen, fenceClose } = lines[k];
     if (inFence || fenceOpen || fenceClose) return false;
     const start = lineStart(line, containers, true);
-    return start.rest === 'text' && start.opened.length === 0;
+    return restOf(k, start, false) === 'text' && start.opened.length === 0;
   };
   // Whether the line above is a table row, or indented code that follows one.
   let afterRow = false;
@@ -853,13 +898,15 @@ function linkReader(lines) {
     const j = next++;
     if (inFence) {
       paragraph = false;
+      table = false;
       afterRow = false;
       return [];
     }
     // A fence is a block, and the line that closes one goes on with the
     // containers that hold it.
     const start = fenceClose ? { matched: containers.length, opened: [] } : lineStart(line, containers, paragraph, stops);
-    const rest = fenceOpen || fenceClose ? 'block' : start.rest;
+    const rest = fenceOpen || fenceClose ? 'block' : restOf(j, start, table);
+    table = rest === 'row';
     if (!(paragraph && rest === 'text' && start.opened.length === 0)) {
       // The line starts a block, and the containers it does not go on with
       // end; those it goes on with hold that block, unless it is blank. The
@@ -881,7 +928,7 @@ function linkReader(lines) {
       // lines that go on with it, and those of any other block are read on
       // its line alone.
       let last = j;
-      if (paragraph) while (last + 1 < lines.length && goesOn(lines[last + 1])) last += 1;
+      if (paragraph) while (last + 1 < lines.length && goesOn(last + 1)) last += 1;
       open.code = paragraphCodeSpans(lines.slice(j, last + 1).map((l) => l.line));
     }
     const code = rest === 'code' && !afterRow;
