@@ -1284,11 +1284,19 @@ describe('refusals before scanning', () => {
       /uncommitted changes \(pins für run\.json\).*The pin file and the --hma directory belong outside the OASB checkout/,
     ],
     [
-      'a tracked file was renamed',
+      'tracked files were renamed and copied',
       () => {
         git(fx.oasb, 'mv', '--', 'benchmark-results-v6.json', 'renamed.json');
+        // With status.renames set to copies, git status reports a copy whose source also changed.
+        git(fx.oasb, 'config', 'status.renames', 'copies');
+        copyFileSync(join(fx.oasb, 'dvaa-benchmark-results.json'), join(fx.oasb, 'copied.json'));
+        appendFileSync(join(fx.oasb, 'dvaa-benchmark-results.json'), '\n');
+        git(fx.oasb, 'add', '--', 'dvaa-benchmark-results.json', 'copied.json');
       },
-      /uncommitted changes \(renamed\.json\); commit or remove them/,
+      new RegExp(
+        'uncommitted changes \\(dvaa-benchmark-results\\.json -> copied\\.json, dvaa-benchmark-results\\.json, ' +
+          'benchmark-results-v6\\.json -> renamed\\.json\\); commit or remove them',
+      ),
     ],
     [
       'the scanner did not load its classifier model and would score samples with its word list',
