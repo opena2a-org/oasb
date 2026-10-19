@@ -310,6 +310,26 @@ stay on record here with the reason they changed.
   backticks, ``` ``[README](../README.md)`` ```, no longer counts, while
   one between two backticks that a backslash escapes,
   `` \`[README](../README.md)\` ``, now counts.
+- `npm run check:readme` reads a line that starts with `|` as a table row
+  when the line after it is a delimiter row with as many cells, such as
+  `| - |`, or when the line above it is a table row, as GitHub-flavored
+  Markdown starts a table only at a header row and a delimiter row. It read
+  every such line as a table row; another such line is now paragraph text,
+  and link text and code spans wrap past it. With `docs/nowhere.md` absent,
+  `see [the` then `|guide| page](docs/nowhere.md)` exited 0 and now exits 1
+  with `link target "docs/nowhere.md" does not exist`, while `[a`, `| t |`,
+  `| - |`, `b](docs/nowhere.md)`, a table between the two parts, still
+  exits 0. After the line `` a `x ``, the line
+  `` | [y](docs/nowhere.md) z` `` exited 1 and now exits 0, as the code span
+  from the first line holds the link, while with `| - |` as a third line,
+  which makes the second a table's header row, it still exits 1. The links
+  on indented code right after a table row are still read, as is a line
+  indented 4 columns that goes on with such a paragraph line: `| a` then
+  `    [x](docs/nowhere.md)` still exits 1. A line that opens a block quote
+  or list item and then indented code does not go on with that paragraph,
+  and the inline links on it are no longer read: `| a` then
+  `>     [x](docs/nowhere.md)`, or `-     [x](docs/nowhere.md)`, exited 1
+  and now exits 0.
 
 ## 0.4.1 - 2026-10-17
 
