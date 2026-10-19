@@ -1093,6 +1093,24 @@ test('a code span ends at the next run of as many backticks, and an href inside 
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('a backslash-escaped backtick does not open a code span; a backslash inside a code span does not stop it closing', () => {
+  const read = [
+    '\\`[x](docs/nowhere.md)\\`',
+    '\\`<a href="docs/nowhere.md">x</a>\\`',
+    '\\``[x](docs/nowhere.md)``',
+    '`a\\` [x](docs/nowhere.md)',
+  ];
+  for (const line of read) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/, line);
+  }
+  for (const line of ['\\\\`[x](docs/nowhere.md)\\\\`', '\\```[x](docs/nowhere.md)``']) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
