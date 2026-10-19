@@ -330,6 +330,28 @@ stay on record here with the reason they changed.
   and the inline links on it are no longer read: `| a` then
   `>     [x](docs/nowhere.md)`, or `-     [x](docs/nowhere.md)`, exited 1
   and now exits 0.
+- `npm run check:readme` reads the lines of a table as table rows whether
+  or not they start with `|`: a header row such as `t | u`, a delimiter row
+  such as `--- | ---`, `-|-` or `:-: | --:`, and a body row such as `bar`.
+  The entry above holds only for rows that start with `|`: after a table
+  line that did not, the check read the `|` lines as paragraph text, so
+  link text and code spans ran on from one row to the next. A table now
+  goes on until a blank line, indented code, another block, or a line that
+  leaves the block quotes and list items that hold it or opens another. A
+  delimiter row is read in the block quotes and list items of its header
+  row, and a line that goes on with a paragraph lazily is not a header
+  row. With `docs/nowhere.md` absent, `| t | u |`, `--- | ---`,
+  `| [c | d |`, `e](docs/nowhere.md)` exited 1 with
+  `link target "docs/nowhere.md" does not exist` and now exits 0, as do
+  `t | u`, `|---|---|` and the same two rows, and `| bar | baz |`,
+  `| - | - |`, `bar` and the same two rows. `| a | b |`, `--- | ---`,
+  `` | `c | d | ``, `` | [e](docs/nowhere.md) | f` | `` exited 0 and now
+  exits 1, as do `| a |`, `| - |`, `> | [b |`, `> c](docs/nowhere.md)`,
+  where the block quote ends the table, and `| a | b |`, `- | -`,
+  `| [c |`, `d](docs/nowhere.md)`, where `- | -` opens a list item and is
+  not a delimiter row. markdown-it 14.1.1 and micromark 4.0.3 with
+  micromark-extension-gfm-table 2.1.2 render each of these as the check
+  now reads it.
 - `npm run check:readme` reads a fence inside a block quote as the start of
   a fenced code block, which ends the paragraph above it, and reads no link
   in that block. It read a line such as `` > ``` `` as paragraph text, so a
