@@ -396,6 +396,23 @@ stay on record here with the reason they changed.
   a block now fails the check that it links to the README; it passed. One
   whose link sits on the quoted line before such a block, after a backtick
   that only a backtick inside the block would close, now passes it.
+- `npm run check:readme` reads no "as of" note for a dated page inside a
+  fenced code block in a block quote, as it reads no link there. It left
+  out the lines of a fenced code block only where the fence starts a line,
+  so a note that sat only in such a block passed the check. With a README
+  that links `docs/AUDIT-2026-06-03.md`, and the lines `` > ``` ``,
+  `> As of 2026-06-03.`, `` > ``` `` and
+  `> See the [README](../README.md) for the current figures.` above that
+  page's first H2, the check exited 0, and now exits 1 with
+  `is a dated page, so above its first H2 it must say "as of 2026-06-03"`.
+  So do the same lines with `~~~text` and `~~~` for the fences; the note in
+  the info string of the opening fence, `` > ```As of 2026-06-03. ``; the
+  note with no fence to close the block and the link after a blank line,
+  which ends the block quote; the note after a shorter fence inside a
+  block that `` > ```` `` opens; the note in such a block in a nested block
+  quote or in a list item of a block quote; and the note in such a block
+  below the link to the README. A note after the block, on a quoted line or
+  after the end of the block quote, passes, as it did.
 
 ## 0.4.1 - 2026-10-17
 
