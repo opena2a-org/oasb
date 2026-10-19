@@ -35,7 +35,12 @@
 //      follows on its line or 3 or more tildes, at most 3 columns past where
 //      the text of the block quote or list item that holds it starts, to a
 //      fence of as many or more of the same with only spaces or tabs after
-//      it, or to the end of that block quote or list item. Links
+//      it, or to the end of that block quote or list item. Nor is a link
+//      read on the lines after such a fence where the text of a list item
+//      starts, on the line that opens the item outside a block quote
+//      (- ``` or 1. ~~~), up to a fence that closes it or to the end of the
+//      list items that hold it; parse() tags those lines as it tags those of
+//      a block whose fence starts its line. Links
 //      inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
@@ -194,26 +199,108 @@ const readmePath = resolve(readmeArg || join(root, 'README.md'));
 const failures = [];
 const fail = (msg) => failures.push(msg);
 
+// The patterns that lineStart(), further down, reads with. parse() reads each
+// line with lineStart() as the README is read, so they are set before it.
+// The blocks that lineStart() reads where a line's block quote markers, list
+// markers and indentation end, each matched at lastIndex: an ATX heading, a
+// setext heading underline (=== or ---), a thematic break (***, ___, - - -),
+// the first line of an HTML block of the kinds that may interrupt a
+// paragraph (CommonMark kinds 1 to 6: <script>, <pre>, <style>, <textarea>, a
+// comment, a processing instruction, a declaration, CDATA, whose name is
+// matched in capitals only, or a block tag such as <div> or </p>; a tag such
+// as <span> does not interrupt one), and a list marker. The spaces and tabs
+// after a thematic break's last mark are matched by that mark's [ \t]*
+// alone: with a second [ \t]* after the marks, the two could share them in
+// every way, which took seconds on a line of 100,000 of them.
+const ATX_HEADING = /#{1,6}(?:[ \t]|$)/y;
+const SETEXT_UNDERLINE = /(?:=+|-+)[ \t]*$/y;
+const THEMATIC_BREAK = /(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/y;
+const HTML_BLOCK_START = new RegExp(
+  '<(?:script|pre|style|textarea)(?:[\\s>]|$)|<!--|<\\?|<![a-z]|' +
+    '</?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|' +
+    'fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|' +
+    'menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|' +
+    'track|ul)(?:\\s|/?>|$)',
+  'iy',
+);
+const CDATA_START = /<!\[CDATA\[/y;
+const LIST_MARKER = /(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/y;
+// A code fence: 3 or more backticks that no backtick follows on the line, or
+// 3 or more tildes.
+const FENCE = /`{3,}(?=[^`]*$)|~{3,}/y;
+const matchAt = (re, text, i) => {
+  re.lastIndex = i;
+  return re.exec(text);
+};
+
+// A table's delimiter row, such as | - | :-: | or --- | ---, once the block
+// quote markers and indentation before it and the spaces and tabs after it
+// are removed.
+const DELIMITER_ROW = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?$/;
+// A line that holds only the characters of a delimiter row, block quote
+// markers and indentation, which tableHeader() reads further only then.
+const DELIMITER_CHARACTERS = /^[ \t>|:-]*\r?$/;
+
+// Columns as CommonMark counts them in the indentation of a line: a tab
+// moves on to the next multiple of 4.
+const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
+
 // Split a markdown file into lines, tagging each with whether it sits inside a
-// fenced code block, so headings and links are only read from prose.
+// fenced code block, so headings and links are only read from prose. A block
+// opens at a fence that starts a line, after its indentation, and runs to
+// the next line that starts so with 3 or more of the same character. A
+// block also opens at a fence where the text of a list item starts, on the
+// line that opens the item outside a block quote (- ``` or 1. ~~~), as
+// lineStart() reads that line with the block quotes and list items that
+// blockReader() keeps open after the line above. That block runs to the
+// fence that closes it, as closes() reads one, or to the first line that
+// does not go on with the list items that hold it, as a fenced code block
+// takes no line lazily. A fence inside a block quote is left to
+// blockReader(), as no line of that block starts with its fence.
 function parse(text) {
   const lines = text.split('\n');
   if (lines[lines.length - 1] === '') lines.pop();
-  let fence = null;
-  return lines.map((line, i) => {
-    const marker = line.match(/^\s*(```+|~~~+)/);
-    if (marker) {
-      if (fence === null) {
-        fence = marker[1][0];
-        return { n: i + 1, line, fenceOpen: true, inFence: false };
+  const parsed = lines.map((line, i) => ({ n: i + 1, line, inFence: false }));
+  const read = blockReader(parsed);
+  let fence = null; // the character of the fence that opened a block that starts its line
+  let listFence = null; // the opening fence of the block in a list item that the line above is in
+  for (const l of parsed) {
+    // How lineStart() reads the line, once it has been read so: the reader
+    // is given it, so that it reads the line once.
+    let start;
+    if (listFence) {
+      start = read.start(l.line);
+      if (start.matched === read.containers.length) {
+        if (closes(start, listFence)) {
+          listFence = null;
+          l.fenceClose = true;
+        } else {
+          l.inFence = true;
+        }
+        read(l, start);
+        continue;
       }
-      if (marker[1][0] === fence) {
-        fence = null;
-        return { n: i + 1, line, fenceClose: true, inFence: false };
+      listFence = null;
+    }
+    const marker = l.line.match(/^\s*(```+|~~~+)/);
+    if (marker && fence === null) {
+      fence = marker[1][0];
+      l.fenceOpen = true;
+    } else if (marker && marker[1][0] === fence) {
+      fence = null;
+      l.fenceClose = true;
+    } else if (fence !== null) {
+      l.inFence = true;
+    } else {
+      start ??= read.start(l.line);
+      if (start.rest === 'fence' && !start.quoted) {
+        listFence = start.fence;
+        l.fenceOpen = true;
       }
     }
-    return { n: i + 1, line, inFence: fence !== null };
-  });
+    read(l, start);
+  }
+  return parsed;
 }
 
 // GitHub heading anchor: lowercase, drop punctuation except - and _, spaces to -.
@@ -292,7 +379,9 @@ if (!firstH2) {
 let commandLine = null;
 for (let i = 0; i < readme.length && commandLine === null; i++) {
   if (!readme[i].fenceOpen || readme[i].n >= COMMAND_BY) continue;
-  const lang = readme[i].line.replace(/^\s*(```+|~~~+)/, '').trim().toLowerCase();
+  // The info string: what follows the fence's run, past the list markers
+  // before it on a line that opens a list item.
+  const lang = readme[i].line.replace(/^[^`~]*(?:`{3,}|~{3,})/, '').trim().toLowerCase();
   if (lang && !['bash', 'sh', 'shell', 'console', 'zsh'].includes(lang)) continue;
   for (let j = i + 1; j < readme.length && readme[j].inFence; j++) {
     const cmd = readme[j].line.trim().replace(/^\$\s*/, '');
@@ -644,38 +733,6 @@ function linkTargets(line, open) {
 const BLANK = /^[\s>]*$/;
 const OWN_BLOCK = /^[\s>]*(?:\||#{1,6}\s)/;
 
-// The blocks that lineStart() reads where a line's block quote markers, list
-// markers and indentation end, each matched at lastIndex: an ATX heading, a
-// setext heading underline (=== or ---), a thematic break (***, ___, - - -),
-// the first line of an HTML block of the kinds that may interrupt a
-// paragraph (CommonMark kinds 1 to 6: <script>, <pre>, <style>, <textarea>, a
-// comment, a processing instruction, a declaration, CDATA, whose name is
-// matched in capitals only, or a block tag such as <div> or </p>; a tag such
-// as <span> does not interrupt one), and a list marker. The spaces and tabs
-// after a thematic break's last mark are matched by that mark's [ \t]*
-// alone: with a second [ \t]* after the marks, the two could share them in
-// every way, which took seconds on a line of 100,000 of them.
-const ATX_HEADING = /#{1,6}(?:[ \t]|$)/y;
-const SETEXT_UNDERLINE = /(?:=+|-+)[ \t]*$/y;
-const THEMATIC_BREAK = /(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/y;
-const HTML_BLOCK_START = new RegExp(
-  '<(?:script|pre|style|textarea)(?:[\\s>]|$)|<!--|<\\?|<![a-z]|' +
-    '</?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|' +
-    'fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|' +
-    'menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|' +
-    'track|ul)(?:\\s|/?>|$)',
-  'iy',
-);
-const CDATA_START = /<!\[CDATA\[/y;
-const LIST_MARKER = /(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/y;
-// A code fence: 3 or more backticks that no backtick follows on the line, or
-// 3 or more tildes.
-const FENCE = /`{3,}(?=[^`]*$)|~{3,}/y;
-const matchAt = (re, text, i) => {
-  re.lastIndex = i;
-  return re.exec(text);
-};
-
 // Where a thematic break may start on a line: it runs to the end of the
 // line, so it starts in the run of one mark (*, - or _), spaces and tabs
 // that ends the line, and nowhere when the line ends in another character.
@@ -691,14 +748,6 @@ function breakStart(text) {
   while (start > 0 && (text[start - 1] === mark || text[start - 1] === ' ' || text[start - 1] === '\t')) start--;
   return start;
 }
-
-// A table's delimiter row, such as | - | :-: | or --- | ---, once the block
-// quote markers and indentation before it and the spaces and tabs after it
-// are removed.
-const DELIMITER_ROW = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?$/;
-// A line that holds only the characters of a delimiter row, block quote
-// markers and indentation, which tableHeader() reads further only then.
-const DELIMITER_CHARACTERS = /^[ \t>|:-]*\r?$/;
 
 // How many cells a table row holds: its text split at each | that no \ comes
 // right before, not counting the empty cell before a leading | or after a
@@ -738,10 +787,6 @@ function tableHeader(start, containers, next) {
   return DELIMITER_ROW.test(cells) && cellCount(cells) === cellCount(row);
 }
 
-// Columns as CommonMark counts them in the indentation of a line: a tab
-// moves on to the next multiple of 4.
-const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
-
 // The start of one line, read as CommonMark reads it. `containers` are the
 // block quotes ({ quote: true }) and list items ({ width, empty }) open after
 // the line above, outermost first, and `paragraph` says whether that line
@@ -763,10 +808,10 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // reading each of `containers`.
 // Returns how many of `containers` the line goes on with, the containers it
 // opens, and whether the rest of it is 'blank', 'code' (indented code), 'row'
-// (text that starts with |, as a table row does), 'fence' (a code fence
-// inside a block quote that the line goes on with or opens, which parse()
-// does not read; `fence` is then its run of backticks or tildes, and `bare`
-// says whether only spaces and tabs follow it), 'block' (one of the other
+// (text that starts with |, as a table row does), 'fence' (a code fence;
+// `fence` is then its run of backticks or tildes, `bare` says whether only
+// spaces and tabs follow it, and `quoted` whether the line goes on with or
+// opens a block quote), 'block' (one of the other
 // blocks) or 'text', which a paragraph holds. A 'row' comes with `row`, the
 // text from its |, and so does a 'text' that is not indented 4 or more
 // columns, the text from where it starts, as a table row need not start
@@ -852,10 +897,9 @@ function lineStart(line, containers, paragraph, stops) {
     // as the line goes on with every container that holds it.
     const interrupts = paragraph && matched === containers.length && opened.length === 0;
     if (text[j] === '|') return { matched, opened, rest: 'row', row: text.slice(j) };
-    // A fence interrupts a paragraph. One outside a block quote is left to
-    // parse(), which reads the fences that start a line.
-    const fence = quoted && matchAt(FENCE, text, j);
-    if (fence) return { matched, opened, rest: 'fence', fence: fence[0], bare: /^[ \t]*$/.test(text.slice(j + fence[0].length)) };
+    // A fence interrupts a paragraph.
+    const fence = matchAt(FENCE, text, j);
+    if (fence) return { matched, opened, rest: 'fence', fence: fence[0], bare: /^[ \t]*$/.test(text.slice(j + fence[0].length)), quoted };
     if (
       matchAt(ATX_HEADING, text, j) ||
       matchAt(HTML_BLOCK_START, text, j) ||
@@ -884,6 +928,127 @@ function lineStart(line, containers, paragraph, stops) {
       col = d;
     }
   }
+}
+
+// Whether a line that lineStart() reads as `start`, and that goes on with
+// the block quotes and list items that hold a fenced code block, closes the
+// block that the fence `open` opened: with a fence of the same character, at
+// least as long, with only spaces and tabs after it.
+function closes(start, open) {
+  return start.rest === 'fence' && start.opened.length === 0 && start.bare && start.fence[0] === open[0] && start.fence.length >= open.length;
+}
+
+// Reads where the blocks of one page start, as lineStart() reads each line
+// with the block quotes and list items that the lines above it leave open.
+// The reader is made with the page's lines and then called with each of
+// them in order, tagged as parse() tags them, and with how lineStart()
+// reads the line when the caller has read it so; `start(line)` reads the
+// next line so without reading it into the reader. restOf() below reads
+// whether a line is a table row, as linkReader() describes. A line inside a
+// fenced code block that parse() tags starts no block, and the line that
+// closes one goes on with the containers that hold it. A fence that parse()
+// does not tag, one inside a block quote, opens a block that the reader
+// follows to the fence that closes it, or to the first line that does not
+// go on with the block quotes and list items that hold it, as a fenced code
+// block takes no line lazily. The reader returns null for a line that
+// parse() tags as inside a fenced code block, and for each line after the
+// opening fence of a block that the reader follows, its closing fence
+// included. For any other line it returns `rest`, the rest of the line as
+// lineStart() reads it, with a 'row' or 'text' read as 'row' when it is a
+// table row and as 'text' otherwise, and a fence that parse() tags read as
+// 'block'; `starts`, whether the line starts a block rather than going on
+// with the paragraph above; and `j`, its index in the lines. Given a set as
+// `quotedFences`, the reader adds to it the index in `lines` of each line
+// of a block that it follows, its fences included. The reader's
+// `containers` and `restOf` are those it reads the next line with, for a
+// caller that reads the lines after it ahead.
+function blockReader(lines, quotedFences) {
+  // The containers open after the line above and their stops, as
+  // lineStart() takes them.
+  const containers = [];
+  let stops = [];
+  let paragraph = false;
+  let table = false; // whether the line read last was a table row
+  // The opening fence of the fenced code block inside a block quote that
+  // the line above is in, or null.
+  let fenced = null;
+  let next = 0; // the index in lines of the line read next
+  // The rest of lines[k] as the reader reads it, lineStart() having read the
+  // line as `start` after a line that `containers` hold, which is paragraph
+  // text when `paragraphAbove` is true and a table row when `rowAbove` is. A
+  // 'row' or 'text' is a table row when the line above is one and the line
+  // goes on with every container and opens none, or when it is a table's
+  // header row as tableHeader() reads it. A line that goes on with the
+  // paragraph above lazily, without the list item indentation of some of
+  // `containers`, is held by them all, as the paragraph is, so its
+  // delimiter row is read in all of them. One that leaves out a block quote
+  // marker is text, as markdown-it 14 reads it; after a line of paragraph
+  // text, `stops` holds the block quotes of `containers` and no list item,
+  // so the last of them says whether the line leaves one out, without a
+  // step for each container. A 'row' is text otherwise.
+  const restOf = (k, start, paragraphAbove, rowAbove) => {
+    if (start.rest !== 'row' && start.rest !== 'text') return start.rest;
+    const opensNone = start.opened.length === 0;
+    if (rowAbove && opensNone && start.matched === containers.length) return 'row';
+    const lazy = paragraphAbove && opensNone && start.matched < containers.length;
+    if (lazy && stops.length > 0 && stops.at(-1) >= start.matched) return 'text';
+    const as = lazy ? { ...start, matched: containers.length } : start;
+    return tableHeader(as, containers, lines[k + 1]) ? 'row' : 'text';
+  };
+  const read = ({ line, inFence, fenceOpen, fenceClose }, given) => {
+    const j = next++;
+    if (inFence) {
+      paragraph = false;
+      table = false;
+      return null;
+    }
+    // A fence is a block, and the line that closes one goes on with the
+    // containers that hold it.
+    const start = fenceClose ? { matched: containers.length, opened: [] } : given ?? lineStart(line, containers, paragraph, stops);
+    if (fenced) {
+      // A line that goes on with the containers that hold the block is in
+      // it, as is the fence that closes it: one of the same character, at
+      // least as long, with only spaces and tabs after it. A line that does
+      // not go on with them ends the block quote or list item that holds
+      // the block, and so the block, as a fenced code block takes no line
+      // lazily.
+      if (start.matched === containers.length) {
+        if (closes(start, fenced)) fenced = null;
+        quotedFences?.add(j);
+        return null;
+      }
+      fenced = null;
+    }
+    const rest = fenceOpen || fenceClose ? 'block' : restOf(j, start, paragraph, table);
+    table = rest === 'row';
+    const starts = !(paragraph && rest === 'text' && start.opened.length === 0);
+    if (starts) {
+      // The line starts a block, and the containers it does not go on with
+      // end; those it goes on with hold that block, unless it is blank. The
+      // list is cut and added to in place: copied for each line, it took a
+      // step for each container that a blank line goes on with.
+      containers.length = start.matched;
+      while (stops.length > 0 && stops.at(-1) >= start.matched) stops.pop();
+      if (rest !== 'blank' || start.opened.length > 0) {
+        for (const c of containers) c.empty = false;
+        stops = stops.filter((s) => containers[s].quote);
+      }
+      for (const c of start.opened) {
+        if (c.quote || c.empty) stops.push(containers.length);
+        containers.push(c);
+      }
+      paragraph = rest === 'text';
+    }
+    if (rest === 'fence') {
+      fenced = start.fence;
+      quotedFences?.add(j);
+    }
+    return { j, rest, starts };
+  };
+  read.start = (line) => lineStart(line, containers, paragraph, stops);
+  read.containers = containers;
+  read.restOf = restOf;
+  return read;
 }
 
 // Reads the link targets on the lines of one page, as linkTargets reads
@@ -915,14 +1080,15 @@ function lineStart(line, containers, paragraph, stops) {
 // line whose text starts with | is text, which link text and code spans
 // wrap past as past any other line of their paragraph. A line inside a
 // fence has no links,
-// and a fence ends a paragraph. parse() reads the fences that start a line;
-// a fence inside a block quote, which lineStart() reads, opens a block that
-// the reader follows to the fence that closes it or to the end of the block
-// quote or list item that holds it, and no line of that block, its opening
-// fence included, has links. Given a set as `quotedFences`, the reader adds
-// to it the index in `lines` of each line of such a block, its fences
-// included. A line that lineStart() reads as indented code
-// has no inline links or
+// and a fence ends a paragraph. parse() reads the fences that start a line
+// and those where the text of a list item that a line opens starts, outside
+// a block quote; a fence inside a block quote, which lineStart() reads,
+// opens a block that blockReader() follows to the fence that closes it or
+// to the end of the block quote or list item that holds it, and no line of
+// that block, its opening fence included, has links. Given a set as
+// `quotedFences`, the reader adds to it the index in `lines` of each line
+// of such a block, its fences included. A line that
+// lineStart() reads as indented code has no inline links or
 // definitions, as its text is shown as written. lineStart() does not track
 // HTML blocks, and such a line may be inside one instead: there it is raw
 // HTML, whose inline links and definitions are text as well, but whose
@@ -932,113 +1098,42 @@ function lineStart(line, containers, paragraph, stops) {
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines, quotedFences) {
   let open = noOpenLinkText();
-  // The containers open after the line above and their stops, as
-  // lineStart() takes them.
-  const containers = [];
-  let stops = [];
-  let paragraph = false;
-  let table = false; // whether the line read last was a table row
-  let next = 0; // the index in lines of the line read next
-  // The rest of lines[k] as the reader reads it, lineStart() having read the
-  // line as `start` after a line that `containers` hold, which is paragraph
-  // text when `paragraphAbove` is true and a table row when `rowAbove` is. A
-  // 'row' or 'text' is a table row when the line above is one and the line
-  // goes on with every container and opens none, or when it is a table's
-  // header row as tableHeader() reads it. A line that goes on with the
-  // paragraph above lazily, without the list item indentation of some of
-  // `containers`, is held by them all, as the paragraph is, so its
-  // delimiter row is read in all of them. One that leaves out a block quote
-  // marker is text, as markdown-it 14 reads it; after a line of paragraph
-  // text, `stops` holds the block quotes of `containers` and no list item,
-  // so the last of them says whether the line leaves one out, without a
-  // step for each container. A 'row' is text otherwise.
-  const restOf = (k, start, paragraphAbove, rowAbove) => {
-    if (start.rest !== 'row' && start.rest !== 'text') return start.rest;
-    const opensNone = start.opened.length === 0;
-    if (rowAbove && opensNone && start.matched === containers.length) return 'row';
-    const lazy = paragraphAbove && opensNone && start.matched < containers.length;
-    if (lazy && stops.length > 0 && stops.at(-1) >= start.matched) return 'text';
-    const as = lazy ? { ...start, matched: containers.length } : start;
-    return tableHeader(as, containers, lines[k + 1]) ? 'row' : 'text';
-  };
-  // Whether lines[k] is text that goes on with the paragraph that
-  // `containers` hold, as the reader reads it below. The line above it is
-  // text of that paragraph, so it is not a table row.
+  const read = blockReader(lines, quotedFences);
+  // Whether lines[k] is text that goes on with the paragraph that the
+  // reader's `containers` hold, as the reader reads it below. The line above
+  // it is text of that paragraph, so it is not a table row.
   const goesOn = (k) => {
     const { line, inFence, fenceOpen, fenceClose } = lines[k];
     if (inFence || fenceOpen || fenceClose) return false;
-    const start = lineStart(line, containers, true);
-    return restOf(k, start, true, false) === 'text' && start.opened.length === 0;
+    const start = lineStart(line, read.containers, true);
+    return read.restOf(k, start, true, false) === 'text' && start.opened.length === 0;
   };
   // Whether the line above is a table row, or indented code that follows one.
   let afterRow = false;
-  // The opening fence of the fenced code block inside a block quote that
-  // the line above is in, or null.
-  let fenced = null;
-  return ({ line, inFence, fenceOpen, fenceClose }) => {
-    const j = next++;
-    if (inFence) {
-      paragraph = false;
-      table = false;
+  return (l) => {
+    const block = read(l);
+    if (block === null) {
       afterRow = false;
       return [];
     }
-    // A fence is a block, and the line that closes one goes on with the
-    // containers that hold it.
-    const start = fenceClose ? { matched: containers.length, opened: [] } : lineStart(line, containers, paragraph, stops);
-    if (fenced) {
-      // A line that goes on with the containers that hold the block is in
-      // it, as is the fence that closes it: one of the same character, at
-      // least as long, with only spaces and tabs after it. A line that does
-      // not go on with them ends the block quote or list item that holds
-      // the block, and so the block, as a fenced code block takes no line
-      // lazily.
-      if (start.matched === containers.length) {
-        if (start.rest === 'fence' && start.opened.length === 0 && start.bare && start.fence[0] === fenced[0] && start.fence.length >= fenced.length) {
-          fenced = null;
-        }
-        quotedFences?.add(j);
-        return [];
-      }
-      fenced = null;
-    }
-    const rest = fenceOpen || fenceClose ? 'block' : restOf(j, start, paragraph, table);
-    table = rest === 'row';
-    if (!(paragraph && rest === 'text' && start.opened.length === 0)) {
-      // The line starts a block, and the containers it does not go on with
-      // end; those it goes on with hold that block, unless it is blank. The
-      // list is cut and added to in place: copied for each line, it took a
-      // step for each container that a blank line goes on with.
-      containers.length = start.matched;
-      while (stops.length > 0 && stops.at(-1) >= start.matched) stops.pop();
-      if (rest !== 'blank' || start.opened.length > 0) {
-        for (const c of containers) c.empty = false;
-        stops = stops.filter((s) => containers[s].quote);
-      }
-      for (const c of start.opened) {
-        if (c.quote || c.empty) stops.push(containers.length);
-        containers.push(c);
-      }
-      paragraph = rest === 'text';
+    const { j, rest, starts } = block;
+    const paragraph = rest === 'text';
+    if (starts) {
       open = noOpenLinkText();
       // The code spans of the block: those of a paragraph may run on to the
       // lines that go on with it, and those of any other block are read on
       // its line alone.
       let last = j;
       if (paragraph) while (last + 1 < lines.length && goesOn(last + 1)) last += 1;
-      open.code = paragraphCodeSpans(lines.slice(j, last + 1).map((l) => l.line));
+      open.code = paragraphCodeSpans(lines.slice(j, last + 1).map(({ line }) => line));
     }
     const code = rest === 'code' && !afterRow;
     afterRow = rest === 'row' || (rest === 'code' && afterRow);
-    // The opening fence of a block inside a block quote holds no link, as
-    // what follows its run is an info string, not text.
-    if (rest === 'fence') {
-      fenced = start.fence;
-      quotedFences?.add(j);
-      return [];
-    }
-    if (code) return hrefTargets(line);
-    const targets = linkTargets(line, open);
+    // The opening fence of a block that parse() does not tag holds no link,
+    // as what follows its run is an info string, not text.
+    if (rest === 'fence') return [];
+    if (code) return hrefTargets(l.line);
+    const targets = linkTargets(l.line, open);
     if (!paragraph) open = noOpenLinkText();
     return targets;
   };
@@ -1731,8 +1826,9 @@ for (const [file, { at, shown }] of datedPages) {
   if (!page) continue; // readPage has reported it
   const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
   // A line of a fenced code block is read as a blank line, which ends a
-  // paragraph. parse() reads the blocks whose fence starts a line; the link
-  // reader below reads those inside a block quote.
+  // paragraph. parse() reads the blocks whose fence starts a line or the
+  // text of a list item outside a block quote; the link reader below reads
+  // those inside a block quote.
   const written = (h2 === -1 ? page : page.slice(0, h2)).map((l) => (l.inFence || l.fenceOpen || l.fenceClose ? '' : l.line));
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
