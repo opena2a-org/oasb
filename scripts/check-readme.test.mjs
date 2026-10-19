@@ -1181,6 +1181,87 @@ test('link text that holds a link is not read as a link; an image\'s text may ho
   }
 });
 
+test('a [ or ] inside an autolink or raw HTML neither opens nor closes link text', () => {
+  for (const line of [
+    '[see <https://example.org/a]b> here](docs/nowhere.md)',
+    '[a <b title="]"> c](docs/nowhere.md)',
+    "[a <b title='\"]' data-x=a]b> c](docs/nowhere.md)",
+    '[a <!-- ] --> b](docs/nowhere.md)',
+    '[a <?x ] ?> b](docs/nowhere.md)',
+    '[a <!DOCTYPE ]> b](docs/nowhere.md)',
+    '[a <![CDATA[ ] ]]> b](docs/nowhere.md)',
+  ]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/, line);
+  }
+  for (const line of [
+    '<b title="[">x](docs/nowhere.md)',
+    '<https://example.org/[>x](docs/nowhere.md)',
+    '[a <b title="](docs/nowhere.md)">',
+    '[a <b c=](docs/nowhere.md)>',
+    // <!--> and <!---> are whole comments, so the ] after one closes the
+    // link text.
+    '[a <!-->] --> b](docs/nowhere.md)',
+    '[a <!--->] --> b](docs/nowhere.md)',
+  ]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+  const wrapped = check('[a <b title="]">\nc](docs/nowhere.md)\n');
+  assert.equal(wrapped.status, 1);
+  assert.match(wrapped.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
+});
+
+test('a < that opens no autolink or raw HTML on its line is text, so a ] after it closes link text', () => {
+  for (const line of [
+    '[a <b title="]" / > c](docs/nowhere.md)',
+    '[a <a:x]y> c](docs/nowhere.md)',
+    '[a \\<b title="]"> c](docs/nowhere.md)',
+    '[a <!-- ] c](docs/nowhere.md)',
+  ]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+});
+
+test('of a code span, an autolink and raw HTML, the one that starts first holds the others as text', () => {
+  for (const line of [
+    '[a <https://example.org/`]> c](docs/nowhere.md) `x`',
+    '[a <b title="`]"> c](docs/nowhere.md) `x`',
+    '<b `x` title="["> c](docs/nowhere.md)',
+    '`<b title="`[x](docs/nowhere.md)">',
+  ]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/, line);
+  }
+  const r = check('[a <b `x` title="]"> c](docs/nowhere.md)\n');
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("an inline link's target or title may hold a backtick", () => {
+  const target = check('[x](`docs/nowhere.md`)\n');
+  assert.equal(target.status, 1);
+  assert.ok(target.stderr.includes('line 11: link target "`docs/nowhere.md`" does not exist'), target.stderr);
+  const title = check('[x](docs/guide.md "`") and [y](docs/nowhere.md "`")\n');
+  assert.equal(title.status, 1);
+  assert.match(title.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/);
+});
+
+test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
+  // Searched for from each opening, as a regular expression per opening
+  // searches, the end of each one is read to the end of the line; on such a
+  // line that did not finish in 20 seconds.
+  const unit = '<!--<?<![CDATA[<!A';
+  const line = unit.repeat(Math.ceil((1 << 20) / unit.length));
+  const started = process.hrtime.bigint();
+  const r = check(`${line}\n`);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters`);
+});
+
 test('link text may wrap onto the next line of its paragraph, but not into another block', () => {
   for (const body of [
     'See the [release smoke\nguide](docs/nowhere.md).\n',

@@ -17,7 +17,12 @@
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
 //      `href='target'` attribute. Links inside code spans are not read, a
 //      code span ending at the next run of as many backticks; a backtick
-//      after a backslash (\`) is text and opens none. Other forms,
+//      after a backslash (\`) is text and opens none. A `[` or `]` inside a
+//      code span, an autolink (`<https://...>`) or raw HTML (a tag, comment,
+//      processing instruction, declaration or CDATA section) neither opens
+//      nor closes link text, and of these the one that starts first holds
+//      the others as text; each is read when it opens and closes on the
+//      same line. Other forms,
 //      such as an unquoted href or a definition on the same line as a list
 //      marker (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
@@ -336,17 +341,17 @@ function anchorsOf(file) {
   return anchorCache.get(file);
 }
 
-// A line with its code spans removed. As in CommonMark, a run of backticks
-// opens a code span that the next run of the same length closes, so
-// ``a ` b`` is one span; a run that no run of its length follows is text.
-// Outside a code span a backslash escapes the character after it, so \` is a
-// literal backtick and \`` opens a span with the one backtick left of its
-// run, while \\` is a literal backslash and then a run that may open one.
-// Inside a code span a backslash is text and does not stop a run closing it.
-// The runs are listed by length in one pass first, and the run that closes a
-// span is the next one of its length on that list, so the line is not read
-// again from each run that opens one.
-function withoutCodeSpans(line) {
+// The code spans of one line. As in CommonMark, a run of backticks opens a
+// code span that the next run of the same length closes, so ``a ` b`` is one
+// span; a run that no run of its length follows is text. Inside a code span
+// a backslash is text and does not stop a run closing it. For the run of
+// backticks that starts at line[i], codeSpanAt(i) says whether it opens a
+// span and gives the index after that span, or after the run when it opens
+// none. The runs are listed by length in one pass first, and the run that
+// closes a span is the next one of its length on that list, so the line is
+// not read again from each run that opens one; a reader asks about the runs
+// it meets from left to right.
+function codeSpans(line) {
   const runs = new Map(); // run length -> the start of each run of that length, in order
   for (let i = 0; i < line.length; ) {
     if (line[i] !== '`') {
@@ -359,6 +364,24 @@ function withoutCodeSpans(line) {
     runs.get(i - start).push(start);
   }
   const passed = new Map(); // run length -> how many runs of that length start before the text read
+  return (i) => {
+    let end = i;
+    while (line[end] === '`') end += 1;
+    const run = end - i;
+    const starts = runs.get(run) ?? [];
+    let next = passed.get(run) ?? 0;
+    while (next < starts.length && starts[next] < end) next += 1;
+    passed.set(run, next);
+    return next < starts.length ? { opens: true, end: starts[next] + run } : { opens: false, end };
+  };
+}
+
+// A line with its code spans removed. Outside a code span a backslash
+// escapes the character after it, so \` is a literal backtick and \`` opens
+// a span with the one backtick left of its run, while \\` is a literal
+// backslash and then a run that may open one.
+function withoutCodeSpans(line) {
+  const codeSpanAt = codeSpans(line);
   let out = '';
   let from = 0;
   let i = 0;
@@ -371,22 +394,54 @@ function withoutCodeSpans(line) {
       i += 1;
       continue;
     }
-    let end = i;
-    while (line[end] === '`') end += 1;
-    const run = end - i;
-    const starts = runs.get(run) ?? [];
-    let next = passed.get(run) ?? 0;
-    while (next < starts.length && starts[next] < end) next += 1;
-    passed.set(run, next);
-    if (next < starts.length) {
+    const span = codeSpanAt(i);
+    if (span.opens) {
       out += line.slice(from, i);
-      from = starts[next] + run;
-      i = from;
-    } else {
-      i = end;
+      from = span.end;
     }
+    i = span.end;
   }
   return out + line.slice(from);
+}
+
+// The autolinks and raw HTML of one line, as CommonMark reads them: an
+// autolink <scheme:target> or <name@host>, an open tag with its attributes,
+// a closing tag, a comment from <!-- to the first --> after its <!, so that
+// <!--> is one, a processing instruction from <? to the first ?> after it, a
+// CDATA section from <![CDATA[ to the first ]]> after it, and a declaration
+// from <! and a letter to the first > after it. A backslash inside one is
+// text. For the < at line[i], htmlAt(i) is the index after the autolink or
+// raw HTML that starts there, or i + 1 when none does. A reader asks about
+// each < it meets from left to right, and the line is searched for the end
+// of a comment, processing instruction, CDATA section or declaration on from
+// where that end was last found, so a line of many <!-- that no --> follows
+// is not read again from each one.
+const AUTOLINK = /<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^<>\x00-\x20]*>/;
+const EMAIL_AUTOLINK = /<[\w.!#$%&'*+\/=?^`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>/;
+const OPEN_TAG = /<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^"'=<>`\x00-\x20]+|'[^']*'|"[^"]*"))?)*\s*\/?>/;
+const CLOSING_TAG = /<\/[A-Za-z][A-Za-z0-9-]*\s*>/;
+const AUTOLINK_OR_TAG = new RegExp([AUTOLINK, EMAIL_AUTOLINK, OPEN_TAG, CLOSING_TAG].map((r) => r.source).join('|'), 'y');
+function inlineHtml(line) {
+  const found = new Map(); // end -> where it was last found, or -1 when nowhere after
+  const after = (end, from) => {
+    let at = found.get(end);
+    if (at === undefined || (at !== -1 && at < from)) {
+      at = line.indexOf(end, from);
+      found.set(end, at);
+    }
+    return at === -1 ? -1 : at + end.length;
+  };
+  return (i) => {
+    AUTOLINK_OR_TAG.lastIndex = i;
+    const tag = AUTOLINK_OR_TAG.exec(line);
+    if (tag) return i + tag[0].length;
+    let end = -1;
+    if (line.startsWith('<!--', i)) end = after('-->', i + 2);
+    else if (line.startsWith('<?', i)) end = after('?>', i + 2);
+    else if (line.startsWith('<![CDATA[', i)) end = after(']]>', i + 9);
+    else if (line[i + 1] === '!' && /[A-Za-z]/.test(line[i + 2] ?? '')) end = after('>', i + 3);
+    return end === -1 ? i + 1 : end;
+  };
 }
 
 // As in CommonMark, a backslash escapes the character after it when that is
@@ -442,20 +497,31 @@ function inlineLink(line, paren) {
 // or at the [ of ![ for an image, and ends at the first unescaped ] that no
 // [ inside it pairs with, so foo](target) and [x\](target) are text. Link
 // text that holds a link is not a link's text, as links do not nest, while
-// an image's text may hold one. The line is read on from the ) that closes a
-// link, so its destination and title are not read as text. open.brackets is
-// the stack of the [ that no ] has closed yet, true for one that opens an
-// image, and open.aroundLink how many of them, from the bottom, were open
-// when a link was read, so text that one of them opens holds that link.
-// `open` starts with what an earlier line of the paragraph left open and
-// keeps what this line leaves open.
+// an image's text may hold one. The line is read from left to right, and a
+// code span, an autolink or raw HTML is read whole where it starts, so a [
+// or ] inside one is text: [a <b title="]"> c](target) is a link, and
+// <b title="[">c](target) is text. Whichever of them starts first holds the
+// others, so a backtick inside an HTML tag opens no code span, and a < inside
+// a code span opens no tag. The line is read on from the ) that closes a
+// link, so its destination and title, which may hold a backtick, are not
+// read as text. open.brackets is the stack of the [ that no ] has closed
+// yet, true for one that opens an image, and open.aroundLink how many of
+// them, from the bottom, were open when a link was read, so text that one of
+// them opens holds that link. `open` starts with what an earlier line of the
+// paragraph left open and keeps what this line leaves open.
 function inlineDestinations(line, open) {
   const targets = [];
   const { brackets } = open;
+  const codeSpanAt = codeSpans(line);
+  const htmlAt = inlineHtml(line);
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
     if (escapes(line, i)) {
       i++;
+    } else if (c === '`') {
+      i = codeSpanAt(i).end - 1;
+    } else if (c === '<') {
+      i = htmlAt(i) - 1;
     } else if (c === '[' || (c === '!' && line[i + 1] === '[')) {
       brackets.push(c === '!');
       if (c === '!') i++;
@@ -479,17 +545,17 @@ function inlineDestinations(line, open) {
 // reference definition [label]: target (footnotes [^1]: are not links),
 // whose label may hold a code span or \], and HTML href="target" /
 // href='target', after attribute values that may hold >. Links inside code
-// spans are not read; a definition is matched before they are removed, as
-// a code span in its label does not make it text. `open` carries link text
-// that an earlier line of the paragraph left open, as inlineDestinations
-// reads it.
+// spans are not read: inlineDestinations reads past each code span, and an
+// href is read on the line with its code spans removed. A definition is
+// matched on the whole line, as a code span in its label does not make it
+// text. `open` carries link text that an earlier line of the paragraph left
+// open, as inlineDestinations reads it.
 function linkTargets(line, open) {
   const targets = [];
   const def = line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
-  const prose = withoutCodeSpans(line);
-  targets.push(...inlineDestinations(prose, open));
-  for (const m of prose.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+  targets.push(...inlineDestinations(line, open));
+  for (const m of withoutCodeSpans(line).matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     targets.push(m[1] ?? m[2]);
   }
   return targets;
