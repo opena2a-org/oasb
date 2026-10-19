@@ -226,8 +226,8 @@ const METHODOLOGY_NOTE =
   'Full-pipeline verdict is the artifact producing at least one high/critical ATTACK finding. The verdict ' +
   'excludes POSTURE / hardening findings, which fire on benign and malicious artifacts alike and so carry no ' +
   'malicious-intent signal: AST-PROMPT-001/003/004 (missing prompt defenses), AST-GOV-001..005 (missing ' +
-  'governance/oversight/override resistance), and AST-SCOPE-001 (wildcard tool access — a least-privilege ' +
-  'posture issue that >2,900 benign registry MCP servers also declare via allowedTools:["*"]). AST-SCOPE-003 ' +
+  'governance/oversight/override resistance), and AST-SCOPE-001 (wildcard tool access via allowedTools:["*"] — ' +
+  'a least-privilege posture issue, not an attack, however many configs declare it). AST-SCOPE-003 ' +
   '(scope-purpose mismatch) is kept as a verdict driver — it catches real privilege-escalation and supply-chain ' +
   'trojans, and excluding it would collapse those categories. The scanner emits all of these to users with ' +
   'severity and a fix; the exclusion governs the ' +

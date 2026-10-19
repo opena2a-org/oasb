@@ -190,11 +190,12 @@ function routeFilename(sampleId: string, artifactType?: string): string {
 // - AST-GOV-001..005: missing governance / oversight / scope / override
 //   resistance. Every governance-light system_prompt trips AST-GOV-004; it has
 //   no discriminative power for malice.
-// - AST-SCOPE-001 (wildcard tool access): a least-privilege posture issue. Over
-//   2,900 benign registry MCP servers declare allowedTools:["*"]; a signal that
-//   fires on thousands of benign configs cannot distinguish malicious intent.
-//   Malicious configs are caught by the adversarial directives they layer on top
+// - AST-SCOPE-001 (wildcard tool access): a least-privilege posture issue, not
+//   an attack, however many configs declare allowedTools:["*"]. Malicious
+//   configs are caught by the adversarial directives they layer on top
 //   (AST-SCOPE-004: escalation / control-bypass / harvest), not by the wildcard.
+//   BENCHMARK-RESULTS.md section 3 withdraws the count of benign registry MCP
+//   servers that was once given here as a reason.
 //
 // AST-SCOPE-003 (scope-purpose mismatch) is deliberately NOT excluded: it is a
 // genuine trojan-detection signal that catches real privilege-escalation and
