@@ -1352,6 +1352,42 @@ test('the lines of a table are table rows whether or not they start with |, up t
   }
 });
 
+test('a line that goes on with a paragraph lazily is a table header row when a delimiter row in the block quotes and list items that hold the paragraph follows it', () => {
+  // markdown-it 14.1.0 and micromark 4.0.2 with micromark-extension-gfm-table
+  // 2.1.1 render each of these with a link to docs/nowhere.md: the header
+  // row goes on with the list item's paragraph lazily, without the item's
+  // indentation, and the delimiter row is in the list item, indented by
+  // the item's width or by up to 2 columns more, so the code span opened
+  // in the paragraph does not run on into the row. The header row need not
+  // start with |.
+  for (const [body, n] of [
+    ['- see `x\n| [y](docs/nowhere.md) | z` |\n  |---|---|\n', 12],
+    ['1. see `x\n| [y](docs/nowhere.md) | z` |\n   |---|---|\n', 12],
+    ['- see `x\n| [y](docs/nowhere.md) | z` |\n   |---|---|\n', 12],
+    ['- see `x\n| [y](docs/nowhere.md) | z` |\n    |---|---|\n', 12],
+    ['> - see `x\n> | [y](docs/nowhere.md) | z` |\n>   |---|---|\n', 12],
+    ['- a\n  - see `x\n  | [y](docs/nowhere.md) | z` |\n    |---|---|\n', 13],
+    ['- see `x\n| [y](docs/nowhere.md) | z` |\n  | --- | --- |\n  | c | d |\n', 12],
+    ['- see `x\n[y](docs/nowhere.md) | z`\n  ---|---\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${n}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+  // Both render none of these with a link: link text opened in the
+  // paragraph does not run on into the header row; and a delimiter row
+  // that leaves the list item, or holds fewer cells than the header row,
+  // starts no table, so the code span runs on through the | line.
+  for (const body of [
+    '- see [the\n| docs](docs/nowhere.md) | z |\n  |---|---|\n',
+    '- see `x\n| [y](docs/nowhere.md) | z` |\n|---|---|\n',
+    '- see `x\n| [y](docs/nowhere.md) | z` |\n  |---|\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('link text does not wrap past a setext underline, a thematic break or an HTML block start', () => {
   for (const middle of ['---', '===', '***', '___', '- - -', '<div>', '</p>', '<!-- note -->', '<pre>', '> ---']) {
     const body = `[a\n${middle}\nb](docs/nowhere.md)\n`;
