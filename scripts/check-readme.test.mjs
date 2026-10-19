@@ -1030,6 +1030,39 @@ test('links inside inline code and fenced blocks are ignored', () => {
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('links CommonMark renders with spaces, escapes, code spans or > in an attribute are read', () => {
+  const lines = [
+    '[x]( docs/nowhere.md )',
+    '[x](docs/nowhere.md "T" )',
+    '[x](docs/nowhere.md "a \\" b")',
+    '[`x`]: docs/nowhere.md',
+    '[a\\]b]: docs/nowhere.md',
+    '<a title="a>b" href="docs/nowhere.md">x</a>',
+    'A ``code ` x`` then [x](docs/nowhere.md) and `y`.',
+    'A ``code ` x`` then <a href="docs/nowhere.md">x</a> and `y`.',
+  ];
+  for (const line of lines) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/, line);
+  }
+});
+
+test('a code span ends at the next run of as many backticks, and an href inside a quoted attribute is not read', () => {
+  const r = check(
+    'Write ``a ` [y](docs/nowhere.md) `` and ```b `` <a href="docs/nowhere.md">```.\n\n' +
+      '<a title="x href=\'docs/nowhere.md\'" href="docs/guide.md">Guide</a>\n',
+  );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
+  const r = check('- item\n\n  [x]: docs/nowhere.md\n');
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /line 13: link target "docs\/nowhere\.md" does not exist/);
+  assert.equal(check('- [x]: docs/nowhere.md\n').status, 0);
+});
+
 test('a link path or anchor with a malformed %-escape is named by its line, with no stack trace', () => {
   const r = check('See [the plan](100%.md) and [setup](docs/guide.md#100%).\n', {
     'docs/how-it-works.md': '# How it works\n\nSee [the plan](100%.md) and [here](#50%off).\n',

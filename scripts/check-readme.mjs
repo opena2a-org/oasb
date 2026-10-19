@@ -12,8 +12,10 @@
 //      one line: inline `[text](target)` with an optional double-quoted title,
 //      a reference definition `[label]: target` at the start of a line
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
-//      `href='target'` attribute. Other forms, such as an unquoted href or a
-//      definition inside a list item, are not read. A link whose path, or
+//      `href='target'` attribute. Links inside code spans are not read, a
+//      code span ending at the next run of as many backticks. Other forms,
+//      such as an unquoted href or a definition on the same line as a list
+//      marker (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
 //      (100%.md) fails with its line. For a path the message says to write
 //      a literal % as %25; a heading's anchor holds no %, so for an anchor it
@@ -329,14 +331,27 @@ function anchorsOf(file) {
   return anchorCache.get(file);
 }
 
-// Link targets on one prose line: inline [text](target), a reference
-// definition [label]: target (footnotes [^1]: are not links), and HTML
-// href="target" / href='target'.
-function linkTargets(prose) {
-  const targets = [...prose.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1]);
-  const def = prose.match(/^ {0,3}\[(?!\^)[^\]]+\]:\s*(?:<([^>\s]+)>|(\S+))/);
+// A line with its code spans removed. As in CommonMark, a run of backticks
+// opens a code span that the next run of the same length closes, so
+// ``a ` b`` is one span; a run that no run of its length follows is text.
+function withoutCodeSpans(line) {
+  return line.replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, '');
+}
+
+// Link targets on one prose line: inline [text](target), with spaces inside
+// the parentheses and an optional double-quoted title that may hold \", a
+// reference definition [label]: target (footnotes [^1]: are not links),
+// whose label may hold a code span or \], and HTML href="target" /
+// href='target', after attribute values that may hold >. Links inside code
+// spans are not read; a definition is matched before they are removed, as
+// a code span in its label does not make it text.
+function linkTargets(line) {
+  const targets = [];
+  const def = line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
-  for (const m of prose.matchAll(/<[a-z][^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+  const prose = withoutCodeSpans(line);
+  for (const m of prose.matchAll(/\]\(\s*([^)\s]+)(?:\s+"(?:[^"\\]|\\.)*")?\s*\)/g)) targets.push(m[1]);
+  for (const m of prose.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     targets.push(m[1] ?? m[2]);
   }
   return targets;
@@ -351,8 +366,7 @@ const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
 function checkLinks({ file: doc, prefix, lines }, linked) {
   for (const { n, line, inFence } of lines) {
     if (inFence) continue;
-    const prose = line.replace(/`[^`]*`/g, '');
-    for (const target of linkTargets(prose)) {
+    for (const target of linkTargets(line)) {
       if (!target) continue;
       if (ABSOLUTE.test(target)) continue;
       const [pathPart, anchor] = target.split('#');
@@ -661,7 +675,7 @@ function checkSkippedCoverage(tests) {
   const seen = new Set([readmePath]);
   for (const { line, inFence } of section) {
     if (inFence) continue;
-    for (const target of linkTargets(line.replace(/`[^`]*`/g, ''))) {
+    for (const target of linkTargets(line)) {
       if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
       const pathPart = target.split('#')[0];
       if (!pathPart || !/\.md$/i.test(pathPart)) continue;
