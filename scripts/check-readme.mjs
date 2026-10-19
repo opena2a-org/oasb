@@ -26,7 +26,13 @@
 //      many cells, and paragraph text otherwise. The links on indented code
 //      that follows a table row, with no other line between, are read too,
 //      as the row may be a paragraph that the lines after it go on with.
-//      Links inside code spans are not read, a
+//      No link is read in a fenced code block inside a block quote, which
+//      ends a paragraph: from a fence, 3 or more backticks that no backtick
+//      follows on its line or 3 or more tildes, at most 3 columns past where
+//      the text of the block quote or list item that holds it starts, to a
+//      fence of as many or more of the same with only spaces or tabs after
+//      it, or to the end of that block quote or list item. Links
+//      inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
 //      holds no definition; a backtick after a backslash (\`) is text and
@@ -658,6 +664,9 @@ const HTML_BLOCK_START = new RegExp(
 );
 const CDATA_START = /<!\[CDATA\[/y;
 const LIST_MARKER = /(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/y;
+// A code fence: 3 or more backticks that no backtick follows on the line, or
+// 3 or more tildes.
+const FENCE = /`{3,}(?=[^`]*$)|~{3,}/y;
 const matchAt = (re, text, i) => {
   re.lastIndex = i;
   return re.exec(text);
@@ -729,7 +738,10 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // reading each of `containers`.
 // Returns how many of `containers` the line goes on with, the containers it
 // opens, and whether the rest of it is 'blank', 'code' (indented code), 'row'
-// (text that starts with |, as a table row does), 'block' (one of the other
+// (text that starts with |, as a table row does), 'fence' (a code fence
+// inside a block quote that the line goes on with or opens, which parse()
+// does not read; `fence` is then its run of backticks or tildes, and `bare`
+// says whether only spaces and tabs follow it), 'block' (one of the other
 // blocks) or 'text', which a paragraph holds. A 'row' comes with `row`, the
 // text from its |. Whether it is a table row or paragraph text is the
 // caller's to read, as a table starts only at a header row that a delimiter
@@ -775,6 +787,7 @@ function lineStart(line, containers, paragraph, stops) {
   };
 
   let matched = 0;
+  let quoted = false; // whether the line goes on with or opens a block quote
   for (const container of containers) {
     const [j, c] = nonspace();
     // The rest of the line is blank, so it goes on with the containers
@@ -788,6 +801,7 @@ function lineStart(line, containers, paragraph, stops) {
     if (container.quote) {
       if (c - col > 3 || text[j] !== '>') break;
       quoteMarker(j, c);
+      quoted = true;
     } else {
       if (c - col < container.width) break;
       advance(container.width);
@@ -804,12 +818,17 @@ function lineStart(line, containers, paragraph, stops) {
     if (text[j] === '>') {
       opened.push({ quote: true });
       quoteMarker(j, c);
+      quoted = true;
       continue;
     }
     // Whether a block that starts here would interrupt the paragraph above,
     // as the line goes on with every container that holds it.
     const interrupts = paragraph && matched === containers.length && opened.length === 0;
     if (text[j] === '|') return { matched, opened, rest: 'row', row: text.slice(j) };
+    // A fence interrupts a paragraph. One outside a block quote is left to
+    // parse(), which reads the fences that start a line.
+    const fence = quoted && matchAt(FENCE, text, j);
+    if (fence) return { matched, opened, rest: 'fence', fence: fence[0], bare: /^[ \t]*$/.test(text.slice(j + fence[0].length)) };
     if (
       matchAt(ATX_HEADING, text, j) ||
       matchAt(HTML_BLOCK_START, text, j) ||
@@ -855,8 +874,12 @@ function lineStart(line, containers, paragraph, stops) {
 // when the line after it is a delimiter row as tableHeader() reads it;
 // otherwise it is text, which link text and code spans wrap past as past
 // any other line of their paragraph. A line inside a fence has no links,
-// and a fence ends a paragraph. A line
-// that lineStart() reads as indented code has no inline links or
+// and a fence ends a paragraph. parse() reads the fences that start a line;
+// a fence inside a block quote, which lineStart() reads, opens a block that
+// the reader follows to the fence that closes it or to the end of the block
+// quote or list item that holds it, and no line of that block, its opening
+// fence included, has links. A line that lineStart() reads as indented code
+// has no inline links or
 // definitions, as its text is shown as written. lineStart() does not track
 // HTML blocks, and such a line may be inside one instead: there it is raw
 // HTML, whose inline links and definitions are text as well, but whose
@@ -894,6 +917,9 @@ function linkReader(lines) {
   };
   // Whether the line above is a table row, or indented code that follows one.
   let afterRow = false;
+  // The opening fence of the fenced code block inside a block quote that
+  // the line above is in, or null.
+  let fenced = null;
   return ({ line, inFence, fenceOpen, fenceClose }) => {
     const j = next++;
     if (inFence) {
@@ -905,6 +931,21 @@ function linkReader(lines) {
     // A fence is a block, and the line that closes one goes on with the
     // containers that hold it.
     const start = fenceClose ? { matched: containers.length, opened: [] } : lineStart(line, containers, paragraph, stops);
+    if (fenced) {
+      // A line that goes on with the containers that hold the block is in
+      // it, as is the fence that closes it: one of the same character, at
+      // least as long, with only spaces and tabs after it. A line that does
+      // not go on with them ends the block quote or list item that holds
+      // the block, and so the block, as a fenced code block takes no line
+      // lazily.
+      if (start.matched === containers.length) {
+        if (start.rest === 'fence' && start.opened.length === 0 && start.bare && start.fence[0] === fenced[0] && start.fence.length >= fenced.length) {
+          fenced = null;
+        }
+        return [];
+      }
+      fenced = null;
+    }
     const rest = fenceOpen || fenceClose ? 'block' : restOf(j, start, table);
     table = rest === 'row';
     if (!(paragraph && rest === 'text' && start.opened.length === 0)) {
@@ -933,6 +974,12 @@ function linkReader(lines) {
     }
     const code = rest === 'code' && !afterRow;
     afterRow = rest === 'row' || (rest === 'code' && afterRow);
+    // The opening fence of a block inside a block quote holds no link, as
+    // what follows its run is an info string, not text.
+    if (rest === 'fence') {
+      fenced = start.fence;
+      return [];
+    }
     if (code) return hrefTargets(line);
     const targets = linkTargets(line, open);
     if (!paragraph) open = noOpenLinkText();

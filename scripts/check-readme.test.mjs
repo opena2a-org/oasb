@@ -1626,6 +1626,82 @@ test('a backtick inside an autolink, a tag or a link title opens no code span on
   }
 });
 
+test('a fence inside a block quote ends the paragraph above it, so a backtick there opens no code span past it', () => {
+  // A fence of backticks, or of tildes, which a backtick may follow, after
+  // the > of the quote that holds the paragraph, after the indentation of a
+  // list item in that quote, after a quote inside the quote or inside a list
+  // item, after a tab or after 3 more spaces, ends the paragraph, and the
+  // backtick before the link has no run to close it there, also when one
+  // follows the block.
+  for (const body of [
+    '> a `x [y](docs/nowhere.md)\n> ```\n> z`\n> ```\n',
+    '> a `x [y](docs/nowhere.md)\n> ~~~\n> z`\n> ~~~\n',
+    '> - a `x [y](docs/nowhere.md)\n>   ```\n>   z`\n>   ```\n',
+    '> a `x [y](docs/nowhere.md)\n> ```\n> z\n> ```\n> w`\n',
+    '> a `x [y](docs/nowhere.md)\n> ~~~ z`\n',
+    '> > a `x [y](docs/nowhere.md)\n> > ```\n> > z`\n',
+    '- > a `x [y](docs/nowhere.md)\n  > ```\n  > z`\n',
+    '> a `x [y](docs/nowhere.md)\n>\t```\n> z`\n',
+    '> a `x [y](docs/nowhere.md)\n>    ```\n> z`\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+  // None of these is a fence, and each goes on with the paragraph, so the
+  // backtick before the link opens a span that the one after it closes:
+  // backticks with a backtick after them, backticks 4 columns past the text
+  // of the quote, and an ordered list item that starts at 2.
+  for (const body of [
+    '> a `x [y](docs/nowhere.md)\n> ```z`\n',
+    '> a `x [y](docs/nowhere.md)\n>     ```\n> z`\n',
+    '> a `x [y](docs/nowhere.md)\n> 2. ```\n> z`\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('no line of a fenced code block inside a block quote has links, to its closing fence or the end of the quote or list item that holds it', () => {
+  // The block runs on past a fence of the other character, a shorter one,
+  // one with text after it or one 4 columns in, past a blank quoted line, a
+  // > and lines indented for a list item that holds the block or its quote,
+  // and to the end of the page when no fence closes it. Its opening fence
+  // holds no link.
+  for (const body of [
+    '> ```\n> [y](docs/nowhere.md)\n> ```\n',
+    '> ~~~\n> [y](docs/nowhere.md)\n> ~~~\n',
+    '> ~~~\n> <a href="docs/nowhere.md">y</a>\n> ~~~\n',
+    '> ```\n> [y](docs/nowhere.md)\n',
+    '> ```js [y](docs/nowhere.md)\n> a\n> ```\n',
+    '> ~~~\n> ```\n> [y](docs/nowhere.md)\n> ~~~\n',
+    '> ````\n> ```\n> [y](docs/nowhere.md)\n',
+    '> ```\n> ``` x\n> [y](docs/nowhere.md)\n> ```\n',
+    '> ```\n>     ```\n> [y](docs/nowhere.md)\n',
+    '> ```\n>\n> [y](docs/nowhere.md)\n> ```\n',
+    '> ```\n> > ```\n> [y](docs/nowhere.md)\n',
+    '> - ```\n>\n>   [y](docs/nowhere.md)\n',
+    '- > ```\n  > [y](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A fence of the same character at least as long, after at most 3 spaces,
+  // closes it; a line without > ends the quote and the block, as a blank
+  // line does, and a line not indented for the list item ends the item.
+  for (const [body, line] of [
+    ['> ```\n> a\n> ````\n> [y](docs/nowhere.md)\n> ```\n', 14],
+    ['> ```\n> a\n>    ```\n> [y](docs/nowhere.md)\n', 14],
+    ['> ```\n> a\n[y](docs/nowhere.md)\n', 13],
+    ['> ```\n> a\n\n[y](docs/nowhere.md)\n', 14],
+    ['> - ```\n> [y](docs/nowhere.md)\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
@@ -1814,6 +1890,27 @@ test('a link to the README inside a code span that runs on to the next line does
   assert.equal(r.status, 1);
   assert.match(r.stderr, DATED);
   assert.match(r.stderr, /it must link to the README for the current figures; /);
+});
+
+test("a dated page's link to the README before a fenced code block in a block quote, or after it, is read, and one inside it is not", () => {
+  // In the first, the fence ends the paragraph, so the backtick before the
+  // link is text; in the second, a fence closes the block before the link.
+  for (const intro of [
+    '> As of 2026-06-03, see `the [README](../README.md).\n> ```\n> z`\n> ```\n',
+    '> As of 2026-06-03.\n> ~~~\n> x\n> ~~~\n> See the [README](../README.md) for the current figures.\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    '> As of 2026-06-03.\n> ~~~\n> See the [README](../README.md) for the current figures.\n> ~~~\n',
+    '> As of 2026-06-03.\n> ```\n> See the [README](../README.md) for the current figures.\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must link to the README for the current figures; /, intro);
+  }
 });
 
 test("a dated page's link to the README is read from its lines as written, and not from a line of indented code", () => {
