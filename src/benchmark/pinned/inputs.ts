@@ -119,18 +119,22 @@ export function verifyCorpus(
   // -z prints each path as it is: without it, git C-quotes a path holding a
   // space or a non-ASCII character, and the quoted text is not the path.
   const status: string[] = [];
+  // How the refusal names each entry: a rename or copy as `<source> -> <path>`,
+  // as `git status --short` prints it, so the source file is named too.
+  const shown: string[] = [];
   const fields = git(oasbRoot, ['status', '--porcelain', '-z', '--untracked-files=all', '--', '.', ':(exclude)results'])
     .split('\0');
   for (let i = 0; i < fields.length; i++) {
     if (!fields[i]) continue;
-    status.push(fields[i].slice(3));
+    const path = fields[i].slice(3);
+    status.push(path);
     // A rename or copy entry is followed by a field holding its source path.
-    if (/[RC]/.test(fields[i].slice(0, 2))) i++;
+    shown.push(/[RC]/.test(fields[i].slice(0, 2)) ? `${fields[++i]} -> ${path}` : path);
   }
   if (status.length > 0) {
     const operatorFiles = status.some(rel => operatorPaths.some(p => isInside(resolve(oasbRoot, rel), p)));
     throw new PinError(
-      `dirty input tree: the OASB checkout has uncommitted changes (${shortList(status)}); ` +
+      `dirty input tree: the OASB checkout has uncommitted changes (${shortList(shown)}); ` +
         'commit or remove them so the scoring code and corpus are the committed ones' +
         (operatorFiles
           ? '. The pin file and the --hma directory belong outside the OASB checkout; move them there, ' +

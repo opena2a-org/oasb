@@ -130,6 +130,15 @@ stay on record here with the reason they changed.
   is not checked; one on its own line inside a list item is checked, and
   they now name the shape that is not: a definition on the same line as a
   list marker (`- [label]: path`).
+- `scripts/run-pinned-benchmark.ts` names a renamed file in the OASB
+  checkout by its old and new paths when it refuses the checkout for
+  uncommitted changes, as `git status --short` prints a rename: after
+  `git mv old.json renamed.json`, the refusal reads `the OASB checkout has
+  uncommitted changes (old.json -> renamed.json)`. It named only
+  `renamed.json`, which does not say which tracked file moved. A copy that
+  `git status` reports, when `status.renames` is set to `copies`, is named
+  the same way. A test in `src/benchmark/pinned/pinned.test.ts` renames one
+  file and copies another.
 
 ## 0.4.1 - 2026-10-17
 
