@@ -285,6 +285,31 @@ stay on record here with the reason they changed.
   the line `` [z](docs/nowhere.md) y` `` exits 1 as before, while after
   the line `` a `[x `` the line `` <b title="`"> ](docs/nowhere.md) ``,
   whose first backtick closes the span, exited 1 and now exits 0.
+- `npm run check:readme` does not read an inline link on a line of
+  indented code: a line that does not go on with a paragraph and starts 4
+  or more columns past where the text of the block quote or list item that
+  holds it starts, a tab moving on to the next multiple of 4. With
+  `docs/nowhere.md` absent, `Text.`, a blank line and
+  `    [x](docs/nowhere.md)`, which commonmark.js 0.31.2 and markdown-it
+  14.1.1 render without a link, exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exits 0, as do
+  the same lines with a tab before the link, and `- item`, a blank line
+  and 6 or 8 spaces before the link. `Text.` then
+  `    [x](docs/nowhere.md)`, a line that goes on with the paragraph, still
+  exits 1. An href on a line of indented code is still read, as the check
+  does not track HTML blocks, inside which such a line is raw HTML and an
+  href on it a link: `<table>`, `  <tr>`, then
+  `    <td><a href="docs/nowhere.md">x</a></td>` still exits 1. So are the
+  links on indented code right after a line whose text starts with `|`,
+  which may be a paragraph rather than a table row: `| a` then
+  `    [x](docs/nowhere.md)` still exits 1. On a page whose file name
+  carries a date, the link to the README above its first H2 is read from
+  the lines as written, as the other links are, not with their code spans
+  and `>` markers taken out as for the "as of" note. A link to the README
+  there on a line of indented code, or inside a code span of two
+  backticks, ``` ``[README](../README.md)`` ```, no longer counts, while
+  one between two backticks that a backslash escapes,
+  `` \`[README](../README.md)\` ``, now counts.
 
 ## 0.4.1 - 2026-10-17
 
