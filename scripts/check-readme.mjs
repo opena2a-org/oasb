@@ -10,6 +10,7 @@
 //      repository, and an #anchor in a link to a .md file resolves to a
 //      heading in that file. The check reads three forms, each written within
 //      one line: inline `[text](target)` with an optional double-quoted title,
+//      whose target may be written `<target>` or hold balanced parentheses,
 //      a reference definition `[label]: target` at the start of a line
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
 //      `href='target'` attribute. Links inside code spans are not read, a
@@ -338,8 +339,53 @@ function withoutCodeSpans(line) {
   return line.replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, '');
 }
 
-// Link targets on one prose line: inline [text](target), with spaces inside
-// the parentheses and an optional double-quoted title that may hold \", a
+// The destinations of the inline links [text](target) on one line, read as
+// CommonMark reads a link destination: <target> runs to the closing > and may
+// hold spaces but no unescaped < or >; a bare target ends at a space or at
+// the ) that closes the link, and may hold balanced parentheses, nested up to
+// 32 deep as markdown-it allows. A backslash escape of an ASCII punctuation
+// character stands for that character. The destination may be followed by a
+// double-quoted title that may hold \".
+const ESCAPE = /\\([!-/:-@[-`{-~])/g;
+const MAX_PAREN_DEPTH = 32;
+function inlineDestinations(line) {
+  const targets = [];
+  for (let start = line.indexOf(']('); start !== -1; start = line.indexOf('](', start + 1)) {
+    let i = start + 2;
+    while (line[i] === ' ' || line[i] === '\t') i++;
+    let raw = null;
+    if (line[i] === '<') {
+      let j = i + 1;
+      while (j < line.length && line[j] !== '>' && line[j] !== '<') j += line[j] === '\\' && j + 1 < line.length ? 2 : 1;
+      if (line[j] !== '>') continue;
+      raw = line.slice(i + 1, j);
+      i = j + 1;
+    } else {
+      let j = i;
+      let depth = 0;
+      for (; j < line.length; j++) {
+        const c = line[j];
+        if (c === '\\' && j + 1 < line.length) j++;
+        else if (c <= ' ' || c === '\x7f') break;
+        else if (c === '(') {
+          if (++depth > MAX_PAREN_DEPTH) break;
+        } else if (c === ')') {
+          if (depth === 0) break;
+          depth--;
+        }
+      }
+      if (depth !== 0) continue;
+      raw = line.slice(i, j);
+      i = j;
+    }
+    const rest = line.slice(i).match(/^(?:[ \t]+"(?:[^"\\]|\\.)*")?[ \t]*\)/);
+    if (rest) targets.push(raw.replace(ESCAPE, '$1'));
+  }
+  return targets;
+}
+
+// Link targets on one prose line: inline [text](target), whose destination
+// inlineDestinations reads, with spaces inside the parentheses, a
 // reference definition [label]: target (footnotes [^1]: are not links),
 // whose label may hold a code span or \], and HTML href="target" /
 // href='target', after attribute values that may hold >. Links inside code
@@ -350,7 +396,7 @@ function linkTargets(line) {
   const def = line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
   const prose = withoutCodeSpans(line);
-  for (const m of prose.matchAll(/\]\(\s*([^)\s]+)(?:\s+"(?:[^"\\]|\\.)*")?\s*\)/g)) targets.push(m[1]);
+  targets.push(...inlineDestinations(prose));
   for (const m of prose.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     targets.push(m[1] ?? m[2]);
   }

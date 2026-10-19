@@ -1048,6 +1048,43 @@ test('links CommonMark renders with spaces, escapes, code spans or > in an attri
   }
 });
 
+test('inline destinations in angle brackets, with balanced parentheses or with escapes resolve', () => {
+  const pages = { 'docs/a(b).md': '# A\n\n## Setup\n', 'docs/my guide.md': '# Mine\n', 'docs/a(b(c)).md': '# C\n' };
+  const lines = [
+    '[x](<docs/guide.md>)',
+    '[x]( <docs/guide.md#setup-steps> "Guide" )',
+    '[x](<docs/my guide.md>)',
+    '[x](docs/a(b).md)',
+    '[x](docs/a(b).md#setup "A")',
+    '[x](docs/a(b(c)).md)',
+    '[x](docs/a\\(b\\).md)',
+    'See ([x](docs/a(b).md)) and [y](<docs/guide.md>).',
+  ];
+  for (const line of lines) {
+    const r = check(`${line}\n`, pages);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+});
+
+test('inline destinations in angle brackets or with parentheses that name no file fail with the path', () => {
+  const cases = [
+    ['[x](<docs/nowhere.md>)', 'docs/nowhere.md'],
+    ['[x](<docs/no where.md> "T")', 'docs/no where.md'],
+    ['[x](docs/a(b).md)', 'docs/a(b).md'],
+    ['[x](docs/a\\)b.md)', 'docs/a)b.md'],
+  ];
+  for (const [line, target] of cases) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.ok(r.stderr.includes(`line 11: link target "${target}" does not exist`), `${line}\n${r.stderr}`);
+  }
+});
+
+test('a destination CommonMark does not read as a link is not checked', () => {
+  const r = check('[x](<docs/nowhere.md) and [y](docs/a(b.md) and [z](<docs/a<b.md>)\n');
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test('a code span ends at the next run of as many backticks, and an href inside a quoted attribute is not read', () => {
   const r = check(
     'Write ``a ` [y](docs/nowhere.md) `` and ```b `` <a href="docs/nowhere.md">```.\n\n' +
