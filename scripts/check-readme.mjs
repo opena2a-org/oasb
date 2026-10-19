@@ -502,16 +502,40 @@ const BLANK = /^[\s>]*$/;
 const OWN_BLOCK = /^[\s>]*(?:\||#{1,6}\s)/;
 const LIST_ITEM = /^[\s>]*(?:[-+*]|\d{1,9}[.)])\s/;
 
+// Lines that also end a paragraph, for the link check: a setext heading
+// underline (=== or ---), a thematic break (***, ___, - - -), and the first
+// line of an HTML block of the kinds that may interrupt a paragraph
+// (CommonMark kinds 1 to 6: <script>, <pre>, <style>, <textarea>, a comment,
+// a processing instruction, a declaration, CDATA, or a block tag such as
+// <div> or </p>; a tag such as <span> does not interrupt one).
+const BREAK = /^[\s>]*(?:=+|-+|(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})[ \t]*$/;
+const HTML_BLOCK_START = new RegExp(
+  '^[\\s>]*(?:<(?:script|pre|style|textarea)(?:[\\s>]|$)|<!--|<\\?|<![a-z]|<!\\[CDATA\\[|' +
+    '</?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|' +
+    'fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|' +
+    'menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|' +
+    'track|ul)(?:\\s|/?>|$))',
+  'i',
+);
+
 // Reads the link targets on the lines of one page, given in order, as
 // linkTargets reads them, with link text that wraps: the [ a line leaves open
 // is carried to the next line of its paragraph. Paragraphs end as blocks()
-// reads them, at a blank line, a fence, a table row or a heading, and a list
+// reads them, at a blank line, a fence, a table row or a heading, and also
+// at a setext underline, a thematic break or an HTML block start; a list
 // item starts a new one. A line inside a fence has no links.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader() {
   let open = noOpenLinkText();
   return ({ line, inFence, fenceOpen, fenceClose }) => {
-    const ends = inFence || fenceOpen || fenceClose || BLANK.test(line) || OWN_BLOCK.test(line);
+    const ends =
+      inFence ||
+      fenceOpen ||
+      fenceClose ||
+      BLANK.test(line) ||
+      OWN_BLOCK.test(line) ||
+      BREAK.test(line) ||
+      HTML_BLOCK_START.test(line);
     if (ends || LIST_ITEM.test(line)) open = noOpenLinkText();
     const targets = inFence ? [] : linkTargets(line, open);
     if (ends) open = noOpenLinkText();

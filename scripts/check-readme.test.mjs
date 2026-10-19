@@ -1203,6 +1203,21 @@ test('link text may wrap onto the next line of its paragraph, but not into anoth
   }
 });
 
+test('link text does not wrap past a setext underline, a thematic break or an HTML block start', () => {
+  for (const middle of ['---', '===', '***', '___', '- - -', '<div>', '</p>', '<!-- note -->', '<pre>', '> ---']) {
+    const body = `[a\n${middle}\nb](docs/nowhere.md)\n`;
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // Link text that closes before the underline is still read, and a tag
+  // that cannot interrupt a paragraph does not end it.
+  for (const body of ['[a\nb](docs/nowhere.md)\n---\n', '[a\n<span>\nb](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /link target "docs\/nowhere\.md" does not exist/, body);
+  }
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
