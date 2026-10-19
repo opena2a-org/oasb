@@ -196,6 +196,15 @@ stay on record here with the reason they changed.
   README line of backtick runs of lengths 1, 2, 3 and so on, each followed
   by `x` so that none closes, took 6.4 seconds to check and now takes 0.06
   to 0.07 seconds; a 4 MB line takes 0.10 to 0.11 seconds.
+- `npm run check:readme` ends wrapped link text at a setext heading
+  underline (`---`, `===`), a thematic break (`***`, `___`) and the first
+  line of an HTML block that may interrupt a paragraph (`<div>`, `</p>`,
+  `<pre>`, `<!-- note -->`), as it did at a heading. With
+  `docs/nowhere.md` absent, a `[a` line, then one of those lines, then
+  `b](docs/nowhere.md)` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exits 0. With
+  `<span>` as the middle line, which does not interrupt a paragraph, it
+  still exits 1.
 
 ## 0.4.1 - 2026-10-17
 
