@@ -263,6 +263,28 @@ stay on record here with the reason they changed.
   note of `benchmark-results-v6.json`, which § 7 names as the verdict
   methodology, says the count is withdrawn. Tests in
   `scripts/doc-facts.test.mjs` check each of the three for the count.
+- `npm run check:readme` finds a code span that opens on one line and
+  closes on a later line of its paragraph, as CommonMark does, and reads no
+  link inside it: a `[` in it opens no link text, and no inline link,
+  `href` or reference definition in it is read. It found the code spans of
+  each line on that line alone, so with `docs/nowhere.md` absent a README
+  paragraph of the two lines `` a `[x `` and `` y` ](docs/nowhere.md) ``
+  exited 1 with `link target "docs/nowhere.md" does not exist`, naming the
+  second line; it now exits 0. A dated page whose link to the README sits
+  inside such a span, as in the two lines `` see `[the `` and
+  `` README` ](../README.md) ``, now fails the check that it links to the
+  README; it passed. A run of backticks that no run of as many closes in
+  its paragraph is still text, and a code span runs on only over the lines
+  that go on with its paragraph, as link text that wraps does: after the
+  line `` a `x ``, the line `` 2. [y](docs/nowhere.md) z` `` goes on with
+  the paragraph, as an ordered list item that starts at 2 does not end
+  one, and exited 1 and now exits 0, while the line
+  `` > [z](docs/nowhere.md) y` `` starts a block quote, which ends it, and
+  still exits 1. A backtick inside an autolink, an HTML tag or a link
+  title still opens no code span, so after the line `` a <b title="`"> ``
+  the line `` [z](docs/nowhere.md) y` `` exits 1 as before, while after
+  the line `` a `[x `` the line `` <b title="`"> ](docs/nowhere.md) ``,
+  whose first backtick closes the span, exited 1 and now exits 0.
 
 ## 0.4.1 - 2026-10-17
 

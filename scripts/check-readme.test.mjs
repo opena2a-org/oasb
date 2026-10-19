@@ -1414,6 +1414,97 @@ test('a line that goes on with 50,000 list items through 100,000 spaces or 50,00
   assert.ok(ms < 2000, `${ms.toFixed(0)} ms for two pairs of lines`);
 });
 
+test('a code span may run on to a later line of its paragraph, and a [ or a link inside it is not read', () => {
+  // markdown-it 14.1.0 renders none of these with a link or a definition.
+  for (const body of [
+    'a `[x\ny` ](docs/nowhere.md)\n',
+    'a `[x\nb](docs/nowhere.md)\nc` d\n',
+    // `` has no closing run of two backticks, so it is text, and the ` after
+    // it opens a span that the ` on the next line closes.
+    'a `` b `[x\ny` ](docs/nowhere.md)\n',
+    '> a `[x\n> y` ](docs/nowhere.md)\n',
+    '- a `[x\n  y` ](docs/nowhere.md)\n',
+    'a `x\n[y](docs/nowhere.md)\nz`\n',
+    'a `x\n<a href="docs/nowhere.md">y</a>\nz`\n',
+    'a `x\n[y]: docs/nowhere.md\nz`\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // markdown-it 14.1.0 renders each of these with the link or definition:
+  // after a span that closes on the next line; after a run that no run of as
+  // many backticks closes; after a blank line, a list item, a heading, a
+  // table row, a fence, a thematic break, a setext underline or an HTML block
+  // start, which a span does not run past; and after an escaped backtick,
+  // which opens none.
+  for (const [body, line] of [
+    ['a `x\ny` [z](docs/nowhere.md)\n', 12],
+    ['a ``[x\ny` ](docs/nowhere.md)\n', 12],
+    ['a `x\n\n[z](docs/nowhere.md) y`\n', 13],
+    ['- a `x\n- [z](docs/nowhere.md) y`\n', 12],
+    ['a `x\n## [z](docs/nowhere.md) y`\n', 12],
+    ['a `x\n| a | b |\n| - | - |\n| [z](docs/nowhere.md) | y` |\n', 14],
+    ['a `x\n```\nb\n```\n[z](docs/nowhere.md) y`\n', 15],
+    ['a `x\n***\n[z](docs/nowhere.md) y`\n', 13],
+    ['a `x\n---\n[z](docs/nowhere.md) y`\n', 13],
+    ['a `x\n<!-- c -->\n[z](docs/nowhere.md) y`\n', 13],
+    ['a \\`x\n[z](docs/nowhere.md) y`\n', 12],
+    ['a `x\n\n[y]: docs/nowhere.md\nz`\n', 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
+test('a code span runs on to the lines that go on with its paragraph as link text does, and no further', () => {
+  // An ordered list item that starts at 2 and a --- after 4 spaces do not
+  // end a paragraph, and a line without > goes on with a quoted paragraph,
+  // so the span from the first line holds the [ or the link.
+  for (const body of [
+    'a `x\n2. [y](docs/nowhere.md) z`\n',
+    'a `x\n    ---\n[y](docs/nowhere.md) z`\n',
+    '> a `[x\ny` ](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A block quote ends the paragraph above it, and a quote inside a quote
+  // ends a quoted one, so the span does not run on to the link.
+  for (const body of ['a `x\n> [z](docs/nowhere.md) y`\n', '> a `x\n> > [z](docs/nowhere.md) y`\n']) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+});
+
+test('a backtick inside an autolink, a tag or a link title opens no code span on to a later line, and a span that opens holds the tags after it', () => {
+  // markdown-it 14.1.0 and commonmark.js 0.31.2 render each of these with the
+  // link or the href of the second line, as the backtick on the first line
+  // is part of a tag, an autolink or a link title.
+  for (const body of [
+    'a <b title="`">\n[z](docs/nowhere.md) y`\n',
+    'a <https://example.org/`>\n[z](docs/nowhere.md) y`\n',
+    '[x](docs/guide.md "`")\n[z](docs/nowhere.md) y`\n',
+    'a <b title="`">\n<a href="docs/nowhere.md">y</a> z`\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+  // They render none of these with a link or an href: a code span holds the
+  // [ or the tag, from the first line to a backtick on the second, which may
+  // sit in a tag's attribute, as it does in the first.
+  for (const body of [
+    'a `[x\n<b title="`"> ](docs/nowhere.md)\n',
+    'a `x <a href="docs/nowhere.md">\ny`\n',
+    'a `x\ny` `<a href="docs/nowhere.md">`\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
@@ -1594,6 +1685,14 @@ test('a note inside a code block or inline code does not mark a dated page', () 
   );
   assert.equal(r.status, 1);
   assert.match(r.stderr, /it must say "as of 2026-06-03" and link to the README for the current figures; /);
+});
+
+test('a link to the README inside a code span that runs on to the next line does not mark a dated page', () => {
+  // markdown-it 14.1.0 renders the span from `[the to README` and no link.
+  const r = check(DATED_LINK, datedPage('As of 2026-06-03; see `[the\nREADME` ](../README.md) for the current figures.\n'));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, DATED);
+  assert.match(r.stderr, /it must link to the README for the current figures; /);
 });
 
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {

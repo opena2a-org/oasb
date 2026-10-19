@@ -16,13 +16,15 @@
 //      a reference definition `[label]: target` at the start of a line
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
 //      `href='target'` attribute. Links inside code spans are not read, a
-//      code span ending at the next run of as many backticks; a backtick
-//      after a backslash (\`) is text and opens none. A `[` or `]` inside a
-//      code span, an autolink (`<https://...>`) or raw HTML (a tag, comment,
-//      processing instruction, declaration or CDATA section) neither opens
-//      nor closes link text, and of these the one that starts first holds
-//      the others as text; each is read when it opens and closes on the
-//      same line. Other forms,
+//      code span ending at the next run of as many backticks, on its line or
+//      on a later line of its paragraph, and a line that starts inside one
+//      holds no definition; a backtick after a backslash (\`) is text and
+//      opens none. A `[` or `]` inside a code span, an autolink
+//      (`<https://...>`) or raw HTML (a tag, comment, processing
+//      instruction, declaration or CDATA section) neither opens nor closes
+//      link text, and of these the one that starts first holds the others
+//      as text; an autolink or raw HTML is read when it opens and closes on
+//      the same line. Other forms,
 //      such as an unquoted href or a definition on the same line as a list
 //      marker (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
@@ -341,38 +343,74 @@ function anchorsOf(file) {
   return anchorCache.get(file);
 }
 
-// The code spans of one line. As in CommonMark, a run of backticks opens a
-// code span that the next run of the same length closes, so ``a ` b`` is one
-// span; a run that no run of its length follows is text. Inside a code span
-// a backslash is text and does not stop a run closing it. For the run of
-// backticks that starts at line[i], codeSpanAt(i) says whether it opens a
-// span and gives the index after that span, or after the run when it opens
-// none. The runs are listed by length in one pass first, and the run that
-// closes a span is the next one of its length on that list, so the line is
-// not read again from each run that opens one; a reader asks about the runs
-// it meets from left to right.
-function codeSpans(line) {
+// The code spans of a text: one line, or the lines of a paragraph joined by
+// line breaks, where a code span may run from one line on to a later one. As
+// in CommonMark, a run of backticks opens a code span that the next run of
+// the same length closes, so ``a ` b`` is one span; a run that no run of its
+// length follows is text. Inside a code span a backslash is text and does
+// not stop a run closing it. For the run of backticks that starts at
+// text[i], codeSpanAt(i) says whether it opens a span and gives the index
+// after that span, or after the run when it opens none. The runs are listed
+// by length in one pass first, and the run that closes a span is the next
+// one of its length on that list, so the text is not read again from each
+// run that opens one; a reader asks about the runs it meets from left to
+// right.
+function codeSpans(text) {
   const runs = new Map(); // run length -> the start of each run of that length, in order
-  for (let i = 0; i < line.length; ) {
-    if (line[i] !== '`') {
+  for (let i = 0; i < text.length; ) {
+    if (text[i] !== '`') {
       i += 1;
       continue;
     }
     const start = i;
-    while (line[i] === '`') i += 1;
+    while (text[i] === '`') i += 1;
     if (!runs.has(i - start)) runs.set(i - start, []);
     runs.get(i - start).push(start);
   }
   const passed = new Map(); // run length -> how many runs of that length start before the text read
   return (i) => {
     let end = i;
-    while (line[end] === '`') end += 1;
+    while (text[end] === '`') end += 1;
     const run = end - i;
     const starts = runs.get(run) ?? [];
     let next = passed.get(run) ?? 0;
     while (next < starts.length && starts[next] < end) next += 1;
     passed.set(run, next);
     return next < starts.length ? { opens: true, end: starts[next] + run } : { opens: false, end };
+  };
+}
+
+// Reads the code spans in the lines of one paragraph, given in order, as
+// codeSpans finds them in the lines joined by line breaks: a run of
+// backticks that no run on its line closes opens a span when a run of as
+// many on a later line of the paragraph closes it, and the lines between
+// are inside that span. Each call reads the next line and returns `from`,
+// the index on it after a code span that an earlier line opened (0 when
+// none holds the start of the line, and its length or more when one holds
+// all of it), and codeSpanAt(i), which answers as codeSpans does for the
+// run of backticks at line[i], with an index on the line, past its end when
+// the span closes on a later line; `to` is then the index of that run, and
+// otherwise the length of the line.
+function paragraphCodeSpans(lines) {
+  const codeSpanAt = codeSpans(lines.join('\n'));
+  let k = 0; // the line read next
+  let start = 0; // the index in the joined lines where that line starts
+  let after = 0; // the index in the joined lines after the code span read last
+  return () => {
+    const at = start;
+    const { length } = lines[k++];
+    start += length + 1;
+    const spans = {
+      from: Math.max(0, after - at),
+      to: length,
+      codeSpanAt: (i) => {
+        const span = codeSpanAt(at + i);
+        if (span.opens) after = span.end;
+        if (span.opens && span.end - at > length) spans.to = i;
+        return { opens: span.opens, end: span.end - at };
+      },
+    };
+    return spans;
   };
 }
 
@@ -502,19 +540,22 @@ function inlineLink(line, paren) {
 // or ] inside one is text: [a <b title="]"> c](target) is a link, and
 // <b title="[">c](target) is text. Whichever of them starts first holds the
 // others, so a backtick inside an HTML tag opens no code span, and a < inside
-// a code span opens no tag. The line is read on from the ) that closes a
-// link, so its destination and title, which may hold a backtick, are not
-// read as text. open.brackets is the stack of the [ that no ] has closed
-// yet, true for one that opens an image, and open.aroundLink how many of
-// them, from the bottom, were open when a link was read, so text that one of
-// them opens holds that link. `open` starts with what an earlier line of the
-// paragraph left open and keeps what this line leaves open.
-function inlineDestinations(line, open) {
+// a code span opens no tag. `spans` reads the line's code spans as
+// paragraphCodeSpans reads those of a line of a paragraph, so a code span
+// may run on to a later line, and the line is read from spans.from, after a
+// code span that an earlier line opened. The line is read on from the )
+// that closes a link, so its destination and title, which may hold a
+// backtick, are not read as text. open.brackets is the stack of the [ that
+// no ] has closed yet, true for one that opens an image, and open.aroundLink
+// how many of them, from the bottom, were open when a link was read, so text
+// that one of them opens holds that link. `open` starts with what an earlier
+// line of the paragraph left open and keeps what this line leaves open.
+function inlineDestinations(line, open, spans) {
   const targets = [];
   const { brackets } = open;
-  const codeSpanAt = codeSpans(line);
+  const { codeSpanAt } = spans;
   const htmlAt = inlineHtml(line);
-  for (let i = 0; i < line.length; i++) {
+  for (let i = spans.from; i < line.length; i++) {
     const c = line[i];
     if (escapes(line, i)) {
       i++;
@@ -548,14 +589,22 @@ function inlineDestinations(line, open) {
 // spans are not read: inlineDestinations reads past each code span, and an
 // href is read on the line with its code spans removed. A definition is
 // matched on the whole line, as a code span in its label does not make it
-// text. `open` carries link text that an earlier line of the paragraph left
-// open, as inlineDestinations reads it.
+// text, but not on a line that starts inside a code span an earlier line of
+// the paragraph opened. `open` carries what an earlier line of the
+// paragraph left open: link text, as inlineDestinations reads it, and a
+// code span. open.code reads the code spans of the paragraph's lines, as
+// paragraphCodeSpans does, for inlineDestinations, which meets each run of
+// backticks after the autolinks, raw HTML and link destinations that start
+// before it. An href is read on the part of the line outside the code spans
+// that run on to it from an earlier line or from it on to a later one.
 function linkTargets(line, open) {
   const targets = [];
-  const def = line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
+  const spans = open.code();
+  const def = spans.from === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
-  targets.push(...inlineDestinations(line, open));
-  for (const m of withoutCodeSpans(line).matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+  targets.push(...inlineDestinations(line, open, spans));
+  const prose = withoutCodeSpans(line.slice(spans.from, spans.to));
+  for (const m of prose.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     targets.push(m[1] ?? m[2]);
   }
   return targets;
@@ -734,20 +783,34 @@ function lineStart(line, containers, paragraph) {
   return { matched, opened, rest: 'text' };
 }
 
-// Reads the link targets on the lines of one page, given in order, as
-// linkTargets reads them, with link text that wraps: the [ a paragraph's
-// line leaves open is carried to the next line when lineStart() reads that
-// line as text that goes on with the paragraph, which a line may do lazily,
-// without the block quote markers or list item indentation of the line
-// above. Any other line starts a block, and link text opened on one that is
-// not paragraph text, such as a heading or a table row, is not carried. A
-// line inside a fence has no links, and a fence ends a paragraph.
+// Reads the link targets on the lines of one page, as linkTargets reads
+// them, with link text and code spans that wrap. The reader is made with the
+// page's lines and then called with each of them in order. The [ a
+// paragraph's line leaves open is carried to the next line when lineStart()
+// reads that line as text that goes on with the paragraph, which a line may
+// do lazily, without the block quote markers or list item indentation of
+// the line above. So is a code span that a run of backticks opens and a run
+// of as many on a later line of the paragraph closes, as CommonMark reads
+// it: on the first line of a paragraph the reader reads on, with
+// lineStart(), to the paragraph's last line for those runs. Any other line
+// starts a block, and link text or a code span opened on one that is not
+// paragraph text, such as a heading or a table row, is not carried. A line
+// inside a fence has no links, and a fence ends a paragraph.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
-function linkReader() {
+function linkReader(lines) {
   let open = noOpenLinkText();
   let containers = [];
   let paragraph = false;
+  let next = 0; // the index in lines of the line read next
+  // Whether a line is text that goes on with the paragraph that
+  // `containers` hold, as the reader reads it below.
+  const goesOn = ({ line, inFence, fenceOpen, fenceClose }) => {
+    if (inFence || fenceOpen || fenceClose) return false;
+    const start = lineStart(line, containers, true);
+    return start.rest === 'text' && start.opened.length === 0;
+  };
   return ({ line, inFence, fenceOpen, fenceClose }) => {
+    const j = next++;
     if (inFence) {
       paragraph = false;
       return [];
@@ -764,6 +827,12 @@ function linkReader() {
       containers = kept.concat(start.opened);
       paragraph = rest === 'text';
       open = noOpenLinkText();
+      // The code spans of the block: those of a paragraph may run on to the
+      // lines that go on with it, and those of any other block are read on
+      // its line alone.
+      let last = j;
+      if (paragraph) while (last + 1 < lines.length && goesOn(lines[last + 1])) last += 1;
+      open.code = paragraphCodeSpans(lines.slice(j, last + 1).map((l) => l.line));
     }
     const targets = linkTargets(line, open);
     if (!paragraph) open = noOpenLinkText();
@@ -778,7 +847,7 @@ const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
 // line that hold the link as a message names them, and the link's path as
 // written.
 function checkLinks({ file: doc, prefix, lines }, linked) {
-  const read = linkReader();
+  const read = linkReader(lines);
   for (const l of lines) {
     const { n } = l;
     for (const target of read(l)) {
@@ -1088,7 +1157,7 @@ function checkSkippedCoverage(tests) {
   const section = readme.slice(start + 1, end);
   const pages = [{ lines: section, prefix: '' }];
   const seen = new Set([readmePath]);
-  const read = linkReader();
+  const read = linkReader(section);
   for (const l of section) {
     for (const target of read(l)) {
       if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
@@ -1471,8 +1540,9 @@ for (const [file, { at, shown }] of datedPages) {
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {
     missing.push(`say "as of ${date}"`);
   }
-  const read = linkReader();
-  if (!intro.some((line) => read({ line }).some(toReadme))) {
+  const introLines = intro.map((line) => ({ line }));
+  const read = linkReader(introLines);
+  if (!introLines.some((l) => read(l).some(toReadme))) {
     missing.push('link to the README for the current figures');
   }
   if (missing.length) {
