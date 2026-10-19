@@ -679,10 +679,15 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // most 3 columns of indentation. On a line that goes on with every
 // container below a paragraph, a setext underline ends that paragraph, and
 // a list item ends it only when it holds text and, if ordered, starts at 1.
+// `stops` are the indices in `containers` of the block quotes and of the
+// list items that hold nothing yet, in order: once the rest of a line is
+// blank, it goes on with the containers before the next of them. A caller
+// that does not keep them leaves them out, and they are then found by
+// reading each of `containers`.
 // Returns how many of `containers` the line goes on with, the containers it
 // opens, and whether the rest of it is 'blank', 'block' (one of those
 // blocks, or indented code) or 'text', which a paragraph holds.
-function lineStart(line, containers, paragraph) {
+function lineStart(line, containers, paragraph, stops) {
   const text = line.endsWith('\r') ? line.slice(0, -1) : line; // \r\n ends a line too
   const breakFrom = breakStart(text);
   let i = 0;
@@ -725,13 +730,17 @@ function lineStart(line, containers, paragraph) {
   let matched = 0;
   for (const container of containers) {
     const [j, c] = nonspace();
+    // The rest of the line is blank, so it goes on with the containers
+    // before the next of `stops`, opens none, and its rest is blank. find()
+    // passes only stops that the line has read a > or indentation for, so
+    // the list items before the next one are not read one by one.
+    if (j === text.length) {
+      stops ??= [...containers.keys()].filter((s) => containers[s].quote || containers[s].empty);
+      return { matched: stops.find((s) => s >= matched) ?? containers.length, opened: [], rest: 'blank' };
+    }
     if (container.quote) {
       if (c - col > 3 || text[j] !== '>') break;
       quoteMarker(j, c);
-    } else if (j === text.length) {
-      if (container.empty) break;
-      i = j;
-      col = c;
     } else {
       if (c - col < container.width) break;
       advance(container.width);
@@ -799,7 +808,10 @@ function lineStart(line, containers, paragraph) {
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines) {
   let open = noOpenLinkText();
-  let containers = [];
+  // The containers open after the line above and their stops, as
+  // lineStart() takes them.
+  const containers = [];
+  let stops = [];
   let paragraph = false;
   let next = 0; // the index in lines of the line read next
   // Whether a line is text that goes on with the paragraph that
@@ -817,14 +829,23 @@ function linkReader(lines) {
     }
     // A fence is a block, and the line that closes one goes on with the
     // containers that hold it.
-    const start = fenceClose ? { matched: containers.length, opened: [] } : lineStart(line, containers, paragraph);
+    const start = fenceClose ? { matched: containers.length, opened: [] } : lineStart(line, containers, paragraph, stops);
     const rest = fenceOpen || fenceClose ? 'block' : start.rest;
     if (!(paragraph && rest === 'text' && start.opened.length === 0)) {
       // The line starts a block, and the containers it does not go on with
-      // end; those it goes on with hold that block, unless it is blank.
-      const kept = containers.slice(0, start.matched);
-      if (rest !== 'blank' || start.opened.length > 0) for (const c of kept) c.empty = false;
-      containers = kept.concat(start.opened);
+      // end; those it goes on with hold that block, unless it is blank. The
+      // list is cut and added to in place: copied for each line, it took a
+      // step for each container that a blank line goes on with.
+      containers.length = start.matched;
+      while (stops.length > 0 && stops.at(-1) >= start.matched) stops.pop();
+      if (rest !== 'blank' || start.opened.length > 0) {
+        for (const c of containers) c.empty = false;
+        stops = stops.filter((s) => containers[s].quote);
+      }
+      for (const c of start.opened) {
+        if (c.quote || c.empty) stops.push(containers.length);
+        containers.push(c);
+      }
       paragraph = rest === 'text';
       open = noOpenLinkText();
       // The code spans of the block: those of a paragraph may run on to the
