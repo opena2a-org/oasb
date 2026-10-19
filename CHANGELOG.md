@@ -251,6 +251,18 @@ stay on record here with the reason they changed.
   the pattern after them. On macOS arm64, `***`, 100,000 spaces and `x`
   took 3.9 seconds to check, and `---` or `___` with 100,000 tabs 4.4
   seconds; each now takes 0.05 seconds, and 0.07 seconds with 1,000,000.
+- The methodology note `scripts/run-benchmark-v2.ts` puts in each results
+  file, the `note` field of `benchmark-results-v6.json` and the comment on
+  the checks `src/benchmark/hma-pipeline-adapter.ts` leaves out of the
+  verdict gave a count of benign registry MCP servers said to declare
+  `allowedTools:["*"]`, over 2,900, as a reason to leave `AST-SCOPE-001` out
+  of the verdict. `BENCHMARK-RESULTS.md` § 3 withdrew that count on
+  2026-08-27: it measured the corpus export script, not the servers. The
+  three now give the argument § 3 keeps, that a wildcard grant is a
+  least-privilege posture issue however many configs declare it, and the
+  note of `benchmark-results-v6.json`, which § 7 names as the verdict
+  methodology, says the count is withdrawn. Tests in
+  `scripts/doc-facts.test.mjs` check each of the three for the count.
 
 ## 0.4.1 - 2026-10-17
 

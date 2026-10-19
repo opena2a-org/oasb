@@ -1,7 +1,10 @@
 // Tests that statements in README.md, BENCHMARK-RESULTS.md,
 // docs/pinned-benchmark.md, docs/test-catalog.md, docs/adapters.md and
 // docs/how-it-works.md match the corpus, scripts and adapters they describe,
-// and that docs/demo.tape states no count.
+// that docs/demo.tape states no count, and that the verdict methodology in
+// scripts/run-benchmark-v2.ts, benchmark-results-v6.json and
+// src/benchmark/hma-pipeline-adapter.ts does not give the server count
+// BENCHMARK-RESULTS.md withdrew.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -238,4 +241,67 @@ test('docs/adapters.md says a missing rebuff fails each scenario file at collect
   assert.doesNotMatch(text, /either package is missing/, 'the paragraph says a missing rebuff fails each scan, as a missing typescript does');
   assert.match(text, /When the rebuff package is missing, each scenario file fails while vitest collects it/);
   assert.match(text, /When `typescript` is missing, [^.]*each scan fails/);
+});
+
+// Section 3 of BENCHMARK-RESULTS.md withdrew the count of benign registry MCP
+// servers once given as a reason to leave AST-SCOPE-001 out of the verdict:
+// the corpus export script wrote allowedTools:["*"] into the samples it
+// synthesized, so the count measured the script, not the servers. The earlier
+// runner writes its methodology note into each results file it writes,
+// section 7 names the note of benchmark-results-v6.json as the verdict
+// methodology, and the pipeline adapter holds the exclusion.
+const WITHDRAWN_COUNT = /\b2,?900\b|(?:\b\d[\d,]*\+?|\bthousands of)\s+benign\b/i;
+
+test('the withdrawn-count pattern finds a count of benign servers with or without a sign around it', () => {
+  for (const text of [
+    'posture issue that >2,900 benign registry MCP servers also declare via allowedTools:["*"]',
+    'Over 2,900 benign registry MCP servers declare allowedTools:["*"]',
+    'that 2,900+ benign registry MCP servers also declare',
+    'a signal that fires on thousands of benign configs',
+    'over 2900 servers declare it',
+  ]) {
+    assert.ok(WITHDRAWN_COUNT.test(text), `${text} is not found as the count`);
+  }
+  for (const text of [
+    'a least-privilege posture issue, not an attack, however many configs declare it',
+    'BENCHMARK-RESULTS.md section 3 withdraws the count of benign registry MCP servers',
+    'fire on benign and malicious artifacts alike',
+  ]) {
+    assert.ok(!WITHDRAWN_COUNT.test(text), `${text} is found as the count`);
+  }
+});
+
+// The value of a constant a script joins from single-quoted string literals.
+function joinedConstant(file, name) {
+  const text = read(file);
+  const start = text.indexOf(`\nconst ${name} =`);
+  if (start < 0) return undefined;
+  const literals = text.slice(start, text.indexOf(';\n', start)).matchAll(/'((?:[^'\\\n]|\\.)*)'/g);
+  return [...literals].map(([, s]) => s.replace(/\\(.)/g, '$1')).join('');
+}
+
+const methodologyNotes = {
+  'METHODOLOGY_NOTE in scripts/run-benchmark-v2.ts': () => joinedConstant('scripts/run-benchmark-v2.ts', 'METHODOLOGY_NOTE'),
+  'the note of benchmark-results-v6.json': () => JSON.parse(read('benchmark-results-v6.json')).note,
+};
+
+for (const [where, note] of Object.entries(methodologyNotes)) {
+  test(`${where} gives the posture argument for excluding AST-SCOPE-001 and not the withdrawn server count`, () => {
+    const text = note();
+    assert.ok(text, `${where} is not found; update this test`);
+    assert.ok(text.includes('AST-SCOPE-001 (wildcard tool access'), `${where} does not name AST-SCOPE-001 among the excluded findings; update this test with the wording`);
+    assert.ok(text.includes('least-privilege posture issue'), `${where} does not say AST-SCOPE-001 is a least-privilege posture issue`);
+    assert.ok(!WITHDRAWN_COUNT.test(text), `${where} gives the withdrawn count: ${text.match(WITHDRAWN_COUNT)?.[0]}`);
+  });
+}
+
+test('the note of benchmark-results-v6.json says the server count it gave is withdrawn', () => {
+  assert.match(methodologyNotes['the note of benchmark-results-v6.json'](), /BENCHMARK-RESULTS\.md section 3 withdraws that count/);
+});
+
+test('src/benchmark/hma-pipeline-adapter.ts gives no count of benign servers as a reason for excluding AST-SCOPE-001', () => {
+  // Comment lines read as one text, so a count is found where a line wraps.
+  const text = read('src/benchmark/hma-pipeline-adapter.ts').replace(/\n[ \t]*\/\/[ \t]*/g, ' ');
+  assert.ok(text.includes("'AST-SCOPE-001',"), 'the adapter no longer excludes AST-SCOPE-001; update this test');
+  assert.ok(!WITHDRAWN_COUNT.test(text), `the adapter gives the withdrawn count: ${text.match(WITHDRAWN_COUNT)?.[0]}`);
 });
