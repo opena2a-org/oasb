@@ -413,6 +413,26 @@ stay on record here with the reason they changed.
   quote or in a list item of a block quote; and the note in such a block
   below the link to the README. A note after the block, on a quoted line or
   after the end of the block quote, passes, as it did.
+- `npm run check:readme` reads a fence where the text of a list item starts,
+  on the line that opens the item, as the start of a fenced code block. It
+  read a line such as `` - ``` `` or `1. ~~~` as paragraph text, and the
+  fence that closed the block, which starts its line, as the start of
+  another block that ran on to the next such fence. With `docs/nowhere.md`
+  absent, `` - ``` ``, `  [y](docs/nowhere.md)` and `` ``` `` indented for
+  the item exited 1 with `link target "docs/nowhere.md" does not exist`,
+  and now exit 0. `` - ``` ``, `  a` and `` ``` `` indented for the item,
+  then a blank line and `[y](docs/nowhere.md)`, exited 0, as the last line
+  was read as code, and now exit 1 naming that line; a heading after such
+  a block now holds the anchor that a link names. The block runs to a
+  fence of the same character, at least as long, with only spaces or tabs
+  after it, or to the first line that does not go on with the list items
+  that hold it. An item that does not end the paragraph above it, such as
+  `` 2. ``` `` right after a paragraph line, opens no block. The other
+  checks read the block as fenced code too: `` 1. ```bash `` and
+  `   npm test` in the Quick Start are now its first command, a comment on
+  an `opena2a benchmark` line in such a block is now checked, and a dated
+  page's "as of" note or link to the README inside such a block no longer
+  counts, while one after it now does.
 
 ## 0.4.1 - 2026-10-17
 

@@ -1833,6 +1833,90 @@ test('no line of a fenced code block inside a block quote has links, to its clos
   }
 });
 
+test('no line after a fence where the text of a list item starts has links, to its closing fence or the end of the list items that hold it', () => {
+  // The fence follows the marker of a list item that the line opens: a
+  // bullet or an ordered item, after a tab, after a second marker, in an
+  // item that a bullet opens inside another or that starts at 1 after a
+  // paragraph. The block runs on past a blank line, a shorter fence, one of
+  // the other character, one with text after it and one 4 columns past the
+  // item's text, and to the end of the page when no fence closes it.
+  for (const body of [
+    '- ```\n  [y](docs/nowhere.md)\n  ```\n',
+    '1. ~~~\n   [y](docs/nowhere.md)\n   ~~~\n',
+    '1) ```\n   [y](docs/nowhere.md)\n   ```\n',
+    '* ```js\n  <a href="docs/nowhere.md">y</a>\n  ```\n',
+    '-\t```\n\t[y](docs/nowhere.md)\n\t```\n',
+    '- - ```\n    [y](docs/nowhere.md)\n    ```\n',
+    '- a\n  - ```\n    [y](docs/nowhere.md)\n    ```\n',
+    'a\n1. ```\n   [y](docs/nowhere.md)\n   ```\n',
+    '- ```\n\n  [y](docs/nowhere.md)\n  ```\n',
+    '- ````\n  ```\n  [y](docs/nowhere.md)\n  ````\n',
+    '- ```\n  ~~~\n  [y](docs/nowhere.md)\n  ```\n',
+    '- ```\n  ``` x\n  [y](docs/nowhere.md)\n  ```\n',
+    '- ```\n      ```\n  [y](docs/nowhere.md)\n  ```\n',
+    '- ```\n  [y](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A fence of the same character at least as long, at most 3 spaces past
+  // the item's text and with only spaces after it, closes the block, and the
+  // lines after it are read: in the item, after a blank line, or in the next
+  // list item. A line not indented for the item ends the item, and so the
+  // block. None of the last three is a fence: an ordered item that starts at
+  // 2 does not end the paragraph above it, 5 spaces after a marker start
+  // indented code, and a backtick may not follow a run of them.
+  for (const [body, line] of [
+    ['- ```\n  a\n  ```\n  [y](docs/nowhere.md)\n', 14],
+    ['- ```\n  a\n   ```\n  [y](docs/nowhere.md)\n', 14],
+    ['- ````\n  a\n  `````\n  [y](docs/nowhere.md)\n', 14],
+    ['- ~~~\n  a\n  ~~~  \n  [y](docs/nowhere.md)\n', 14],
+    ['- ```\n  a\n  ```\n\n[y](docs/nowhere.md)\n', 15],
+    ['- ```\n  a\n  ```\n- [y](docs/nowhere.md)\n', 14],
+    ['- ```\n  a\n[y](docs/nowhere.md)\n', 13],
+    ['- ```\n- [y](docs/nowhere.md)\n', 12],
+    ['a\n2. ```\n[y](docs/nowhere.md)\n', 13],
+    ['-     ```\n  [y](docs/nowhere.md)\n', 12],
+    ['- ``` `\n  [y](docs/nowhere.md)\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
+test('a heading after a fenced code block in a list item holds its anchor', () => {
+  // The fence that closes the block starts its line, and was read as the
+  // start of another block, which ran on to the end of the page.
+  const r = check('See [next](#next).\n\n- ```\n  a\n  ```\n\n## Next\n');
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('a fenced code block in a list item is a code block to the first-command and benchmark-comment checks', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    const run = (readme) => {
+      writeFileSync(join(dir, 'README.md'), readme);
+      return spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+    };
+    // The language is read after the fence, past the list marker before it.
+    const shell = run('# Title\n\n## Quick Start\n\n1. ```bash\n   npm test\n   ```\n');
+    assert.equal(shell.status, 0, shell.stderr);
+    assert.match(shell.stdout, /first command at line 6,/);
+    const js = run('# Title\n\n## Quick Start\n\n- ```js\n  x()\n  ```\n\nnpm test\n');
+    assert.equal(js.status, 1);
+    assert.match(js.stderr, /^README: no shell code block with a command starts before line 30; /m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const r = check('- ```bash\n  opena2a benchmark ./my-agent   # OASB-1 controls at level L2\n  ```\n');
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^README: line 12: the comment names level L2, but `opena2a benchmark` with level L1 \(no --level\) checks the OASB-1 controls of level L1; /m,
+  );
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
@@ -2071,6 +2155,24 @@ test('a note inside a fenced code block in a block quote does not mark a dated p
   ]) {
     const r = check(DATED_LINK, datedPage(intro));
     assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test("a dated page's note or link to the README inside a fenced code block in a list item is not read, and one after that block is", () => {
+  const inside = check(DATED_LINK, datedPage('As of 2026-06-03.\n\n- ```\n  See the [README](../README.md) for the current figures.\n  ```\n'));
+  assert.equal(inside.status, 1);
+  assert.match(inside.stderr, DATED);
+  assert.match(inside.stderr, /it must link to the README for the current figures; /);
+  const note = check(DATED_LINK, datedPage('- ```\n  As of 2026-06-03.\n  ```\n\nSee the [README](../README.md) for the current figures.\n'));
+  assert.equal(note.status, 1);
+  assert.match(note.stderr, DATED);
+  assert.match(note.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./);
+  for (const intro of [
+    'As of 2026-06-03.\n\n- ```\n  x\n  ```\n\nSee the [README](../README.md) for the current figures.\n',
+    '- ```\n  x\n  ```\n\nAs of 2026-06-03; see the [README](../README.md).\n',
+  ]) {
+    const after = check(DATED_LINK, datedPage(intro));
+    assert.equal(after.status, 0, `${intro}\n${after.stderr}`);
   }
 });
 
