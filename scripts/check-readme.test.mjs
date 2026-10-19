@@ -1403,6 +1403,17 @@ test('a line of 50,000 list markers before text is checked in under 2 seconds', 
   assert.ok(ms < 2000, `${ms.toFixed(0)} ms for four lines of ${lines[0].length} characters`);
 });
 
+test('a line that goes on with 50,000 list items through 100,000 spaces or 50,000 tabs is checked in under 2 seconds', () => {
+  // The spaces and tabs before the text were read again for each list item
+  // that the line went on with: these two pairs of lines took 15.7 seconds.
+  const pairs = ['+ '.repeat(50000) + 'x\n' + ' '.repeat(100000) + 'y', '-\t'.repeat(50000) + 'x\n' + '\t'.repeat(50000) + 'y'];
+  const started = process.hrtime.bigint();
+  const r = check(`${pairs.join('\n\n')}\n`);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for two pairs of lines`);
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
