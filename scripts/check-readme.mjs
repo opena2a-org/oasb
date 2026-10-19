@@ -893,11 +893,15 @@ function lineStart(line, containers, paragraph, stops) {
 // starts a block, and link text or a code span opened on one that is not
 // paragraph text, such as a heading or a table row, is not carried. A table
 // starts at a header row as tableHeader() reads it. A line that goes on
-// with a paragraph lazily is one when its delimiter row is in the block
-// quotes and list items that hold the paragraph; the list items and block
-// quotes the lazy line left out then end, so the table is held by those
-// its own markers and indentation go on with, as markdown-it 14 reads it
-// (micromark 4 holds it in the paragraph's). A table goes on with each
+// with a list item's paragraph lazily, without the item's indentation, is
+// one when its delimiter row is in the list items that hold the paragraph;
+// the list items the lazy line left out then end, so the table is held by
+// those its own indentation goes on with, as markdown-it 14 places it,
+// after the list (micromark 4 holds it in the item). A line that goes on
+// with a paragraph lazily without a block quote marker of the line above
+// is paragraph text, as markdown-it 14 reads it: no table starts at it,
+// whatever the next line (micromark 4 starts one in the block quote). A
+// table goes on with each
 // line after its header row that goes on with the block quotes and list
 // items that hold the table, opens none, and is not blank, indented code
 // or another block; each of these lines is a table row, whether or not it
@@ -933,15 +937,19 @@ function linkReader(lines) {
   // 'row' or 'text' is a table row when the line above is one and the line
   // goes on with every container and opens none, or when it is a table's
   // header row as tableHeader() reads it. A line that goes on with the
-  // paragraph above lazily, without the block quote markers or list item
-  // indentation of some of `containers`, is held by them all, as the
-  // paragraph is, so its delimiter row is read in all of them. A 'row' is
-  // text otherwise.
+  // paragraph above lazily, without the list item indentation of some of
+  // `containers`, is held by them all, as the paragraph is, so its
+  // delimiter row is read in all of them. One that leaves out a block quote
+  // marker is text, as markdown-it 14 reads it; after a line of paragraph
+  // text, `stops` holds the block quotes of `containers` and no list item,
+  // so the last of them says whether the line leaves one out, without a
+  // step for each container. A 'row' is text otherwise.
   const restOf = (k, start, paragraphAbove, rowAbove) => {
     if (start.rest !== 'row' && start.rest !== 'text') return start.rest;
     const opensNone = start.opened.length === 0;
     if (rowAbove && opensNone && start.matched === containers.length) return 'row';
     const lazy = paragraphAbove && opensNone && start.matched < containers.length;
+    if (lazy && stops.length > 0 && stops.at(-1) >= start.matched) return 'text';
     const as = lazy ? { ...start, matched: containers.length } : start;
     return tableHeader(as, containers, lines[k + 1]) ? 'row' : 'text';
   };

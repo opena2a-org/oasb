@@ -1352,7 +1352,7 @@ test('the lines of a table are table rows whether or not they start with |, up t
   }
 });
 
-test('a line that goes on with a paragraph lazily is a table header row when a delimiter row in the block quotes and list items that hold the paragraph follows it', () => {
+test("a line that goes on with a list item's paragraph lazily is a table header row when a delimiter row in the list item follows it, and one that leaves out a block quote marker is paragraph text", () => {
   // markdown-it 14.1.0 and micromark 4.0.2 with micromark-extension-gfm-table
   // 2.1.1 render each of these with a link to docs/nowhere.md: the header
   // row goes on with the list item's paragraph lazily, without the item's
@@ -1385,6 +1385,36 @@ test('a line that goes on with a paragraph lazily is a table header row when a d
   ]) {
     const r = check(body);
     assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A line that goes on with a paragraph lazily without a block quote
+  // marker of the line above, with or without a list item's indentation,
+  // is paragraph text, as markdown-it 14.1.0 reads it: no table starts at
+  // it, so the code span opened in the paragraph runs on through the | line
+  // and holds the link. micromark 4.0.2 with micromark-extension-gfm-table
+  // 2.1.1 starts a table inside the block quote at such a line and renders
+  // the link; the check reads these three as markdown-it does.
+  for (const body of [
+    '> see `x\n| [y](docs/nowhere.md) | z` |\n> |---|---|\n',
+    '- > see `x\n| [y](docs/nowhere.md) | z` |\n  > |---|---|\n',
+    '> - see `x\n| [y](docs/nowhere.md) | z` |\n>   |---|---|\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // On such a line, link text wraps as onto any other line of the
+  // paragraph: markdown-it 14.1.0 renders the first of these with a link
+  // and micromark 4.0.2 without one. Both render the other three as the
+  // check reads them: a link to docs/nowhere.md on the line named, and
+  // none to docs/missing.md, which a code span holds.
+  for (const [body, n] of [
+    ['> see [the\n| docs](docs/nowhere.md) | z |\n> |---|---|\n', 12],
+    ['> see\n[y](docs/guide.md) | z`\n> | --- | --- |\n>  | `c | d |\n>  | [e](docs/nowhere.md) | f` |\n', 15],
+    ['- > see `x\n  y](docs/guide.md) | z\n  > |:-|:-|\n  >   | `c | d |\n| [e](docs/nowhere.md) | f` |\n', 15],
+    ['>> see\n   [y](docs/nowhere.md) | z`\n>> |:-|:-|\n    x | y\n    [k](docs/missing.md) `\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(r.stderr.trim().split('\n'), [`README: line ${n}: link target "docs/nowhere.md" does not exist.`], body);
   }
 });
 
