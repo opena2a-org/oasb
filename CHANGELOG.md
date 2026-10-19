@@ -160,6 +160,14 @@ stay on record here with the reason they changed.
   naming the line; a line whose offer is inside a code span, ``` Write
   ``Scanner Benchmark `x` across products`` in code. ```, exited 1 and now
   exits 0.
+- `npm run check:readme` reads a link or `href` after a backslash-escaped
+  backtick, which CommonMark renders as a backtick and not as the start of
+  a code span. With `docs/nowhere.md` absent, a README line
+  `` \`[x](docs/nowhere.md)\` ``, `` \`<a href="docs/nowhere.md">x</a>\` ``
+  or ``` \``[x](docs/nowhere.md)`` ``` exited 0, and now exits 1 naming the
+  line. After an escaped backtick, the rest of its run opens a code span,
+  so ```` \```[x](docs/nowhere.md)`` ````, which CommonMark renders as a
+  backtick and a code span, now exits 0; it exited 1.
 
 ## 0.4.1 - 2026-10-17
 

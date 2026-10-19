@@ -14,7 +14,8 @@
 //      a reference definition `[label]: target` at the start of a line
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
 //      `href='target'` attribute. Links inside code spans are not read, a
-//      code span ending at the next run of as many backticks. Other forms,
+//      code span ending at the next run of as many backticks; a backtick
+//      after a backslash (\`) is text and opens none. Other forms,
 //      such as an unquoted href or a definition on the same line as a list
 //      marker (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
@@ -336,8 +337,38 @@ function anchorsOf(file) {
 // A line with its code spans removed. As in CommonMark, a run of backticks
 // opens a code span that the next run of the same length closes, so
 // ``a ` b`` is one span; a run that no run of its length follows is text.
+// Outside a code span a backslash escapes the character after it, so \` is a
+// literal backtick and \`` opens a span with the one backtick left of its
+// run, while \\` is a literal backslash and then a run that may open one.
+// Inside a code span a backslash is text and does not stop a run closing it.
 function withoutCodeSpans(line) {
-  return line.replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, '');
+  let out = '';
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '\\') {
+      out += line.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (line[i] !== '`') {
+      out += line[i];
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (line[end] === '`') end += 1;
+    const run = end - i;
+    const closer = new RegExp(`(?<!\`)\`{${run}}(?!\`)`, 'g');
+    closer.lastIndex = end;
+    const close = closer.exec(line);
+    if (close) {
+      i = close.index + run;
+    } else {
+      out += line.slice(i, end);
+      i = end;
+    }
+  }
+  return out;
 }
 
 // The destinations of the inline links [text](target) on one line, read as
