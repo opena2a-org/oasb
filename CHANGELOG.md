@@ -139,6 +139,18 @@ stay on record here with the reason they changed.
   `git status` reports, when `status.renames` is set to `copies`, is named
   the same way. A test in `src/benchmark/pinned/pinned.test.ts` renames one
   file and copies another.
+- `npm run check:readme` reads an inline link's target as CommonMark reads a
+  link destination. It ended the target at the first `)` or space, so with
+  `docs/guide.md` present `[x](<docs/guide.md>)` exited 1 with
+  `link target "<docs/guide.md>" does not exist`, and with `docs/a(b).md`
+  present `[x](docs/a(b).md)` exited 1 with
+  `link target "docs/a(b" does not exist`; both now exit 0. A target in
+  angle brackets runs to the closing `>` and may hold spaces
+  (`[x](<docs/my guide.md>)`), a bare target may hold balanced parentheses,
+  nested up to 32 deep, and a backslash escape such as `\(` stands for the
+  character it escapes. A target in angle brackets or with parentheses that
+  names no file exits 1 with the path, such as
+  `link target "docs/a(b).md" does not exist`.
 
 ## 0.4.1 - 2026-10-17
 

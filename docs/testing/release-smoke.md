@@ -22,11 +22,12 @@ the claims this repository publishes:
    other `.md` page a reader reaches from them by those links, each link
    from the directory of the file it is in. It reads three link forms, each
    written within one line: inline links (`[text](path)`, with an optional
-   double-quoted title), reference definitions at the start of a line
-   (`[label]: path`) and quoted HTML `href` attributes. It checks a `#anchor`
-   only in links to `.md` files. Other forms, such as an unquoted `href` or a
-   definition on the same line as a list marker (`- [label]: path`), are not
-   checked. A linked `.md` page whose
+   double-quoted title, and a path written `<path>` or holding balanced
+   parentheses, `[text](docs/a(b).md)`), reference definitions at the
+   start of a line (`[label]: path`) and quoted HTML `href` attributes. It
+   checks a `#anchor` only in links to `.md` files. Other forms, such as an
+   unquoted `href` or a definition on the same line as a list marker
+   (`- [label]: path`), are not checked. A linked `.md` page whose
    file name carries a date (`docs/AUDIT-2026-06-03.md`) must say "as of"
    that date and link to the README above its first H2: its counts are those
    of that day and nothing compares them with the suite. Reference detail
