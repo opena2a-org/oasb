@@ -205,6 +205,25 @@ stay on record here with the reason they changed.
   `link target "docs/nowhere.md" does not exist`, and now exits 0. With
   `<span>` as the middle line, which does not interrupt a paragraph, it
   still exits 1.
+- `npm run check:readme` reads an autolink or raw HTML before the brackets
+  of link text, as CommonMark does: a `[` or `]` inside an autolink, such as
+  `<https://example.org/a]b>`, or inside an HTML tag, comment, processing
+  instruction, declaration or CDATA section that opens and closes on the
+  same line neither opens nor closes link text. With `docs/nowhere.md`
+  absent, `[see <https://example.org/a]b> here](docs/nowhere.md)` and
+  `[a <b title="]"> c](docs/nowhere.md)`, which CommonMark renders as links,
+  exited 0, and now exit 1 with
+  `link target "docs/nowhere.md" does not exist`, while
+  `<b title="[">x](docs/nowhere.md)`, which it renders as text, exited 1 and
+  now exits 0. Of a code span, an autolink and raw HTML, the one that starts
+  first holds the others as text, so a backtick inside a tag opens no code
+  span: `` [a <b title="`]"> c](docs/nowhere.md) `x` `` exited 0 and now
+  exits 1. An inline link's target or title may hold a backtick:
+  `` [x](`docs/nowhere.md`) `` exited 0 and now exits 1 with
+  `` link target "`docs/nowhere.md`" does not exist ``, and with
+  `docs/guide.md` present,
+  `` [x](docs/guide.md "`") and [y](docs/nowhere.md "`") `` exited 0 and
+  now exits 1.
 
 ## 0.4.1 - 2026-10-17
 
