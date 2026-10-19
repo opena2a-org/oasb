@@ -330,6 +330,27 @@ stay on record here with the reason they changed.
   and the inline links on it are no longer read: `| a` then
   `>     [x](docs/nowhere.md)`, or `-     [x](docs/nowhere.md)`, exited 1
   and now exits 0.
+- `npm run check:readme` reads a fence inside a block quote as the start of
+  a fenced code block, which ends the paragraph above it, and reads no link
+  in that block. It read a line such as `` > ``` `` as paragraph text, so a
+  code span could run on into the block and past it. With
+  `docs/nowhere.md` absent, the lines `` > a `x [y](docs/nowhere.md) ``,
+  `` > ``` ``, `` > z` `` and `` > ``` `` exited 0, and now exit 1 with
+  `link target "docs/nowhere.md" does not exist`, naming the first line, as
+  they did before the check found code spans that run on to a later line
+  of their paragraph. So do the same lines with `~~~` for each fence; the
+  first line followed by `` > ``` ``, `> z`, `` > ``` `` and `` > w` ``;
+  and `` > - a `x [y](docs/nowhere.md) `` followed by the other three lines
+  indented for that list item. The block runs from its opening fence to a
+  fence of as many or more of the same character with only spaces or tabs
+  after it, or to the end of the block quote or list item that holds it,
+  and no line of it, the opening fence included, has a link the check
+  reads: `> ~~~`, `> [y](docs/nowhere.md)` and `> ~~~` exited 1 and now
+  exit 0, as do `` > ``` `` and `> [y](docs/nowhere.md)` with no fence to
+  close the block. A dated page whose link to the README sits inside such
+  a block now fails the check that it links to the README; it passed. One
+  whose link sits on the quoted line before such a block, after a backtick
+  that only a backtick inside the block would close, now passes it.
 
 ## 0.4.1 - 2026-10-17
 
