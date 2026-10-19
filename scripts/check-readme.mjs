@@ -638,12 +638,20 @@ function lineStart(line, containers, paragraph) {
   const breakFrom = breakStart(text);
   let i = 0;
   let col = 0;
-  // The index and column of the first character from i that is not a space or a tab.
+  // The index and column of the first character from i that is not a space
+  // or a tab. advance() moves i and col on inside one run of spaces and
+  // tabs, where both stay the same (a tab ends on the same column from any
+  // column inside it), so the run is read once, not once for each list item
+  // that the line goes on with.
+  let runEnd = -1;
+  let runEndColumn = 0;
   const nonspace = () => {
-    let j = i;
-    let c = col;
-    while (text[j] === ' ' || text[j] === '\t') c = nextColumn(text[j++], c);
-    return [j, c];
+    if (i > runEnd) {
+      runEnd = i;
+      runEndColumn = col;
+      while (text[runEnd] === ' ' || text[runEnd] === '\t') runEndColumn = nextColumn(text[runEnd++], runEndColumn);
+    }
+    return [runEnd, runEndColumn];
   };
   // Moves on by n columns of spaces and tabs, into a tab that is wider.
   const advance = (n) => {
