@@ -61,8 +61,9 @@
 //      for comparing products calls it a recall-only comparison. Its benign
 //      class was labeled by HackMyAgent, one of the scanners it compares, so
 //      only recall on the malicious samples is comparable across products.
-//      Retire this check when the benchmark has a benign set that no scanner
-//      under test labeled.
+//      Fenced code and the text inside a code span are not read, a code span
+//      ending at the next run of as many backticks. Retire this check when
+//      the benchmark has a benign set that no scanner under test labeled.
 //   9. a linked .md page whose file name carries a date (YYYY-MM-DD) says
 //      "as of <that date>" and links to the README above its first H2. Its
 //      counts are those of that day and are not compared with the suite, so
@@ -1031,7 +1032,7 @@ function blocks(lines) {
 }
 
 for (const { n, text, prefix } of documents.flatMap((d) => blocks(d.lines).map((b) => ({ ...b, prefix: d.prefix })))) {
-  const prose = text.replace(/`[^`]*`/g, '');
+  const prose = withoutCodeSpans(text);
   if (NAMES_BENCHMARK.test(prose) && COMPARES_PRODUCTS.test(prose) && !RECALL_ONLY.test(prose)) {
     fail(
       `${prefix}line ${n}: the Scanner Benchmark is offered for comparing products without calling it a recall-only comparison. ` +

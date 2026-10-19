@@ -1187,6 +1187,16 @@ test('the Scanner Benchmark and a product comparison in different blocks pass', 
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('the recall-only check ends a code span at the next run of as many backticks', () => {
+  // A single backtick inside a two-backtick span does not end it, so the
+  // text after the span is read and the text inside it is not.
+  const after = check('Run ``a ` b``; the Scanner Benchmark compares results across scanners, see `y`.\n');
+  assert.equal(after.status, 1, 'the text after ``a ` b`` is not read');
+  assert.match(after.stderr, new RegExp(`line 11: ${RECALL_ONLY_FAILURE.source}`));
+  const inside = check('Write ``Scanner Benchmark `x` across products`` in code.\n');
+  assert.equal(inside.status, 0, inside.stderr);
+});
+
 test("this repository's README offers the Scanner Benchmark only as a recall-only comparison", () => {
   const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
   assert.doesNotMatch(r.stderr, RECALL_ONLY_FAILURE);
