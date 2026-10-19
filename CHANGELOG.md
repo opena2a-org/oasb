@@ -113,6 +113,23 @@ stay on record here with the reason they changed.
   leads to; so did a link on another page that took the README's text, one
   on a page a link leads to and, with the counts checked, one in the
   README's MITRE ATLAS Coverage section.
+- `npm run check:readme` reads more links that CommonMark renders, and
+  reports one whose target does not exist. It skipped an inline link with
+  spaces inside the parentheses (`[x]( docs/nowhere.md )`), before its
+  closing parenthesis (`[x](docs/nowhere.md "T" )`) or an escaped quote in
+  its title (`[x](docs/nowhere.md "a \" b")`); a reference definition whose
+  label holds a code span (``[`x`]: docs/nowhere.md``) or an escaped bracket
+  (`[a\]b]: docs/nowhere.md`); an `href` after an attribute value that holds
+  `>` (`<a title="a>b" href="docs/nowhere.md">`); and a link or `href` after
+  a code span of two backticks that holds one (``` ``code ` x`` ```), as it
+  ended a code span at the next single backtick. It now ends a code span at
+  the next run of as many backticks, as CommonMark does. With
+  `docs/nowhere.md` absent, a README holding any one of these exited 0, and
+  now exits 1 naming the line. The 0.4.1 entry, `scripts/check-readme.mjs`
+  and `docs/testing/release-smoke.md` said a definition inside a list item
+  is not checked; one on its own line inside a list item is checked, and
+  they now name the shape that is not: a definition on the same line as a
+  list marker (`- [label]: path`).
 
 ## 0.4.1 - 2026-10-17
 
@@ -1076,8 +1093,8 @@ stay on record here with the reason they changed.
   inline links (`[text](path)`, with an optional double-quoted title),
   reference definitions at the start of a line (`[label]: path`) and quoted
   HTML `href` attributes. It checks a `#anchor` only in links to `.md`
-  files. Other forms, such as an unquoted `href` or a definition inside a
-  list item, are not checked.
+  files. Other forms, such as an unquoted `href` or a definition on the
+  same line as a list marker (`- [label]: path`), are not checked.
 - `src/benchmark/pinned/runs-of-record.test.ts` looks for the newest run's
   counts on `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md` outside
   code spans and code blocks. The page's description of that test writes
