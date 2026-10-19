@@ -725,7 +725,13 @@ function cellCount(row) {
 function tableHeader(start, containers, next) {
   const { row } = start;
   if (row === undefined || next === undefined || !row.includes('|') || !DELIMITER_CHARACTERS.test(next.line)) return false;
-  const held = [...containers.slice(0, start.matched), ...start.opened];
+  // The block quotes and list items that hold the header row: `containers`
+  // itself when the row goes on with them all and opens none, as
+  // lineStart() does not change the list, and a copy otherwise. Copied for
+  // each line that goes on with a paragraph lazily and holds a |, over a
+  // line of delimiter characters, it took a step for each container on
+  // each such line.
+  const held = start.matched === containers.length && start.opened.length === 0 ? containers : [...containers.slice(0, start.matched), ...start.opened];
   const delimiter = lineStart(next.line, held, true);
   if (delimiter.matched < held.length || delimiter.opened.length > 0 || delimiter.row === undefined) return false;
   const cells = delimiter.row.trim();

@@ -1625,6 +1625,25 @@ test('a line that goes on with 50,000 list items through 100,000 spaces or 50,00
   assert.ok(ms < 2000, `${ms.toFixed(0)} ms for two pairs of lines`);
 });
 
+test('a page that opens 100,000 list items, or block quotes, and then holds 100,000 lines of a lone | is checked in under 2 seconds', () => {
+  // Each | line goes on with the paragraph lazily, and the next line holds
+  // only the characters of a delimiter row, so tableHeader() read it with
+  // a copy of the list of containers, made for each such line: these two
+  // pages took 5.4 to 15.3 seconds in four runs, and the block quote page
+  // 5.4 seconds alone while a lazy line that leaves out a block quote
+  // marker was read as a header row.
+  const n = 100000;
+  const pages = {
+    'docs/items.md': `${'+ '.repeat(n)}x\n${'|\n'.repeat(n)}`,
+    'docs/quoted.md': `${'> '.repeat(n)}x\n${'|\n'.repeat(n)}`,
+  };
+  const started = process.hrtime.bigint();
+  const r = check('[items](docs/items.md) and [quoted](docs/quoted.md)\n', pages);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for two pages of ${n + 1} lines`);
+});
+
 test('a code span may run on to a later line of its paragraph, and a [ or a link inside it is not read', () => {
   // markdown-it 14.1.0 renders none of these with a link or a definition.
   for (const body of [
