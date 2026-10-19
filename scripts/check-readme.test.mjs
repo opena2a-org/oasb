@@ -1306,6 +1306,52 @@ test('link text wraps past a line that starts with | when no delimiter row makes
   }
 });
 
+test('the lines of a table are table rows whether or not they start with |, up to the line that ends the table', () => {
+  // markdown-it 14.1.1 and micromark 4.0.3 with micromark-extension-gfm-table
+  // 2.1.2 render none of these with a link: the header row, the delimiter
+  // row or a body row does not start with |, and the lines after it are
+  // still rows of the table, so link text does not run on from one row to
+  // the next. A header row ends the paragraph above it.
+  for (const body of [
+    '| t | u |\n--- | ---\n| [c | d |\ne](docs/nowhere.md)\n',
+    't | u\n|---|---|\n| [c | d |\ne](docs/nowhere.md)\n',
+    'a | b\n-|-\n| [c | d |\ne](docs/nowhere.md)\n',
+    'a | b\n:-: | --:\n| [c | d |\ne](docs/nowhere.md)\n',
+    '| bar | baz |\n| - | - |\n| bar | baz |\nbar\n| [c | d |\ne](docs/nowhere.md)\n',
+    '[a\nt | u\n--- | ---\nb](docs/nowhere.md)\n',
+    '> a | b\n> -|-\n> [c\n> d](docs/nowhere.md)\n',
+    '- a | b\n  -|-\n  [c\n  d](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // Both render each of these with a link to docs/nowhere.md: a code span
+  // does not run on from one row to the next; a line that opens a block
+  // quote or list item, or leaves the block quote that holds the table,
+  // ends it; a line that goes on with a paragraph lazily is not a header
+  // row; and a delimiter row that opens a list item (- | -), is indented 4
+  // columns, opens a block quote the header row is not in, or is a setext
+  // underline (-), or a header row indented 4 columns that goes on with a
+  // paragraph, starts no table.
+  for (const [body, n] of [
+    ['| a | b |\n--- | ---\n| `c | d |\n| [e](docs/nowhere.md) | f` |\n', 14],
+    ['| a |\n| - |\n> | [b |\n> c](docs/nowhere.md)\n', 14],
+    ['| a |\n| - |\n- | [b |\n  c](docs/nowhere.md)\n', 14],
+    ['| a |\n| - |\n- [b\n  c](docs/nowhere.md)\n', 14],
+    ['> | a |\n> | - |\n| [b |\nc](docs/nowhere.md)\n', 14],
+    ['> foo\n| a | b |\n| - | - |\n[c\nd](docs/nowhere.md)\n', 15],
+    ['| a | b |\n- | -\n| [c |\nd](docs/nowhere.md)\n', 14],
+    ['| a | b |\n    --- | ---\n| [c |\nd](docs/nowhere.md)\n', 14],
+    ['| a | b |\n> | - | - |\n| [c | d |\ne](docs/nowhere.md)\n', 14],
+    ['| a |\n-\n| [b |\nc](docs/nowhere.md)\n', 14],
+    ['foo\n    a | b\n-|-\n[c\nd](docs/nowhere.md)\n', 15],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${n}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
 test('link text does not wrap past a setext underline, a thematic break or an HTML block start', () => {
   for (const middle of ['---', '===', '***', '___', '- - -', '<div>', '</p>', '<!-- note -->', '<pre>', '> ---']) {
     const body = `[a\n${middle}\nb](docs/nowhere.md)\n`;
