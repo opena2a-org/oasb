@@ -151,6 +151,15 @@ stay on record here with the reason they changed.
   character it escapes. A target in angle brackets or with parentheses that
   names no file exits 1 with the path, such as
   `link target "docs/a(b).md" does not exist`.
+- `npm run check:readme` also ends a code span at the next run of as many
+  backticks where it checks that a paragraph, table row or heading that
+  offers the Scanner Benchmark for comparing products calls it a
+  recall-only comparison. That check ended a code span at the next single
+  backtick. A README line ``` Run ``a ` b``; the Scanner Benchmark
+  compares results across scanners, see `y`. ``` exited 0, and now exits 1
+  naming the line; a line whose offer is inside a code span, ``` Write
+  ``Scanner Benchmark `x` across products`` in code. ```, exited 1 and now
+  exits 0.
 
 ## 0.4.1 - 2026-10-17
 
