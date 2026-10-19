@@ -1381,6 +1381,46 @@ test('link text does not wrap past an empty ATX heading or an underline that \\r
   assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
 });
 
+test('an inline link on a line of indented code is not read; one on a paragraph line indented as far is, and so is an href', () => {
+  // Indented code starts 4 or more columns past where the text of the block
+  // quote or list item that holds the line starts, a tab moving on to column
+  // 4, on a line that does not go on with a paragraph. Its text is shown as
+  // written, so it holds no inline link. Inside an HTML block such a line is
+  // raw HTML, where an inline link is text too, but an href is a link. A
+  // line whose text starts with | may be a paragraph, not a table row, and
+  // then the line indented 4 columns after it goes on with that paragraph.
+  for (const body of [
+    'Text.\n\n    [x](docs/nowhere.md)\n',
+    'Text.\n\n\t[x](docs/nowhere.md)\n',
+    '- item\n\n        [x](docs/nowhere.md)\n',
+    '- item\n\n      [x](docs/nowhere.md)\n',
+    '1.     [x](docs/nowhere.md)\n\n   text\n\n       [y](docs/nowhere.md)\n',
+    '> Text.\n>\n>     [x](docs/nowhere.md)\n',
+    'Text.\n>     [x](docs/nowhere.md)\n',
+    '```\nx\n```\n    [x](docs/nowhere.md)\n',
+    '### Heading\n    [x](docs/nowhere.md)\n',
+    '<div>\n    [x](docs/nowhere.md)\n</div>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  for (const [body, n] of [
+    ['Text.\n    [x](docs/nowhere.md)\n', 12],
+    ['- item\n\n    [x](docs/nowhere.md)\n', 13],
+    ['> Text.\n>\n>    [x](docs/nowhere.md)\n', 13],
+    ['> Text.\n    [x](docs/nowhere.md)\n', 12],
+    ['    code\n[x](docs/nowhere.md)\n', 12],
+    ['<table>\n  <tr>\n    <td><a href="docs/nowhere.md">x</a></td>\n  </tr>\n</table>\n', 13],
+    ['<p align="center">\n    <a href="docs/nowhere.md"><img src="logo.png"></a>\n</p>\n', 12],
+    ['<pre>\ntext\n\n    <a href="docs/nowhere.md">x</a>\n</pre>\n', 14],
+    ['| a\n    [x](docs/nowhere.md)\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${n}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
 test('a line of ***, --- or ___ and 100,000 spaces or tabs before text is checked in under 2 seconds', () => {
   // The spaces and tabs could be split between the last mark and a [ \t]*
   // after the marks in every way: these three lines took 12.9 seconds.
@@ -1716,6 +1756,30 @@ test('a link to the README inside a code span that runs on to the next line does
   assert.equal(r.status, 1);
   assert.match(r.stderr, DATED);
   assert.match(r.stderr, /it must link to the README for the current figures; /);
+});
+
+test("a dated page's link to the README is read from its lines as written, and not from a line of indented code", () => {
+  // With the code span or the "> " taken out, as the "as of" note is read,
+  // the first two lines would start with 4 spaces or a tab and be read as
+  // indented code. A backtick after a backslash is text, so the link
+  // between two of them is read, while a code span that two backticks open
+  // and close holds a link as text.
+  for (const intro of [
+    '`npm test`    counts are as of 2026-06-03; see the [README](../README.md).\n',
+    '> As of 2026-06-03.\n>\n> \tSee the [README](../README.md) for the current counts.\n',
+    'As of 2026-06-03, see the \\`[README](../README.md)\\`.\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    'As of 2026-06-03.\n\n    See the [README](../README.md) for the current counts.\n',
+    'As of 2026-06-03, see ``[README](../README.md)``.\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, /it must link to the README for the current figures; /, intro);
+  }
 });
 
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {

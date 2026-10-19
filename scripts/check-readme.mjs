@@ -15,7 +15,16 @@
 //      or on an earlier line of its paragraph (`foo](target)` is text),
 //      a reference definition `[label]: target` at the start of a line
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
-//      `href='target'` attribute. Links inside code spans are not read, a
+//      `href='target'` attribute. An inline link or definition on a line of
+//      indented code is not read: a line that does not go on with a
+//      paragraph and starts 4 or more columns past where the text of the
+//      block quote or list item that holds it starts, a tab moving on to the
+//      next multiple of 4. An href on such a line is read, as the line may
+//      be raw HTML inside an HTML block, where an href is a link. So are the
+//      links on indented code that follows a line whose text starts with |,
+//      with no other line between, as that line may be a paragraph rather
+//      than a table row, which the lines after it may go on with. Links
+//      inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
 //      holds no definition; a backtick after a backslash (\`) is text and
@@ -581,18 +590,28 @@ function inlineDestinations(line, open, spans) {
   return targets;
 }
 
+// The targets of the HTML href="target" / href='target' attributes on one
+// line, after attribute values that may hold >, read on the line with its
+// code spans removed.
+function hrefTargets(line) {
+  const targets = [];
+  for (const m of withoutCodeSpans(line).matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    targets.push(m[1] ?? m[2]);
+  }
+  return targets;
+}
+
 // Link targets on one prose line: inline [text](target), whose destination
 // inlineDestinations reads, with spaces inside the parentheses, a
 // reference definition [label]: target (footnotes [^1]: are not links),
-// whose label may hold a code span or \], and HTML href="target" /
-// href='target', after attribute values that may hold >. Links inside code
-// spans are not read: inlineDestinations reads past each code span, and an
-// href is read on the line with its code spans removed. A definition is
-// matched on the whole line, as a code span in its label does not make it
-// text, but not on a line that starts inside a code span an earlier line of
-// the paragraph opened. `open` carries what an earlier line of the
-// paragraph left open: link text, as inlineDestinations reads it, and a
-// code span. open.code reads the code spans of the paragraph's lines, as
+// whose label may hold a code span or \], and the hrefs hrefTargets reads.
+// Links inside code spans are not read: inlineDestinations reads past each
+// code span, and hrefTargets removes them. A definition is matched on the
+// whole line, as a code span in its label does not make it text, but not
+// on a line that starts inside a code span an earlier line of the
+// paragraph opened. `open` carries what an earlier line of the paragraph
+// left open: link text, as inlineDestinations reads it, and a code span.
+// open.code reads the code spans of the paragraph's lines, as
 // paragraphCodeSpans does, for inlineDestinations, which meets each run of
 // backticks after the autolinks, raw HTML and link destinations that start
 // before it. An href is read on the part of the line outside the code spans
@@ -603,10 +622,7 @@ function linkTargets(line, open) {
   const def = spans.from === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
   targets.push(...inlineDestinations(line, open, spans));
-  const prose = withoutCodeSpans(line.slice(spans.from, spans.to));
-  for (const m of prose.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
-    targets.push(m[1] ?? m[2]);
-  }
+  targets.push(...hrefTargets(line.slice(spans.from, spans.to)));
   return targets;
 }
 
@@ -685,8 +701,9 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // that does not keep them leaves them out, and they are then found by
 // reading each of `containers`.
 // Returns how many of `containers` the line goes on with, the containers it
-// opens, and whether the rest of it is 'blank', 'block' (one of those
-// blocks, or indented code) or 'text', which a paragraph holds.
+// opens, and whether the rest of it is 'blank', 'code' (indented code), 'row'
+// (a table row), 'block' (one of the other blocks) or 'text', which a
+// paragraph holds.
 function lineStart(line, containers, paragraph, stops) {
   const text = line.endsWith('\r') ? line.slice(0, -1) : line; // \r\n ends a line too
   const breakFrom = breakStart(text);
@@ -753,7 +770,7 @@ function lineStart(line, containers, paragraph, stops) {
     const [j, c] = nonspace();
     if (j === text.length) return { matched, opened, rest: 'blank' };
     // Indented code, unless it goes on with the paragraph above.
-    if (c - col > 3) return { matched, opened, rest: paragraph && opened.length === 0 ? 'text' : 'block' };
+    if (c - col > 3) return { matched, opened, rest: paragraph && opened.length === 0 ? 'text' : 'code' };
     if (text[j] === '>') {
       opened.push({ quote: true });
       quoteMarker(j, c);
@@ -762,8 +779,8 @@ function lineStart(line, containers, paragraph, stops) {
     // Whether a block that starts here would interrupt the paragraph above,
     // as the line goes on with every container that holds it.
     const interrupts = paragraph && matched === containers.length && opened.length === 0;
+    if (text[j] === '|') return { matched, opened, rest: 'row' };
     if (
-      text[j] === '|' ||
       matchAt(ATX_HEADING, text, j) ||
       matchAt(HTML_BLOCK_START, text, j) ||
       matchAt(CDATA_START, text, j) ||
@@ -804,7 +821,16 @@ function lineStart(line, containers, paragraph, stops) {
 // lineStart(), to the paragraph's last line for those runs. Any other line
 // starts a block, and link text or a code span opened on one that is not
 // paragraph text, such as a heading or a table row, is not carried. A line
-// inside a fence has no links, and a fence ends a paragraph.
+// inside a fence has no links, and a fence ends a paragraph. A line
+// that lineStart() reads as indented code has no inline links or
+// definitions, as its text is shown as written. lineStart() does not track
+// HTML blocks, and such a line may be inside one instead: there it is raw
+// HTML, whose inline links and definitions are text as well, but whose
+// hrefs are links. So the hrefs on such a line are read. Nor does
+// lineStart() tell a table row from a paragraph whose text starts with |,
+// which the lines after it may go on with; so on the lines of indented code
+// that follow a table row with no other line between, the inline links and
+// definitions are read as well.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines) {
   let open = noOpenLinkText();
@@ -821,10 +847,13 @@ function linkReader(lines) {
     const start = lineStart(line, containers, true);
     return start.rest === 'text' && start.opened.length === 0;
   };
+  // Whether the line above is a table row, or indented code that follows one.
+  let afterRow = false;
   return ({ line, inFence, fenceOpen, fenceClose }) => {
     const j = next++;
     if (inFence) {
       paragraph = false;
+      afterRow = false;
       return [];
     }
     // A fence is a block, and the line that closes one goes on with the
@@ -855,6 +884,9 @@ function linkReader(lines) {
       if (paragraph) while (last + 1 < lines.length && goesOn(lines[last + 1])) last += 1;
       open.code = paragraphCodeSpans(lines.slice(j, last + 1).map((l) => l.line));
     }
+    const code = rest === 'code' && !afterRow;
+    afterRow = rest === 'row' || (rest === 'code' && afterRow);
+    if (code) return hrefTargets(line);
     const targets = linkTargets(line, open);
     if (!paragraph) open = noOpenLinkText();
     return targets;
@@ -1547,10 +1579,10 @@ for (const [file, { at, shown }] of datedPages) {
   const page = readPage(file);
   if (!page) continue; // readPage has reported it
   const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
-  // A line of a code block is read as a blank line, which ends a paragraph.
-  const intro = (h2 === -1 ? page : page.slice(0, h2)).map((l) =>
-    l.inFence || l.fenceOpen || l.fenceClose ? '' : l.line.replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''),
-  );
+  // A line of a fenced code block is read as a blank line, which ends a
+  // paragraph. The note is read without code spans and > markers.
+  const written = (h2 === -1 ? page : page.slice(0, h2)).map((l) => (l.inFence || l.fenceOpen || l.fenceClose ? '' : l.line));
+  const intro = written.map((line) => line.replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
     if (!pathPart || ABSOLUTE.test(target)) return false;
@@ -1561,9 +1593,12 @@ for (const [file, { at, shown }] of datedPages) {
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {
     missing.push(`say "as of ${date}"`);
   }
-  const introLines = intro.map((line) => ({ line }));
-  const read = linkReader(introLines);
-  if (!introLines.some((l) => read(l).some(toReadme))) {
+  // The links are read from the lines as written, as check 4 reads them:
+  // without its code spans or > markers, a line could start 4 columns in
+  // and be read as indented code.
+  const writtenLines = written.map((line) => ({ line }));
+  const read = linkReader(writtenLines);
+  if (!writtenLines.some((l) => read(l).some(toReadme))) {
     missing.push('link to the README for the current figures');
   }
   if (missing.length) {
