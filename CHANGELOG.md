@@ -352,6 +352,25 @@ stay on record here with the reason they changed.
   not a delimiter row. markdown-it 14.1.1 and micromark 4.0.3 with
   micromark-extension-gfm-table 2.1.2 render each of these as the check
   now reads it.
+- `npm run check:readme` reads a line that goes on with a paragraph lazily,
+  without the block quote markers or list item indentation of the line
+  above, as the header row of a table when the next line is a delimiter row
+  with as many cells in the block quotes and list items that hold the
+  paragraph. The entry above read no such line as a header row, so a code
+  span or link text opened in a list item's paragraph ran on into the row.
+  With `docs/nowhere.md` absent, `` - see `x ``,
+  `` | [y](docs/nowhere.md) | z` | ``, `  |---|---|` exited 0 and now exits 1
+  with `link target "docs/nowhere.md" does not exist`, as do the same lines
+  with `1. see` and `   |---|---|`, with the delimiter row indented 3 or 4
+  columns, in a list item inside `> `, in a list item of another, with a
+  body row after `| --- | --- |`, and with `` [y](docs/nowhere.md) | z` ``
+  over `  ---|---`, a header row that does not start with `|`.
+  `- see [the`, `| docs](docs/nowhere.md) | z |`, `  |---|---|` exited 1
+  and now exits 0. A delimiter row that leaves the list item, `|---|---|`
+  after the first two lines, or holds fewer cells, `  |---|`, starts no
+  table, and the code span runs on. markdown-it 14.1.0 and micromark 4.0.2
+  with micromark-extension-gfm-table 2.1.1 render each of these as the
+  check now reads it.
 - `npm run check:readme` reads a fence inside a block quote as the start of
   a fenced code block, which ends the paragraph above it, and reads no link
   in that block. It read a line such as `` > ``` `` as paragraph text, so a

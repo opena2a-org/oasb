@@ -892,11 +892,16 @@ function lineStart(line, containers, paragraph, stops) {
 // lineStart(), to the paragraph's last line for those runs. Any other line
 // starts a block, and link text or a code span opened on one that is not
 // paragraph text, such as a heading or a table row, is not carried. A table
-// starts at a header row as tableHeader() reads it, which a line that goes
-// on with a paragraph lazily is not, and goes on with each line after it
-// that goes on with the block quotes and list items that hold the table,
-// opens none, and is not blank, indented code or another block; each of
-// these lines is a table row, whether or not it starts with |. Any other
+// starts at a header row as tableHeader() reads it. A line that goes on
+// with a paragraph lazily is one when its delimiter row is in the block
+// quotes and list items that hold the paragraph; the list items and block
+// quotes the lazy line left out then end, so the table is held by those
+// its own markers and indentation go on with, as markdown-it 14 reads it
+// (micromark 4 holds it in the paragraph's). A table goes on with each
+// line after its header row that goes on with the block quotes and list
+// items that hold the table, opens none, and is not blank, indented code
+// or another block; each of these lines is a table row, whether or not it
+// starts with |. Any other
 // line whose text starts with | is text, which link text and code spans
 // wrap past as past any other line of their paragraph. A line inside a
 // fence has no links,
@@ -927,14 +932,18 @@ function linkReader(lines) {
   // text when `paragraphAbove` is true and a table row when `rowAbove` is. A
   // 'row' or 'text' is a table row when the line above is one and the line
   // goes on with every container and opens none, or when it is a table's
-  // header row as tableHeader() reads it and does not go on with the
-  // paragraph above lazily. A 'row' is text otherwise.
+  // header row as tableHeader() reads it. A line that goes on with the
+  // paragraph above lazily, without the block quote markers or list item
+  // indentation of some of `containers`, is held by them all, as the
+  // paragraph is, so its delimiter row is read in all of them. A 'row' is
+  // text otherwise.
   const restOf = (k, start, paragraphAbove, rowAbove) => {
     if (start.rest !== 'row' && start.rest !== 'text') return start.rest;
     const opensNone = start.opened.length === 0;
     if (rowAbove && opensNone && start.matched === containers.length) return 'row';
     const lazy = paragraphAbove && opensNone && start.matched < containers.length;
-    return !lazy && tableHeader(start, containers, lines[k + 1]) ? 'row' : 'text';
+    const as = lazy ? { ...start, matched: containers.length } : start;
+    return tableHeader(as, containers, lines[k + 1]) ? 'row' : 'text';
   };
   // Whether lines[k] is text that goes on with the paragraph that
   // `containers` hold, as the reader reads it below. The line above it is
