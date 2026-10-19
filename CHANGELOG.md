@@ -168,6 +168,34 @@ stay on record here with the reason they changed.
   line. After an escaped backtick, the rest of its run opens a code span,
   so ```` \```[x](docs/nowhere.md)`` ````, which CommonMark renders as a
   backtick and a code span, now exits 0; it exited 1.
+- `npm run check:readme` reads a backslash in an inline link's target as an
+  escape only before ASCII punctuation, as CommonMark does: before a space
+  it is text, and the space ends the target. With `docs/a\ b.md` absent,
+  `[x](docs/a\ b.md)`, which CommonMark renders as text, exited 1 with
+  `link target "docs/a\ b.md" does not exist`, and now exits 0.
+- `npm run check:readme` reads a line on from the `)` that closes an inline
+  link, so a link's title is not read as text. With `docs/guide.md`
+  present and `docs/nowhere.md` absent,
+  `[x](docs/guide.md "](docs/nowhere.md) )")` and
+  `[x](docs/guide.md "[y](docs/nowhere.md)")` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exit 0.
+- `npm run check:readme` reads `](target)` as the end of an inline link only
+  after link text that a `[` no backslash escapes opens, on the same line
+  or on an earlier line of its paragraph. With `docs/nowhere.md` absent,
+  `foo](docs/nowhere.md)` and `[x\](docs/nowhere.md)` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exit 0, while
+  `[x\\](docs/nowhere.md)`, whose `]` is not escaped, still exits 1. Link
+  text that holds a link is not a link's text, as links do not nest: with
+  `docs/guide.md` present, `[a [b](docs/guide.md) c](docs/nowhere.md)`
+  exited 1 and now exits 0. An image's text may hold a link, and link text
+  may wrap onto the next line of its paragraph, but not past a blank line,
+  a fence, a heading, a table row or a list item.
+- `npm run check:readme` finds the run of backticks that closes a code span
+  in a list of the line's runs by length, made in one pass, instead of
+  reading the rest of the line again from each run. On macOS arm64, a 1 MB
+  README line of backtick runs of lengths 1, 2, 3 and so on, each followed
+  by `x` so that none closes, took 6.4 seconds to check and now takes 0.06
+  to 0.07 seconds; a 4 MB line takes 0.10 to 0.11 seconds.
 
 ## 0.4.1 - 2026-10-17
 

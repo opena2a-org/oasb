@@ -1111,6 +1111,98 @@ test('a backslash-escaped backtick does not open a code span; a backslash inside
   }
 });
 
+// A line of backtick runs of lengths 1, 2, 3, ..., each followed by x, so
+// that no run closes another, about `size` characters long.
+const unclosedRuns = (size) => {
+  const runs = [];
+  for (let length = 1, total = 0; total < size; total += length + 1, length++) runs.push(`${'`'.repeat(length)}x`);
+  return runs.join('');
+};
+
+test('a 1 MB line of backtick runs of different lengths, none of them closed, is checked in under 2 seconds', () => {
+  // Each run was read to the end of the line for a run of its length: this
+  // line took 6.4 seconds.
+  const line = unclosedRuns(1 << 20);
+  const started = process.hrtime.bigint();
+  const r = check(`${line}\n`);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters`);
+});
+
+test('a backslash escapes only ASCII punctuation in a link destination, so a space after one ends it', () => {
+  // The backslash is text and the space ends the destination; " b.md)" is
+  // not a title, so the line holds no link.
+  const r = check('[x](docs/a\\ b.md)\n');
+  assert.equal(r.status, 0, r.stderr);
+  // Before a letter a backslash is text that stays in the destination.
+  const letter = check('[x](docs/no\\where.md)\n');
+  assert.equal(letter.status, 1);
+  assert.ok(letter.stderr.includes('line 11: link target "docs/no\\where.md" does not exist'), letter.stderr);
+});
+
+test('the title of a link is not read again as text; links after the link are read', () => {
+  for (const line of ['[x](docs/guide.md "](docs/nowhere.md) )")', '[x](docs/guide.md "[y](docs/nowhere.md)")']) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+  const r = check('[x](docs/guide.md "T") and [y](docs/nowhere.md)\n');
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/);
+});
+
+test('](target) is read only after link text that a [ no backslash escapes opens', () => {
+  for (const line of [
+    'foo](docs/nowhere.md)',
+    '[x\\](docs/nowhere.md)',
+    '\\[x](docs/nowhere.md)',
+    '[x]y](docs/nowhere.md)',
+    '[x](docs/guide.md) y](docs/nowhere.md)',
+  ]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+  for (const line of ['[x\\\\](docs/nowhere.md)', '[x\\]y](docs/nowhere.md)', '[a [b] c](docs/nowhere.md)']) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/, line);
+  }
+});
+
+test('link text that holds a link is not read as a link; an image\'s text may hold one', () => {
+  for (const line of ['[a [b](docs/guide.md) c](docs/nowhere.md)', '[[b](docs/guide.md)](docs/nowhere.md)']) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+  for (const line of ['![a [b](docs/guide.md) c](docs/nowhere.md)', '[![b](docs/guide.md)](docs/nowhere.md)']) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.match(r.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/, line);
+  }
+});
+
+test('link text may wrap onto the next line of its paragraph, but not into another block', () => {
+  for (const body of [
+    'See the [release smoke\nguide](docs/nowhere.md).\n',
+    '- See the [release smoke\n  guide](docs/nowhere.md).\n',
+    '> See the [release smoke\n> guide](docs/nowhere.md).\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+  for (const body of [
+    'See the [release smoke\n\nguide](docs/nowhere.md).\n',
+    '## A [heading\nguide](docs/nowhere.md)\n',
+    '| a | b |\n| - | - |\n| [c | d |\ne](docs/nowhere.md)\n',
+    '- a [b\n- c](docs/nowhere.md)\n',
+    '```\n[a\n```\nb](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);

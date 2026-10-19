@@ -11,6 +11,8 @@
 //      heading in that file. The check reads three forms, each written within
 //      one line: inline `[text](target)` with an optional double-quoted title,
 //      whose target may be written `<target>` or hold balanced parentheses,
+//      and whose text opens at a `[` that no backslash escapes, on that line
+//      or on an earlier line of its paragraph (`foo](target)` is text),
 //      a reference definition `[label]: target` at the start of a line
 //      (indented at most three spaces), and a quoted HTML `href="target"` or
 //      `href='target'` attribute. Links inside code spans are not read, a
@@ -341,77 +343,133 @@ function anchorsOf(file) {
 // literal backtick and \`` opens a span with the one backtick left of its
 // run, while \\` is a literal backslash and then a run that may open one.
 // Inside a code span a backslash is text and does not stop a run closing it.
+// The runs are listed by length in one pass first, and the run that closes a
+// span is the next one of its length on that list, so the line is not read
+// again from each run that opens one.
 function withoutCodeSpans(line) {
+  const runs = new Map(); // run length -> the start of each run of that length, in order
+  for (let i = 0; i < line.length; ) {
+    if (line[i] !== '`') {
+      i += 1;
+      continue;
+    }
+    const start = i;
+    while (line[i] === '`') i += 1;
+    if (!runs.has(i - start)) runs.set(i - start, []);
+    runs.get(i - start).push(start);
+  }
+  const passed = new Map(); // run length -> how many runs of that length start before the text read
   let out = '';
+  let from = 0;
   let i = 0;
   while (i < line.length) {
     if (line[i] === '\\') {
-      out += line.slice(i, i + 2);
       i += 2;
       continue;
     }
     if (line[i] !== '`') {
-      out += line[i];
       i += 1;
       continue;
     }
     let end = i;
     while (line[end] === '`') end += 1;
     const run = end - i;
-    const closer = new RegExp(`(?<!\`)\`{${run}}(?!\`)`, 'g');
-    closer.lastIndex = end;
-    const close = closer.exec(line);
-    if (close) {
-      i = close.index + run;
+    const starts = runs.get(run) ?? [];
+    let next = passed.get(run) ?? 0;
+    while (next < starts.length && starts[next] < end) next += 1;
+    passed.set(run, next);
+    if (next < starts.length) {
+      out += line.slice(from, i);
+      from = starts[next] + run;
+      i = from;
     } else {
-      out += line.slice(i, end);
       i = end;
     }
   }
-  return out;
+  return out + line.slice(from);
+}
+
+// As in CommonMark, a backslash escapes the character after it when that is
+// ASCII punctuation, which then stands for itself; before any other
+// character, such as a space, a backslash is text.
+const PUNCTUATION = /[!-/:-@[-`{-~]/;
+const ESCAPE = /\\([!-/:-@[-`{-~])/g;
+const escapes = (line, i) => line[i] === '\\' && PUNCTUATION.test(line[i + 1] ?? '');
+
+// The inline link whose destination opens at the ( at line[paren], read as
+// CommonMark reads a link destination: <target> runs to the closing > and may
+// hold spaces but no unescaped < or >; a bare target ends at a space, at a
+// control character or at the ) that closes the link, and may hold balanced
+// parentheses, nested up to 32 deep as markdown-it allows. The destination
+// may be followed by a double-quoted title that may hold \". Returns the
+// target, with each escape read as the character it escapes, and the index
+// after the ) that closes the link, or null when no link closes there.
+const MAX_PAREN_DEPTH = 32;
+function inlineLink(line, paren) {
+  let i = paren + 1;
+  while (line[i] === ' ' || line[i] === '\t') i++;
+  let raw = null;
+  if (line[i] === '<') {
+    let j = i + 1;
+    while (j < line.length && line[j] !== '>' && line[j] !== '<') j += escapes(line, j) ? 2 : 1;
+    if (line[j] !== '>') return null;
+    raw = line.slice(i + 1, j);
+    i = j + 1;
+  } else {
+    let j = i;
+    let depth = 0;
+    for (; j < line.length; j++) {
+      const c = line[j];
+      if (escapes(line, j)) j++;
+      else if (c <= ' ' || c === '\x7f') break;
+      else if (c === '(') {
+        if (++depth > MAX_PAREN_DEPTH) break;
+      } else if (c === ')') {
+        if (depth === 0) break;
+        depth--;
+      }
+    }
+    if (depth !== 0) return null;
+    raw = line.slice(i, j);
+    i = j;
+  }
+  const rest = line.slice(i).match(/^(?:[ \t]+"(?:[^"\\]|\\.)*")?[ \t]*\)/);
+  return rest && { target: raw.replace(ESCAPE, '$1'), end: i + rest[0].length };
 }
 
 // The destinations of the inline links [text](target) on one line, read as
-// CommonMark reads a link destination: <target> runs to the closing > and may
-// hold spaces but no unescaped < or >; a bare target ends at a space or at
-// the ) that closes the link, and may hold balanced parentheses, nested up to
-// 32 deep as markdown-it allows. A backslash escape of an ASCII punctuation
-// character stands for that character. The destination may be followed by a
-// double-quoted title that may hold \".
-const ESCAPE = /\\([!-/:-@[-`{-~])/g;
-const MAX_PAREN_DEPTH = 32;
-function inlineDestinations(line) {
+// CommonMark finds them. Link text opens at a [ that no backslash escapes,
+// or at the [ of ![ for an image, and ends at the first unescaped ] that no
+// [ inside it pairs with, so foo](target) and [x\](target) are text. Link
+// text that holds a link is not a link's text, as links do not nest, while
+// an image's text may hold one. The line is read on from the ) that closes a
+// link, so its destination and title are not read as text. open.brackets is
+// the stack of the [ that no ] has closed yet, true for one that opens an
+// image, and open.aroundLink how many of them, from the bottom, were open
+// when a link was read, so text that one of them opens holds that link.
+// `open` starts with what an earlier line of the paragraph left open and
+// keeps what this line leaves open.
+function inlineDestinations(line, open) {
   const targets = [];
-  for (let start = line.indexOf(']('); start !== -1; start = line.indexOf('](', start + 1)) {
-    let i = start + 2;
-    while (line[i] === ' ' || line[i] === '\t') i++;
-    let raw = null;
-    if (line[i] === '<') {
-      let j = i + 1;
-      while (j < line.length && line[j] !== '>' && line[j] !== '<') j += line[j] === '\\' && j + 1 < line.length ? 2 : 1;
-      if (line[j] !== '>') continue;
-      raw = line.slice(i + 1, j);
-      i = j + 1;
-    } else {
-      let j = i;
-      let depth = 0;
-      for (; j < line.length; j++) {
-        const c = line[j];
-        if (c === '\\' && j + 1 < line.length) j++;
-        else if (c <= ' ' || c === '\x7f') break;
-        else if (c === '(') {
-          if (++depth > MAX_PAREN_DEPTH) break;
-        } else if (c === ')') {
-          if (depth === 0) break;
-          depth--;
-        }
-      }
-      if (depth !== 0) continue;
-      raw = line.slice(i, j);
-      i = j;
+  const { brackets } = open;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (escapes(line, i)) {
+      i++;
+    } else if (c === '[' || (c === '!' && line[i + 1] === '[')) {
+      brackets.push(c === '!');
+      if (c === '!') i++;
+    } else if (c === ']' && brackets.length > 0) {
+      const image = brackets.pop();
+      const holdsLink = !image && brackets.length < open.aroundLink;
+      open.aroundLink = Math.min(open.aroundLink, brackets.length);
+      if (holdsLink || line[i + 1] !== '(') continue;
+      const link = inlineLink(line, i + 1);
+      if (!link) continue;
+      targets.push(link.target);
+      if (!image) open.aroundLink = brackets.length;
+      i = link.end - 1;
     }
-    const rest = line.slice(i).match(/^(?:[ \t]+"(?:[^"\\]|\\.)*")?[ \t]*\)/);
-    if (rest) targets.push(raw.replace(ESCAPE, '$1'));
   }
   return targets;
 }
@@ -422,17 +480,43 @@ function inlineDestinations(line) {
 // whose label may hold a code span or \], and HTML href="target" /
 // href='target', after attribute values that may hold >. Links inside code
 // spans are not read; a definition is matched before they are removed, as
-// a code span in its label does not make it text.
-function linkTargets(line) {
+// a code span in its label does not make it text. `open` carries link text
+// that an earlier line of the paragraph left open, as inlineDestinations
+// reads it.
+function linkTargets(line, open) {
   const targets = [];
   const def = line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
   const prose = withoutCodeSpans(line);
-  targets.push(...inlineDestinations(prose));
+  targets.push(...inlineDestinations(prose, open));
   for (const m of prose.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     targets.push(m[1] ?? m[2]);
   }
   return targets;
+}
+
+// A line that ends a paragraph (a blank line, or a blank ">" line), one that
+// is a block of its own (a table row or a heading), and the first line of a
+// list item.
+const BLANK = /^[\s>]*$/;
+const OWN_BLOCK = /^[\s>]*(?:\||#{1,6}\s)/;
+const LIST_ITEM = /^[\s>]*(?:[-+*]|\d{1,9}[.)])\s/;
+
+// Reads the link targets on the lines of one page, given in order, as
+// linkTargets reads them, with link text that wraps: the [ a line leaves open
+// is carried to the next line of its paragraph. Paragraphs end as blocks()
+// reads them, at a blank line, a fence, a table row or a heading, and a list
+// item starts a new one. A line inside a fence has no links.
+const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
+function linkReader() {
+  let open = noOpenLinkText();
+  return ({ line, inFence, fenceOpen, fenceClose }) => {
+    const ends = inFence || fenceOpen || fenceClose || BLANK.test(line) || OWN_BLOCK.test(line);
+    if (ends || LIST_ITEM.test(line)) open = noOpenLinkText();
+    const targets = inFence ? [] : linkTargets(line, open);
+    if (ends) open = noOpenLinkText();
+    return targets;
+  };
 }
 
 const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
@@ -442,9 +526,10 @@ const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
 // line that hold the link as a message names them, and the link's path as
 // written.
 function checkLinks({ file: doc, prefix, lines }, linked) {
-  for (const { n, line, inFence } of lines) {
-    if (inFence) continue;
-    for (const target of linkTargets(line)) {
+  const read = linkReader();
+  for (const l of lines) {
+    const { n } = l;
+    for (const target of read(l)) {
       if (!target) continue;
       if (ABSOLUTE.test(target)) continue;
       const [pathPart, anchor] = target.split('#');
@@ -751,9 +836,9 @@ function checkSkippedCoverage(tests) {
   const section = readme.slice(start + 1, end);
   const pages = [{ lines: section, prefix: '' }];
   const seen = new Set([readmePath]);
-  for (const { line, inFence } of section) {
-    if (inFence) continue;
-    for (const target of linkTargets(line)) {
+  const read = linkReader();
+  for (const l of section) {
+    for (const target of read(l)) {
       if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
       const pathPart = target.split('#')[0];
       if (!pathPart || !/\.md$/i.test(pathPart)) continue;
@@ -1047,11 +1132,11 @@ function blocks(lines) {
   const out = [];
   let open = null;
   for (const { n, line, inFence, fenceOpen, fenceClose } of lines) {
-    if (inFence || fenceOpen || fenceClose || /^[\s>]*$/.test(line)) {
+    if (inFence || fenceOpen || fenceClose || BLANK.test(line)) {
       open = null;
       continue;
     }
-    if (/^[\s>]*(?:\||#{1,6}\s)/.test(line)) {
+    if (OWN_BLOCK.test(line)) {
       out.push({ n, text: line });
       open = null;
       continue;
@@ -1120,9 +1205,10 @@ for (const [file, { at, shown }] of datedPages) {
   const page = readPage(file);
   if (!page) continue; // readPage has reported it
   const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
-  const intro = (h2 === -1 ? page : page.slice(0, h2))
-    .filter((l) => !l.inFence && !l.fenceOpen && !l.fenceClose)
-    .map((l) => l.line.replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
+  // A line of a code block is read as a blank line, which ends a paragraph.
+  const intro = (h2 === -1 ? page : page.slice(0, h2)).map((l) =>
+    l.inFence || l.fenceOpen || l.fenceClose ? '' : l.line.replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''),
+  );
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
     if (!pathPart || ABSOLUTE.test(target)) return false;
@@ -1133,7 +1219,8 @@ for (const [file, { at, shown }] of datedPages) {
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {
     missing.push(`say "as of ${date}"`);
   }
-  if (!intro.some((line) => linkTargets(line).some(toReadme))) {
+  const read = linkReader();
+  if (!intro.some((line) => read({ line }).some(toReadme))) {
     missing.push('link to the README for the current figures');
   }
   if (missing.length) {
