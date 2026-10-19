@@ -1403,6 +1403,29 @@ test('a line of 50,000 list markers before text is checked in under 2 seconds', 
   assert.ok(ms < 2000, `${ms.toFixed(0)} ms for four lines of ${lines[0].length} characters`);
 });
 
+test('a page that opens 50,000 list items and then holds 50,000 blank lines, or lines of a lone >, is checked in under 2 seconds', () => {
+  // Each such line went on with the list items one at a time, and the list
+  // of them was copied for each line: these two pages took 14.5 seconds.
+  const n = 50000;
+  const deep = ' '.repeat(2 * n);
+  const pages = {
+    'docs/blank.md': `${'+ '.repeat(n)}x\n${'\n'.repeat(n)}${deep}[a\n${deep}b](nowhere.md)\n`,
+    'docs/quoted.md': `> ${'+ '.repeat(n)}x\n${'>\n'.repeat(n)}> ${deep}[a\n> ${deep}b](nowhere.md)\n`,
+  };
+  const started = process.hrtime.bigint();
+  const r = check('[blank](docs/blank.md) and [quoted](docs/quoted.md)\n', pages);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  // Those lines go on with every list item, so the line after them that is
+  // indented into the innermost one is paragraph text, and its link text
+  // wraps onto the next line.
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.trim().split('\n'), [
+    `README: docs/blank.md line ${n + 3}: link target "nowhere.md" does not exist.`,
+    `README: docs/quoted.md line ${n + 3}: link target "nowhere.md" does not exist.`,
+  ]);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for two pages of ${n + 3} lines`);
+});
+
 test('a line that goes on with 50,000 list items through 100,000 spaces or 50,000 tabs is checked in under 2 seconds', () => {
   // The spaces and tabs before the text were read again for each list item
   // that the line went on with: these two pairs of lines took 15.7 seconds.
