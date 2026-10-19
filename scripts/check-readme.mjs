@@ -919,7 +919,9 @@ function lineStart(line, containers, paragraph, stops) {
 // a fence inside a block quote, which lineStart() reads, opens a block that
 // the reader follows to the fence that closes it or to the end of the block
 // quote or list item that holds it, and no line of that block, its opening
-// fence included, has links. A line that lineStart() reads as indented code
+// fence included, has links. Given a set as `quotedFences`, the reader adds
+// to it the index in `lines` of each line of such a block, its fences
+// included. A line that lineStart() reads as indented code
 // has no inline links or
 // definitions, as its text is shown as written. lineStart() does not track
 // HTML blocks, and such a line may be inside one instead: there it is raw
@@ -928,7 +930,7 @@ function lineStart(line, containers, paragraph, stops) {
 // indented code that follow a table row with no other line between, the
 // inline links and definitions are read as well.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
-function linkReader(lines) {
+function linkReader(lines, quotedFences) {
   let open = noOpenLinkText();
   // The containers open after the line above and their stops, as
   // lineStart() takes them.
@@ -995,6 +997,7 @@ function linkReader(lines) {
         if (start.rest === 'fence' && start.opened.length === 0 && start.bare && start.fence[0] === fenced[0] && start.fence.length >= fenced.length) {
           fenced = null;
         }
+        quotedFences?.add(j);
         return [];
       }
       fenced = null;
@@ -1031,6 +1034,7 @@ function linkReader(lines) {
     // what follows its run is an info string, not text.
     if (rest === 'fence') {
       fenced = start.fence;
+      quotedFences?.add(j);
       return [];
     }
     if (code) return hrefTargets(line);
@@ -1727,27 +1731,32 @@ for (const [file, { at, shown }] of datedPages) {
   if (!page) continue; // readPage has reported it
   const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
   // A line of a fenced code block is read as a blank line, which ends a
-  // paragraph. The note is read without code spans and > markers.
+  // paragraph. parse() reads the blocks whose fence starts a line; the link
+  // reader below reads those inside a block quote.
   const written = (h2 === -1 ? page : page.slice(0, h2)).map((l) => (l.inFence || l.fenceOpen || l.fenceClose ? '' : l.line));
-  const intro = written.map((line) => line.replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
     if (!pathPart || ABSOLUTE.test(target)) return false;
     const path = decoded(pathPart);
     return path !== null && resolve(dirname(file), path) === readmePath;
   };
+  // The links are read from the lines as written, as check 4 reads them:
+  // without its code spans or > markers, a line could start 4 columns in
+  // and be read as indented code. Each line is read, also those after a
+  // link to the README, so that `quotedFences` names each line of a fenced
+  // code block inside a block quote.
+  const writtenLines = written.map((line) => ({ line }));
+  const quotedFences = new Set();
+  const read = linkReader(writtenLines, quotedFences);
+  const linksReadme = writtenLines.map((l) => read(l).some(toReadme)).includes(true);
+  // The note is read without code spans and > markers, and without the
+  // lines of a fenced code block inside a block quote.
+  const intro = written.map((line, k) => (quotedFences.has(k) ? '' : line).replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
   const missing = [];
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {
     missing.push(`say "as of ${date}"`);
   }
-  // The links are read from the lines as written, as check 4 reads them:
-  // without its code spans or > markers, a line could start 4 columns in
-  // and be read as indented code.
-  const writtenLines = written.map((line) => ({ line }));
-  const read = linkReader(writtenLines);
-  if (!writtenLines.some((l) => read(l).some(toReadme))) {
-    missing.push('link to the README for the current figures');
-  }
+  if (!linksReadme) missing.push('link to the README for the current figures');
   if (missing.length) {
     fail(
       `${at}: "${shown}" is a dated page, so above its first H2 it must ${missing.join(' and ')}; ` +

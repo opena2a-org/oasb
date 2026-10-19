@@ -2044,6 +2044,36 @@ test("a dated page's link to the README before a fenced code block in a block qu
   }
 });
 
+test('a note inside a fenced code block in a block quote does not mark a dated page, and one after the block does', () => {
+  // The note sits in the block, in the info string of its opening fence, in
+  // a block that the end of the block quote closes or that a shorter fence
+  // inside it does not close, in a block in a nested block quote or in a
+  // list item of a block quote, or in a block below the link to the README;
+  // the link is read in each.
+  for (const intro of [
+    '> ```\n> As of 2026-06-03.\n> ```\n> See the [README](../README.md) for the current figures.\n',
+    '> ~~~text\n> As of 2026-06-03.\n> ~~~\n> See the [README](../README.md) for the current figures.\n',
+    '> ```As of 2026-06-03.\n> x\n> ```\n> See the [README](../README.md) for the current figures.\n',
+    '> ```\n> As of 2026-06-03.\n\nSee the [README](../README.md) for the current figures.\n',
+    '> ````\n> ```\n> As of 2026-06-03.\n> ````\n> See the [README](../README.md) for the current figures.\n',
+    '> > ```\n> > As of 2026-06-03.\n> > ```\n> See the [README](../README.md) for the current figures.\n',
+    '> - item\n>\n>   ```\n>   As of 2026-06-03.\n>   ```\n>\n> See the [README](../README.md) for the current figures.\n',
+    '> See the [README](../README.md) for the current figures.\n>\n> ```\n> As of 2026-06-03.\n> ```\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  for (const intro of [
+    '> ```\n> x\n> ```\n> As of 2026-06-03; see the [README](../README.md).\n',
+    '> ```\n> x\n\nAs of 2026-06-03; see the [README](../README.md).\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
 test("a dated page's link to the README is read from its lines as written, and not from a line of indented code", () => {
   // With the code span or the "> " taken out, as the "as of" note is read,
   // the first two lines would start with 4 spaces or a tab and be read as
