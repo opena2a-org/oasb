@@ -596,6 +596,22 @@ const matchAt = (re, text, i) => {
   return re.exec(text);
 };
 
+// Where a thematic break may start on a line: it runs to the end of the
+// line, so it starts in the run of one mark (*, - or _), spaces and tabs
+// that ends the line, and nowhere when the line ends in another character.
+// lineStart() tries THEMATIC_BREAK only from there: tried at each list
+// marker of a line such as "- - - ... - x", it read to the end of the line
+// before it failed, which took seconds on a line of 50,000 markers.
+function breakStart(text) {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === ' ' || text[end - 1] === '\t')) end--;
+  const mark = text[end - 1];
+  if (mark !== '*' && mark !== '-' && mark !== '_') return text.length;
+  let start = end - 1;
+  while (start > 0 && (text[start - 1] === mark || text[start - 1] === ' ' || text[start - 1] === '\t')) start--;
+  return start;
+}
+
 // Columns as CommonMark counts them in the indentation of a line: a tab
 // moves on to the next multiple of 4.
 const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
@@ -619,6 +635,7 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // blocks, or indented code) or 'text', which a paragraph holds.
 function lineStart(line, containers, paragraph) {
   const text = line.endsWith('\r') ? line.slice(0, -1) : line; // \r\n ends a line too
+  const breakFrom = breakStart(text);
   let i = 0;
   let col = 0;
   // The index and column of the first character from i that is not a space or a tab.
@@ -685,7 +702,7 @@ function lineStart(line, containers, paragraph) {
       matchAt(HTML_BLOCK_START, text, j) ||
       matchAt(CDATA_START, text, j) ||
       (interrupts && matchAt(SETEXT_UNDERLINE, text, j)) ||
-      matchAt(THEMATIC_BREAK, text, j)
+      (j >= breakFrom && matchAt(THEMATIC_BREAK, text, j))
     ) {
       return { matched, opened, rest: 'block' };
     }

@@ -1392,6 +1392,17 @@ test('a line of ***, --- or ___ and 100,000 spaces or tabs before text is checke
   assert.ok(ms < 2000, `${ms.toFixed(0)} ms for three lines of ${lines[0].length} characters`);
 });
 
+test('a line of 50,000 list markers before text is checked in under 2 seconds', () => {
+  // A thematic break was tried at each list marker and read to the end of
+  // the line before it failed: these four lines took 41.5 seconds.
+  const lines = ['- '.repeat(50000) + 'x', '* '.repeat(50000) + 'x', '-\t'.repeat(50000) + 'x', '- '.repeat(50000) + 'x - - -'];
+  const started = process.hrtime.bigint();
+  const r = check(`${lines.join('\n\n')}\n`);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for four lines of ${lines[0].length} characters`);
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
