@@ -1299,6 +1299,99 @@ test('link text does not wrap past a setext underline, a thematic break or an HT
   }
 });
 
+test('link text wraps past a line that 4 or more columns of indentation make paragraph text', () => {
+  // A block that may end a paragraph starts after at most 3 columns of
+  // indentation, and a tab moves on to column 4. <![cdata[ is not CDATA.
+  for (const middle of ['    ---', '\t---', '    ***', '    ===', '    <div>', '    # h', '<![cdata[']) {
+    const body = `[a\n${middle}\nb](docs/nowhere.md)\n`;
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 13: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+  const item = check('[a\n    - b](docs/nowhere.md)\n');
+  assert.equal(item.status, 1);
+  assert.match(item.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
+  for (const middle of ['   ---', '   ***', '   ===', '   <div>', '   # h', '<![CDATA[']) {
+    const body = `[a\n${middle}\nb](docs/nowhere.md)\n`;
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  assert.equal(check('[a\n   - b](docs/nowhere.md)\n').status, 0);
+});
+
+test('indentation is counted from the text of the list item or block quote that holds the line', () => {
+  // 6 spaces are 4 past the text of "- [a", and 4 spaces after "> " are 4
+  // past the quote's text, so the --- is paragraph text there.
+  for (const body of ['- [a\n      ---\n  b](docs/nowhere.md)\n', '> [a\n>     ---\n> b](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 13: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+  // The text of the inner item starts in column 4, so 4 spaces and --- end
+  // its paragraph, as 3 spaces after "> " end a quoted one.
+  for (const body of ['- x\n  - [a\n    ---\n    b](docs/nowhere.md)\n', '> [a\n>    ---\n> b](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A list item with nothing on its first line ends at a blank line, so the
+  // paragraph after it is not in the item and its --- is 4 columns in.
+  const r = check('-\n\n  [a\n    ---\n  b](docs/nowhere.md)\n');
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /line 15: link target "docs\/nowhere\.md" does not exist/);
+});
+
+test('a block quote ends the paragraph above it, and a line after a quoted paragraph continues it', () => {
+  for (const body of ['[a\n> b](docs/nowhere.md)\n', '> [a\n> > b](docs/nowhere.md)\n', '- [a\n  > b](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A line of paragraph text continues the paragraph without the > or the
+  // indentation of the block that holds it.
+  for (const body of ['> [a\nb](docs/nowhere.md)\n', '> > [a\n> b](docs/nowhere.md)\n', '- [a\nb](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+});
+
+test('a list item ends a paragraph only when it holds text and, if ordered, starts at 1', () => {
+  for (const body of ['[a\n2. b](docs/nowhere.md)\n', '[a\n10) b](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/, body);
+  }
+  const empty = check('[a\n+ \nb](docs/nowhere.md)\n');
+  assert.equal(empty.status, 1);
+  assert.match(empty.stderr, /line 13: link target "docs\/nowhere\.md" does not exist/);
+  // A line that does not continue the block quote holding the paragraph
+  // starts a list at any number.
+  for (const body of ['[a\n1. b](docs/nowhere.md)\n', '[a\n- b](docs/nowhere.md)\n', '> [a\n2. b](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('link text does not wrap past an empty ATX heading or an underline that \\r\\n ends, or between lines of indented code', () => {
+  for (const body of ['[a\n#\nb](docs/nowhere.md)\n', '[a\r\n---\r\nb](docs/nowhere.md)\r\n', '    code [a\n    b](docs/nowhere.md)\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  const r = check('[a\r\nb](docs/nowhere.md)\r\n');
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
+});
+
+test('a line of ***, --- or ___ and 100,000 spaces or tabs before text is checked in under 2 seconds', () => {
+  // The spaces and tabs could be split between the last mark and a [ \t]*
+  // after the marks in every way: these three lines took 12.9 seconds.
+  const lines = ['***' + ' '.repeat(100000) + 'x', '---' + '\t'.repeat(100000) + 'x', '___' + '\t'.repeat(100000) + 'x'];
+  const started = process.hrtime.bigint();
+  const r = check(`${lines.join('\n\n')}\n`);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for three lines of ${lines[0].length} characters`);
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);

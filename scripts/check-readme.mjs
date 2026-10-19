@@ -561,50 +561,187 @@ function linkTargets(line, open) {
   return targets;
 }
 
-// A line that ends a paragraph (a blank line, or a blank ">" line), one that
-// is a block of its own (a table row or a heading), and the first line of a
-// list item.
+// A line that ends a paragraph (a blank line, or a blank ">" line) and one
+// that is a block of its own (a table row or a heading), as blocks() reads
+// them.
 const BLANK = /^[\s>]*$/;
 const OWN_BLOCK = /^[\s>]*(?:\||#{1,6}\s)/;
-const LIST_ITEM = /^[\s>]*(?:[-+*]|\d{1,9}[.)])\s/;
 
-// Lines that also end a paragraph, for the link check: a setext heading
-// underline (=== or ---), a thematic break (***, ___, - - -), and the first
-// line of an HTML block of the kinds that may interrupt a paragraph
-// (CommonMark kinds 1 to 6: <script>, <pre>, <style>, <textarea>, a comment,
-// a processing instruction, a declaration, CDATA, or a block tag such as
-// <div> or </p>; a tag such as <span> does not interrupt one).
-const BREAK = /^[\s>]*(?:=+|-+|(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})[ \t]*$/;
+// The blocks that lineStart() reads where a line's block quote markers, list
+// markers and indentation end, each matched at lastIndex: an ATX heading, a
+// setext heading underline (=== or ---), a thematic break (***, ___, - - -),
+// the first line of an HTML block of the kinds that may interrupt a
+// paragraph (CommonMark kinds 1 to 6: <script>, <pre>, <style>, <textarea>, a
+// comment, a processing instruction, a declaration, CDATA, whose name is
+// matched in capitals only, or a block tag such as <div> or </p>; a tag such
+// as <span> does not interrupt one), and a list marker. The spaces and tabs
+// after a thematic break's last mark are matched by that mark's [ \t]*
+// alone: with a second [ \t]* after the marks, the two could share them in
+// every way, which took seconds on a line of 100,000 of them.
+const ATX_HEADING = /#{1,6}(?:[ \t]|$)/y;
+const SETEXT_UNDERLINE = /(?:=+|-+)[ \t]*$/y;
+const THEMATIC_BREAK = /(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/y;
 const HTML_BLOCK_START = new RegExp(
-  '^[\\s>]*(?:<(?:script|pre|style|textarea)(?:[\\s>]|$)|<!--|<\\?|<![a-z]|<!\\[CDATA\\[|' +
+  '<(?:script|pre|style|textarea)(?:[\\s>]|$)|<!--|<\\?|<![a-z]|' +
     '</?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|' +
     'fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|' +
     'menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|' +
-    'track|ul)(?:\\s|/?>|$))',
-  'i',
+    'track|ul)(?:\\s|/?>|$)',
+  'iy',
 );
+const CDATA_START = /<!\[CDATA\[/y;
+const LIST_MARKER = /(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/y;
+const matchAt = (re, text, i) => {
+  re.lastIndex = i;
+  return re.exec(text);
+};
+
+// Columns as CommonMark counts them in the indentation of a line: a tab
+// moves on to the next multiple of 4.
+const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
+
+// The start of one line, read as CommonMark reads it. `containers` are the
+// block quotes ({ quote: true }) and list items ({ width, empty }) open after
+// the line above, outermost first, and `paragraph` says whether that line
+// was paragraph text. The line goes on with a block quote when its > follows
+// at most 3 columns of indentation (the > takes one column of a space or tab
+// after it), and with a list item when it is blank, unless the item holds
+// nothing yet, or indented by the item's width: the columns from where the
+// text of the block that holds the item starts to where the item's text
+// starts, which is 1 to 4 columns after the marker, or 1 when more follow or
+// no text does. Past those, the line may open block quotes and list items,
+// and then start one of the blocks above or a table row (|), each after at
+// most 3 columns of indentation. On a line that goes on with every
+// container below a paragraph, a setext underline ends that paragraph, and
+// a list item ends it only when it holds text and, if ordered, starts at 1.
+// Returns how many of `containers` the line goes on with, the containers it
+// opens, and whether the rest of it is 'blank', 'block' (one of those
+// blocks, or indented code) or 'text', which a paragraph holds.
+function lineStart(line, containers, paragraph) {
+  const text = line.endsWith('\r') ? line.slice(0, -1) : line; // \r\n ends a line too
+  let i = 0;
+  let col = 0;
+  // The index and column of the first character from i that is not a space or a tab.
+  const nonspace = () => {
+    let j = i;
+    let c = col;
+    while (text[j] === ' ' || text[j] === '\t') c = nextColumn(text[j++], c);
+    return [j, c];
+  };
+  // Moves on by n columns of spaces and tabs, into a tab that is wider.
+  const advance = (n) => {
+    const to = col + n;
+    while (col < to) {
+      const next = nextColumn(text[i], col);
+      if (next > to) {
+        col = to;
+      } else {
+        col = next;
+        i++;
+      }
+    }
+  };
+  // Moves past the > at index j, in column c, and one column of a space or tab after it.
+  const quoteMarker = (j, c) => {
+    i = j + 1;
+    col = c + 1;
+    if (text[i] === ' ' || text[i] === '\t') advance(1);
+  };
+
+  let matched = 0;
+  for (const container of containers) {
+    const [j, c] = nonspace();
+    if (container.quote) {
+      if (c - col > 3 || text[j] !== '>') break;
+      quoteMarker(j, c);
+    } else if (j === text.length) {
+      if (container.empty) break;
+      i = j;
+      col = c;
+    } else {
+      if (c - col < container.width) break;
+      advance(container.width);
+    }
+    matched++;
+  }
+
+  const opened = [];
+  for (;;) {
+    const [j, c] = nonspace();
+    if (j === text.length) return { matched, opened, rest: 'blank' };
+    // Indented code, unless it goes on with the paragraph above.
+    if (c - col > 3) return { matched, opened, rest: paragraph && opened.length === 0 ? 'text' : 'block' };
+    if (text[j] === '>') {
+      opened.push({ quote: true });
+      quoteMarker(j, c);
+      continue;
+    }
+    // Whether a block that starts here would interrupt the paragraph above,
+    // as the line goes on with every container that holds it.
+    const interrupts = paragraph && matched === containers.length && opened.length === 0;
+    if (
+      text[j] === '|' ||
+      matchAt(ATX_HEADING, text, j) ||
+      matchAt(HTML_BLOCK_START, text, j) ||
+      matchAt(CDATA_START, text, j) ||
+      (interrupts && matchAt(SETEXT_UNDERLINE, text, j)) ||
+      matchAt(THEMATIC_BREAK, text, j)
+    ) {
+      return { matched, opened, rest: 'block' };
+    }
+    const marker = matchAt(LIST_MARKER, text, j);
+    if (!marker) break;
+    const width = c - col + marker[0].length;
+    i = j + marker[0].length;
+    col = c + marker[0].length;
+    const [k, d] = nonspace();
+    const empty = k === text.length;
+    if (interrupts && (empty || (marker[1] !== undefined && Number(marker[1]) !== 1))) break;
+    if (empty || d - col > 4) {
+      opened.push({ width: width + 1, empty });
+      if (!empty) advance(1);
+    } else {
+      opened.push({ width: width + d - col, empty });
+      i = k;
+      col = d;
+    }
+  }
+  return { matched, opened, rest: 'text' };
+}
 
 // Reads the link targets on the lines of one page, given in order, as
-// linkTargets reads them, with link text that wraps: the [ a line leaves open
-// is carried to the next line of its paragraph. Paragraphs end as blocks()
-// reads them, at a blank line, a fence, a table row or a heading, and also
-// at a setext underline, a thematic break or an HTML block start; a list
-// item starts a new one. A line inside a fence has no links.
+// linkTargets reads them, with link text that wraps: the [ a paragraph's
+// line leaves open is carried to the next line when lineStart() reads that
+// line as text that goes on with the paragraph, which a line may do lazily,
+// without the block quote markers or list item indentation of the line
+// above. Any other line starts a block, and link text opened on one that is
+// not paragraph text, such as a heading or a table row, is not carried. A
+// line inside a fence has no links, and a fence ends a paragraph.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader() {
   let open = noOpenLinkText();
+  let containers = [];
+  let paragraph = false;
   return ({ line, inFence, fenceOpen, fenceClose }) => {
-    const ends =
-      inFence ||
-      fenceOpen ||
-      fenceClose ||
-      BLANK.test(line) ||
-      OWN_BLOCK.test(line) ||
-      BREAK.test(line) ||
-      HTML_BLOCK_START.test(line);
-    if (ends || LIST_ITEM.test(line)) open = noOpenLinkText();
-    const targets = inFence ? [] : linkTargets(line, open);
-    if (ends) open = noOpenLinkText();
+    if (inFence) {
+      paragraph = false;
+      return [];
+    }
+    // A fence is a block, and the line that closes one goes on with the
+    // containers that hold it.
+    const start = fenceClose ? { matched: containers.length, opened: [] } : lineStart(line, containers, paragraph);
+    const rest = fenceOpen || fenceClose ? 'block' : start.rest;
+    if (!(paragraph && rest === 'text' && start.opened.length === 0)) {
+      // The line starts a block, and the containers it does not go on with
+      // end; those it goes on with hold that block, unless it is blank.
+      const kept = containers.slice(0, start.matched);
+      if (rest !== 'blank' || start.opened.length > 0) for (const c of kept) c.empty = false;
+      containers = kept.concat(start.opened);
+      paragraph = rest === 'text';
+      open = noOpenLinkText();
+    }
+    const targets = linkTargets(line, open);
+    if (!paragraph) open = noOpenLinkText();
     return targets;
   };
 }

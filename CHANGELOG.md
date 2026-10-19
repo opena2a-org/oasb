@@ -224,6 +224,33 @@ stay on record here with the reason they changed.
   `docs/guide.md` present,
   `` [x](docs/guide.md "`") and [y](docs/nowhere.md "`") `` exited 0 and
   now exits 1.
+- `npm run check:readme` reads where a paragraph ends as CommonMark does
+  when link text wraps onto the next line. A setext underline, a thematic
+  break, an HTML block start, an ATX heading or a list marker ends one
+  only after at most 3 columns of indentation, counted from where the text
+  of the list item or block quote that holds the line starts, with a tab
+  moving on to the next multiple of 4 columns; it read them at any
+  indentation. With `docs/nowhere.md` absent, a `[a` line, then
+  `    ---` (or a tab and `---`, or 4 spaces and `***`, `===`, `<div>` or
+  `# h`, or `<![cdata[`, which is not CDATA), then `b](docs/nowhere.md)`
+  exited 0, and now exits 1 with
+  `link target "docs/nowhere.md" does not exist`. So do `- [a`, then 6
+  spaces and `---`, then `  b](docs/nowhere.md)`; `[a` then
+  `    - b](docs/nowhere.md)`; and `[a` then `2. b](docs/nowhere.md)`, as
+  an ordered list item ends a paragraph only when it starts at 1. A block
+  quote now ends one: `[a` then `> b](docs/nowhere.md)` exited 1 and now
+  exits 0, while `> [a` then `b](docs/nowhere.md)`, a line that continues
+  the quoted paragraph without `>`, still exits 1. A `[a` line, then `#`
+  (an empty heading), then `b](docs/nowhere.md)` exited 1 and now exits 0,
+  as do the same lines with `---` in the middle and `\r\n` line endings,
+  and `    code [a` then `    b](docs/nowhere.md)`, two lines of indented
+  code.
+- `npm run check:readme` checks a README line that starts with `***`,
+  `---` or `___`, then spaces or tabs, then other text, such as `x`,
+  without trying each split of the spaces and tabs between the marks and
+  the pattern after them. On macOS arm64, `***`, 100,000 spaces and `x`
+  took 3.9 seconds to check, and `---` or `___` with 100,000 tabs 4.4
+  seconds; each now takes 0.05 seconds, and 0.07 seconds with 1,000,000.
 
 ## 0.4.1 - 2026-10-17
 
