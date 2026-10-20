@@ -484,9 +484,7 @@ stay on record here with the reason they changed.
   See the `<a href="../README.md">README</a>` for the current figures. ``
   and `</div>` after the H1 of `docs/AUDIT-2026-06-03.md`, which the README
   links, and a blank line, the check exited 1 with `it must link to the
-  README for the current figures`, and now exits 0. A block that `<span>`
-  alone on a line opens (CommonMark kind 7) is still not followed, so an
-  href between backticks there is still not read.
+  README for the current figures`, and now exits 0.
 - `npm run check:readme` opens a fenced code block on a line whose first
   characters other than white space are 3 or more backticks or tildes only
   when they start at most 3 columns past where the text of the list items
@@ -617,9 +615,7 @@ stay on record here with the reason they changed.
   `opena2a benchmark` line there is no longer checked; and an `href` or an
   inline link to `docs/nowhere.md` between two such lines exited 0 and now
   exits 1 with `link target "docs/nowhere.md" does not exist`, as on the
-  other lines of an HTML block. A block that `<span>` alone on a line opens
-  (CommonMark kind 7) is not followed, so a fence there still opens a code
-  block.
+  other lines of an HTML block.
 - `npm run check:readme` opens no fenced code block at a line whose run of
   backticks a backtick follows on the line, as CommonMark allows no
   backtick in the info string of a backtick fence. It opened one there, so
@@ -764,10 +760,7 @@ stay on record here with the reason they changed.
   1 with `first H2 is "Install" at line 7`. With `<!--`, `## Install`,
   `-->` and `## Quick Start` in place of its `<div>`, `## Quick Start` and
   `</div>`, it passes, and so it does with `<div>`, `## Install`, `</div>`,
-  a blank line and `## Quick Start` there. A block that `<span>` alone on
-  a line opens (CommonMark kind 7) is not followed, so that README with
-  `<span>` and `</span>` in place of the `<div>` tags passes, with
-  `Quick Start at line 4`.
+  a blank line and `## Quick Start` there.
 - `npm run check:readme` reads a dated page's "as of" note inside a
   `<textarea>` in an HTML block, also where the note sits in an HTML
   comment, processing instruction or `<style>` there. The text of a
@@ -803,10 +796,7 @@ stay on record here with the reason they changed.
   `docs/mitre-atlas-mapping.md`, which that section links to below them,
   the check exited 0, and now exits 1 with `E2E-003 is listed as MITRE
   ATLAS coverage, but every test in
-  src/e2e/E2E-003.live-network-detection.test.ts is skipped`. A block that
-  `<span>` alone on a line opens (CommonMark kind 7) is not followed, so
-  with `<span>` and `</span>` in place of the `<div>` tags in
-  `docs/test-catalog.md` the check exits 1 with the table not found.
+  src/e2e/E2E-003.live-network-detection.test.ts is skipped`.
 - `npm run check:readme` reads a dated page's "as of" note between
   backticks on a line of an HTML block. The line is raw HTML, in which a
   backtick is text: markdown-it 14.1.1 and micromark 4.0.2 pass it through
@@ -865,10 +855,7 @@ stay on record here with the reason they changed.
   `-->`, around the line, and puts each of the four blocks, after a blank
   line, below the table's last row, where the line was read as a row
   whose Source names no directory; on the README and on a page that took
-  its text, each of those inputs exited 1 and now exits 0. A block that
-  `<span>` alone on a line opens (CommonMark kind 7) is not followed, so
-  with `<span>` and `</span>` in place of the `<div>` tags the check still
-  exits 1 with the "Category" row's message.
+  its text, each of those inputs exited 1 and now exits 0.
 - `npm run check:readme` ends a `<textarea>` in a paragraph, a heading or a
   table cell at a `</textarea>` end tag inside a comment, processing
   instruction, CDATA section or declaration, or inside the quoted value of
@@ -925,11 +912,7 @@ stay on record here with the reason they changed.
   that row's line. `scripts/check-readme.test.mjs` also puts that
   `## What Gets Tested` line and a table in a block that `<div>` opens,
   which exited 1 the same way, and in a fenced code block, which the check
-  already skipped, on the README and on a page that took its text. A
-  block that `<span>` alone on a line opens (CommonMark kind 7) is still
-  not followed, so with `<span>` and `</span>` in place of the `<div>`
-  tags the section starts at the line inside it and the check exits 1,
-  reading the table in that block as the section's table.
+  already skipped, on the README and on a page that took its text.
 - `npm run check:readme` reads no part of a tag as the text of a dated page,
   on a line of an HTML block or, where the tag ends on its line, in a
   paragraph, a heading or a table cell: a browser shows no tag, nor the
@@ -986,10 +969,7 @@ stay on record here with the reason they changed.
   instead, which the check already skipped, it exited 1 and still does.
   `scripts/check-readme.test.mjs` puts that `## MITRE ATLAS Coverage` line
   in each of the three blocks right before the heading, with E2E-003
-  listed in the section's table and in a page the section links to. A
-  block that `<span>` alone on a line opens (CommonMark kind 7) is still
-  not followed, so with `<span>` and `</span>` in place of `<!--` and
-  `-->` the section starts at the line inside it and the check exits 0.
+  listed in the section's table and in a page the section links to.
 - `npm run check:readme` reads no line of an HTML block that it follows
   (CommonMark kinds 1 to 6) as paragraph text, as CommonMark reads none
   so, so no line goes on with it lazily: a line of text at column 0 after
@@ -1048,6 +1028,37 @@ stay on record here with the reason they changed.
   after `<details>`, between two `~~~` lines in `<details>`, and between
   backticks in a block that `<details>` opens hold for `<details open>`:
   with `<details>`, each of those exited 0 and now exits 1.
+- `npm run check:readme` follows an HTML block that an open tag or a
+  closing tag alone on a line opens, such as `<span>` or `</span>`
+  (CommonMark kind 7), up to the line before the next blank line, as it
+  follows one that `<div>` opens, but not from a line that goes on with a
+  paragraph, also lazily, as such a block cannot interrupt one. A tag
+  with text after it on its line opens none. The check read the lines of
+  such a block as Markdown, so a `##` line there was a heading. With
+  `<span>`, `## MITRE ATLAS Coverage`, `</span>` and a blank line right
+  before `## MITRE ATLAS Coverage` in the README, and `E2E-003` in place
+  of `E2E-003 (skipped)` in the "Exfiltration via Cyber Means" row of
+  `docs/mitre-atlas-mapping.md`, `node scripts/check-readme.mjs` exited 0,
+  as the section started at the line inside the block and ended at the
+  real heading. It now exits 1 with `docs/mitre-atlas-mapping.md line 15:
+  E2E-003 is listed as MITRE ATLAS coverage, but every test in
+  src/e2e/E2E-003.live-network-detection.test.ts is skipped`, as it
+  already did with `<div>` and `</div>` in place of the `<span>` tags. In
+  `docs/test-catalog.md`, a blank line, `<span>`, `## Note` and `</span>`
+  right after `## What Gets Tested`, the same with `| Fake row | 99 |` in
+  place of `## Note`, and `<span>`, `## What Gets Tested`, a table,
+  `</span>` and a blank line right before that heading each exited 1 and
+  now exit 0. With `--no-counts`, a README of `# Title`, a blank line,
+  `<span>`, `## Quick Start`, `</span>`, a blank line and a shell code
+  block exited 0 with `Quick Start at line 4` and now exits 1 with
+  `README has no H2 heading`; `<span>`,
+  `` See `<a href="nope.md">the page</a>`. `` and `</span>` in the README
+  exited 0 and now exit 1 with `link target "nope.md" does not exist`;
+  `<span>`, `See [the page](docs/nowhere.md).` and `</span>` exited 1 and
+  now exit 0, as that line is raw HTML, where the link is text, while
+  `Text.`, `<span>` and that link line still exit 1; and an "as of" note
+  between two `~~~` lines between `<span>` and `</span>` on a dated page
+  that the README links failed the check and now marks the page.
 
 ## 0.4.1 - 2026-10-17
 

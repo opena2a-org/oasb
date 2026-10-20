@@ -613,14 +613,15 @@ test('a directory whose name ends in .md in the MITRE ATLAS Coverage section is 
 
 test('a ## line of a fenced code block or of an HTML block does not end the MITRE ATLAS Coverage section, and a ## line outside one does', () => {
   // CommonMark reads the ## line as code in a fenced code block, and as raw
-  // HTML in a block that <div> opens, up to a blank line, so the table and
-  // the link below the block are still in the section. withAtlas() puts the
-  // row at line 45; the four lines added after the heading move it to 49.
+  // HTML in a block that <div> opens, or <span> alone on a line (kind 7), up
+  // to a blank line, so the table and the link below the block are still in
+  // the section. withAtlas() puts the row at line 45; the four lines added
+  // after the heading move it to 49.
   const below = (block, readme) => readme.replace('## MITRE ATLAS Coverage\n', `## MITRE ATLAS Coverage\n\n${block}`);
   const listed = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001, E2E-003 |');
   const linked = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](docs/atlas.md).');
   const page = withPage('| E2E-003 | Outbound TCP |');
-  for (const block of ['<div>\n## Note\n</div>\n', '```bash\n## Note\n```\n']) {
+  for (const block of ['<div>\n## Note\n</div>\n', '<span>\n## Note\n</span>\n', '```bash\n## Note\n```\n']) {
     let r = checkCounts(below(block, listed));
     assert.equal(r.status, 1, block);
     assert.equal(r.stderr.trim(), `README: line 49: ${SKIPPED_E2E_003}`, block);
@@ -637,13 +638,18 @@ test('a ## line of a fenced code block or of an HTML block does not end the MITR
 
 // CommonMark reads a ## line as code in a fenced code block, and as raw HTML
 // in a block that <!-- opens, up to the line that holds -->, or in one that
-// <div> opens, up to a blank line, so the section starts at the heading
-// below the block, and the table and the link below that heading are in it.
-// withAtlas() puts the row at line 45; the block and the blank line after
-// it, added before the heading, move it to 49.
+// <div> opens, up to a blank line, as in one that an open tag or a closing
+// tag alone on a line opens (kind 7), such as <span>, </span> or
+// <span class="note">, so the section starts at the heading below the block,
+// and the table and the link below that heading are in it. withAtlas() puts
+// the row at line 45; the block and the blank line after it, added before
+// the heading, move it to 49.
 for (const [kind, block] of [
   ['a block that <!-- opens', '<!--\n## MITRE ATLAS Coverage\n-->\n'],
   ['a block that <div> opens', '<div>\n## MITRE ATLAS Coverage\n</div>\n'],
+  ['a block that <span> opens', '<span>\n## MITRE ATLAS Coverage\n</span>\n'],
+  ['a block that </span> opens', '</span>\n## MITRE ATLAS Coverage\n<span>\n'],
+  ['a block that <span class="note"> opens', '<span class="note">  \n## MITRE ATLAS Coverage\n</span>\n'],
   ['a fenced code block', '```markdown\n## MITRE ATLAS Coverage\n```\n'],
 ]) {
   test(`a ## MITRE ATLAS Coverage line of ${kind} does not start the MITRE ATLAS Coverage section`, () => {
@@ -659,6 +665,57 @@ for (const [kind, block] of [
     assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
   });
 }
+
+test('a tag alone on a line that goes on with a paragraph, or a tag with text after it on its line, opens no HTML block, so the ## MITRE ATLAS Coverage line below it starts the section', () => {
+  // An HTML block of kind 7 cannot interrupt a paragraph, so <span> on a
+  // line that goes on with one, also lazily without the > of the block quote
+  // that holds it, is paragraph text, and a tag with text after it on its
+  // line opens no such block. The ## line below each is an H2, which starts
+  // the section, so the section ends at the ## MITRE ATLAS Coverage heading
+  // below it, and the table below that heading is not read.
+  for (const block of [
+    'Text.\n<span>\n## MITRE ATLAS Coverage\n</span>\n',
+    '> Text.\n<span>\n## MITRE ATLAS Coverage\n</span>\n',
+    '<span>Text.\n## MITRE ATLAS Coverage\n</span>\n',
+  ]) {
+    const before = (readme) => readme.replace('## MITRE ATLAS Coverage\n', `${block}\n## MITRE ATLAS Coverage\n`);
+    const r = checkCounts(before(withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001, E2E-003 |')));
+    assert.equal(r.status, 0, `${block}\n${r.stderr}`);
+  }
+});
+
+test('a markdown link on a line of an HTML block that a tag alone on a line opens is not resolved, and one in a paragraph that such a line goes on with is', () => {
+  // CommonMark reads each line of a block that an open tag or a closing tag
+  // alone on a line opens (kind 7), up to a blank line, as raw HTML, where
+  // [the page](docs/nowhere.md) is text. Such a block starts on a line that
+  // follows no paragraph text, or that opens a block quote or list item,
+  // also below a paragraph. It cannot interrupt a paragraph, so on a line
+  // that goes on with one the tag is paragraph text, and so is the link
+  // below it, as it is after the blank line that ends the block and after a
+  // tag with text after it on its line.
+  for (const body of [
+    '<span>\nSee [the page](docs/nowhere.md).\n</span>\n',
+    '</span>\nSee [the page](docs/nowhere.md).\n',
+    '<img src="logo.png" />\nSee [the page](docs/nowhere.md).\n',
+    '> <span>\n> See [the page](docs/nowhere.md).\n',
+    'Text.\n> <span>\n> See [the page](docs/nowhere.md).\n',
+    'Text.\n- <span>\n  See [the page](docs/nowhere.md).\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  for (const [body, line] of [
+    ['Text.\n<span>\nSee [the page](docs/nowhere.md).\n', 13],
+    ['> Text.\n> <span>\n> See [the page](docs/nowhere.md).\n', 13],
+    ['- Text.\n<span>\n  See [the page](docs/nowhere.md).\n', 13],
+    ['<span>\n\nSee [the page](docs/nowhere.md).\n', 13],
+    ['<span>Text.\nSee [the page](docs/nowhere.md).\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+});
 
 // "constructor" and "toString" are inherited by every object, so a lookup
 // that is not limited to the counts' own keys finds a function for them.
@@ -2194,8 +2251,9 @@ test('a # line of an HTML block holds no anchor, and a heading after the block d
 
 test("a ## line of an HTML block is not the README's first H2, and a ## line after the block is", () => {
   // CommonMark reads each line of the block as raw HTML: in a block that
-  // <div> opens, up to a blank line, and in a comment, up to -->. No
-  // heading starts on such a line, so it is not the Quick Start.
+  // <div> opens, or <span> alone on a line (kind 7), up to a blank line, and
+  // in a comment, up to -->. No heading starts on such a line, so it is not
+  // the Quick Start.
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
   try {
     const run = (readme) => {
@@ -2203,17 +2261,20 @@ test("a ## line of an HTML block is not the README's first H2, and a ## line aft
       return spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
     };
     const command = '\n```bash\nnpm test\n```\n';
-    const none = run(`# Title\n\n<div>\n## Quick Start\n</div>\n${command}`);
-    assert.equal(none.status, 1);
-    assert.match(none.stderr, /^README: README has no H2 heading; the first one must be "## Quick Start"\.$/m);
-    const other = run(`# Title\n\n<div>\n## Quick Start\n</div>\n\n## Install\n${command}`);
-    assert.equal(other.status, 1);
-    assert.match(other.stderr, /^README: first H2 is "Install" at line 7; it must be "Quick Start"\.$/m);
+    for (const tag of ['div', 'span']) {
+      const none = run(`# Title\n\n<${tag}>\n## Quick Start\n</${tag}>\n${command}`);
+      assert.equal(none.status, 1, tag);
+      assert.match(none.stderr, /^README: README has no H2 heading; the first one must be "## Quick Start"\.$/m, tag);
+      const other = run(`# Title\n\n<${tag}>\n## Quick Start\n</${tag}>\n\n## Install\n${command}`);
+      assert.equal(other.status, 1, tag);
+      assert.match(other.stderr, /^README: first H2 is "Install" at line 7; it must be "Quick Start"\.$/m, tag);
+    }
     // The line that holds a comment's --> ends the block, and a blank line
-    // ends a <div> block: the ## line after each is the first H2.
+    // ends a <div> or <span> block: the ## line after each is the first H2.
     for (const [readme, at] of [
       [`# Title\n\n<!--\n## Install\n-->\n## Quick Start\n${command}`, 6],
       [`# Title\n\n<div>\n## Install\n</div>\n\n## Quick Start\n${command}`, 7],
+      [`# Title\n\n<span>\n## Install\n</span>\n\n## Quick Start\n${command}`, 7],
     ]) {
       const r = run(readme);
       assert.equal(r.status, 0, `${readme}\n${r.stderr}`);
@@ -2820,16 +2881,18 @@ test('a fenced code block whose fence starts a later line of a list item ends wi
 
 test('a line of ``` or ~~~ inside an HTML block opens no code block, so a note after it marks a dated page, and one after the block ends does not', () => {
   // Each line of an HTML block is raw HTML: in a block that a block tag
-  // such as <div> opens up to a blank line, in one that <pre> opens past a
-  // blank line up to </pre>, and in a comment up to -->. A line there that
-  // starts with 3 or more backticks or tildes, also after the > of a block
-  // quote that holds the block or a list marker, opens no fenced code block.
-  // A note inside the comment is not shown, so the one in a comment follows
-  // its end, on the line that holds it.
+  // such as <div> opens, or <span> alone on a line (kind 7), up to a blank
+  // line, in one that <pre> opens past a blank line up to </pre>, and in a
+  // comment up to -->. A line there that starts with 3 or more backticks or
+  // tildes, also after the > of a block quote that holds the block or a list
+  // marker, opens no fenced code block. A note inside the comment is not
+  // shown, so the one in a comment follows its end, on the line that holds
+  // it.
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
     '<div>\n```\n    As of 2026-06-03.\n```\n</div>\n\n' + see,
     '<details open>\n~~~\nAs of 2026-06-03.\n~~~\n</details>\n\n' + see,
+    '<span>\n~~~\nAs of 2026-06-03.\n~~~\n</span>\n\n' + see,
     '<pre>\n\n```\nAs of 2026-06-03.\n```\n</pre>\n\n' + see,
     '<!--\n```\n--> As of 2026-06-03.\n\n' + see,
     '> <div>\n> ```\n> As of 2026-06-03.\n> ```\n> </div>\n\n' + see,
@@ -2954,9 +3017,11 @@ test('an href between backticks on a line of an HTML block is a link, as a backt
   // Check 4 resolves such an href with both backticks on its line, or one
   // of them on an earlier line of the block, on a line that lineStart()
   // reads as text, as indented code or as a table row, and in a block quote
-  // that holds the block.
+  // that holds the block, also in a block that <span> alone on a line opens
+  // (kind 7).
   for (const [body, line] of [
     ['<div>\nSee `<a href="nope.md">the page</a>`.\n</div>\n', 12],
+    ['<span>\nSee `<a href="nope.md">the page</a>`.\n</span>\n', 12],
     ['<div>\n    See `<a href="nope.md">the page</a>`.\n</div>\n', 12],
     ['<div>\n| See `<a href="nope.md">the page</a>` |\n| --- |\n</div>\n', 12],
     ['> <div>\n> See `<a href="nope.md">the page</a>`.\n> </div>\n', 12],
@@ -3577,16 +3642,18 @@ test('a note between backticks on a line of an HTML block marks a dated page, as
 
 test("a ## line of an HTML block is not a dated page's first H2, so a note below it marks the page, and one below a ## line after the block does not", () => {
   // CommonMark reads each line of the block as raw HTML: in a block that
-  // <div> or <details> opens, up to a blank line, also after a line of ```
-  // there, in one that <pre> opens, past a blank line up to </pre>, and in
-  // a comment, up to -->. No heading starts on such a line, so the page's
-  // first H2 is the first ## line after the block.
+  // <div> or <details> opens, or <span> alone on a line (kind 7), up to a
+  // blank line, also after a line of ``` there, in one that <pre> opens,
+  // past a blank line up to </pre>, and in a comment, up to -->. No heading
+  // starts on such a line, so the page's first H2 is the first ## line after
+  // the block.
   const page = (block) => ({
     'docs/AUDIT-2026-06-03.md': `# Audit\n\n${block}\nAs of 2026-06-03. See the [README](../README.md).\n\n## Real\n\n| npm test total | 245 |\n`,
   });
   for (const block of [
     '<div>\n## Counts\n</div>\n',
     '<details>\n## Counts\n</details>\n',
+    '<span>\n## Counts\n</span>\n',
     '<div>\n```\n## Counts\n</div>\n',
     '<!--\n## Counts\n-->\n',
     '<pre>\n## Counts\n\n## More\n</pre>\n',
@@ -3594,11 +3661,11 @@ test("a ## line of an HTML block is not a dated page's first H2, so a note below
     const r = check(DATED_LINK, page(block));
     assert.equal(r.status, 0, `${block}\n${r.stderr}`);
   }
-  // A blank line ends a <div> block, a line without the ">" of the block
-  // quote that holds one ends that block quote, and so the block, and a
+  // A blank line ends a <div> or <span> block, a line without the ">" of the
+  // block quote that holds one ends that block quote, and so the block, and a
   // comment that ends on its first line is that line alone: the ## line
   // after each is the page's first H2, and the note below it is not read.
-  for (const block of ['<div>\n</div>\n\n## Counts\n', '> <div>\n## Counts\n', '<!-- x -->\n## Counts\n']) {
+  for (const block of ['<div>\n</div>\n\n## Counts\n', '<span>\n</span>\n\n## Counts\n', '> <div>\n## Counts\n', '<!-- x -->\n## Counts\n']) {
     const r = check(DATED_LINK, page(block));
     assert.equal(r.status, 1, block);
     assert.match(r.stderr, DATED, block);
@@ -3838,13 +3905,14 @@ test('the counts and the What Gets Tested table on a page that took README text 
 
 test('a ## line of a fenced code block or of an HTML block does not end the What Gets Tested section, and a ## line outside one does', () => {
   // CommonMark reads the ## line as code in a fenced code block, and as raw
-  // HTML in a block that <div> opens, up to a blank line, so the table below
-  // it is still in the section. The four lines added after the heading move
-  // the "Pinned benchmark harness tests" row from line 36 to line 40.
+  // HTML in a block that <div> opens, or <span> alone on a line (kind 7), up
+  // to a blank line, so the table below it is still in the section. The four
+  // lines added after the heading move the "Pinned benchmark harness tests"
+  // row from line 36 to line 40.
   const below = (block, text) => text.replace('## What Gets Tested\n', `## What Gets Tested\n\n${block}`);
   const wrong = (text) => text.replace('| Pinned benchmark harness tests | 3 |', '| Pinned benchmark harness tests | 4 |');
   const ROW = 'the "Pinned benchmark harness tests" row says 4; the test report has 3 tests in src/benchmark/pinned.';
-  for (const block of ['<div>\n## Note\n</div>\n', '```bash\n## Note\n```\n']) {
+  for (const block of ['<div>\n## Note\n</div>\n', '<span>\n## Note\n</span>\n', '```bash\n## Note\n```\n']) {
     const ok = checkCounts(below(block, COUNTED));
     assert.equal(ok.status, 0, `${block}\n${ok.stderr}`);
     const bad = checkCounts(wrong(below(block, COUNTED)));
@@ -3855,12 +3923,14 @@ test('a ## line of a fenced code block or of an HTML block does not end the What
   // the heading on moved to docs/test-catalog.md.
   const at = COUNTED.indexOf('## What Gets Tested');
   const page = (catalog) => checkCounts(COUNTED.slice(0, at), SUITE, report(SUITE), { ...SOURCES, 'docs/test-catalog.md': catalog });
-  const catalog = below('<div>\n## Note\n</div>\n', COUNTED.slice(at));
-  const ok = page(catalog);
-  assert.equal(ok.status, 0, ok.stderr);
-  const bad = page(wrong(catalog));
-  assert.equal(bad.status, 1);
-  assert.equal(bad.stderr.trim(), `README: docs/test-catalog.md line 17: ${ROW}`);
+  for (const block of ['<div>\n## Note\n</div>\n', '<span>\n## Note\n</span>\n']) {
+    const catalog = below(block, COUNTED.slice(at));
+    const ok = page(catalog);
+    assert.equal(ok.status, 0, `${block}\n${ok.stderr}`);
+    const bad = page(wrong(catalog));
+    assert.equal(bad.status, 1, block);
+    assert.equal(bad.stderr.trim(), `README: docs/test-catalog.md line 17: ${ROW}`, block);
+  }
   // An H2 ends the section, so the table below it is not read.
   for (const r of [checkCounts(below('## Note\n', COUNTED)), page(below('## Note\n', COUNTED.slice(at)))]) {
     assert.equal(r.status, 1);
@@ -3870,8 +3940,9 @@ test('a ## line of a fenced code block or of an HTML block does not end the What
 
 test('a | line of a fenced code block or of an HTML block in the What Gets Tested section is no row of the table', () => {
   // CommonMark reads the | line as code in a fenced code block, as raw HTML
-  // in a block that <div> opens, up to a blank line, and in one that <!--
-  // opens, up to the line that holds -->, so the rows of the section are
+  // in a block that <div> opens, or <span> alone on a line (kind 7), up to a
+  // blank line, and in one that <!-- opens, up to the line that holds -->,
+  // so the rows of the section are
   // those of the table, with the block above or below it. The four lines
   // added after the heading move the "Pinned benchmark harness tests" row
   // from line 36 to line 40; on a page that took README text, where the
@@ -3884,7 +3955,13 @@ test('a | line of a fenced code block or of an HTML block in the What Gets Teste
   const ROW = 'the "Pinned benchmark harness tests" row says 4; the test report has 3 tests in src/benchmark/pinned.';
   const at = COUNTED.indexOf('## What Gets Tested');
   const page = (catalog) => checkCounts(COUNTED.slice(0, at), SUITE, report(SUITE), { ...SOURCES, 'docs/test-catalog.md': catalog });
-  for (const block of ['```text\n| Fake row | 99 |\n```\n', '~~~\n| Fake row | 99 |\n~~~\n', '<div>\n| Fake row | 99 |\n</div>\n', '<!--\n| Fake row | 99 |\n-->\n']) {
+  for (const block of [
+    '```text\n| Fake row | 99 |\n```\n',
+    '~~~\n| Fake row | 99 |\n~~~\n',
+    '<div>\n| Fake row | 99 |\n</div>\n',
+    '<span>\n| Fake row | 99 |\n</span>\n',
+    '<!--\n| Fake row | 99 |\n-->\n',
+  ]) {
     for (const [place, line, pageLine] of [[above, 40, 17], [below, 36, 13]]) {
       const ok = checkCounts(place(block, COUNTED));
       assert.equal(ok.status, 0, `${block}\n${ok.stderr}`);
@@ -3903,13 +3980,14 @@ test('a | line of a fenced code block or of an HTML block in the What Gets Teste
 test('a ## What Gets Tested line of a fenced code block or of an HTML block does not start the What Gets Tested section', () => {
   // CommonMark reads the ## line as code in a fenced code block, as raw HTML
   // in a block that <!-- opens, up to the line that holds -->, and in one
-  // that <div> opens, up to a blank line, so the section starts at the
-  // heading below the block, and the table checked is the one below that
-  // heading. The block and the blank line after it, added before the
-  // heading, move the "Pinned benchmark harness tests" row from line 36 to
-  // line 44, or 43 with the <div> block, which holds no blank line; on a
-  // page that took README text, where the README's text from the heading on
-  // moved to docs/test-catalog.md, from line 13 to line 21, or 20.
+  // that <div> opens, or <span> alone on a line (kind 7), up to a blank
+  // line, so the section starts at the heading below the block, and the
+  // table checked is the one below that heading. The block and the blank
+  // line after it, added before the heading, move the "Pinned benchmark
+  // harness tests" row from line 36 to line 44, or 43 with the <div> or
+  // <span> block, which holds no blank line; on a page that took README
+  // text, where the README's text from the heading on moved to
+  // docs/test-catalog.md, from line 13 to line 21, or 20.
   const TABLE = '| Category | Tests | Source | What |\n|---|---|---|---|\n| Fake | 99 | `src/atomic` | x |\n';
   const before = (block, text) => text.replace('## What Gets Tested\n', `${block}\n## What Gets Tested\n`);
   const wrong = (text) => text.replace('| Pinned benchmark harness tests | 3 |', '| Pinned benchmark harness tests | 4 |');
@@ -3919,6 +3997,7 @@ test('a ## What Gets Tested line of a fenced code block or of an HTML block does
   for (const [block, line, pageLine] of [
     [`<!--\n## What Gets Tested\n\n${TABLE}-->\n`, 44, 21],
     [`<div>\n## What Gets Tested\n${TABLE}</div>\n`, 43, 20],
+    [`<span>\n## What Gets Tested\n${TABLE}</span>\n`, 43, 20],
     [`\`\`\`markdown\n## What Gets Tested\n\n${TABLE}\`\`\`\n`, 44, 21],
   ]) {
     const ok = checkCounts(before(block, COUNTED));

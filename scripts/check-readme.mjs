@@ -77,13 +77,17 @@
 //      those of a block whose fence starts its line. None of these fences
 //      opens a block on a line of an HTML block, which is raw HTML: a block
 //      that a block tag such as <div> opens runs to the line before the next
-//      blank line, one that <pre>, <script>, <style>, <textarea>, a comment,
-//      a processing instruction, a declaration or CDATA opens runs to the
-//      line that holds its end, and either ends before a line that does not
-//      go on with the block quotes and list items that hold it. Nor does a
-//      > or a list marker open a block quote or list item on a line of such
-//      a block after its first, as the line is raw HTML, so a line after the
-//      block is read with the block quotes and list items that held it.
+//      blank line, as does one that another open tag or closing tag alone on
+//      a line but for white space after it opens, such as <span> or </span>,
+//      on a line that does not go on with a paragraph, also lazily, which
+//      such a block cannot interrupt; one that <pre>, <script>, <style>,
+//      <textarea>, a comment, a processing instruction, a declaration or
+//      CDATA opens runs to the line that holds its end, and each ends before
+//      a line that does not go on with the block quotes and list items that
+//      hold it. Nor does a > or a list marker open a block quote or list
+//      item on a line of such a block after its first, as the line is raw
+//      HTML, so a line after the block is read with the block quotes and
+//      list items that held it.
 //      Links inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
@@ -261,14 +265,19 @@ const fail = (msg) => failures.push(msg);
 // the first line of an HTML block of the kinds that may interrupt a
 // paragraph (CommonMark kinds 1 to 6: <script>, <pre>, <style>, <textarea>, a
 // comment, a processing instruction, a declaration, CDATA, whose name is
-// matched in capitals only, or a block tag such as <div> or </p>; a tag such
-// as <span> does not interrupt one), and a list marker. The spaces and tabs
-// after a thematic break's last mark are matched by that mark's [ \t]*
-// alone: with a second [ \t]* after the marks, the two could share them in
-// every way, which took seconds on a line of 100,000 of them.
+// matched in capitals only, or a block tag such as <div> or </p>), the
+// first line of an HTML block of kind 7, which cannot interrupt one (an
+// open tag or a closing tag that starts none of the other kinds, such as
+// <span> or </span>, with only white space after it on the line), and a
+// list marker. The spaces and tabs after a thematic break's last mark are
+// matched by that mark's [ \t]* alone: with a second [ \t]* after the
+// marks, the two could share them in every way, which took seconds on a
+// line of 100,000 of them.
 // HTML_BLOCK_START matches the first line of an HTML block of kind 1, 2, 3
 // or 4 with the group of that number, and one of kind 6, a block tag, with
-// none of them; CDATA_START matches one of kind 5.
+// none of them; CDATA_START matches one of kind 5, and HTML_BLOCK_7_START
+// one of kind 7, whose tag is read as OPEN_TAG and CLOSING_TAG read one, as
+// inlineHtml() reads a tag inline.
 const ATX_HEADING = /#{1,6}(?:[ \t]|$)/y;
 const SETEXT_UNDERLINE = /(?:=+|-+)[ \t]*$/y;
 const THEMATIC_BREAK = /(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/y;
@@ -281,11 +290,17 @@ const HTML_BLOCK_START = new RegExp(
   'iy',
 );
 const CDATA_START = /<!\[CDATA\[/y;
+const OPEN_TAG = /<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^"'=<>`\x00-\x20]+|'[^']*'|"[^"]*"))?)*\s*\/?>/;
+const CLOSING_TAG = /<\/[A-Za-z][A-Za-z0-9-]*\s*>/;
+const HTML_BLOCK_7_START = new RegExp(`(?:${OPEN_TAG.source}|${CLOSING_TAG.source})\\s*$`, 'y');
 // What ends an HTML block of kinds 1 to 5, as CommonMark ends it: the first
 // line of the block, its first line included, that holds the pattern after
-// the block quote markers that hold the block. A block of kind 6 ends before
-// the first line that is blank after those markers.
+// the block quote markers that hold the block. A block of kind 6 or 7 ends
+// before the first line that is blank after those markers.
 const HTML_BLOCK_END = { 1: /<\/(?:script|pre|style|textarea)>/i, 2: /-->/, 3: /\?>/, 4: />/, 5: /\]\]>/ };
+// Whether an HTML block of `kind` ends before a blank line, as one of kind
+// 6 or 7 does, rather than at a line that holds the end HTML_BLOCK_END gives.
+const endsAtBlank = (kind) => kind >= 6;
 const LIST_MARKER = /(?:[-+*]|(\d{1,9})[.)])(?=[ \t]|$)/y;
 // A code fence: 3 or more backticks that no backtick follows on the line, or
 // 3 or more tildes.
@@ -689,11 +704,10 @@ function withoutCodeSpans(line) {
 // < it meets from left to right, and the line is searched for the end of a
 // comment, processing instruction, CDATA section or declaration on from
 // where that end was last found, so a line of many <!-- that no --> follows
-// is not read again from each one.
+// is not read again from each one. OPEN_TAG and CLOSING_TAG are set above
+// parse(), as lineStart() reads the first line of an HTML block with them.
 const AUTOLINK = /<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^<>\x00-\x20]*>/;
 const EMAIL_AUTOLINK = /<[\w.!#$%&'*+\/=?^`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>/;
-const OPEN_TAG = /<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^"'=<>`\x00-\x20]+|'[^']*'|"[^"]*"))?)*\s*\/?>/;
-const CLOSING_TAG = /<\/[A-Za-z][A-Za-z0-9-]*\s*>/;
 const AUTOLINK_OR_TAG = new RegExp(`${AUTOLINK.source}|${EMAIL_AUTOLINK.source}|(${OPEN_TAG.source}|${CLOSING_TAG.source})`, 'y');
 function inlineHtml(line) {
   const found = new Map(); // end -> where it was last found, or -1 when nowhere after
@@ -980,7 +994,8 @@ function tableHeader(start, containers, next, pipeless) {
 // (|), each after at most 3 columns of indentation. On a line that goes on
 // with every container below a paragraph, a setext underline ends that
 // paragraph, and a list item ends it only when it holds text and, if
-// ordered, starts at 1.
+// ordered, starts at 1. An HTML block of kind 7 starts only on a line that
+// does not go on with a paragraph, also lazily, as it cannot interrupt one.
 // `stops` are the indices in `containers` of the block quotes and of the
 // list items that hold nothing yet, in order: once the rest of a line is
 // blank, it goes on with the containers before the next of them. A caller
@@ -992,7 +1007,7 @@ function tableHeader(start, containers, next, pipeless) {
 // `fence` is then its run of backticks or tildes, `bare` says whether only
 // spaces and tabs follow it, and `quoted` whether the line goes on with or
 // opens a block quote), 'block' (one of the other blocks; when it is an HTML
-// block, `html` is its kind, 1 to 6) or 'text', which a paragraph holds. A
+// block, `html` is its kind, 1 to 7) or 'text', which a paragraph holds. A
 // 'row' comes with `row`, the text from its |, and so does a 'text' that is
 // not indented 4 or more columns, the text from where it starts, as a table
 // row need not start with |. Whether either is a table row or paragraph
@@ -1090,6 +1105,11 @@ function lineStart(line, containers, paragraph, stops) {
     const html = matchAt(HTML_BLOCK_START, text, j);
     if (html) return { matched, opened, rest: 'block', html: [1, 2, 3, 4].find((k) => html[k] !== undefined) ?? 6 };
     if (matchAt(CDATA_START, text, j)) return { matched, opened, rest: 'block', html: 5 };
+    // A block of kind 7 cannot interrupt a paragraph, so it starts on no
+    // line that goes on with the paragraph above, lazily or not: only on a
+    // line whose line above is no paragraph text, or that opens a block
+    // quote or list item first.
+    if (!(paragraph && opened.length === 0) && matchAt(HTML_BLOCK_7_START, text, j)) return { matched, opened, rest: 'block', html: 7 };
     const marker = matchAt(LIST_MARKER, text, j);
     if (!marker) return { matched, opened, rest: 'text', row: text.slice(j) };
     const width = c - col + marker[0].length;
@@ -1143,19 +1163,20 @@ function afterQuotes(line, quotes) {
 // follows to the fence that closes it, or to the first line that does not
 // go on with the block quotes and list items that hold it, as a fenced code
 // block takes no line lazily. The reader also follows an HTML block, of
-// kind 1 to 6, from a line outside one that lineStart() reads as its first
+// kind 1 to 7, from a line outside one that lineStart() reads as its first
 // line: to the line before the first line that does not go on with the
 // block quotes and list items that hold it, as an HTML block takes no line
-// lazily; a block of kind 6 also to the line before the first line that is
-// blank after their markers, and one of kind 1 to 5 to the first line that
-// holds its end, as HTML_BLOCK_END gives it. The lines of such a block are
-// read as any other line is, so lineStart() may read one as indented code,
-// but a fence on one opens no fenced code block: the reader reads it as a
-// block of its own, as its text is raw HTML. Nor does a > or a list marker
-// open a block quote or list item on a line of the block after its first,
-// so the line after the block is read with the block quotes and list items
-// that held the block, and a line after the blank line that ends a block
-// that <div> opens, indented 4 or more columns past them, is indented code.
+// lazily; a block of kind 6 or 7 also to the line before the first line
+// that is blank after their markers, and one of kind 1 to 5 to the first
+// line that holds its end, as HTML_BLOCK_END gives it. The lines of such a
+// block are read as any other line is, so lineStart() may read one as
+// indented code, but a fence on one opens no fenced code block: the reader
+// reads it as a block of its own, as its text is raw HTML. Nor does a > or
+// a list marker open a block quote or list item on a line of the block
+// after its first, so the line after the block is read with the block
+// quotes and list items that held the block, and a line after the blank
+// line that ends a block that <div> opens, indented 4 or more columns past
+// them, is indented code.
 // Nor is a line of the block paragraph text, so no line goes on with it
 // lazily: the line after it starts a block, and when that line does not go
 // on with the list items that hold the block, they end there.
@@ -1199,12 +1220,12 @@ function blockReader(lines, quotedFences, htmlLines) {
   let htmlBlock = null;
   // Whether `line`, which lineStart() reads as `start`, is a line of that
   // HTML block: it goes on with the containers that hold the block, as an
-  // HTML block takes no line lazily, and, in a block of kind 6, is not blank
-  // after their markers.
+  // HTML block takes no line lazily, and, in a block of kind 6 or 7, is not
+  // blank after their markers.
   const inHtml = (line, start) =>
     htmlBlock !== null &&
     start.matched >= htmlBlock.depth &&
-    !(htmlBlock.kind === 6 && /^[ \t]*\r?$/.test(afterQuotes(line, htmlBlock.quotes)));
+    !(endsAtBlank(htmlBlock.kind) && /^[ \t]*\r?$/.test(afterQuotes(line, htmlBlock.quotes)));
   let next = 0; // the index in lines of the line read next
   // The rest of lines[k] as the reader reads it, lineStart() having read the
   // line as `start` after a line that `containers` hold, which is paragraph
@@ -1270,7 +1291,7 @@ function blockReader(lines, quotedFences, htmlLines) {
     // holds the block's end is its last.
     let html = inHtml(line, start);
     if (html) htmlLines?.set(j, htmlBlock);
-    if (htmlBlock && (!html || (htmlBlock.kind !== 6 && HTML_BLOCK_END[htmlBlock.kind].test(afterQuotes(line, htmlBlock.quotes))))) htmlBlock = null;
+    if (htmlBlock && (!html || (!endsAtBlank(htmlBlock.kind) && HTML_BLOCK_END[htmlBlock.kind].test(afterQuotes(line, htmlBlock.quotes))))) htmlBlock = null;
     const rest = fenceOpen || fenceClose || (html && start.rest === 'fence') ? 'block' : restOf(j, start, paragraph, table);
     // A row that no row comes before is a header row.
     if (rest === 'row' && !table) columns = cellCount(start.row);
@@ -1308,7 +1329,7 @@ function blockReader(lines, quotedFences, htmlLines) {
       htmlBlock = { kind: start.html, depth: containers.length, quotes: containers.filter((c) => c.quote).length };
       html = true;
       htmlLines?.set(j, htmlBlock);
-      if (htmlBlock.kind !== 6 && HTML_BLOCK_END[htmlBlock.kind].test(afterQuotes(line, htmlBlock.quotes))) htmlBlock = null;
+      if (!endsAtBlank(htmlBlock.kind) && HTML_BLOCK_END[htmlBlock.kind].test(afterQuotes(line, htmlBlock.quotes))) htmlBlock = null;
     }
     if (rest === 'fence') {
       fenced = start.fence;
@@ -2141,17 +2162,18 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // 9. A dated page the README links says it is one. Nothing compares its
 // counts with the suite, so above its first H2 it says "as of <the date in
 // its file name>" and links to the README. The note may be wrapped and may
-// sit in a blockquote, or in an HTML block of kind 1 to 6, such as one that
-// <div> or <details open> opens, also on a line there that is indented 4 or
-// more columns or that follows a line of 3 or more backticks or tildes,
-// which opens no code block there, and between backticks there, which open
-// no inline code, as the text of an HTML block is raw HTML; text in a code
-// block or inline code is not the note. Nor, in an HTML block, is text
-// inside a comment, a processing instruction, a declaration, a CDATA
-// section, or a <script> or <style> element, as shownHtml() finds them, as
-// none of these holds text for the reader, nor the text of a tag, such as
-// the quoted value of an attribute, also one that runs on to a later line
-// of the block, as a browser shows no part of a tag: the line
+// sit in a blockquote, or in an HTML block of kind 1 to 7, such as one that
+// <div> or <details open> opens, or <span> alone on a line, also on a line
+// there that is indented 4 or more columns or that follows a line of 3 or
+// more backticks or tildes, which opens no code block there, and between
+// backticks there, which open no inline code, as the text of an HTML block
+// is raw HTML; text in a code block or inline code is not the note. Nor, in
+// an HTML block, is text inside a comment, a processing instruction, a
+// declaration, a CDATA section, or a <script> or <style> element, as
+// shownHtml() finds them, as none of these holds text for the reader, nor
+// the text of a tag, such as the quoted value of an attribute, also one
+// that runs on to a later line of the block, as a browser shows no part of
+// a tag: the line
 // <div title="As of 2026-06-03.">x</div> holds no note, and the words on
 // either side of a tag, or of a line break inside one, are read as one
 // word when no space parts them, as <div>A<span class="x">s of</span> is
