@@ -807,6 +807,27 @@ stay on record here with the reason they changed.
   `<span>` alone on a line opens (CommonMark kind 7) is not followed, so
   with `<span>` and `</span>` in place of the `<div>` tags in
   `docs/test-catalog.md` the check exits 1 with the table not found.
+- `npm run check:readme` reads a dated page's "as of" note between
+  backticks on a line of an HTML block. The line is raw HTML, in which a
+  backtick is text: markdown-it 14.1.1 and micromark 4.0.2 pass it through
+  with the backticks around the note. The check read the note there on the
+  part of the line outside its code spans, while it read the hrefs on that
+  line whole. With a README that links `docs/AUDIT-2026-06-03.md`, and the lines
+  `<div>`, `` `As of 2026-06-03.` See the <a href="../README.md">README</a>
+  for the current figures. `` and `</div>` after that page's H1 and a blank
+  line, the check exited 1 with `is a dated page, so above its first H2 it
+  must say "as of 2026-06-03"`, and now exits 0. So do `` a ` ``,
+  `As of 2026-06-03.` and `` d` `` as three lines of a `<div>` block, also
+  in a block quote, ``` `` As of 2026-06-03 ` `` ``` there, and
+  `` `As of 2026-06-03.` `` on such a line indented 4 spaces, in a table
+  row, on the `<div>` line itself, in a block that `<details>` or `<pre>`
+  opens, in a `<div>` in a list item, and after the `-->` that ends a
+  comment, on its line. A `<!--` between backticks there still starts a
+  comment that hides the note after it, and in a paragraph, also one after
+  the blank line that ends such a block, the backticks still make a code
+  span, which both renderers show as code, and the note there still fails
+  the check. The entry above that says the code spans of the block's lines
+  still hold no note no longer holds.
 
 ## 0.4.1 - 2026-10-17
 

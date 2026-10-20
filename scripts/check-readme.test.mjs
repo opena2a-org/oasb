@@ -3041,17 +3041,35 @@ test('a note inside a <textarea> marks a dated page, also inside a comment, proc
   }
 });
 
-test('a note in an HTML block is read without the code spans of its lines, as elsewhere, and a backtick there keeps no comment from opening', () => {
-  // The code spans of the lines of an HTML block are read as on other
-  // lines: one may run on from one line to a later one, also in a block
-  // quote, and a run of two backticks is closed by the next run of two. A
-  // comment starts at <!-- and ends at --> also inside such a span, as the
-  // text of an HTML block is passed on as written.
+test('a note between backticks on a line of an HTML block marks a dated page, as a backtick in raw HTML is text, and a backtick there keeps no comment from opening', () => {
+  // A renderer passes the text of an HTML block on as written, so a
+  // backtick there opens no code span, and the note is read on the whole
+  // line, as an href there is: between two backticks on its line, also two
+  // on two lines of the block, in a block quote, as a run of two, after a
+  // backslash, on a line indented 4 columns, in a table row, in a block
+  // that <details> or <pre> opens, in a list item, and after the --> that
+  // ends a comment, on its line.
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
+    '<div>\n`As of 2026-06-03.` See the <a href="../README.md">README</a> for the current figures.\n</div>\n',
     `<div>\na \`\nAs of 2026-06-03.\nd\`\n</div>\n\n${see}`,
     `> <div>\n> a \`\n> As of 2026-06-03.\n> d\`\n> </div>\n\n${see}`,
     `<div>\n\`\` As of 2026-06-03 \` \`\`\n</div>\n\n${see}`,
+    `<div>\n\\\`As of 2026-06-03.\\\`\n</div>\n\n${see}`,
+    `<div>\n    \`As of 2026-06-03.\`\n</div>\n\n${see}`,
+    `<div>\n| \`As of 2026-06-03.\` |\n| --- |\n</div>\n\n${see}`,
+    `<details>\n\`As of 2026-06-03.\`\n</details>\n\n${see}`,
+    `<pre>\n\n\`As of 2026-06-03.\`\n</pre>\n\n${see}`,
+    `- <div>\n  \`As of 2026-06-03.\`\n  </div>\n\n${see}`,
+    `<!-- x --> \`As of 2026-06-03.\`\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // A comment starts at <!-- and ends at --> also between backticks: the
+  // note after a <!-- that no --> follows is not read, and the note after
+  // the --> that ends a comment is.
+  for (const intro of [
     `<div>\n\`<!--\` As of 2026-06-03.\n</div>\n\n${see}`,
     `<div>\nx \` <!--\ny \` As of 2026-06-03.\n</div>\n\n${see}`,
   ]) {
@@ -3060,16 +3078,20 @@ test('a note in an HTML block is read without the code spans of its lines, as el
     assert.match(r.stderr, DATED, intro);
     assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
   }
-  // A backtick after a backslash is text, and the note after the end of a
-  // comment is read, also where that end or the comment's start is inside
-  // a code span.
   for (const intro of [
-    `<div>\n\\\`As of 2026-06-03.\\\`\n</div>\n\n${see}`,
     `<div>\n<!-- x \`-->\` As of 2026-06-03.\n</div>\n\n${see}`,
     `<div>\n\`a <!-- \` --> As of 2026-06-03 \`\n</div>\n\n${see}`,
   ]) {
     const r = check(DATED_LINK, datedPage(intro));
     assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // In a paragraph, also one after the blank line that ends such a block,
+  // the backticks make a code span, which holds no note.
+  for (const intro of [`\`As of 2026-06-03.\` ${see}`, `<div>\nx\n</div>\n\n\`As of 2026-06-03.\` ${see}`]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
   }
 });
 
