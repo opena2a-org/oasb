@@ -707,8 +707,8 @@ stay on record here with the reason they changed.
   open no code block in a comment. Text after the end of one of these is
   read, also the rest of the line that holds the end:
   `<!-- draft --> As of 2026-06-03.` passes, as it did, and so does the
-  note in a block that `<pre>` or `<textarea>` opens. A comment inside a
-  paragraph is read as the paragraph's text, as before. The text of an
+  note in a block that `<pre>` or `<textarea>` opens. The entry below
+  covers a comment in a paragraph or a table cell. The text of an
   HTML block is passed on as written, so a backtick there keeps no comment
   from opening: `<div>`, `` `<!--` As of 2026-06-03. `` and `</div>`
   passed and now fail, while the code spans of the block's lines still
@@ -760,6 +760,30 @@ stay on record here with the reason they changed.
   comment inside a `<textarea>` is text between the words on either side
   of it: `<textarea>As of <!-- x --> 2026-06-03.</textarea>` passed and now
   fails. A comment after `</textarea>` still hides the note.
+- `npm run check:readme` reads no "as of" note for a dated page inside an
+  HTML comment, processing instruction, declaration or CDATA section in a
+  paragraph, a heading or a table cell, also where one runs on to a later
+  line of its paragraph. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the lines
+  `Hello <!-- As of 2026-06-03. --> world.`, a blank line and
+  `See the [README](../README.md) for the current figures.` after that
+  page's H1 and a blank line, the check exited 0, and now exits 1 with
+  `is a dated page, so above its first H2 it must say "as of 2026-06-03"`.
+  So do the lines `| <!-- As of 2026-06-03. --> | x |` and `| - | - |` in
+  place of the paragraph, and `Hello <!-- As of` and
+  `2026-06-03. --> world.` on two lines, also in a block quote or a list
+  item. Text after the end of one of these is read, also on the line that
+  holds the end, and the words on either side of one are read together,
+  as in an HTML block: `As of <!--` and `--> 2026-06-03.` on two lines
+  failed and now pass. A `<!--` that no `-->` follows in its paragraph is
+  text, as is one that the `|` between two cells of a table row parts
+  from its `-->`. Whichever of a code span and raw HTML starts first holds
+  the other, as CommonMark reads them: a note after a comment that holds a
+  backtick, or after a tag whose attribute value holds one, and before a
+  backtick later on the line, failed and now passes, as that first
+  backtick opens no code span. The code spans of a table row are read in
+  each cell, so a note in a cell between a cell that holds a backtick and
+  a later one that holds another failed and now passes.
 
 ## 0.4.1 - 2026-10-17
 

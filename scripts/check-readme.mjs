@@ -662,10 +662,14 @@ function withoutCodeSpans(line) {
 // <!--> is one, a processing instruction from <? to the first ?> after it, a
 // CDATA section from <![CDATA[ to the first ]]> after it, and a declaration
 // from <! and a letter to the first > after it. A backslash inside one is
-// text. For the < at line[i], htmlAt(i) is the index after the autolink or
-// raw HTML that starts there, or i + 1 when none does. A reader asks about
-// each < it meets from left to right, and the line is searched for the end
-// of a comment, processing instruction, CDATA section or declaration on from
+// text. For the < at line[i], htmlAt(i).end is the index after the autolink
+// or raw HTML that starts there, or i + 1 when none does, and
+// htmlAt(i).unshown is the end that closes a comment, processing
+// instruction, CDATA section or declaration whose start is there, -->, ?>,
+// ]]> or >, whether or not the line holds that end, and null otherwise; an
+// autolink such as <!a@b.c> starts no declaration. A reader asks about each
+// < it meets from left to right, and the line is searched for the end of a
+// comment, processing instruction, CDATA section or declaration on from
 // where that end was last found, so a line of many <!-- that no --> follows
 // is not read again from each one.
 const AUTOLINK = /<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^<>\x00-\x20]*>/;
@@ -686,13 +690,17 @@ function inlineHtml(line) {
   return (i) => {
     AUTOLINK_OR_TAG.lastIndex = i;
     const tag = AUTOLINK_OR_TAG.exec(line);
-    if (tag) return i + tag[0].length;
-    let end = -1;
-    if (line.startsWith('<!--', i)) end = after('-->', i + 2);
-    else if (line.startsWith('<?', i)) end = after('?>', i + 2);
-    else if (line.startsWith('<![CDATA[', i)) end = after(']]>', i + 9);
-    else if (line[i + 1] === '!' && /[A-Za-z]/.test(line[i + 2] ?? '')) end = after('>', i + 3);
-    return end === -1 ? i + 1 : end;
+    if (tag) return { end: i + tag[0].length, unshown: null };
+    // The end that closes the raw HTML that starts there, and how many
+    // characters after the < the search for it starts.
+    let unshown = null;
+    let skip = 0;
+    if (line.startsWith('<!--', i)) [unshown, skip] = ['-->', 2];
+    else if (line.startsWith('<?', i)) [unshown, skip] = ['?>', 2];
+    else if (line.startsWith('<![CDATA[', i)) [unshown, skip] = [']]>', 9];
+    else if (line[i + 1] === '!' && /[A-Za-z]/.test(line[i + 2] ?? '')) [unshown, skip] = ['>', 3];
+    const end = unshown ? after(unshown, i + skip) : -1;
+    return { end: end === -1 ? i + 1 : end, unshown };
   };
 }
 
@@ -776,7 +784,7 @@ function inlineDestinations(line, open, spans) {
     } else if (c === '`') {
       i = codeSpanAt(i).end - 1;
     } else if (c === '<') {
-      i = htmlAt(i) - 1;
+      i = htmlAt(i).end - 1;
     } else if (c === '[' || (c === '!' && line[i + 1] === '[')) {
       brackets.push(c === '!');
       if (c === '!') i++;
@@ -1332,12 +1340,14 @@ function blockReader(lines, quotedFences, htmlLines) {
 // on, where the line outside the code spans that run on to it from an
 // earlier line of its paragraph or from it on to a later one starts and
 // ends, as a [start, end) pair, which is the part of the line that it reads
-// hrefs on when the line is not a line of an HTML block. Given a map as
-// `htmlLines`, blockReader() sets in it the lines of each HTML block, as it
-// describes.
+// hrefs on when the line is not a line of an HTML block, followed by the
+// index in `lines` of the line that starts the block, such as a paragraph,
+// that the line is a line of. Given a map as `htmlLines`, blockReader() sets
+// in it the lines of each HTML block, as it describes.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines, codeLines, outside, htmlLines) {
   let open = noOpenLinkText();
+  let first = 0; // the index in `lines` of the line that starts the block read last
   const read = blockReader(lines, codeLines, htmlLines);
   // Whether lines[k] is text that goes on with the paragraph that the
   // reader's `containers` hold, as the reader reads it below. The line above
@@ -1355,6 +1365,7 @@ function linkReader(lines, codeLines, outside, htmlLines) {
     const paragraph = rest === 'text' || rest === 'paragraph';
     if (starts) {
       open = noOpenLinkText();
+      first = j;
       // The code spans of the block: those of a paragraph may run on to the
       // lines that go on with it, and those of any other block are read on
       // its line alone.
@@ -1385,7 +1396,7 @@ function linkReader(lines, codeLines, outside, htmlLines) {
     // as any other line of that paragraph, with link text of its own, so
     // that each line after it is read with the code spans that run on to it.
     const targets = linkTargets(l.line, html ? noOpenLinkText() : open, spans);
-    outside?.set(j, [spans.from, spans.to]);
+    outside?.set(j, [spans.from, spans.to, first]);
     if (html) return hrefTargets(l.line, true);
     if (!paragraph) open = noOpenLinkText();
     return targets;
@@ -2083,8 +2094,11 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // <!-- As of 2026-06-03. -->, holds the note only after the end of it, on
 // the line that holds that end. None of these starts inside a <textarea>
 // element, whose text, escapable raw text, a browser shows, so the line
-// <textarea><!-- As of 2026-06-03. --></textarea> holds the note. A comment
-// inside a paragraph is read as the paragraph's text. The page's first H2 is
+// <textarea><!-- As of 2026-06-03. --></textarea> holds the note. Nor, in a
+// paragraph, a heading or a cell of a table row, is text inside a comment, a
+// processing instruction, a declaration or a CDATA section, as shownInline()
+// finds them, such as <!-- As of 2026-06-03. --> after a word, also one that
+// runs on from one line of a paragraph to a later one. The page's first H2 is
 // found as check 2 finds the README's: a ## line of a fenced code block or of
 // an HTML block is none.
 
@@ -2157,6 +2171,67 @@ function inBoth(a, b) {
   return both;
 }
 
+// The ends of the raw HTML that shownInline() leaves out, as inlineHtml()
+// gives them: of a comment, a processing instruction, a CDATA section and a
+// declaration.
+const UNSHOWN_ENDS = ['-->', '?>', ']]>', '>'];
+const NO_ENDS = new Set();
+
+// The text of `line`, a line of a paragraph or a heading or a cell of a
+// table row, that check 9 reads the note on: the line without its code
+// spans, as outsideCodeSpans() finds them, and without each comment,
+// processing instruction, CDATA section and declaration in it, as
+// inlineHtml() reads them inline, as none of these holds text for the
+// reader. The line is read from left to right, and whichever of a code span
+// and an autolink or raw HTML starts first holds the other: a backtick
+// inside an autolink or raw HTML, such as a comment or a tag, opens no code
+// span, and a <!-- inside a code span opens no comment. A comment,
+// processing instruction, CDATA section or declaration whose end the line
+// does not hold runs on to the first line below that holds that end when
+// `below`, the ends that the lines after this one in its paragraph hold,
+// has it, as CommonMark reads raw HTML on past a line break in a
+// paragraph: the rest of the line is left out, and that end is returned as
+// `open`. Otherwise its < is text. Given `open`, the end of the one that
+// the line above leaves open, the line is read from after the first match
+// of that end at or after `start`, and when there is none, the line is left
+// out whole and `open` is returned again. Returns the text as `text`.
+function shownInline(line, open = null, start = 0, below = NO_ENDS) {
+  let i = 0;
+  if (open) {
+    const end = line.indexOf(open, start);
+    if (end === -1) return { text: '', open };
+    i = end + open.length;
+  }
+  const codeSpanAt = codeSpans(line);
+  const htmlAt = inlineHtml(line);
+  let text = '';
+  let from = i; // where the text not yet added starts
+  while (i < line.length) {
+    const c = line[i];
+    if (c === '\\') {
+      i += 2;
+    } else if (c === '`') {
+      const span = codeSpanAt(i);
+      if (span.opens) {
+        text += line.slice(from, i);
+        from = span.end;
+      }
+      i = span.end;
+    } else if (c === '<') {
+      const { end, unshown } = htmlAt(i);
+      if (unshown && end === i + 1 && below.has(unshown)) return { text: text + line.slice(from, i), open: unshown };
+      if (unshown && end > i + 1) {
+        text += line.slice(from, i);
+        from = end;
+      }
+      i = end;
+    } else {
+      i += 1;
+    }
+  }
+  return { text: text + line.slice(from), open: null };
+}
+
 for (const [file, { at, shown }] of datedPages) {
   const date = basename(file).match(DATE_IN_NAME)[0];
   const page = readPage(file);
@@ -2190,32 +2265,67 @@ for (const [file, { at, shown }] of datedPages) {
   // reads it as indented code or as a fence, as its text is raw HTML. A code
   // span may run on from one line of a paragraph to a later one, so the note
   // is read, as an href on a line outside an HTML block is, on the part of
-  // each line in `outside`, and on a table row whole, without the code spans
-  // in it. Of a line of an HTML
-  // block, it is read on the characters of that part outside its code spans
-  // that shownHtml() also shows. shownHtml() reads the line's text after the
-  // > markers of the block quotes that hold the block, so that such a > ends
-  // no declaration, and all of that text, code spans included: a renderer
-  // passes the text of an HTML block on as written, so a backtick there
-  // keeps no <!-- or --> from starting or ending a comment. A line break
-  // inside the raw HTML that shownHtml() leaves out is left out with it, so
-  // it does not join the words around it with a space; one inside a
-  // <textarea> element is shown, as the element's text is, and is read as a
-  // space. What a block leaves open at its last line is not carried to the
-  // line after the block.
+  // each line in `outside`, and on each cell of a table row, as rowCells()
+  // splits it, on the text that shownInline() gives. A comment, processing
+  // instruction, CDATA section or declaration may run on to a later line of
+  // a paragraph as well, to the first line whose part, after the > markers,
+  // spaces and tabs that start it, holds its end. The lines of a paragraph
+  // here are those that `outside` gives the same first line, up to a line of
+  // an HTML block. Of a line of an HTML block, the note is read on the
+  // characters of that part outside its code spans that shownHtml() also
+  // shows. shownHtml() reads the line's text after the > markers of the
+  // block quotes that hold the block, so that such a > ends no declaration,
+  // and all of that text, code spans included: a renderer passes the text of
+  // an HTML block on as written, so a backtick there keeps no <!-- or -->
+  // from starting or ending a comment. A line break inside the raw HTML that
+  // shownHtml() or shownInline() leaves out is left out with it, so it does
+  // not join the words around it with a space; one inside a <textarea>
+  // element is shown, as the element's text is, and is read as a space. What
+  // a block leaves open at its last line is not carried to the line after
+  // the block.
+  //
+  // `inline` holds, for each line read with shownInline() but a table row,
+  // its part in `outside`, where its text starts after the > markers,
+  // spaces and tabs that start that part when the part starts the line, and
+  // the first line of its paragraph; `below`, for each line, the ends in
+  // UNSHOWN_ENDS that the lines after it in its paragraph hold there.
+  const inline = above.map((l, k) => {
+    const at = outside.get(k);
+    if (!at || htmlLines.has(k) || l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k)) return null;
+    const [from, to, first] = at;
+    const part = l.line.slice(from, to);
+    return { part, start: from === 0 ? part.match(/^\s*(?:>\s?)*/)[0].length : 0, first };
+  });
+  const below = [];
+  for (let k = above.length - 1, ends = NO_ENDS; k >= 0; k--) {
+    below[k] = ends;
+    const line = inline[k];
+    if (!line || inline[k - 1]?.first !== line.first) {
+      ends = NO_ENDS;
+    } else {
+      const text = line.part.slice(line.start);
+      ends = new Set([...ends, ...UNSHOWN_ENDS.filter((end) => text.includes(end))]);
+    }
+  }
   let intro = '';
   let block; // the HTML block that the line above is a line of, if any
   let open = null; // the entry of HIDDEN_HTML_END that ends what the line above leaves open in that block
+  let unshown = null; // the end of the raw HTML that the line above leaves open in its paragraph
   above.forEach((l, k) => {
     const html = htmlLines.get(k);
     if (html !== block) open = null;
     block = html;
     let text = '';
-    if (!(l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k))) {
-      const [from, to] = outside.get(k) ?? [0, l.line.length];
-      const part = l.line.slice(from, to);
-      if (!html) text = withoutCodeSpans(part);
+    if (inline[k]) {
+      const { part, start } = inline[k];
+      ({ text, open: unshown } = shownInline(part, unshown, start, below[k]));
+    } else if (!(l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k))) {
+      // A line outside an HTML block that `outside` does not hold is a table
+      // row.
+      if (!html) text = rowCells(l.line).map((cell) => shownInline(cell).text).join('|');
       else {
+        const [from, to] = outside.get(k) ?? [0, l.line.length];
+        const part = l.line.slice(from, to);
         // The line's text after the block's > markers, and where it starts.
         const raw = afterQuotes(l.line, html.quotes);
         const rawAt = l.line.length - raw.length;
@@ -2229,7 +2339,7 @@ for (const [file, { at, shown }] of datedPages) {
           .join('');
       }
     }
-    intro += text.replace(/^\s*(?:>\s?)+/, '') + (open && open !== TEXTAREA_END ? '' : ' ');
+    intro += text.replace(/^\s*(?:>\s?)+/, '') + ((open && open !== TEXTAREA_END) || unshown ? '' : ' ');
   });
   const missing = [];
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.replace(/\s+/g, ' '))) {
