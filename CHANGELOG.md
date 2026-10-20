@@ -582,12 +582,13 @@ stay on record here with the reason they changed.
   page's H1 and a blank line, the check exited 1 with `is a dated page, so
   above its first H2 it must say "as of 2026-06-03"`, and now exits 0. So
   does the note between two `~~~` lines in `<details>`, between two
-  `` ``` `` lines after `<pre>` and a blank line, in a comment, in a
-  `<div>` in a block quote with `` > ``` `` lines, and after `` - ``` ``
-  in a `<div>`. A fence after the blank line that ends a `<div>` block, on
-  a line without the `>` of a block quote that holds one, or after a
-  comment that ends on its first line still opens a code block, and the
-  note in it still fails the check. The other checks read these lines the
+  `` ``` `` lines after `<pre>` and a blank line, after the `-->` that
+  ends a comment with a `` ``` `` line in it, in a `<div>` in a block
+  quote with `` > ``` `` lines, and after `` - ``` `` in a `<div>`. A
+  fence after the blank line that ends a `<div>` block, on a line without
+  the `>` of a block quote that holds one, or after a comment that ends on
+  its first line still opens a code block, and the note in it still fails
+  the check. The other checks read these lines the
   same way: `<div>`, `` ```bash ``, `npm test`, `` ``` `` and `</div>` as
   the Quick Start's only command exited 0 and now exit 1 with `no shell
   code block with a command starts before line 30`; a comment on an
@@ -669,6 +670,29 @@ stay on record here with the reason they changed.
   `## Setup` above the `<div>`, a link to `#setup-1` exited 0, and now
   exits 1. A heading after the blank line that ends a `<div>` block, or
   after a comment that ends on its first line, still holds its anchor.
+- `npm run check:readme` reads no "as of" note for a dated page inside an
+  HTML comment, processing instruction, declaration or CDATA section, or
+  inside `<script>` or `<style>`, in an HTML block, also where one of these
+  sits in a block that `<div>` or `<details>` opens. With a README that
+  links `docs/AUDIT-2026-06-03.md`, and the lines
+  `<!-- As of 2026-06-03. -->`, a blank line and
+  `See the [README](../README.md) for the current figures.` after that
+  page's H1 and a blank line, the check exited 0, and now exits 1 with
+  `is a dated page, so above its first H2 it must say "as of 2026-06-03"`.
+  So do the lines `<style>`, `As of 2026-06-03.` and `</style>` in place of
+  the comment, and a comment that runs over lines with the note indented 4
+  spaces inside it, or with the note between two `` ``` `` lines, which
+  open no code block in a comment. Text after the end of one of these is
+  read, also the rest of the line that holds the end:
+  `<!-- draft --> As of 2026-06-03.` passes, as it did, and so does the
+  note in a block that `<pre>` or `<textarea>` opens. A comment inside a
+  paragraph is read as the paragraph's text, as before. The text of an
+  HTML block is passed on as written, so a backtick there keeps no comment
+  from opening: `<div>`, `` `<!--` As of 2026-06-03. `` and `</div>`
+  passed and now fail, while the code spans of the block's lines still
+  hold no note, as on other lines. The words on either side of a comment
+  in an HTML block are read together: `<div>As of <!--` and
+  `--> 2026-06-03.</div>` on two lines failed and now pass.
 
 ## 0.4.1 - 2026-10-17
 
