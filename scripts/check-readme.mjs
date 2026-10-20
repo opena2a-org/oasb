@@ -5,6 +5,8 @@
 // together after content moves into docs/:
 //   1. the README stays under MAX_LINES lines;
 //   2. the first H2 is "Quick Start" and starts before line QUICK_START_BY;
+//      no ## line of a fenced code block or of an HTML block is an H2, as
+//      check 4 reads no heading there;
 //   3. a fenced code block with a runnable command starts before line COMMAND_BY;
 //   4. each relative link the check reads resolves to a file in the
 //      repository, and an #anchor in a link to a .md file resolves to a
@@ -144,9 +146,10 @@
 //      ending at the next run of as many backticks. Retire this check when
 //      the benchmark has a benign set that no scanner under test labeled.
 //   9. a linked .md page whose file name carries a date (YYYY-MM-DD) says
-//      "as of <that date>" and links to the README above its first H2. Its
-//      counts are those of that day and are not compared with the suite, so
-//      the page itself sends the reader to the README for the current ones.
+//      "as of <that date>" and links to the README above its first H2,
+//      found as check 2 finds the README's. Its counts are those of that
+//      day and are not compared with the suite, so the page itself sends
+//      the reader to the README for the current ones.
 //  10. no static img.shields.io badge in the README's prose has a message
 //      that starts with a digit, as `tests-404%20passing` and
 //      `MITRE%20ATLAS-15%20techniques` did. Such a number is typed into the
@@ -454,8 +457,10 @@ if (readme.length >= MAX_LINES) {
   fail(`README has ${readme.length} lines; the budget is under ${MAX_LINES}. Move reference detail into docs/ and link to it.`);
 }
 
-// 2. Quick Start is the first H2 and sits near the top.
-const firstH2 = readme.find((l) => !l.inFence && /^##\s/.test(l.line));
+// 2. Quick Start is the first H2 and sits near the top. A ## line of a
+// fenced code block or of an HTML block, as parse() tags them, is no H2, as
+// its text is code or raw HTML.
+const firstH2 = readme.find((l) => !l.inFence && !l.html && /^##\s/.test(l.line));
 if (!firstH2) {
   fail('README has no H2 heading; the first one must be "## Quick Start".');
 } else {
@@ -2077,7 +2082,8 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // reader. A block that one of these opens, such as
 // <!-- As of 2026-06-03. -->, holds the note only after the end of it, on
 // the line that holds that end. A comment inside a paragraph is read as the
-// paragraph's text.
+// paragraph's text. The page's first H2 is found as check 2 finds the
+// README's: a ## line of a fenced code block or of an HTML block is none.
 
 // The raw HTML that shownHtml() leaves out of the text of an HTML block,
 // each matched in any case: a <script> or a <style> element, from <script
@@ -2141,7 +2147,7 @@ for (const [file, { at, shown }] of datedPages) {
   const date = basename(file).match(DATE_IN_NAME)[0];
   const page = readPage(file);
   if (!page) continue; // readPage has reported it
-  const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
+  const h2 = page.findIndex((l) => !l.inFence && !l.html && /^##\s/.test(l.line));
   const above = h2 === -1 ? page : page.slice(0, h2);
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
