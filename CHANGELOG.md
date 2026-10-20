@@ -990,6 +990,24 @@ stay on record here with the reason they changed.
   block that `<span>` alone on a line opens (CommonMark kind 7) is still
   not followed, so with `<span>` and `</span>` in place of `<!--` and
   `-->` the section starts at the line inside it and the check exits 0.
+- `npm run check:readme` reads no line of an HTML block that it follows
+  (CommonMark kinds 1 to 6) as paragraph text, as CommonMark reads none
+  so, so no line goes on with it lazily: a line of text at column 0 after
+  a line of such a block in a list item ends the item. After an indented
+  line of the block, the check read that column-0 line as going on with
+  the item, so it read an HTML block that an indented line below opened
+  as held by the item, ended it before the next line at column 0, and
+  read the ## lines from there on as headings. With `# Title`, a blank
+  line, `- <!-- a note`, `  more`, `plain`, `  <!--`, `## Quick Start`,
+  a blank line, a bash code block holding `npm test`, a blank line,
+  `## Guide`, a blank line and `Text.` in the README,
+  `node scripts/check-readme.mjs --no-counts` exited 0 with
+  `Quick Start at line 7`, where commonmark.js 0.31.2 and
+  markdown-it 14.1.0 render no H2, as `## Quick Start` and the lines
+  after it are inside a comment. It now exits 1 with `README has no H2
+  heading`, as it already did without the `  more` line. With the list's
+  two lines `- <!--` and `  a note -->`, or `- <div>` and `  more`, it
+  also exited 0 with `Quick Start at line 7` and exits 1 now.
 
 ## 0.4.1 - 2026-10-17
 
