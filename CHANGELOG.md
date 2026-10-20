@@ -784,6 +784,29 @@ stay on record here with the reason they changed.
   comment inside a `<textarea>` is text between the words on either side
   of it: `<textarea>As of <!-- x --> 2026-06-03.</textarea>` passed and now
   fails. A comment after `</textarea>` still hides the note.
+- `npm run check:readme` finds the H2 that ends the "What Gets Tested"
+  section, and the one that ends the README's "MITRE ATLAS Coverage"
+  section, as it finds the README's first H2, so that a `##` line of a
+  fenced code block or of an HTML block ends neither, as CommonMark reads
+  the line as code or raw HTML. The check compares the table of the first,
+  on the README or a page that took its text, with the suite, and reads
+  the tables of the second and the pages it links to for skipped tests.
+  The first ended at any line that starts with `##` and white space, and
+  the second at such a line outside a fenced code block. With a blank
+  line, `<div>`, `## Note` and `</div>` right after `## What Gets Tested`
+  in `docs/test-catalog.md`, `node scripts/check-readme.mjs` exited 1
+  with `the "What Gets Tested" table was not found`, and now exits 0;
+  with `` ```bash ``, `## Note` and `` ``` `` in place of the last three
+  of those lines, it also exited 1 and now exits 0. With a blank line,
+  `<div>`, `## Note` and `</div>` right after `## MITRE ATLAS Coverage`
+  in the README, and `E2E-003` in place of `E2E-003 (skipped)` in
+  `docs/mitre-atlas-mapping.md`, which that section links to below them,
+  the check exited 0, and now exits 1 with `E2E-003 is listed as MITRE
+  ATLAS coverage, but every test in
+  src/e2e/E2E-003.live-network-detection.test.ts is skipped`. A block that
+  `<span>` alone on a line opens (CommonMark kind 7) is not followed, so
+  with `<span>` and `</span>` in place of the `<div>` tags in
+  `docs/test-catalog.md` the check exits 1 with the table not found.
 
 ## 0.4.1 - 2026-10-17
 
