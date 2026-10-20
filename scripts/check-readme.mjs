@@ -42,22 +42,25 @@
 //      paragraph text otherwise.
 //      A line whose first characters other than white space are 3 or more
 //      backticks or tildes opens a fenced code block, and no link is read on
-//      the lines between it and the next such line of the same character,
-//      only when that run starts at most 3 columns past where the text of
-//      the list items that hold the line starts; a line that starts further
-//      in goes on with the paragraph above it, as indented code cannot
-//      interrupt a paragraph, or is indented code.
+//      it, on the next such line of the same character, where the block
+//      ends, or on the lines between them, only when that run starts at most
+//      3 columns past where the text of the list items that hold the line
+//      starts; a line that starts further in goes on with the paragraph
+//      above it, as indented code cannot interrupt a paragraph, or is
+//      indented code. As CommonMark reads those two lines, text after the
+//      run is the block's info string on the first, and on the last makes
+//      the line code, not a closing fence.
 //      No link is read in a fenced code block inside a block quote, which
 //      ends a paragraph: from a fence, 3 or more backticks that no backtick
 //      follows on its line or 3 or more tildes, at most 3 columns past where
 //      the text of the block quote or list item that holds it starts, to a
 //      fence of as many or more of the same with only spaces or tabs after
 //      it, or to the end of that block quote or list item. Nor is a link
-//      read on the lines after such a fence where the text of a list item
-//      starts, on the line that opens the item outside a block quote
-//      (- ``` or 1. ~~~), up to a fence that closes it or to the end of the
-//      list items that hold it; parse() tags those lines as it tags those of
-//      a block whose fence starts its line. Links
+//      read on such a fence where the text of a list item starts, on the
+//      line that opens the item outside a block quote (- ``` or 1. ~~~), or
+//      on the lines after it, up to a fence that closes it or to the end of
+//      the list items that hold it; parse() tags those lines as it tags
+//      those of a block whose fence starts its line. Links
 //      inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
@@ -1204,24 +1207,24 @@ function blockReader(lines, quotedFences) {
 // cells of a row past the number of cells of the table's header row, which
 // neither renderer shows, are not read. Any other line whose text starts
 // with | is text, which link text and code spans wrap past as past any
-// other line of their paragraph. A line inside a fence has no links, and a
-// fence ends a paragraph. parse() reads the fences that start a line at
-// most 3 columns past where the text of the list items that hold it
-// starts, and those where the text of a list item that a line opens starts,
-// outside a block quote; a fence inside a block quote, which lineStart()
-// reads, opens a block that blockReader() follows to the fence that closes
-// it or to the end of the block quote or list item that holds it, and no
-// line of that block, its opening fence included, has links. A line that
-// lineStart() reads as indented code, a table row above it or not, has no
-// inline links or definitions, as its text is shown as written.
-// lineStart() does not track HTML blocks, and such a line may be inside
-// one instead: there it is raw HTML, whose inline links and definitions
-// are text as well, but whose hrefs are links. So the hrefs on such a line
-// are read. Given a set as `codeLines`, the reader adds to it the index in
-// `lines` of each line of a fenced code block inside a block quote, its
-// fences included, and of each line of indented code on which it reads no
-// inline link or definition, unless blockReader() reads that line as a line
-// of an HTML block: its text is then raw HTML, not code.
+// other line of their paragraph. No line of a fenced code block has links,
+// its fences included, and a fence ends a paragraph. parse() reads the
+// fences that start a line at most 3 columns past where the text of the
+// list items that hold it starts, and those where the text of a list item
+// that a line opens starts, outside a block quote; a fence inside a block
+// quote, which lineStart() reads, opens a block that blockReader() follows
+// to the fence that closes it or to the end of the block quote or list item
+// that holds it, and no line of that block, its opening fence included, has
+// links. A line that lineStart() reads as indented code, a table row above
+// it or not, has no inline links or definitions, as its text is shown as
+// written. lineStart() does not track HTML blocks, and such a line may be
+// inside one instead: there it is raw HTML, whose inline links and
+// definitions are text as well, but whose hrefs are links. So the hrefs on
+// such a line are read. Given a set as `codeLines`, the reader adds to it
+// the index in `lines` of each line of a fenced code block inside a block
+// quote, its fences included, and of each line of indented code on which it
+// reads no inline link or definition, unless blockReader() reads that line
+// as a line of an HTML block: its text is then raw HTML, not code.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines, codeLines) {
   let open = noOpenLinkText();
@@ -1249,9 +1252,12 @@ function linkReader(lines, codeLines) {
       if (paragraph) while (last + 1 < lines.length && goesOn(last + 1)) last += 1;
       open.code = paragraphCodeSpans(lines.slice(j, last + 1).map(({ line }) => line));
     }
-    // The opening fence of a block that parse() does not tag holds no link,
-    // as what follows its run is an info string, not text.
-    if (rest === 'fence') return [];
+    // A fence holds no link, whether parse() tags it or not: what follows the
+    // run of an opening fence is an info string, not text, and a line that
+    // parse() reads as a closing fence and that holds more than spaces and
+    // tabs after its run closes no block as CommonMark reads it, so it is
+    // code.
+    if (rest === 'fence' || l.fenceOpen || l.fenceClose) return [];
     if (rest === 'code') {
       if (!html) codeLines?.add(j);
       return hrefTargets(l.line);
