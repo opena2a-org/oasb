@@ -1328,11 +1328,11 @@ test('the lines of a table are table rows whether or not they start with |, up t
   // Both render each of these with a link to docs/nowhere.md: a code span
   // does not run on from one row to the next; a line that opens a block
   // quote or list item, or leaves the block quote that holds the table,
-  // ends it; a line that goes on with a paragraph lazily is not a header
-  // row; and a delimiter row that opens a list item (- | -), is indented 4
-  // columns, opens a block quote the header row is not in, or is a setext
-  // underline (-), or a header row indented 4 columns that goes on with a
-  // paragraph, starts no table.
+  // ends it; a line that goes on with a block quote's paragraph lazily is
+  // not a header row; and a delimiter row that opens a list item (- | -),
+  // is indented 4 columns, opens a block quote the header row is not in, or
+  // is a setext underline (-), or a header row indented 4 columns that goes
+  // on with a paragraph, starts no table.
   for (const [body, n] of [
     ['| a | b |\n--- | ---\n| `c | d |\n| [e](docs/nowhere.md) | f` |\n', 14],
     ['| a |\n| - |\n> | [b |\n> c](docs/nowhere.md)\n', 14],
@@ -1415,6 +1415,94 @@ test("a line that goes on with a list item's paragraph lazily is a table header 
     const r = check(body);
     assert.equal(r.status, 1, body);
     assert.deepEqual(r.stderr.trim().split('\n'), [`README: line ${n}: link target "docs/nowhere.md" does not exist.`], body);
+  }
+});
+
+test("a line that goes on with a list item's paragraph lazily over a delimiter row 4 or more columns past the containers the line goes on with starts a paragraph there", () => {
+  // The delimiter row is in the list item, so the lazy line ends the
+  // item's paragraph and the item. markdown-it 14.1.0 and 14.1.1 start no
+  // table there, as the delimiter row is 4 or more columns past the block
+  // quotes and list items the lazy line goes on with, and read the lazy
+  // line and the lines after it as one paragraph after the list item.
+  // micromark 4.0.2 with micromark-extension-gfm-table 2.1.1 reads a table
+  // in the list item, with the lines after the delimiter row as body rows.
+  // Both render a link to docs/nowhere.md on the line named, and the code
+  // span that runs on from the lazy line in markdown-it does not hold it.
+  for (const [body, n] of [
+    ['- see\nx | `y\n    |---|---|\n  z` | [m](docs/nowhere.md) |\n  | `c | d |\n', 14],
+    ['- see\nx | `y\n     |---|---|\n  z` | [m](docs/nowhere.md) |\n  | `c | d |\n', 14],
+    ['- see\nx | `y\n\t|---|---|\n  z` | [m](docs/nowhere.md) |\n  | `c | d |\n', 14],
+    ['1. see\nx | `y\n    |---|---|\n   z` | [m](docs/nowhere.md) |\n   | `c | d |\n', 14],
+    ['- a\n  - see\n  x | `y\n      |---|---|\n    z` | [m](docs/nowhere.md) |\n    | `c | d |\n', 15],
+    ['> - see\n> x | `y\n>     |---|---|\n>   z` | [m](docs/nowhere.md) |\n>   | `c | d |\n', 14],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(r.stderr.trim().split('\n'), [`README: line ${n}: link target "docs/nowhere.md" does not exist.`], body);
+  }
+});
+
+test('a header row that holds no | starts a table when its delimiter row holds a | or a :, unless the line follows a table row or goes on with a paragraph lazily', () => {
+  // markdown-it 14.1.0 and 14.1.1 read the first two lines of each of these
+  // as a paragraph and the third as the header row of a table under the
+  // delimiter row ---. micromark 4.0.2 with micromark-extension-gfm-table
+  // 2.1.1 reads the first line as the header row of a table, the third as
+  // a body row, and --- as a thematic break. Neither renders a link.
+  for (const body of ['[a\n|:-\n| e](docs/nowhere.md) |\n---\n', '[a\n:-\n| e](docs/nowhere.md) |\n---\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // markdown-it starts no table at a header row that holds no |, and
+  // renders a link to docs/nowhere.md in each of these, while micromark
+  // starts one at the line above the delimiter row and renders no link.
+  // The check reads them as micromark does.
+  for (const body of ['[a\nb](docs/nowhere.md)\n:-\n', 'abc\n|:-\n| [x |\ny](docs/nowhere.md) |\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // micromark starts no table at a line that follows a table row and
+  // leaves the block quote or list item that holds the table, nor does the
+  // check, at such a header row that holds no |; and a line that goes on
+  // with a list item's paragraph lazily and holds no | is paragraph text,
+  // as markdown-it reads it. Both renderers render a link to
+  // docs/nowhere.md on the line named.
+  for (const [body, n] of [
+    ['> | a |\n> | - |\nabc\n:-\n[x\ny](docs/nowhere.md)\n', 16],
+    ['1. | a |\n   | - |\nabc\n:-\n[x\ny](docs/nowhere.md)\n', 16],
+    ['1. see\nabc\n   :-\n  | [e](docs/guide.md) | f` |\n z` | [m](docs/nowhere.md) |\n', 15],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(r.stderr.trim().split('\n'), [`README: line ${n}: link target "docs/nowhere.md" does not exist.`], body);
+  }
+});
+
+test('the cells of a table row are read one at a time, and a row holds no definition and no cell past those of its header row', () => {
+  // markdown-it 14.1.0 and 14.1.1, and micromark 4.0.2 with
+  // micromark-extension-gfm-table 2.1.1, read the text of each cell of a
+  // row on its own, show as many cells of a row as its table's header row
+  // holds, and read a line of a table that looks like a definition as a
+  // row, its cells holding its text. Neither renders a link in any of
+  // these: link text does not run on from one cell to the next, the link
+  // in the third is in a second cell of a table of one column, and no
+  // definition is read on a row.
+  for (const body of [
+    '| a | b |\n| - | - |\n| [c | d](docs/nowhere.md) |\n',
+    '| [a | b](docs/nowhere.md) |\n| - | - |\n',
+    '| a |\n| - |\n| b | [c](docs/nowhere.md) |\n',
+    '| a |\n| - |\n[x]: docs/nowhere.md\n',
+    '| a | b |\n| - | - |\n[x]: docs/nowhere.md\n',
+    '[x]: docs/nowhere.md | b\n| - | - |\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // Both render a link here: a code span does not run on from one cell to
+  // the next, and a | after a backslash is text in a cell.
+  for (const body of ['| a | b |\n| - | - |\n| `c | [d](docs/nowhere.md) ` |\n', '| a |\n| - |\n| [c \\| d](docs/nowhere.md) |\n']) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(r.stderr.trim().split('\n'), ['README: line 13: link target "docs/nowhere.md" does not exist.'], body);
   }
 });
 
@@ -1553,6 +1641,21 @@ test('an inline link on a line of indented code is not read; one on a paragraph 
     assert.equal(r.status, 1, body);
     assert.match(r.stderr, new RegExp(`line ${n}: link target "docs/nowhere\\.md" does not exist`), body);
   }
+});
+
+test('an inline link on a line of indented code after a table row is not read', () => {
+  // markdown-it 14.1.0 and 14.1.1, and micromark 4.0.2 with
+  // micromark-extension-gfm-table 2.1.1, end a table at a line indented 4
+  // or more columns past the block quotes and list items that hold it, and
+  // render that line as a code block, with no link.
+  const r = check('| a |\n| - |\n    [x](docs/nowhere.md)\n');
+  assert.equal(r.status, 0, r.stderr);
+  // Both render the link to docs/one.md and none to docs/two.md: the last
+  // two lines are a code block, after a table whose header row goes on
+  // with the list item's paragraph lazily.
+  const lazy = check('- see\n| [y](docs/one.md) | z |\n  -|-\n      | `c | d |\n      | [e](docs/two.md) | f` |\n');
+  assert.equal(lazy.status, 1);
+  assert.deepEqual(lazy.stderr.trim().split('\n'), ['README: line 12: link target "docs/one.md" does not exist.']);
 });
 
 test('a line that opens a block quote or list item and then indented code after a | line that is paragraph text holds no inline link', () => {

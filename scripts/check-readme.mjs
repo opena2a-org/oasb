@@ -21,15 +21,25 @@
 //      block quote or list item that holds it starts, a tab moving on to the
 //      next multiple of 4. An href on such a line is read, as the line may
 //      be raw HTML inside an HTML block, where an href is a link. A table
-//      starts at a header row: a line that holds a |, does not go on with a
-//      paragraph lazily, and is followed, in the same block quotes and list
-//      items, by a delimiter row (| - | or --- | ---) with as many cells.
-//      It goes on until a blank line, indented code, another block, or a
-//      line that leaves those block quotes and list items or opens another,
-//      and its lines are table rows whether or not they start with |. A
-//      line whose text starts with | is paragraph text otherwise. The links
-//      on indented code that follows a table row, with no other line
-//      between, are read too.
+//      starts at a header row: a line followed, in the same block quotes
+//      and list items, by a delimiter row (| - | or --- | ---) with as many
+//      cells, where the line holds a |, or holds none and does not follow a
+//      table row, and the delimiter row holds a | or a :. A line that goes
+//      on with a paragraph lazily is paragraph text when it leaves out a
+//      block quote marker or holds no |. One that leaves out only list item
+//      indentation is a header row when a delimiter row in the list items
+//      that hold the paragraph follows it and is at most 3 columns past the
+//      block quotes and list items the line goes on with, which hold the
+//      table; when that row is 4 or more columns past them, the line ends
+//      the paragraph and the list items it leaves out, and starts a
+//      paragraph. A table goes on until a blank line, indented code,
+//      another block, or a line that leaves those block quotes and list
+//      items or opens another, and its lines are table rows whether or not
+//      they start with |. The cells of a row are read one at a time, so
+//      link text and code spans do not run on from one cell to the next; a
+//      row holds no definition, and a row's cells past the number of cells
+//      of the header row are not read. A line whose text starts with | is
+//      paragraph text otherwise.
 //      A line whose first characters other than white space are 3 or more
 //      backticks or tildes opens a fenced code block, and no link is read on
 //      the lines between it and the next such line of the same character,
@@ -742,6 +752,17 @@ function linkTargets(line, open) {
   return targets;
 }
 
+// Link targets in the first `count` cells of a table row, `row` being its
+// text from where it starts, the cells as rowCells() splits it. Each cell
+// is read on its own, with no link text or code span open before it, as
+// inlineDestinations and hrefTargets read a line; a cell holds no
+// definition.
+function rowTargets(row, count) {
+  return rowCells(row)
+    .slice(0, count)
+    .flatMap((cell) => [...inlineDestinations(cell, noOpenLinkText(), paragraphCodeSpans([cell])()), ...hrefTargets(cell)]);
+}
+
 // A line that ends a paragraph (a blank line, or a blank ">" line) and one
 // that is a block of its own (a table row or a heading), as blocks() reads
 // them.
@@ -764,31 +785,40 @@ function breakStart(text) {
   return start;
 }
 
-// How many cells a table row holds: its text split at each | that no \ comes
-// right before, not counting the empty cell before a leading | or after a
-// trailing one.
-function cellCount(row) {
+// The cells of a table row: its text split at each | that no \ comes right
+// before, without the empty cell before a leading | or after a trailing one.
+function rowCells(row) {
   const text = row.trim();
   const parts = text.split(/(?<!\\)\|/);
   if (text.startsWith('|')) parts.shift();
   if (parts.length > 0 && text.endsWith('|') && !text.endsWith('\\|')) parts.pop();
-  return parts.length;
+  return parts;
+}
+
+// How many cells a table row holds, as rowCells() splits it. A function
+// declaration and not a constant: parse() reads the README above this line,
+// with blockReader(), which reads it.
+function cellCount(row) {
+  return rowCells(row).length;
 }
 
 // Whether a line that lineStart() read as `start`, after a line that
 // `containers` hold, is the header row of a table: in GitHub-flavored
-// Markdown a table starts only at a line that holds a |, whether or not it
-// starts with one, where the next line (`next`, from the reader's lines) goes
-// on with the block quotes and list items that hold the header row, opens
-// none, and is then a delimiter row with as many cells, after at most 3
-// columns of indentation. The next line is read as one that goes on with a
-// paragraph, so a line of - alone, of -- or of --- is a setext underline, as
-// micromark 4 with its GFM table extension reads it (markdown-it 14.1.1
-// reads -- and --- under a header row of one cell as a delimiter row).
-// Without a delimiter row, the line is paragraph text.
-function tableHeader(start, containers, next) {
+// Markdown a table starts at a line, whether or not it starts with |, where
+// the next line (`next`, from the reader's lines) goes on with the block
+// quotes and list items that hold the header row, opens none, and is then a
+// delimiter row with as many cells, after at most 3 columns of indentation.
+// The next line is read as one that goes on with a paragraph, so a line of -
+// alone, of -- or of --- is a setext underline, as micromark 4 with its GFM
+// table extension reads it (markdown-it 14.1.1 reads -- and --- under a
+// header row of one cell as a delimiter row). A header row that holds a |
+// starts a table in both. One that holds none, a row of one cell, starts a
+// table in micromark 4 when the delimiter row holds a | or a :, and in
+// markdown-it 14 never; the check reads it as micromark does when
+// `pipeless` is true. Without a delimiter row, the line is paragraph text.
+function tableHeader(start, containers, next, pipeless) {
   const { row } = start;
-  if (row === undefined || next === undefined || !row.includes('|') || !DELIMITER_CHARACTERS.test(next.line)) return false;
+  if (row === undefined || next === undefined || !(pipeless || row.includes('|')) || !DELIMITER_CHARACTERS.test(next.line)) return false;
   // The block quotes and list items that hold the header row: `containers`
   // itself when the row goes on with them all and opens none, as
   // lineStart() does not change the list, and a copy otherwise. Copied for
@@ -799,7 +829,7 @@ function tableHeader(start, containers, next) {
   const delimiter = lineStart(next.line, held, true);
   if (delimiter.matched < held.length || delimiter.opened.length > 0 || delimiter.row === undefined) return false;
   const cells = delimiter.row.trim();
-  return DELIMITER_ROW.test(cells) && cellCount(cells) === cellCount(row);
+  return DELIMITER_ROW.test(cells) && cellCount(cells) === cellCount(row) && (row.includes('|') || /[|:]/.test(cells));
 }
 
 // The start of one line, read as CommonMark reads it. `containers` are the
@@ -971,9 +1001,12 @@ function closes(start, open) {
 // opening fence of a block that the reader follows, its closing fence
 // included. For any other line it returns `rest`, the rest of the line as
 // lineStart() reads it, with a 'row' or 'text' read as 'row' when it is a
-// table row and as 'text' otherwise, and a fence that parse() tags read as
-// 'block'; `starts`, whether the line starts a block rather than going on
-// with the paragraph above; and `j`, its index in the lines. Given a set as
+// table row, as 'paragraph' when it is a lazy line that starts a paragraph,
+// as restOf() reads it, and as 'text' otherwise, and a fence that parse()
+// tags read as 'block'; `starts`, whether the line starts a block rather
+// than going on with the paragraph above; `j`, its index in the lines; and
+// for a table row, `row`, its text from where it starts, and `columns`, how
+// many cells the header row of its table holds. Given a set as
 // `quotedFences`, the reader adds to it the index in `lines` of each line
 // of a block that it follows, its fences included. The reader's
 // `containers` and `restOf` are those it reads the next line with, for a
@@ -985,6 +1018,7 @@ function blockReader(lines, quotedFences) {
   let stops = [];
   let paragraph = false;
   let table = false; // whether the line read last was a table row
+  let columns = 0; // how many cells the header row of that row's table holds
   // The opening fence of the fenced code block inside a block quote that
   // the line above is in, or null.
   let fenced = null;
@@ -994,22 +1028,32 @@ function blockReader(lines, quotedFences) {
   // text when `paragraphAbove` is true and a table row when `rowAbove` is. A
   // 'row' or 'text' is a table row when the line above is one and the line
   // goes on with every container and opens none, or when it is a table's
-  // header row as tableHeader() reads it. A line that goes on with the
-  // paragraph above lazily, without the list item indentation of some of
-  // `containers`, is held by them all, as the paragraph is, so its
-  // delimiter row is read in all of them. One that leaves out a block quote
-  // marker is text, as markdown-it 14 reads it; after a line of paragraph
-  // text, `stops` holds the block quotes of `containers` and no list item,
-  // so the last of them says whether the line leaves one out, without a
-  // step for each container. A 'row' is text otherwise.
+  // header row as tableHeader() reads it, which reads one that holds no |
+  // as micromark 4 does unless the line follows a table row: micromark
+  // starts no table at a line that follows one and leaves the block quotes
+  // or list items that hold it, and markdown-it 14 none at such a header
+  // row. A line that goes on with the paragraph above lazily, without the
+  // list item indentation of some of `containers`, and holds a | ends the
+  // paragraph when its delimiter row is one in all of them, as markdown-it
+  // 14 reads it, and the list items it left out end with the paragraph. It
+  // is then a header row when its delimiter row is one in the containers it
+  // goes on with too, which hold its table, and otherwise, when the
+  // delimiter row is indented 4 or more columns past them, the first line
+  // of a paragraph there, 'paragraph', as markdown-it 14 reads it. A lazy
+  // line that holds no |, or leaves out a block quote marker, is text, as
+  // markdown-it 14 reads it; after a line of paragraph text, `stops` holds
+  // the block quotes of `containers` and no list item, so the last of them
+  // says whether the line leaves one out, without a step for each
+  // container. A 'row' is text otherwise.
   const restOf = (k, start, paragraphAbove, rowAbove) => {
     if (start.rest !== 'row' && start.rest !== 'text') return start.rest;
     const opensNone = start.opened.length === 0;
     if (rowAbove && opensNone && start.matched === containers.length) return 'row';
-    const lazy = paragraphAbove && opensNone && start.matched < containers.length;
-    if (lazy && stops.length > 0 && stops.at(-1) >= start.matched) return 'text';
-    const as = lazy ? { ...start, matched: containers.length } : start;
-    return tableHeader(as, containers, lines[k + 1]) ? 'row' : 'text';
+    const next = lines[k + 1];
+    if (!(paragraphAbove && opensNone && start.matched < containers.length)) return tableHeader(start, containers, next, !rowAbove) ? 'row' : 'text';
+    if (stops.length > 0 && stops.at(-1) >= start.matched) return 'text';
+    if (!tableHeader({ ...start, matched: containers.length }, containers, next, false)) return 'text';
+    return tableHeader(start, containers, next, false) ? 'row' : 'paragraph';
   };
   const read = ({ line, inFence, fenceOpen, fenceClose }, given) => {
     const j = next++;
@@ -1036,6 +1080,8 @@ function blockReader(lines, quotedFences) {
       fenced = null;
     }
     const rest = fenceOpen || fenceClose ? 'block' : restOf(j, start, paragraph, table);
+    // A row that no row comes before is a header row.
+    if (rest === 'row' && !table) columns = cellCount(start.row);
     table = rest === 'row';
     const starts = !(paragraph && rest === 'text' && start.opened.length === 0);
     if (starts) {
@@ -1053,13 +1099,13 @@ function blockReader(lines, quotedFences) {
         if (c.quote || c.empty) stops.push(containers.length);
         containers.push(c);
       }
-      paragraph = rest === 'text';
+      paragraph = rest === 'text' || rest === 'paragraph';
     }
     if (rest === 'fence') {
       fenced = start.fence;
       quotedFences?.add(j);
     }
-    return { j, rest, starts };
+    return rest === 'row' ? { j, rest, starts, row: start.row, columns } : { j, rest, starts };
   };
   read.start = (line) => lineStart(line, containers, paragraph, stops);
   read.containers = containers;
@@ -1079,40 +1125,47 @@ function blockReader(lines, quotedFences) {
 // lineStart(), to the paragraph's last line for those runs. Any other line
 // starts a block, and link text or a code span opened on one that is not
 // paragraph text, such as a heading or a table row, is not carried. A table
-// starts at a header row as tableHeader() reads it. A line that goes on
-// with a list item's paragraph lazily, without the item's indentation, is
-// one when its delimiter row is in the list items that hold the paragraph;
-// the list items the lazy line left out then end, so the table is held by
-// those its own indentation goes on with, as markdown-it 14 places it,
-// after the list (micromark 4 holds it in the item). A line that goes on
-// with a paragraph lazily without a block quote marker of the line above
-// is paragraph text, as markdown-it 14 reads it: no table starts at it,
-// whatever the next line (micromark 4 starts one in the block quote). A
-// table goes on with each
-// line after its header row that goes on with the block quotes and list
-// items that hold the table, opens none, and is not blank, indented code
-// or another block; each of these lines is a table row, whether or not it
-// starts with |. Any other
-// line whose text starts with | is text, which link text and code spans
-// wrap past as past any other line of their paragraph. A line inside a
-// fence has no links,
-// and a fence ends a paragraph. parse() reads the fences that start a line
-// at most 3 columns past where the text of the list items that hold it
+// starts at a header row as tableHeader() reads it, one that holds no |
+// only on a line that does not follow a table row or go on with a
+// paragraph lazily. A line that goes on with a list item's paragraph
+// lazily, without the item's indentation, and holds a | ends the paragraph
+// when its delimiter row is in the list items that hold the paragraph, as
+// markdown-it 14 reads it, and the list items the lazy line left out end
+// too. It is then the header row of a table held by the block quotes and
+// list items its own indentation goes on with, as markdown-it 14 places
+// it, after the list (micromark 4 holds it in the item), or, when the
+// delimiter row is indented 4 or more columns past those, the first line
+// of a paragraph that they hold, as markdown-it 14 reads it (micromark 4
+// starts a table in the item). A line that goes on with a paragraph
+// lazily without a block quote marker of the line above is paragraph
+// text, as markdown-it 14 reads it: no table starts at it, whatever the
+// next line (micromark 4 starts one in the block quote). A table goes on
+// with each line after its header row that goes on with the block quotes
+// and list items that hold the table, opens none, and is not blank,
+// indented code or another block; each of these lines is a table row,
+// whether or not it starts with |. The cells of a row are read one at a
+// time, as both renderers read them, so link text and code spans do not
+// run on from one cell to the next, a row holds no definition, and the
+// cells of a row past the number of cells of the table's header row, which
+// neither renderer shows, are not read. Any other line whose text starts
+// with | is text, which link text and code spans wrap past as past any
+// other line of their paragraph. A line inside a fence has no links, and a
+// fence ends a paragraph. parse() reads the fences that start a line at
+// most 3 columns past where the text of the list items that hold it
 // starts, and those where the text of a list item that a line opens starts,
 // outside a block quote; a fence inside a block quote, which lineStart()
 // reads, opens a block that blockReader() follows to the fence that closes
 // it or to the end of the block quote or list item that holds it, and no
 // line of that block, its opening fence included, has links. A line that
-// lineStart() reads as indented code has no inline links or
-// definitions, as its text is shown as written. lineStart() does not track
-// HTML blocks, and such a line may be inside one instead: there it is raw
-// HTML, whose inline links and definitions are text as well, but whose
-// hrefs are links. So the hrefs on such a line are read. On the lines of
-// indented code that follow a table row with no other line between, the
-// inline links and definitions are read as well. Given a set as
-// `codeLines`, the reader adds to it the index in `lines` of each line of a
-// fenced code block inside a block quote, its fences included, and of each
-// line of indented code on which it reads no inline link or definition.
+// lineStart() reads as indented code, a table row above it or not, has no
+// inline links or definitions, as its text is shown as written.
+// lineStart() does not track HTML blocks, and such a line may be inside
+// one instead: there it is raw HTML, whose inline links and definitions
+// are text as well, but whose hrefs are links. So the hrefs on such a line
+// are read. Given a set as `codeLines`, the reader adds to it the index in
+// `lines` of each line of a fenced code block inside a block quote, its
+// fences included, and of each line of indented code on which it reads no
+// inline link or definition.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines, codeLines) {
   let open = noOpenLinkText();
@@ -1126,16 +1179,11 @@ function linkReader(lines, codeLines) {
     const start = lineStart(line, read.containers, true);
     return read.restOf(k, start, true, false) === 'text' && start.opened.length === 0;
   };
-  // Whether the line above is a table row, or indented code that follows one.
-  let afterRow = false;
   return (l) => {
     const block = read(l);
-    if (block === null) {
-      afterRow = false;
-      return [];
-    }
+    if (block === null) return [];
     const { j, rest, starts } = block;
-    const paragraph = rest === 'text';
+    const paragraph = rest === 'text' || rest === 'paragraph';
     if (starts) {
       open = noOpenLinkText();
       // The code spans of the block: those of a paragraph may run on to the
@@ -1145,15 +1193,14 @@ function linkReader(lines, codeLines) {
       if (paragraph) while (last + 1 < lines.length && goesOn(last + 1)) last += 1;
       open.code = paragraphCodeSpans(lines.slice(j, last + 1).map(({ line }) => line));
     }
-    const code = rest === 'code' && !afterRow;
-    afterRow = rest === 'row' || (rest === 'code' && afterRow);
     // The opening fence of a block that parse() does not tag holds no link,
     // as what follows its run is an info string, not text.
     if (rest === 'fence') return [];
-    if (code) {
+    if (rest === 'code') {
       codeLines?.add(j);
       return hrefTargets(l.line);
     }
+    if (rest === 'row') return rowTargets(block.row, block.columns);
     const targets = linkTargets(l.line, open);
     if (!paragraph) open = noOpenLinkText();
     return targets;
