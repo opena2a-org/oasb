@@ -820,11 +820,38 @@ function inlineDestinations(line, open, spans) {
 // line, after attribute values that may hold >, read on the line with its
 // code spans removed, or, when `raw` is true, on the whole line: on a line
 // of raw HTML, such as a line of an HTML block, a backtick is text and
-// opens no code span.
+// opens no code span. A tag that starts at a < and a letter is read on to
+// the first > outside its quoted values, or to a quote that no later quote
+// of its kind closes, and its first href there is a target; the line is
+// read on after that href, or from the character after the < when the tag
+// holds none. From each index a tag meets an href that starts there, or
+// else the first href it meets from the next character, or from after the
+// quoted value that starts there, and none at a >: that first href is noted
+// for each index in one pass from the end of the line, so a line of many <
+// that no > follows is not read again from each one.
+const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/iy;
 function hrefTargets(line, raw = false) {
+  const text = raw ? line : withoutCodeSpans(line);
+  // reach[i] is the index of the first href a tag meets from text[i] on, or
+  // -1 when it meets none; next[q] is the index of the next quote q after
+  // text[i], or -1 when there is none.
+  const reach = new Int32Array(text.length + 1).fill(-1);
+  const next = { '"': -1, "'": -1 };
+  for (let i = text.length - 1; i >= 0; i--) {
+    const c = text[i];
+    HREF.lastIndex = i;
+    if (HREF.test(text)) reach[i] = i;
+    else if (c === '"' || c === "'") reach[i] = next[c] === -1 ? -1 : reach[next[c] + 1];
+    else if (c !== '>') reach[i] = reach[i + 1];
+    if (c === '"' || c === "'") next[c] = i;
+  }
   const targets = [];
-  for (const m of (raw ? line : withoutCodeSpans(line)).matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
-    targets.push(m[1] ?? m[2]);
+  for (let i = 0; i + 1 < text.length; i++) {
+    if (text[i] !== '<' || !/[a-z]/i.test(text[i + 1]) || reach[i + 2] === -1) continue;
+    HREF.lastIndex = reach[i + 2];
+    const [, double, single] = HREF.exec(text);
+    targets.push(double ?? single);
+    i = HREF.lastIndex - 1;
   }
   return targets;
 }

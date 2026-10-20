@@ -898,6 +898,18 @@ stay on record here with the reason they changed.
   the rest of the line, so
   `Hello <textarea><!-- </textarea><script> --> As of 2026-06-03. world.`
   exited 0 and now exits 1.
+- `npm run check:readme` finds the hrefs on a line in one pass from the end
+  of the line, which notes for each character the first href that a tag
+  read on from there meets, instead of reading the rest of the line again
+  from each `<` and letter. On macOS arm64, with a README that links
+  `docs/AUDIT-2026-06-03.md`, and that page holding `As of 2026-06-03.`, a
+  blank line, `<div>`, a line of `<a` repeated 50,000 times, `</div>`, a
+  blank line and `See the [README](../README.md) for the current figures.`
+  above its first H2, `node scripts/check-readme.mjs --no-counts README.md`
+  took 17.9 seconds; with `<a b="` or `<textarea ` repeated 50,000 times
+  on that line instead it took 62.5 and 82.3 seconds. Each now takes 0.07
+  to 0.42 seconds, and 0.18 to 0.82 seconds with the line ten times as
+  long, over four runs of each.
 
 ## 0.4.1 - 2026-10-17
 
