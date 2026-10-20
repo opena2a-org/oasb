@@ -3080,6 +3080,56 @@ test("a ## line of an HTML block is not a dated page's first H2, so a note below
   }
 });
 
+test('a note inside a comment, processing instruction, declaration or CDATA section in a paragraph, a heading or a table cell does not mark a dated page', () => {
+  // None of these shows its text where it sits inline either, also where it
+  // runs on to a later line of its paragraph, in a block quote or a list
+  // item, and a line break inside one is not a space between the words
+  // around it. A > marker of a block quote ends no declaration.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Hello <!-- As of 2026-06-03. --> world.\n\n${see}`,
+    `| <!-- As of 2026-06-03. --> | x |\n| - | - |\n\n${see}`,
+    `### Audit <!-- As of 2026-06-03. -->\n\n${see}`,
+    `Hello <?note As of 2026-06-03. ?> world.\n\n${see}`,
+    `Hello <!NOTE As of 2026-06-03.> world.\n\n${see}`,
+    `Hello <![CDATA[As of 2026-06-03.]]> world.\n\n${see}`,
+    `Hello <!-- As of\n2026-06-03. --> world.\n\n${see}`,
+    `Hello <!--\nAs of 2026-06-03.\n--> world.\n\n${see}`,
+    `Hello <?note\nAs of 2026-06-03.\n?> world.\n\n${see}`,
+    `> Hello <!-- As of\n> 2026-06-03. --> world.\n\n${see}`,
+    `> Hello <!NOTE x\n> As of 2026-06-03.> world.\n\n${see}`,
+    `- Hello <!-- As of\n2026-06-03. --> world.\n\n${see}`,
+    `As of<!--\n-->2026-06-03.\n\n${see}`,
+    `Hello <!-- As of 2026-06-03. \` --> x \`\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  // The text after the end of one is read, also on the line that holds the
+  // end, and a backtick inside one, or inside a tag, opens no code span. A
+  // <!-- inside a code span opens no comment, nor does one whose end its
+  // paragraph does not hold, and a cell of a table row ends what opens in
+  // it, a code span too.
+  for (const intro of [
+    `Draft <!-- x --> as of 2026-06-03.\n\n${see}`,
+    `Draft <!--\nx\n--> as of 2026-06-03.\n\n${see}`,
+    `As of <!--\n--> 2026-06-03.\n\n${see}`,
+    `Draft <!-- \` --> as of 2026-06-03 \`.\n\n${see}`,
+    `Draft <b title="\`">as of 2026-06-03</b> \`.\n\n${see}`,
+    `Draft <!--\nx \`-->\` as of 2026-06-03.\n\n${see}`,
+    `\`<!--\` As of 2026-06-03. \`-->\`\n\n${see}`,
+    `Hello <!-- As of 2026-06-03.\n\n${see}`,
+    `Hello <!-- As of 2026-06-03.\n\n--> world.\n\n${see}`,
+    `| <!-- x | As of 2026-06-03. --> |\n| - | - |\n\n${see}`,
+    `| \`a | As of 2026-06-03. | b\` |\n| - | - | - |\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {
   const gaps = readFileSync(join(repo, 'docs', 'known-gaps.md'), 'utf8');
   assert.match(gaps, /\]\(AUDIT-2026-06-03\.md\)/, 'docs/known-gaps.md no longer links the 2026-06-03 audit');
