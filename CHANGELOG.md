@@ -930,6 +930,34 @@ stay on record here with the reason they changed.
   not followed, so with `<span>` and `</span>` in place of the `<div>`
   tags the section starts at the line inside it and the check exits 1,
   reading the table in that block as the section's table.
+- `npm run check:readme` reads no part of a tag as the text of a dated page:
+  a browser shows no tag, nor the quoted value of an attribute, also one
+  that runs on to a later line of an HTML block. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and these lines after that page's H1 and a
+  blank line, then a blank line and
+  `See the [README](../README.md) for the current figures.`:
+  `<div title="As of 2026-06-03.">x</div>` exited 0 and now exits 1 with
+  `is a dated page, so above its first H2 it must say "as of 2026-06-03"`,
+  as does `Hello <span title="As of 2026-06-03.">x</span> world.`, and so
+  do the three lines `<div title="`, `As of 2026-06-03.` and `">x</div>`.
+  `<div title="x">As of 2026-06-03.</div>` still exits 0. The words on
+  either side of a tag join with no space, as a browser shows them, so
+  `<div>As<span class="x"> of 2026-06-03.</span></div>` exited 1 and now
+  exits 0, as does `Hello A<span class="x">s of 2026-06-03.</span> world.`.
+  Inside a `<textarea>` a tag is text, so
+  `<textarea>As <b>of</b> 2026-06-03.</textarea>` still exits 1. A
+  `</textarea>` inside a comment ends the `<textarea>`, and a quoted value
+  that a tag after it opens there runs on past the comment, so
+  `Hello <textarea><!-- </textarea><b title="x --> As of 2026-06-03." y>
+  world.` exited 0 and now exits 1, while
+  `Hello <textarea><!-- </textarea><b title="x"> As of 2026-06-03. -->
+  world.`, where the value ends in the comment, still exits 0. An end tag
+  with an attribute, such as `</textarea title="x">`, ends a `<textarea>`,
+  as in a browser, on a line of an HTML block and inside raw HTML in a
+  paragraph, such as a comment, and no part of it is read either, so the
+  three lines `<div>`, `<textarea>x</textarea title="As of 2026-06-03.">`
+  and `</div>` exited 0 and now exit 1, as does
+  `Hello <textarea><!-- </textarea title="As of 2026-06-03."> --> world.`.
 
 ## 0.4.1 - 2026-10-17
 
