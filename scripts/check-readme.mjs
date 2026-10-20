@@ -115,7 +115,8 @@
 //      "What Gets Tested" table, counted per source directory. The rows are
 //      read below the "## What Gets Tested" line up to the next H2, found as
 //      check 2 finds one, so a ## line of a fenced code block or of an HTML
-//      block ends no section. Without
+//      block ends no section, and a line of such a block that starts with |
+//      is no row, as its text is code or raw HTML. Without
 //      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
 //      --tests it reads a vitest JSON report (`vitest run --reporter=json`)
@@ -1632,14 +1633,17 @@ function checkCounts(tests) {
   // belong to a row. The "Attack scenarios" and "npm test total" rows are
   // statements, compared above. Every copy of the table is checked. Its rows
   // are read up to the next H2, as isH2() reads one: a ## line of a fenced
-  // code block or of an HTML block ends no section.
+  // code block or of an HTML block ends no section. A row is a line there
+  // that starts with |, other than one whose first cell starts with - or :-,
+  // as a delimiter row's does; a line of a fenced code block or of an HTML
+  // block, as parse() tags them, is none, as its text is code or raw HTML.
   const tables = [];
   for (const { prefix, lines } of documents) {
     const start = lines.findIndex((l) => !l.inFence && /^##\s+What Gets Tested\s*$/.test(l.line));
     const rows = [];
     for (let i = start + 1; start >= 0 && i < lines.length && !isH2(lines[i]); i++) {
-      const { n, line } = lines[i];
-      if (!line.startsWith('|') || /^\|\s*:?-/.test(line)) continue;
+      const { n, line, inFence, html } = lines[i];
+      if (inFence || html || !line.startsWith('|') || /^\|\s*:?-/.test(line)) continue;
       rows.push({ n, cells: line.split('|').slice(1, -1).map((c) => c.trim()) });
     }
     if (rows.length >= 2) tables.push({ prefix, rows });

@@ -849,6 +849,26 @@ stay on record here with the reason they changed.
   `<textarea>`. The lines `> > Hello <!NOTE x` and
   `>   > As of 2026-06-03. y> world.` exited 0 and now exit 1: the second
   `>` of `>   >` is a block quote marker, which ends no declaration.
+- `npm run check:readme` skips the lines that it tags as lines of a
+  fenced code block or of an HTML block when it reads the rows of the
+  "What Gets Tested" table, as CommonMark reads such a line as code or raw
+  HTML, not as a row. It read such a line that starts with `|` as a row,
+  so one above the table was read as the table's header row, and the
+  header row below it as a row with no test count. With a blank line,
+  `` ```text ``, `| Fake row | 99 |` and `` ``` `` right after
+  `## What Gets Tested` in `docs/test-catalog.md`,
+  `node scripts/check-readme.mjs` exited 1 with `docs/test-catalog.md
+  line 20: the "Category" row has no test count`, and now exits 0; with
+  `<div>`, `| Fake row | 99 |` and `</div>` in place of the last three of
+  those lines, it also exited 1 and now exits 0.
+  `scripts/check-readme.test.mjs` also puts `~~~` fences, or `<!--` and
+  `-->`, around the line, and puts each of the four blocks, after a blank
+  line, below the table's last row, where the line was read as a row
+  whose Source names no directory; on the README and on a page that took
+  its text, each of those inputs exited 1 and now exits 0. A block that
+  `<span>` alone on a line opens (CommonMark kind 7) is not followed, so
+  with `<span>` and `</span>` in place of the `<div>` tags the check still
+  exits 1 with the "Category" row's message.
 
 ## 0.4.1 - 2026-10-17
 
