@@ -444,6 +444,23 @@ stay on record here with the reason they changed.
   indented line that goes on with a paragraph passes, as it did. The check
   does not track HTML blocks, so a note indented 4 spaces inside a `<div>`
   now fails the check too; it passed.
+- `npm run check:readme` opens a fenced code block on a line whose first
+  characters other than white space are 3 or more backticks or tildes only
+  when they start at most 3 columns past where the text of the list items
+  that hold the line starts. It opened one however far in they started, so
+  it read no link on the lines after such a line, up to the next one of the
+  same character. A line further in goes on with the paragraph above it, as
+  indented code cannot interrupt a paragraph, or is indented code. With
+  `docs/nowhere.md` absent, the lines `a`, 4 spaces and `` ``` ``, and 4
+  spaces and `[y](docs/nowhere.md)` exited 0, and now exit 1 with
+  `link target "docs/nowhere.md" does not exist`, naming the third line.
+  After a blank line in place of `a`, the other two lines are indented code
+  and still exit 0. A heading after such a line is read: a link to it from
+  above that line exited 1 with `has no matching heading`, and now passes.
+  The other checks read the same blocks: a dated page's "as of" note or
+  link to the README after such a line now counts, a comment on an
+  `opena2a benchmark` line after it is no longer read as one in a code
+  block, and it no longer opens the code block that holds the first command.
 
 ## 0.4.1 - 2026-10-17
 

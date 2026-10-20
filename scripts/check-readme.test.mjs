@@ -1917,6 +1917,47 @@ test('a fenced code block in a list item is a code block to the first-command an
   );
 });
 
+test('a line of ``` or ~~~ 4 or more columns past where the text of the list items that hold it starts opens no fence, so the lines after it are read', () => {
+  // markdown-it 14.1.0 and commonmark.js 0.31.2 render each of these with the
+  // link: the line goes on with the paragraph above it, with ``` or ~~~ after
+  // 4 spaces or a tab, 4 columns past the text of a list item, lazily inside
+  // a block quote, and 7 columns in after a paragraph line 3 spaces in; with
+  // no paragraph above it, it is indented code, and the link's line after it
+  // starts a paragraph; and the ``` after the link opens a fence rather than
+  // closing one.
+  for (const [body, line] of [
+    ['a\n    ```\n    [y](docs/nowhere.md)\n', 13],
+    ['a\n    ~~~\n    [y](docs/nowhere.md)\n', 13],
+    ['a\n\t```\n\t[y](docs/nowhere.md)\n', 13],
+    ['- a\n  b\n      ```\n      [y](docs/nowhere.md)\n', 14],
+    ['> a\n    ```\n    [y](docs/nowhere.md)\n', 13],
+    ['   a\n       ```\n       [y](docs/nowhere.md)\n', 13],
+    ['    ```\n[y](docs/nowhere.md)\n', 12],
+    ['a\n    ```\n[y](docs/nowhere.md)\n```\n', 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+  // They render none of these with the link: with no paragraph above it, the
+  // line is indented code, as is the link's line; 2 columns past the text of
+  // a list item, or as far in as the text of an item 4 columns wide, it opens
+  // a fence that holds the link; and a ``` at the start of the line after it
+  // opens a fence that holds the link.
+  for (const body of [
+    '\n    ```\n    [y](docs/nowhere.md)\n',
+    '- a\n    ```\n    [y](docs/nowhere.md)\n    ```\n',
+    '1.  a\n\n    ```\n    [y](docs/nowhere.md)\n',
+    'a\n    ```\n```\n[y](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A heading after such a line is not in a fence, so a link to it resolves.
+  const r = check('[s](#setup)\n\na\n    ```\n## Setup\n');
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
@@ -2222,6 +2263,26 @@ test('a note inside an indented code block does not mark a dated page, and one t
     datedPage('The counts below are kept as recorded,\n    as of 2026-06-03; see the [README](../README.md).\n'),
   );
   assert.equal(lazy.status, 0, lazy.stderr);
+});
+
+test('a line of ``` 4 or more columns past where the text of the list items that hold it starts opens no code block to the other checks either', () => {
+  // After a paragraph line, such a line and the lines after it go on with
+  // the paragraph: no command block starts there, a comment there is not one
+  // in a code block, and a dated page's note and link to the README there
+  // are read.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    writeFileSync(join(dir, 'README.md'), '# Title\n\n## Quick Start\n\nRun:\n    ```bash\n    npm test\n    ```\n');
+    const shell = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+    assert.equal(shell.status, 1);
+    assert.match(shell.stderr, /^README: no shell code block with a command starts before line 30; /m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const comment = check('a\n    ```bash\n    opena2a benchmark ./my-agent   # OASB-1 controls at level L2\n');
+  assert.equal(comment.status, 0, comment.stderr);
+  const dated = check(DATED_LINK, datedPage('a\n    ```\nAs of 2026-06-03; see the [README](../README.md).\n'));
+  assert.equal(dated.status, 0, dated.stderr);
 });
 
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {

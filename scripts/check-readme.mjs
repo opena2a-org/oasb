@@ -30,6 +30,13 @@
 //      line whose text starts with | is paragraph text otherwise. The links
 //      on indented code that follows a table row, with no other line
 //      between, are read too.
+//      A line whose first characters other than white space are 3 or more
+//      backticks or tildes opens a fenced code block, and no link is read on
+//      the lines between it and the next such line of the same character,
+//      only when that run starts at most 3 columns past where the text of
+//      the list items that hold the line starts; a line that starts further
+//      in goes on with the paragraph above it, as indented code cannot
+//      interrupt a paragraph, or is indented code.
 //      No link is read in a fenced code block inside a block quote, which
 //      ends a paragraph: from a fence, 3 or more backticks that no backtick
 //      follows on its line or 3 or more tildes, at most 3 columns past where
@@ -247,16 +254,21 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 
 // Split a markdown file into lines, tagging each with whether it sits inside a
 // fenced code block, so headings and links are only read from prose. A block
-// opens at a fence that starts a line, after its indentation, and runs to
-// the next line that starts so with 3 or more of the same character. A
-// block also opens at a fence where the text of a list item starts, on the
-// line that opens the item outside a block quote (- ``` or 1. ~~~), as
-// lineStart() reads that line with the block quotes and list items that
-// blockReader() keeps open after the line above. That block runs to the
-// fence that closes it, as closes() reads one, or to the first line that
-// does not go on with the list items that hold it, as a fenced code block
-// takes no line lazily. A fence inside a block quote is left to
-// blockReader(), as no line of that block starts with its fence.
+// opens at a line whose first characters other than white space are 3 or
+// more backticks or tildes, when they start at most 3 columns past where the
+// text of the list items that hold the line starts, as lineStart() reads
+// that line with the block quotes and list items that blockReader() keeps
+// open after the line above. A line that starts further in opens none: it
+// goes on with the paragraph above it, as indented code cannot interrupt a
+// paragraph, or is indented code. The block runs to the next line that
+// starts so with 3 or more of the same character, however far in. A block
+// also opens at a fence where the text of a list item starts, on the line
+// that opens the item outside a block quote (- ``` or 1. ~~~), as
+// lineStart() reads that line with those block quotes and list items. That
+// block runs to the fence that closes it, as closes() reads one, or to the
+// first line that does not go on with the list items that hold it, as a
+// fenced code block takes no line lazily. A fence inside a block quote is
+// left to blockReader(), as no line of that block starts with its fence.
 function parse(text) {
   const lines = text.split('\n');
   if (lines[lines.length - 1] === '') lines.pop();
@@ -283,7 +295,10 @@ function parse(text) {
       listFence = null;
     }
     const marker = l.line.match(/^\s*(```+|~~~+)/);
-    if (marker && fence === null) {
+    // Read as if no paragraph were open, a line that starts 4 or more
+    // columns past where the text of the list items that hold it starts is
+    // indented code, and opens no fence.
+    if (marker && fence === null && lineStart(l.line, read.containers, false).rest !== 'code') {
       fence = marker[1][0];
       l.fenceOpen = true;
     } else if (marker && marker[1][0] === fence) {
@@ -797,10 +812,11 @@ function tableHeader(start, containers, next) {
 // text of the block that holds the item starts to where the item's text
 // starts, which is 1 to 4 columns after the marker, or 1 when more follow or
 // no text does. Past those, the line may open block quotes and list items,
-// and then start one of the blocks above or a table row (|), each after at
-// most 3 columns of indentation. On a line that goes on with every
-// container below a paragraph, a setext underline ends that paragraph, and
-// a list item ends it only when it holds text and, if ordered, starts at 1.
+// and then start one of the blocks listed above ATX_HEADING or a table row
+// (|), each after at most 3 columns of indentation. On a line that goes on
+// with every container below a paragraph, a setext underline ends that
+// paragraph, and a list item ends it only when it holds text and, if
+// ordered, starts at 1.
 // `stops` are the indices in `containers` of the block quotes and of the
 // list items that hold nothing yet, in order: once the rest of a line is
 // blank, it goes on with the containers before the next of them. A caller
@@ -1081,11 +1097,12 @@ function blockReader(lines, quotedFences) {
 // wrap past as past any other line of their paragraph. A line inside a
 // fence has no links,
 // and a fence ends a paragraph. parse() reads the fences that start a line
-// and those where the text of a list item that a line opens starts, outside
-// a block quote; a fence inside a block quote, which lineStart() reads,
-// opens a block that blockReader() follows to the fence that closes it or
-// to the end of the block quote or list item that holds it, and no line of
-// that block, its opening fence included, has links. A line that
+// at most 3 columns past where the text of the list items that hold it
+// starts, and those where the text of a list item that a line opens starts,
+// outside a block quote; a fence inside a block quote, which lineStart()
+// reads, opens a block that blockReader() follows to the fence that closes
+// it or to the end of the block quote or list item that holds it, and no
+// line of that block, its opening fence included, has links. A line that
 // lineStart() reads as indented code has no inline links or
 // definitions, as its text is shown as written. lineStart() does not track
 // HTML blocks, and such a line may be inside one instead: there it is raw
