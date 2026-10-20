@@ -598,6 +598,16 @@ stay on record here with the reason they changed.
   third as code and the link on the fifth. A heading after such a line is
   read: a link to it from above that line exited 1 with
   `has no matching heading`, and now passes.
+- `npm run check:readme` ends a fenced code block whose fence starts its
+  line only at a run of the same character at least as long as the one
+  that opened it, with only spaces and tabs after the run. It ended the
+  block at the next line that starts with 3 or more of the same character,
+  whatever followed them. With `docs/nowhere.md` absent, a block of
+  `` ``` ``, `npm i`, `` ``` x ``, `[y](docs/nowhere.md)` and `` ``` ``
+  exited 1 with `link target "docs/nowhere.md" does not exist`, and now
+  exits 0, as the link is code. So do a block of ``` ```` ``` that holds
+  `` ``` ``, the link and `` ``` ``, and a block of `~~~~` that holds `~~~`
+  and the link.
 
 ## 0.4.1 - 2026-10-17
 

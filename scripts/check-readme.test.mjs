@@ -1936,6 +1936,31 @@ test('no line of a fenced code block inside a block quote has links, to its clos
   }
 });
 
+test('a fenced code block whose fence starts its line runs on past a shorter fence and a fence with text after it', () => {
+  // The link's line is in the block: after a fence with text after it,
+  // inside a block of 4 backticks after a fence of 3, and inside a block of
+  // 4 tildes after a fence of 3.
+  for (const body of [
+    '```\nnpm i\n``` x\n[y](docs/nowhere.md)\n```\n',
+    '````\n```\n[y](docs/nowhere.md)\n```\n````\n',
+    '~~~~\n~~~\n[y](docs/nowhere.md)\n~~~~\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A run of the same character at least as long, with only spaces and tabs
+  // after it, closes the block, and the line after it is read.
+  for (const [body, line] of [
+    ['````\na\n`````\n[y](docs/nowhere.md)\n', 14],
+    ['```\na\n``` \t\n[y](docs/nowhere.md)\n', 14],
+    ['~~~\na\n~~~~\n[y](docs/nowhere.md)\n', 14],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
 test('no line after a fence where the text of a list item starts has links, to its closing fence or the end of the list items that hold it', () => {
   // The fence follows the marker of a list item that the line opens: a
   // bullet or an ordered item, after a tab, after a second marker, in an

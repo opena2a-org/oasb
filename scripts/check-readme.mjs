@@ -295,11 +295,12 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // open after the line above. A line that starts further in opens none: it
 // goes on with the paragraph above it, as indented code cannot interrupt a
 // paragraph, or is indented code. The block runs to the next line that
-// starts so with a fence of the same character, however far in, or to the
-// first line that does not go on with the list items that hold it, as a
-// fenced code block takes no line lazily: that line ends the list items it
-// does not go on with, and so the block, and is read as a line outside the
-// block, which may open another one. A block also opens at a fence where
+// starts so with a fence of the same character at least as long as the one
+// that opened it, however far in, with only spaces and tabs after the run,
+// or to the first line that does not go on with the list items that hold
+// it, as a fenced code block takes no line lazily: that line ends the list
+// items it does not go on with, and so the block, and is read as a line
+// outside the block, which may open another one. A block also opens at a fence where
 // the text of a list item starts, on the line that opens the item outside a
 // block quote (- ``` or 1. ~~~), as lineStart() reads that line with those
 // block quotes and list items. That block runs to the fence that closes it,
@@ -313,7 +314,7 @@ function parse(text) {
   if (lines[lines.length - 1] === '') lines.pop();
   const parsed = lines.map((line, i) => ({ n: i + 1, line, inFence: false }));
   const read = blockReader(parsed);
-  let fence = null; // the character of the fence that opened a block that starts its line
+  let fence = null; // the fence that opened a block that starts its line
   let listFence = null; // the opening fence of the block in a list item that the line above is in
   for (const l of parsed) {
     // How lineStart() reads the line, once it has been read so: the reader
@@ -354,9 +355,15 @@ function parse(text) {
     // columns past where the text of the list items that hold it starts is
     // indented code, and opens no fence.
     if (marker && fence === null && !html && lineStart(l.line, read.containers, false).rest !== 'code') {
-      fence = marker[0][0];
+      fence = marker[0];
       l.fenceOpen = true;
-    } else if (marker && marker[0][0] === fence) {
+    } else if (
+      marker &&
+      fence !== null &&
+      marker[0][0] === fence[0] &&
+      marker[0].length >= fence.length &&
+      /^[ \t]*\r?$/.test(l.line.slice(marker.index + marker[0].length))
+    ) {
       fence = null;
       l.fenceClose = true;
     } else if (fence !== null) {
