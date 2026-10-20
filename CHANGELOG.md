@@ -930,9 +930,11 @@ stay on record here with the reason they changed.
   not followed, so with `<span>` and `</span>` in place of the `<div>`
   tags the section starts at the line inside it and the check exits 1,
   reading the table in that block as the section's table.
-- `npm run check:readme` reads no part of a tag as the text of a dated page:
-  a browser shows no tag, nor the quoted value of an attribute, also one
-  that runs on to a later line of an HTML block. With a README that links
+- `npm run check:readme` reads no part of a tag as the text of a dated page,
+  on a line of an HTML block or, where the tag ends on its line, in a
+  paragraph, a heading or a table cell: a browser shows no tag, nor the
+  quoted value of an attribute such as `title`, also one that runs on to a
+  later line of an HTML block. With a README that links
   `docs/AUDIT-2026-06-03.md`, and these lines after that page's H1 and a
   blank line, then a blank line and
   `See the [README](../README.md) for the current figures.`:
@@ -940,9 +942,11 @@ stay on record here with the reason they changed.
   `is a dated page, so above its first H2 it must say "as of 2026-06-03"`,
   as does `Hello <span title="As of 2026-06-03.">x</span> world.`, and so
   do the three lines `<div title="`, `As of 2026-06-03.` and `">x</div>`.
-  `<div title="x">As of 2026-06-03.</div>` still exits 0. The words on
-  either side of an inline tag, such as `<span>`, join with no space, as a
-  browser shows them, so
+  `<div title="x">As of 2026-06-03.</div>` still exits 0. In a paragraph a
+  tag that runs on to a later line is read as text, as before, so the two
+  lines `Hello <span` and `title="As of 2026-06-03.">x</span> world.` still
+  exit 0. The words on either side of an inline tag, such as `<span>`, join
+  with no space, as a browser shows them, so
   `<div>As<span class="x"> of 2026-06-03.</span></div>` exited 1 and now
   exits 0, as does `Hello A<span class="x">s of 2026-06-03.</span> world.`.
   A `<br>` and a start tag or an end tag of a block, a list item or a table
