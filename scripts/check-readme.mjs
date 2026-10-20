@@ -1085,20 +1085,21 @@ function blockReader(lines, quotedFences) {
 // a block quote; a fence inside a block quote, which lineStart() reads,
 // opens a block that blockReader() follows to the fence that closes it or
 // to the end of the block quote or list item that holds it, and no line of
-// that block, its opening fence included, has links. Given a set as
-// `quotedFences`, the reader adds to it the index in `lines` of each line
-// of such a block, its fences included. A line that
+// that block, its opening fence included, has links. A line that
 // lineStart() reads as indented code has no inline links or
 // definitions, as its text is shown as written. lineStart() does not track
 // HTML blocks, and such a line may be inside one instead: there it is raw
 // HTML, whose inline links and definitions are text as well, but whose
 // hrefs are links. So the hrefs on such a line are read. On the lines of
 // indented code that follow a table row with no other line between, the
-// inline links and definitions are read as well.
+// inline links and definitions are read as well. Given a set as
+// `codeLines`, the reader adds to it the index in `lines` of each line of a
+// fenced code block inside a block quote, its fences included, and of each
+// line of indented code on which it reads no inline link or definition.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
-function linkReader(lines, quotedFences) {
+function linkReader(lines, codeLines) {
   let open = noOpenLinkText();
-  const read = blockReader(lines, quotedFences);
+  const read = blockReader(lines, codeLines);
   // Whether lines[k] is text that goes on with the paragraph that the
   // reader's `containers` hold, as the reader reads it below. The line above
   // it is text of that paragraph, so it is not a table row.
@@ -1132,7 +1133,10 @@ function linkReader(lines, quotedFences) {
     // The opening fence of a block that parse() does not tag holds no link,
     // as what follows its run is an info string, not text.
     if (rest === 'fence') return [];
-    if (code) return hrefTargets(l.line);
+    if (code) {
+      codeLines?.add(j);
+      return hrefTargets(l.line);
+    }
     const targets = linkTargets(l.line, open);
     if (!paragraph) open = noOpenLinkText();
     return targets;
@@ -1839,15 +1843,18 @@ for (const [file, { at, shown }] of datedPages) {
   // The links are read from the lines as written, as check 4 reads them:
   // without its code spans or > markers, a line could start 4 columns in
   // and be read as indented code. Each line is read, also those after a
-  // link to the README, so that `quotedFences` names each line of a fenced
-  // code block inside a block quote.
+  // link to the README, so that `codeLines` names each line of a fenced
+  // code block inside a block quote and each line of indented code on
+  // which the reader reads no inline link.
   const writtenLines = written.map((line) => ({ line }));
-  const quotedFences = new Set();
-  const read = linkReader(writtenLines, quotedFences);
+  const codeLines = new Set();
+  const read = linkReader(writtenLines, codeLines);
   const linksReadme = writtenLines.map((l) => read(l).some(toReadme)).includes(true);
   // The note is read without code spans and > markers, and without the
-  // lines of a fenced code block inside a block quote.
-  const intro = written.map((line, k) => (quotedFences.has(k) ? '' : line).replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
+  // lines in `codeLines`. Like the link reader, this does not track HTML
+  // blocks, so a line inside one that the reader reads as indented code is
+  // left out here too.
+  const intro = written.map((line, k) => (codeLines.has(k) ? '' : line).replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
   const missing = [];
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {
     missing.push(`say "as of ${date}"`);
