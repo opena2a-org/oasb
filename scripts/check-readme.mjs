@@ -8,8 +8,11 @@
 //   3. a fenced code block with a runnable command starts before line COMMAND_BY;
 //   4. each relative link the check reads resolves to a file in the
 //      repository, and an #anchor in a link to a .md file resolves to a
-//      heading in that file. The check reads three forms, each written within
-//      one line: inline `[text](target)` with an optional double-quoted title,
+//      heading in that file. No line of a fenced code block holds a
+//      heading, nor does a line of an HTML block, which the check follows as
+//      described below, as its text is raw HTML. The check reads three
+//      forms, each written within one line: inline `[text](target)` with an
+//      optional double-quoted title,
 //      whose target may be written `<target>` or hold balanced parentheses,
 //      and whose text opens at a `[` that no backslash escapes, on that line
 //      or on an earlier line of its paragraph (`foo](target)` is text),
@@ -50,9 +53,12 @@
 //      indented code cannot interrupt a paragraph, or is indented code. As
 //      CommonMark reads those two lines, text after the run is the block's
 //      info string on the first, and on the last makes the line code, not a
-//      closing fence. CommonMark allows no backtick in the info string of a
-//      backtick fence, so a line whose run of backticks a backtick follows
-//      (```x`y) opens no block, and inside one is code that ends none. A
+//      closing fence, as do a run on the last that is shorter than the one
+//      on the first and a run that starts 4 or more columns past where the
+//      text of the list items that hold the block starts. CommonMark allows
+//      no backtick in the info string of a backtick fence, so a line whose
+//      run of backticks a backtick follows (```x`y) opens no block, and
+//      inside one is code that ends none. A
 //      block inside list items also ends at the first line that does not go
 //      on with them, as a fenced code block takes no line lazily, and that
 //      line is read as a line outside the block, which may open another one.
@@ -72,8 +78,11 @@
 //      blank line, one that <pre>, <script>, <style>, <textarea>, a comment,
 //      a processing instruction, a declaration or CDATA opens runs to the
 //      line that holds its end, and either ends before a line that does not
-//      go on with the block quotes and list items that hold it. Links
-//      inside code spans are not read, a
+//      go on with the block quotes and list items that hold it. Nor does a
+//      > or a list marker open a block quote or list item on a line of such
+//      a block after its first, as the line is raw HTML, so a line after the
+//      block is read with the block quotes and list items that held it.
+//      Links inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
 //      holds no definition; a backtick after a backslash (\`) is text and
@@ -286,7 +295,9 @@ const DELIMITER_CHARACTERS = /^[ \t>|:-]*\r?$/;
 const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 
 // Split a markdown file into lines, tagging each with whether it sits inside a
-// fenced code block, so headings and links are only read from prose. A block
+// fenced code block, so headings and links are only read from prose, and
+// whether it is a line of an HTML block that blockReader() follows (`html`),
+// whose text is raw HTML, so no heading is read on it either. A block
 // opens at a line whose first characters other than white space are a fence
 // as FENCE reads one, 3 or more backticks that no backtick follows on the
 // line or 3 or more tildes, when they start at most 3 columns past where the
@@ -294,13 +305,16 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // that line with the block quotes and list items that blockReader() keeps
 // open after the line above. A line that starts further in opens none: it
 // goes on with the paragraph above it, as indented code cannot interrupt a
-// paragraph, or is indented code. The block runs to the next line that
-// starts so with a fence of the same character at least as long as the one
-// that opened it, however far in, with only spaces and tabs after the run,
-// or to the first line that does not go on with the list items that hold
-// it, as a fenced code block takes no line lazily: that line ends the list
-// items it does not go on with, and so the block, and is read as a line
-// outside the block, which may open another one. A block also opens at a fence where
+// paragraph, or is indented code. The block runs to the next line whose
+// first characters other than white space are a fence of the same
+// character, at least as long as the one that opened it, with only spaces
+// and tabs after the run, when the run starts at most 3 columns past where
+// the text of the list items that hold the block starts, as closes() reads
+// that line: a fence further in is code. Or it runs to the first line that
+// does not go on with the list items that hold it, as a fenced code block
+// takes no line lazily: that line ends the list items it does not go on
+// with, and so the block, and is read as a line outside the block, which
+// may open another one. A block also opens at a fence where
 // the text of a list item starts, on the line that opens the item outside a
 // block quote (- ``` or 1. ~~~), as lineStart() reads that line with those
 // block quotes and list items. That block runs to the fence that closes it,
@@ -337,15 +351,18 @@ function parse(text) {
     // A block whose fence starts its line ends at a line that does not go
     // on with the list items that hold it, the reader's containers from
     // that fence on, as a line inside the block leaves them as they are.
-    // That line is then read as a line outside the block.
-    if (fence !== null && read.containers.length > 0) {
+    // That line is then read as a line outside the block. Each line of the
+    // block is read so, also with no list item, as closes() reads the
+    // closing fence from how lineStart() reads it.
+    if (fence !== null) {
       start = read.start(l.line);
       if (start.matched < read.containers.length) fence = null;
     }
     // The fence that the line starts with past white space, as FENCE reads
-    // one. A run of backticks that a backtick follows on its line is none, as
-    // CommonMark allows no backtick in the info string of a backtick fence,
-    // so that line opens no block and closes none.
+    // one, which may open a block. A run of backticks that a backtick
+    // follows on its line is none, as CommonMark allows no backtick in the
+    // info string of a backtick fence, so that line opens no block; and as
+    // lineStart() reads a fence with FENCE too, it closes none.
     const marker = matchAt(FENCE, l.line, l.line.match(/^\s*/)[0].length);
     if (fence === null) start ??= read.start(l.line);
     // A line of the HTML block that the line above is in opens no fence, as
@@ -357,13 +374,10 @@ function parse(text) {
     if (marker && fence === null && !html && lineStart(l.line, read.containers, false).rest !== 'code') {
       fence = marker[0];
       l.fenceOpen = true;
-    } else if (
-      marker &&
-      fence !== null &&
-      marker[0][0] === fence[0] &&
-      marker[0].length >= fence.length &&
-      /^[ \t]*\r?$/.test(l.line.slice(marker.index + marker[0].length))
-    ) {
+    } else if (fence !== null && closes(start, fence)) {
+      // A fence 4 or more columns past where the text of the list items
+      // that hold the block starts is code, as lineStart() reads it, and
+      // closes no block.
       fence = null;
       l.fenceClose = true;
     } else if (fence !== null) {
@@ -372,7 +386,7 @@ function parse(text) {
       listFence = start.fence;
       l.fenceOpen = true;
     }
-    read(l, start);
+    if (read(l, start)?.html) l.html = true;
   }
   return parsed;
 }
@@ -387,11 +401,13 @@ function slug(heading) {
     .replace(/\s/g, '-');
 }
 
+// The anchors of the headings on a page's lines, as parse() tags them. A line
+// of an HTML block is raw HTML, so a # that starts it starts no heading.
 function anchors(lines) {
   const seen = new Map();
   const out = new Set();
-  for (const { line, inFence } of lines) {
-    if (inFence) continue;
+  for (const { line, inFence, html } of lines) {
+    if (inFence || html) continue;
     const h = line.match(/^#{1,6}\s+(.*?)\s*#*\s*$/);
     if (!h) continue;
     const base = slug(h[1]);
@@ -1066,12 +1082,17 @@ function afterQuotes(line, quotes) {
 // holds its end, as HTML_BLOCK_END gives it. The lines of such a block are
 // read as any other line is, so lineStart() may read one as indented code,
 // but a fence on one opens no fenced code block: the reader reads it as a
-// block of its own, as its text is raw HTML. `inHtml(line, start)` says
-// whether a line that lineStart() reads as `start` is a line of the HTML
-// block that the line above is in, for parse(), which opens no fence there
-// either. The reader returns null for a line that parse() tags as inside a
-// fenced code block, and for each line after the opening fence of a fenced
-// code block that the reader follows, its closing fence included. For any
+// block of its own, as its text is raw HTML. Nor does a > or a list marker
+// open a block quote or list item on a line of the block after its first,
+// so the line after the block is read with the block quotes and list items
+// that held the block, and a line after the blank line that ends a block
+// that <div> opens, indented 4 or more columns past them, is indented code.
+// `inHtml(line, start)` says whether a line that lineStart() reads as
+// `start` is a line of the HTML block that the line above is in, for
+// parse(), which opens no fence there either. The reader returns null for
+// a line that parse() tags as inside a fenced code block, and for each line
+// after the opening fence of a fenced code block that the reader follows,
+// its closing fence included. For any
 // other line it returns `rest`, the rest of the line as lineStart() reads
 // it, with a 'row' or 'text' read as 'row' when it is a table row, as
 // 'paragraph' when it is a lazy line that starts a paragraph, as restOf()
@@ -1190,9 +1211,14 @@ function blockReader(lines, quotedFences) {
         for (const c of containers) c.empty = false;
         stops = stops.filter((s) => containers[s].quote);
       }
-      for (const c of start.opened) {
-        if (c.quote || c.empty) stops.push(containers.length);
-        containers.push(c);
+      // A line of the HTML block that the line above is in is raw HTML, so
+      // a > or a list marker on it opens no block quote or list item, as
+      // CommonMark reads the whole line as HTML.
+      if (!html) {
+        for (const c of start.opened) {
+          if (c.quote || c.empty) stops.push(containers.length);
+          containers.push(c);
+        }
       }
       paragraph = rest === 'text' || rest === 'paragraph';
     }

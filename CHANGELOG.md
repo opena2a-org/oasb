@@ -594,12 +594,9 @@ stay on record here with the reason they changed.
   `opena2a benchmark` line there is no longer checked; and an `href` or an
   inline link to `docs/nowhere.md` between two such lines exited 0 and now
   exits 1 with `link target "docs/nowhere.md" does not exist`, as on the
-  other lines of an HTML block. A list marker on a line of an HTML block
-  still opens a list item for the check, so `<div>`, `` - ``` ``, a blank
-  line and the note indented 4 spaces, which CommonMark reads as code, now
-  pass, as the same lines with `- x` do. A block that `<span>` alone on a
-  line opens (CommonMark kind 7) is not followed, so a fence there still
-  opens a code block.
+  other lines of an HTML block. A block that `<span>` alone on a line opens
+  (CommonMark kind 7) is not followed, so a fence there still opens a code
+  block.
 - `npm run check:readme` opens no fenced code block at a line whose run of
   backticks a backtick follows on the line, as CommonMark allows no
   backtick in the info string of a backtick fence. It opened one there, so
@@ -627,6 +624,51 @@ stay on record here with the reason they changed.
   exits 0, as the link is code. So do a block of ``` ```` ``` that holds
   `` ``` ``, the link and `` ``` ``, and a block of `~~~~` that holds `~~~`
   and the link.
+- `npm run check:readme` ends a fenced code block whose fence starts its
+  line only at a closing fence that starts at most 3 columns past where
+  the text of the list items that hold the block starts, as CommonMark
+  allows. It ended the block at such a fence however far in it started.
+  With `docs/nowhere.md` absent, a block of `` ``` ``, `a`, 4 spaces and
+  `` ``` ``, `[y](docs/nowhere.md)` and `` ``` `` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exits 0, as
+  markdown-it 14.1.0 and micromark 4.0.2 render the third and fourth lines
+  as code. So do these lines after `- x` and a blank line, each indented 2
+  spaces for the item and the third 4 more, and a block of `~~~` whose
+  third line is a tab and `~~~`.
+- `npm run check:readme` opens no list item or block quote at a list
+  marker or `>` on a line of an HTML block after its first, as CommonMark
+  reads the whole line as raw HTML. It opened one there, so the line after
+  the blank line that ends a block that `<div>` opens was read in that
+  list item, and as text when it was indented 4 spaces, where CommonMark
+  reads indented code. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the lines `<div>`, `- x`, a blank line,
+  `    As of 2026-06-03.`, a blank line and
+  `See the [README](../README.md) for the current figures.` after that
+  page's H1 and a blank line, the check exited 0, and now exits 1 with
+  `is a dated page, so above its first H2 it must say "as of
+  2026-06-03"`, as markdown-it 14.1.0 and micromark 4.0.2 render the note
+  as code. So do these lines with `` - ``` `` or `1. x` in place of `- x`,
+  in a block quote, and in a list item that holds the `<div>` block with
+  the note indented 6 spaces. The note still passes when it starts less
+  than 4 columns past where the text of the block quotes and list items
+  that hold the block starts, and inside a block that `<pre>` opens, up to
+  `</pre>`. Links are read the same way: with `docs/nowhere.md` absent,
+  `<div>`, `- x`, a blank line and `    [y](docs/nowhere.md)` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exit 0.
+- `npm run check:readme` reads no heading on a line of an HTML block, as
+  CommonMark reads the line as raw HTML. It read a line there that starts
+  with 1 to 6 `#` and a space as a heading, so a link to its anchor
+  passed. With `[s](#setup)`, a blank line, `<div>`, `## Setup` and
+  `</div>` after the layout lines of a README, the check exited 0, and now
+  exits 1 with `anchor "#setup" has no matching heading in README.md`, as
+  markdown-it 14.1.0 and micromark 4.0.2 render `## Setup` as text in the
+  `<div>`. So do these lines with `` ``` `` after `<div>`, with
+  `<details>` and `</details>` in place of the tags, and with `<!--` and
+  `-->`, and so does a link to `docs/guide.md#setup` when that page holds
+  such lines. Such a line no longer takes a numbered anchor either: with
+  `## Setup` above the `<div>`, a link to `#setup-1` exited 0, and now
+  exits 1. A heading after the blank line that ends a `<div>` block, or
+  after a comment that ends on its first line, still holds its anchor.
 
 ## 0.4.1 - 2026-10-17
 

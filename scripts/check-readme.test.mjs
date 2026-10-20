@@ -1961,6 +1961,31 @@ test('a fenced code block whose fence starts its line runs on past a shorter fen
   }
 });
 
+test('a fenced code block whose fence starts its line runs on past a fence 4 or more columns past where the text of the list items that hold it starts', () => {
+  // Such a fence is code, not a closing fence: 4 spaces or a tab in at the
+  // top level, and 4 columns past where the text of a bullet or an ordered
+  // list item starts. The link's line is in the block.
+  for (const body of [
+    '```\na\n    ```\n[y](docs/nowhere.md)\n```\n',
+    '~~~\na\n\t~~~\n[y](docs/nowhere.md)\n~~~\n',
+    '- x\n\n  ```\n  a\n      ```\n  [y](docs/nowhere.md)\n  ```\n',
+    '1. x\n\n   ```\n   a\n       ```\n   [y](docs/nowhere.md)\n   ```\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A fence at most 3 columns past where that text starts closes the block,
+  // and the line after it is read.
+  for (const [body, line] of [
+    ['```\na\n   ```\n[y](docs/nowhere.md)\n', 14],
+    ['- x\n\n  ```\n  a\n     ```\n  [y](docs/nowhere.md)\n', 16],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
 test('no line after a fence where the text of a list item starts has links, to its closing fence or the end of the list items that hold it', () => {
   // The fence follows the marker of a list item that the line opens: a
   // bullet or an ordered item, after a tab, after a second marker, in an
@@ -2091,6 +2116,31 @@ test('a heading after a fenced code block in a list item holds its anchor', () =
   // start of another block, which ran on to the end of the page.
   const r = check('See [next](#next).\n\n- ```\n  a\n  ```\n\n## Next\n');
   assert.equal(r.status, 0, r.stderr);
+});
+
+test('a # line of an HTML block holds no anchor, and a heading after the block does', () => {
+  // CommonMark reads each line of the block as raw HTML: in a block that
+  // <div> or <details> opens, up to a blank line, also after a line of ```
+  // there, and in a comment, up to -->. GitHub shows such a line as text,
+  // with no heading and no anchor, so it does not count for #setup-1 either.
+  for (const [body, anchor, where] of [
+    ['[s](#setup)\n\n<div>\n## Setup\n</div>\n', '#setup', 'README.md'],
+    ['[s](#setup)\n\n<div>\n```\n## Setup\n</div>\n', '#setup', 'README.md'],
+    ['[s](#setup)\n\n<details>\n## Setup\n</details>\n', '#setup', 'README.md'],
+    ['[s](#setup)\n\n<!--\n## Setup\n-->\n', '#setup', 'README.md'],
+    ['[s](#setup-1)\n\n## Setup\n\n<div>\n## Setup\n</div>\n', '#setup-1', 'README.md'],
+    ['[s](docs/guide.md#setup)\n', '#setup', 'docs/guide.md'],
+  ]) {
+    const r = check(body, { 'docs/guide.md': '# Guide\n\n<div>\n## Setup\n</div>\n' });
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line 11: anchor "${anchor}" has no matching heading in ${where.replace('.', '\\.')}\\.$`, 'm'), body);
+  }
+  // A blank line ends a <div> block, and a comment that ends on its first
+  // line is that line alone: the heading after each holds the anchor.
+  for (const body of ['[s](#setup)\n\n<div>\n</div>\n\n## Setup\n', '[s](#setup)\n\n<!-- x -->\n## Setup\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
 });
 
 test('a fenced code block in a list item is a code block to the first-command and benchmark-comment checks', () => {
@@ -2687,6 +2737,45 @@ test('a line of ``` or ~~~ inside an HTML block opens no code block, so a note a
     assert.match(r.stderr, DATED, intro);
     assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
   }
+});
+
+test('a list marker on a line of an HTML block opens no list item, so a note indented 4 columns after the blank line that ends the block is code', () => {
+  // CommonMark reads each line of a block that <div> opens, up to a blank
+  // line, as raw HTML, a list marker too. The line after that blank line,
+  // 4 columns past where the text of the block quotes and list items that
+  // hold the block starts, is indented code, and the note there does not
+  // mark a dated page.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n- x\n\n    As of 2026-06-03.\n\n${see}`,
+    `<div>\n- \`\`\`\n\n    As of 2026-06-03.\n\n${see}`,
+    `<div>\n1. x\n\n    As of 2026-06-03.\n\n${see}`,
+    `> <div>\n> - x\n>\n>     As of 2026-06-03.\n\n${see}`,
+    `- <div>\n  - x\n\n      As of 2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  // A note indented less is a paragraph, also in the list item that holds
+  // the block, and one in a block that <pre> opens is raw HTML up to
+  // </pre>, past a blank line: each marks a dated page.
+  for (const intro of [
+    `<div>\n- x\n\nAs of 2026-06-03.\n\n${see}`,
+    `- <div>\n  - x\n\n  As of 2026-06-03.\n\n${see}`,
+    `<pre>\n- x\n\n    As of 2026-06-03.\n</pre>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // Check 4 reads the same lines: an inline link on the indented line is
+  // code, and one on a line that is not indented is read.
+  const code = check('<div>\n- x\n\n    [y](docs/nowhere.md)\n');
+  assert.equal(code.status, 0, code.stderr);
+  const text = check('<div>\n- x\n\n[y](docs/nowhere.md)\n');
+  assert.equal(text.status, 1);
+  assert.match(text.stderr, /^README: line 14: link target "docs\/nowhere\.md" does not exist\.$/m);
 });
 
 test('a line of ``` inside an HTML block opens no code block to the other checks either', () => {
