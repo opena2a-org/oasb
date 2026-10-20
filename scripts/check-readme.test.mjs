@@ -2320,6 +2320,22 @@ test("a dated page's note or link to the README inside a fenced code block in a 
   }
 });
 
+test("a dated page's note and link to the README after a fenced code block in a list item are read with the list items that hold them", () => {
+  // The line after the block goes on with the outer list item, and is not
+  // read as indented code; `2. ```` cannot interrupt a paragraph, so it and
+  // the line after it are paragraph text, not a fenced code block.
+  for (const intro of [
+    'As of 2026-06-03.\n\n10. - ```bash\n      npm i\n    See the [README](../README.md) for the current figures.\n',
+    '10. - ```bash\n      npm i\n    As of 2026-06-03; see the [README](../README.md).\n',
+    'As of 2026-06-03.\n\n10. ```bash\n    npm test\n    ```\n    See the [README](../README.md) for the current figures.\n',
+    'As of 2026-06-03.\n\n- a\n```\nx\n```\n  b\n2. ```\n   See the [README](../README.md) for the current figures.\n',
+    '- a\n```\nx\n```\n  b\n2. ```\n   As of 2026-06-03; see the [README](../README.md).\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
 test("a dated page's link to the README is read from its lines as written, and not from a line of indented code", () => {
   // With the code span or the "> " taken out, as the "as of" note is read,
   // the first two lines would start with 4 spaces or a tab and be read as

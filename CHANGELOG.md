@@ -485,6 +485,21 @@ stay on record here with the reason they changed.
   `` x | `y ``, `    |---|---|` and two lines indented 2 columns,
   `` z` | [m](docs/nowhere.md) | `` and `` | `c | d | ``, exited 0 and now
   exit 1, as both renderers render that link.
+- `npm run check:readme` reads a dated page's "as of" note and link to the
+  README with the list items and fenced code blocks that check 4 reads. It
+  read the page a second time with each line of a fenced code block as a
+  blank line, so the list items that a line such as `` 10. - ```bash ``
+  opens were lost, and the line after the block was read as indented code.
+  With `` 10. - ```bash ``, `      npm i` and
+  `    See the [README](../README.md) for the current figures.` after
+  `As of 2026-06-03.` above the page's first H2, the check exited 1 with
+  `it must link to the README for the current figures`, and now exits 0. So
+  do `` 10. ```bash ``, `    npm test`, `` ``` `` indented for the item and
+  the same link line; and `- a`, `` ``` ``, `x`, `` ``` ``, `  b`,
+  `` 2. ``` `` and the link indented 3 columns, where `` 2. ``` `` cannot
+  interrupt the paragraph above and opens no block. With the note on the
+  link's line instead, `As of 2026-06-03; see the [README](../README.md).`,
+  the first and last of these exited 1 and now exit 0.
 
 ## 0.4.1 - 2026-10-17
 
