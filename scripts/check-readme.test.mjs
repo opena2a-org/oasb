@@ -2979,6 +2979,44 @@ test('a note inside an HTML comment, processing instruction, declaration, CDATA 
   }
 });
 
+test('a note inside a <textarea> marks a dated page, also inside a comment, processing instruction or <style> there, as none of these starts in escapable raw text', () => {
+  // The text of a <textarea> runs to </textarea>, and a <!--, <? or <style
+  // in it is text: the note is read there, on the line that opens the
+  // element and on the later lines of its block, and a line break in it is
+  // a space between the words around it.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<textarea>\n<!-- As of 2026-06-03. -->\n</textarea>\n\n${see}`,
+    `<textarea><!-- As of 2026-06-03. --></textarea>\n\n${see}`,
+    `<div>\n<textarea>\n<!-- As of 2026-06-03. -->\n</textarea>\n</div>\n\n${see}`,
+    `<textarea>\n<?note As of 2026-06-03. ?>\n</textarea>\n\n${see}`,
+    `<textarea>\n<style>As of 2026-06-03.</style>\n</textarea>\n\n${see}`,
+    `> <textarea>\n> <!-- As of 2026-06-03. -->\n> </textarea>\n\n${see}`,
+    `- <textarea>\n  <!-- As of 2026-06-03. -->\n  </textarea>\n\n${see}`,
+    `<TEXTAREA rows="2">\n<!-- As of\n2026-06-03. -->\n</TEXTAREA>\n\n${see}`,
+    `<div>\n<!-- x --> <textarea><!--\nAs of 2026-06-03.\n--></textarea>\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // Outside a <textarea> they still hide the note: after its </textarea>,
+  // and where the <textarea> is itself inside a comment or a <script>. A
+  // comment inside a <textarea> is text, so it does not join the words on
+  // either side of it either.
+  for (const intro of [
+    `<textarea>As of <!-- x --> 2026-06-03.</textarea>\n\n${see}`,
+    `<textarea>x</textarea> <!-- As of 2026-06-03. -->\n\n${see}`,
+    `<div>\n<textarea>\n</textarea>\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div>\n<!-- <textarea> -->\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div>\n<script>\n<textarea>\n</script>\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+});
+
 test('a note in an HTML block is read without the code spans of its lines, as elsewhere, and a backtick there keeps no comment from opening', () => {
   // The code spans of the lines of an HTML block are read as on other
   // lines: one may run on from one line to a later one, also in a block

@@ -744,6 +744,22 @@ stay on record here with the reason they changed.
   a line opens (CommonMark kind 7) is not followed, so that README with
   `<span>` and `</span>` in place of the `<div>` tags passes, with
   `Quick Start at line 4`.
+- `npm run check:readme` reads a dated page's "as of" note inside a
+  `<textarea>` in an HTML block, also where the note sits in an HTML
+  comment, processing instruction or `<style>` there. The text of a
+  `<textarea>` is escapable raw text, which runs to `</textarea>` and in
+  which a `<!--` starts no comment, while the check hid such a comment as
+  it hides one outside a `<textarea>`. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the lines `<textarea>`,
+  `<!-- As of 2026-06-03. -->`, `</textarea>`, a blank line and
+  `See the [README](../README.md) for the current figures.` after that
+  page's H1 and a blank line, the check exited 1 with `is a dated page, so
+  above its first H2 it must say "as of 2026-06-03"`, and now exits 0. So
+  does `<textarea><!-- As of 2026-06-03. --></textarea>` on one line, and so
+  do the three lines in a `<div>`, in a block quote and in a list item. A
+  comment inside a `<textarea>` is text between the words on either side
+  of it: `<textarea>As of <!-- x --> 2026-06-03.</textarea>` passed and now
+  fails. A comment after `</textarea>` still hides the note.
 
 ## 0.4.1 - 2026-10-17
 
