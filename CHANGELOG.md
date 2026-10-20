@@ -581,6 +581,23 @@ stay on record here with the reason they changed.
   pass, as the same lines with `- x` do. A block that `<span>` alone on a
   line opens (CommonMark kind 7) is not followed, so a fence there still
   opens a code block.
+- `npm run check:readme` opens no fenced code block at a line whose run of
+  backticks a backtick follows on the line, as CommonMark allows no
+  backtick in the info string of a backtick fence. It opened one there, so
+  it read no link on that line or on the lines after it, up to the next
+  line that starts with 3 or more backticks, however far in, or to the end
+  of the page. With `docs/nowhere.md` absent,
+  `` ```x`y [x](docs/nowhere.md) `` exited 0, and now exits 1 with
+  `link target "docs/nowhere.md" does not exist`, naming that line, as
+  markdown-it 14.1.1 and micromark 4.0.2 render it as a paragraph with the
+  link. So do `` ``` `y` `` and `[x](docs/nowhere.md)` on the line after
+  it, naming the second line. Inside a block of backticks, such a line is
+  code and no longer ends the block: with `` ``` ``, `` ```x`y ``,
+  `[x](docs/nowhere.md)`, `` ``` `` and `[y](docs/nowhere.md)`, the check
+  named the third line and now names the fifth, as both renderers show the
+  third as code and the link on the fifth. A heading after such a line is
+  read: a link to it from above that line exited 1 with
+  `has no matching heading`, and now passes.
 
 ## 0.4.1 - 2026-10-17
 

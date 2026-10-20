@@ -41,18 +41,21 @@
 //      of the header row are not read. A line whose text starts with | is
 //      paragraph text otherwise.
 //      A line whose first characters other than white space are 3 or more
-//      backticks or tildes opens a fenced code block, and no link is read on
-//      it, on the next such line of the same character, where the block
-//      ends, or on the lines between them, only when that run starts at most
-//      3 columns past where the text of the list items that hold the line
-//      starts; a line that starts further in goes on with the paragraph
-//      above it, as indented code cannot interrupt a paragraph, or is
-//      indented code. As CommonMark reads those two lines, text after the
-//      run is the block's info string on the first, and on the last makes
-//      the line code, not a closing fence. A block inside list items also
-//      ends at the first line that does not go on with them, as a fenced
-//      code block takes no line lazily, and that line is read as a line
-//      outside the block, which may open another one.
+//      backticks that no backtick follows on the line, or 3 or more tildes,
+//      opens a fenced code block, and no link is read on it, on the next
+//      such line of the same character, where the block ends, or on the
+//      lines between them, only when that run starts at most 3 columns past
+//      where the text of the list items that hold the line starts; a line
+//      that starts further in goes on with the paragraph above it, as
+//      indented code cannot interrupt a paragraph, or is indented code. As
+//      CommonMark reads those two lines, text after the run is the block's
+//      info string on the first, and on the last makes the line code, not a
+//      closing fence. CommonMark allows no backtick in the info string of a
+//      backtick fence, so a line whose run of backticks a backtick follows
+//      (```x`y) opens no block, and inside one is code that ends none. A
+//      block inside list items also ends at the first line that does not go
+//      on with them, as a fenced code block takes no line lazily, and that
+//      line is read as a line outside the block, which may open another one.
 //      No link is read in a fenced code block inside a block quote, which
 //      ends a paragraph: from a fence, 3 or more backticks that no backtick
 //      follows on its line or 3 or more tildes, at most 3 columns past where
@@ -284,14 +287,15 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 
 // Split a markdown file into lines, tagging each with whether it sits inside a
 // fenced code block, so headings and links are only read from prose. A block
-// opens at a line whose first characters other than white space are 3 or
-// more backticks or tildes, when they start at most 3 columns past where the
+// opens at a line whose first characters other than white space are a fence
+// as FENCE reads one, 3 or more backticks that no backtick follows on the
+// line or 3 or more tildes, when they start at most 3 columns past where the
 // text of the list items that hold the line starts, as lineStart() reads
 // that line with the block quotes and list items that blockReader() keeps
 // open after the line above. A line that starts further in opens none: it
 // goes on with the paragraph above it, as indented code cannot interrupt a
 // paragraph, or is indented code. The block runs to the next line that
-// starts so with 3 or more of the same character, however far in, or to the
+// starts so with a fence of the same character, however far in, or to the
 // first line that does not go on with the list items that hold it, as a
 // fenced code block takes no line lazily: that line ends the list items it
 // does not go on with, and so the block, and is read as a line outside the
@@ -337,7 +341,11 @@ function parse(text) {
       start = read.start(l.line);
       if (start.matched < read.containers.length) fence = null;
     }
-    const marker = l.line.match(/^\s*(```+|~~~+)/);
+    // The fence that the line starts with past white space, as FENCE reads
+    // one. A run of backticks that a backtick follows on its line is none, as
+    // CommonMark allows no backtick in the info string of a backtick fence,
+    // so that line opens no block and closes none.
+    const marker = matchAt(FENCE, l.line, l.line.match(/^\s*/)[0].length);
     if (fence === null) start ??= read.start(l.line);
     // A line of the HTML block that the line above is in opens no fence, as
     // its text is raw HTML.
@@ -346,9 +354,9 @@ function parse(text) {
     // columns past where the text of the list items that hold it starts is
     // indented code, and opens no fence.
     if (marker && fence === null && !html && lineStart(l.line, read.containers, false).rest !== 'code') {
-      fence = marker[1][0];
+      fence = marker[0][0];
       l.fenceOpen = true;
-    } else if (marker && marker[1][0] === fence) {
+    } else if (marker && marker[0][0] === fence) {
       fence = null;
       l.fenceClose = true;
     } else if (fence !== null) {

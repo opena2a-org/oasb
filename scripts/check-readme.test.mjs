@@ -2134,6 +2134,44 @@ test('a line of ``` or ~~~ 4 or more columns past where the text of the list ite
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('a line that starts with a run of backticks that a backtick follows on the line opens no fence and closes none', () => {
+  // CommonMark allows no backtick in the info string of a backtick fence, and
+  // markdown-it 14.1.1 and micromark 4.0.2 render each of these with the
+  // link: the line is paragraph text with 3 backticks or 4, 2 spaces in,
+  // after a paragraph line and in a list item, and the link on the line
+  // after it goes on with its paragraph.
+  for (const [body, line] of [
+    ['```x`y [x](docs/nowhere.md)\n', 11],
+    ['````x`y [x](docs/nowhere.md)\n', 11],
+    ['  ```x`y [x](docs/nowhere.md)\n', 11],
+    ['a\n```x`y [x](docs/nowhere.md)\n', 12],
+    ['- a\n\n  ```x`y [x](docs/nowhere.md)\n', 13],
+    ['``` `y`\n[x](docs/nowhere.md)\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(r.stderr.trim().split('\n'), [`README: line ${line}: link target "docs/nowhere.md" does not exist.`], body);
+  }
+  // Inside a block of backticks such a line is code and closes no block, so
+  // the link on the line after it is code, the fence after that closes the
+  // block rather than opening one, and the link after the block is read.
+  for (const [body, line] of [
+    ['```\n```x`y\n[x](docs/nowhere.md)\n```\n[y](docs/nowhere.md)\n', 15],
+    ['```\nnpm i\n``` `y`\n[x](docs/nowhere.md)\n```\n[y](docs/nowhere.md)\n', 16],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(r.stderr.trim().split('\n'), [`README: line ${line}: link target "docs/nowhere.md" does not exist.`], body);
+  }
+  // A heading after such a line is not in a fence, so a link to it resolves,
+  // and a fence of tildes, whose info string may hold a backtick, opens a
+  // block whose opening line holds no link.
+  for (const body of ['[s](#setup)\n\n```x`y\n## Setup\n', '~~~ `x` [x](docs/nowhere.md)\nnpm i\n~~~\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('a definition on its own line inside a list item is checked; one on the list marker\'s line is not', () => {
   const r = check('- item\n\n  [x]: docs/nowhere.md\n');
   assert.equal(r.status, 1);
