@@ -2837,6 +2837,34 @@ test('a markdown link on a line of an HTML block is text, not a link, and an hre
   assert.match(href.stderr, /^README: line 12: link target "nope\.md" does not exist\.$/m);
 });
 
+test('an href between backticks on a line of an HTML block is a link, as a backtick in raw HTML is text', () => {
+  // Check 4 resolves such an href with both backticks on its line, or one
+  // of them on an earlier line of the block, on a line that lineStart()
+  // reads as text, as indented code or as a table row, and in a block quote
+  // that holds the block.
+  for (const [body, line] of [
+    ['<div>\nSee `<a href="nope.md">the page</a>`.\n</div>\n', 12],
+    ['<div>\n    See `<a href="nope.md">the page</a>`.\n</div>\n', 12],
+    ['<div>\n| See `<a href="nope.md">the page</a>` |\n| --- |\n</div>\n', 12],
+    ['> <div>\n> See `<a href="nope.md">the page</a>`.\n> </div>\n', 12],
+    ['<div>\nSee `the\n<a href="nope.md">page</a>`.\n</div>\n', 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "nope\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // In a paragraph, also one after the blank line that ends such a block,
+  // the backticks make a code span, which holds no link.
+  for (const body of ['See `<a href="nope.md">the page</a>`.\n', '<div>\nx\n</div>\n\nSee `<a href="nope.md">the page</a>`.\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // The dated-page check, which reads links with the same reader, reads
+  // such an href as the page's link to the README.
+  const dated = check(DATED_LINK, datedPage('<div>\nAs of 2026-06-03. See the `<a href="../README.md">README</a>` for the current figures.\n</div>\n'));
+  assert.equal(dated.status, 0, dated.stderr);
+});
+
 test('a note and link on the lines after the line that ends an HTML block are read with the code spans of their paragraph', () => {
   // lineStart() reads the lines of a comment after its first, and the
   // lines after the one that ends it, as one paragraph, each line of which
