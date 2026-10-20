@@ -49,7 +49,10 @@
 //      above it, as indented code cannot interrupt a paragraph, or is
 //      indented code. As CommonMark reads those two lines, text after the
 //      run is the block's info string on the first, and on the last makes
-//      the line code, not a closing fence.
+//      the line code, not a closing fence. A block inside list items also
+//      ends at the first line that does not go on with them, as a fenced
+//      code block takes no line lazily, and that line is read as a line
+//      outside the block, which may open another one.
 //      No link is read in a fenced code block inside a block quote, which
 //      ends a paragraph: from a fence, 3 or more backticks that no backtick
 //      follows on its line or 3 or more tildes, at most 3 columns past where
@@ -282,14 +285,17 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // open after the line above. A line that starts further in opens none: it
 // goes on with the paragraph above it, as indented code cannot interrupt a
 // paragraph, or is indented code. The block runs to the next line that
-// starts so with 3 or more of the same character, however far in. A block
-// also opens at a fence where the text of a list item starts, on the line
-// that opens the item outside a block quote (- ``` or 1. ~~~), as
-// lineStart() reads that line with those block quotes and list items. That
-// block runs to the fence that closes it, as closes() reads one, or to the
+// starts so with 3 or more of the same character, however far in, or to the
 // first line that does not go on with the list items that hold it, as a
-// fenced code block takes no line lazily. A fence inside a block quote is
-// left to blockReader(), as no line of that block starts with its fence.
+// fenced code block takes no line lazily: that line ends the list items it
+// does not go on with, and so the block, and is read as a line outside the
+// block, which may open another one. A block also opens at a fence where
+// the text of a list item starts, on the line that opens the item outside a
+// block quote (- ``` or 1. ~~~), as lineStart() reads that line with those
+// block quotes and list items. That block runs to the fence that closes it,
+// as closes() reads one, or to the first line that does not go on with the
+// list items that hold it. A fence inside a block quote is left to
+// blockReader(), as no line of that block starts with its fence.
 function parse(text) {
   const lines = text.split('\n');
   if (lines[lines.length - 1] === '') lines.pop();
@@ -314,6 +320,14 @@ function parse(text) {
         continue;
       }
       listFence = null;
+    }
+    // A block whose fence starts its line ends at a line that does not go
+    // on with the list items that hold it, the reader's containers from
+    // that fence on, as a line inside the block leaves them as they are.
+    // That line is then read as a line outside the block.
+    if (fence !== null && read.containers.length > 0) {
+      start = read.start(l.line);
+      if (start.matched < read.containers.length) fence = null;
     }
     const marker = l.line.match(/^\s*(```+|~~~+)/);
     // Read as if no paragraph were open, a line that starts 4 or more

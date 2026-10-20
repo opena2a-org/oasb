@@ -531,6 +531,25 @@ stay on record here with the reason they changed.
   with `` \`As of 2026-06-03.\` `` before that link, on its line, the
   check exited 1 and now exits 0, and with ``` `` As of 2026-06-03 ` `` ```
   there instead, it exited 0 and now exits 1.
+- `npm run check:readme` ends a fenced code block whose fence starts a later
+  line of a list item at the first line that does not go on with the list
+  items that hold it, as a fenced code block takes no line lazily. It ran
+  the block on to the next line that starts with 3 or more of the same
+  character, however far in, past the end of the list item. With
+  `docs/nowhere.md` absent, `- a`, a blank line, `` ``` `` and `x` indented
+  for the item, a blank line and `[y](docs/nowhere.md)` exited 0, and now
+  exit 1 with `link target "docs/nowhere.md" does not exist`, naming the
+  last line. So do these lines with `~~~` in place of `` ``` `` and without
+  the second blank line, and with `1. a` and the item's lines indented 3
+  columns; so does `[y](docs/nowhere.md)` after the block in a list item of
+  its own, or indented for the outer item of two when the block is in the
+  inner one. A line of `` ``` `` that is not indented for the item now opens
+  another block rather than closing this one. The other checks read the
+  same blocks: a heading after the item now holds the anchor that a link
+  names, a line after the item is no longer a command in the item's shell
+  block, a comment on an `opena2a benchmark` line there is no longer read
+  as one in a code block, and a dated page's "as of" note and link to the
+  README there now count.
 
 ## 0.4.1 - 2026-10-17
 
