@@ -2081,50 +2081,64 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // element, as shownHtml() finds them, as none of these holds text for the
 // reader. A block that one of these opens, such as
 // <!-- As of 2026-06-03. -->, holds the note only after the end of it, on
-// the line that holds that end. A comment inside a paragraph is read as the
-// paragraph's text. The page's first H2 is found as check 2 finds the
-// README's: a ## line of a fenced code block or of an HTML block is none.
+// the line that holds that end. None of these starts inside a <textarea>
+// element, whose text, escapable raw text, a browser shows, so the line
+// <textarea><!-- As of 2026-06-03. --></textarea> holds the note. A comment
+// inside a paragraph is read as the paragraph's text. The page's first H2 is
+// found as check 2 finds the README's: a ## line of a fenced code block or of
+// an HTML block is none.
 
 // The raw HTML that shownHtml() leaves out of the text of an HTML block,
 // each matched in any case: a <script> or a <style> element, from <script
 // or <style and white space, a > or the end of the line, a comment, from
 // <!--, a processing instruction, from <?, a CDATA section, from
-// <![CDATA[, and a declaration, from <! and a letter. Each group of
+// <![CDATA[, and a declaration, from <! and a letter. HIDDEN_HTML_START
+// also matches, with its last group, a <textarea> element, from <textarea
+// and white space, a > or the end of the line, whose text shownHtml()
+// shows: it is escapable raw text, which runs to </textarea> and in which
+// the start of each of the others is literal text. Each group of
 // HIDDEN_HTML_START matches one of them, and the entry of HIDDEN_HTML_END
-// with its number is what ends it: </script>, </style>, -->, ?>, ]]> or >.
-// So a comment, processing instruction, CDATA section or declaration that
-// opens an HTML block (HTML_BLOCK_START, CDATA_START) ends with the first
-// match of the end that HTML_BLOCK_END gives that block.
-const HIDDEN_HTML_START = /(<script(?:[\s>]|$))|(<style(?:[\s>]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])/gi;
-const HIDDEN_HTML_END = [null, /<\/script>/gi, /<\/style>/gi, /-->/g, /\?>/g, /\]\]>/g, />/g];
+// with its number is what ends it: </script>, </style>, -->, ?>, ]]>, > or
+// </textarea> (TEXTAREA_END). So a comment, processing instruction, CDATA
+// section or declaration that opens an HTML block (HTML_BLOCK_START,
+// CDATA_START) ends with the first match of the end that HTML_BLOCK_END
+// gives that block.
+const TEXTAREA_END = /<\/textarea>/gi;
+const HIDDEN_HTML_START = /(<script(?:[\s>]|$))|(<style(?:[\s>]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s>]|$))/gi;
+const HIDDEN_HTML_END = [null, /<\/script>/gi, /<\/style>/gi, /-->/g, /\?>/g, /\]\]>/g, />/g, TEXTAREA_END];
 
 // The parts of the text of one line of an HTML block outside the raw HTML
-// that HIDDEN_HTML_START matches, given `open`, the entry of
-// HIDDEN_HTML_END that ends the one that the line above in the block leaves
-// open, or null. The end of each is the first match of its entry after the
-// < that starts it, on its line or on a later line of the block. Returns
-// the parts that hold a character, as [start, end) pairs in order, as
-// `shown`, and the entry that ends the one that the line leaves open, or
-// null, as `open`. Each search starts at most 8 characters before the end
-// of the match before it, so the time a line takes grows in proportion to
-// its length.
+// that HIDDEN_HTML_START matches, but for a <textarea> element, which is
+// shown with the text around it, given `open`, the entry of HIDDEN_HTML_END
+// that ends the one that the line above in the block leaves open, or null.
+// The end of each is the first match of its entry after the < that starts
+// it, on its line or on a later line of the block. Returns the parts that
+// hold a character, as [start, end) pairs in order, as `shown`, and the
+// entry that ends the one that the line leaves open, or null, as `open`.
+// Each search starts at most 9 characters before the end of the match
+// before it, so the time a line takes grows in proportion to its length.
 function shownHtml(text, open) {
   const shown = [];
   let i = 0;
+  let from = 0; // where the shown text that runs on to i starts
   for (;;) {
     if (open) {
       open.lastIndex = i;
-      if (!open.exec(text)) return { shown, open };
+      if (!open.exec(text)) {
+        if (open === TEXTAREA_END && from < text.length) shown.push([from, text.length]);
+        return { shown, open };
+      }
       i = open.lastIndex;
+      if (open !== TEXTAREA_END) from = i;
     }
     HIDDEN_HTML_START.lastIndex = i;
     const start = HIDDEN_HTML_START.exec(text);
     if (!start) {
-      if (i < text.length) shown.push([i, text.length]);
+      if (from < text.length) shown.push([from, text.length]);
       return { shown, open: null };
     }
-    if (i < start.index) shown.push([i, start.index]);
     open = HIDDEN_HTML_END[start.findIndex((group, k) => k > 0 && group !== undefined)];
+    if (open !== TEXTAREA_END && from < start.index) shown.push([from, start.index]);
     i = start.index + 1;
   }
 }
@@ -2185,8 +2199,10 @@ for (const [file, { at, shown }] of datedPages) {
   // passes the text of an HTML block on as written, so a backtick there
   // keeps no <!-- or --> from starting or ending a comment. A line break
   // inside the raw HTML that shownHtml() leaves out is left out with it, so
-  // it does not join the words around it with a space. What a block leaves
-  // open at its last line is not carried to the line after the block.
+  // it does not join the words around it with a space; one inside a
+  // <textarea> element is shown, as the element's text is, and is read as a
+  // space. What a block leaves open at its last line is not carried to the
+  // line after the block.
   let intro = '';
   let block; // the HTML block that the line above is a line of, if any
   let open = null; // the entry of HIDDEN_HTML_END that ends what the line above leaves open in that block
@@ -2213,7 +2229,7 @@ for (const [file, { at, shown }] of datedPages) {
           .join('');
       }
     }
-    intro += text.replace(/^\s*(?:>\s?)+/, '') + (open ? '' : ' ');
+    intro += text.replace(/^\s*(?:>\s?)+/, '') + (open && open !== TEXTAREA_END ? '' : ' ');
   });
   const missing = [];
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.replace(/\s+/g, ' '))) {
