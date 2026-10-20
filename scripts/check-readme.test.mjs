@@ -2764,15 +2764,15 @@ test('a line of ``` 4 or more columns past where the text of the list items that
 });
 
 test('a note on an indented line of an HTML block marks a dated page, and one after the block ends does not', () => {
-  // The line after a block tag such as <div> or <details> goes on with the
-  // HTML block that the tag opens, also in a block quote or a list item
+  // The line after a block tag such as <div> or <details open> goes on with
+  // the HTML block that the tag opens, also in a block quote or a list item
   // that holds the block, and the lines after <pre> go on with its block up
   // to </pre>, past a blank line too. Their text is raw HTML, not indented
   // code, and an href on such a line is a link.
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
     `<div>\n    As of 2026-06-03.\n</div>\n\n${see}`,
-    `<details>\n    As of 2026-06-03.\n</details>\n\n${see}`,
+    `<details open>\n    As of 2026-06-03.\n</details>\n\n${see}`,
     `> <div>\n>     As of 2026-06-03.\n> </div>\n\n${see}`,
     `- <div>\n      As of 2026-06-03.\n  </div>\n\n${see}`,
     `<pre>\nx\n\n    As of 2026-06-03.\n</pre>\n\n${see}`,
@@ -2829,7 +2829,7 @@ test('a line of ``` or ~~~ inside an HTML block opens no code block, so a note a
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
     '<div>\n```\n    As of 2026-06-03.\n```\n</div>\n\n' + see,
-    '<details>\n~~~\nAs of 2026-06-03.\n~~~\n</details>\n\n' + see,
+    '<details open>\n~~~\nAs of 2026-06-03.\n~~~\n</details>\n\n' + see,
     '<pre>\n\n```\nAs of 2026-06-03.\n```\n</pre>\n\n' + see,
     '<!--\n```\n--> As of 2026-06-03.\n\n' + see,
     '> <div>\n> ```\n> As of 2026-06-03.\n> ```\n> </div>\n\n' + see,
@@ -3039,8 +3039,8 @@ test('a note and link on the lines after the line that ends an HTML block are re
 
 test('a note inside an HTML comment, processing instruction, declaration, CDATA section, <script> or <style> does not mark a dated page', () => {
   // No text of these in an HTML block is read as the note, whether one opens
-  // the block or sits inside a block that <div> or <details> opens, and a
-  // line break inside one is not a space between the words around it.
+  // the block or sits inside a block that <div> or <details open> opens, and
+  // a line break inside one is not a space between the words around it.
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
     `<!-- As of 2026-06-03. -->\n\n${see}`,
@@ -3055,7 +3055,7 @@ test('a note inside an HTML comment, processing instruction, declaration, CDATA 
     `- <!--\n  As of 2026-06-03.\n  -->\n\n${see}`,
     `> <!NOTE\n> As of 2026-06-03.\n> >\n\n${see}`,
     `<div>\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
-    `<details>\n<style>\nAs of 2026-06-03.\n</style>\n</details>\n\n${see}`,
+    `<details open>\n<style>\nAs of 2026-06-03.\n</style>\n</details>\n\n${see}`,
     `<!-- a --> <!-- As of 2026-06-03. -->\n\n${see}`,
     `<div>As of<!--\n-->2026-06-03.</div>\n\n${see}`,
     `<!--\n\`\`\`\nAs of 2026-06-03.\n\`\`\`\n-->\n\n${see}`,
@@ -3360,6 +3360,150 @@ test("a dated page's words on either side of a <br> or of a block's start or end
   }
 });
 
+test("a dated page's note inside a tag that runs on to a later line of a paragraph is not read, as CommonMark reads a line break inside a tag", () => {
+  // CommonMark reads an open tag or a closing tag on past a line break in a
+  // paragraph, also in a block quote or a list item, and a browser shows no
+  // part of it: the rest of the line the tag starts on is left out, and the
+  // line it ends on is read from after its >. The line break inside it is
+  // no space, a tag of a block or a <br> parts the words around it, and the
+  // text after a <textarea> start tag is the element's. What the raw HTML
+  // after a </textarea> inside a comment leaves open, such as the quoted
+  // value of that end tag, hides the rest of the paragraph, and no more. A <
+  // that no tag follows on the lines below it is text.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Hello <span\ntitle="As of 2026-06-03.">x</span> world.\n\n${see}`,
+    `Hello <span title="As of\n2026-06-03.">x</span> world.\n\n${see}`,
+    `Hello <img\nalt="As of 2026-06-03."> world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea title="x -->\nAs of 2026-06-03.\n\n${see}`,
+    `Hello <span title="As\nof\n2026-06-03.">x</span> world.\n\n${see}`,
+    `> Hello <span\n> title="As of 2026-06-03.">x</span> world.\n\n${see}`,
+    `- Hello <span\n  title="As of 2026-06-03.">x</span> world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea title="x -->\nAs of\n2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  for (const intro of [
+    `Hello <span\ntitle="x">As of 2026-06-03.</span> world.\n\n${see}`,
+    `A<span\nclass="x">s of 2026-06-03.</span>\n\n${see}`,
+    `Report<br\n/>As of 2026-06-03.\n\n${see}`,
+    `Hello <textarea\nrows="2"><!-- As of 2026-06-03. --></textarea> world.\n\n${see}`,
+    `Hello <span\nAs of 2026-06-03.\n\n${see}`,
+    `Hello <textarea><!-- </textarea title="x -->\n\nAs of 2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test('a <script> or <style> element ends at an end tag with white space, a / or an attribute before its >, as a browser ends it, and no part of that tag is read', () => {
+  // A browser ends the element at </script or </style before white space,
+  // a / or a >, as it ends a <textarea>, also where the end tag runs on to
+  // a later line of the block, and shows the text after that tag's >, on a
+  // line of an HTML block and in the raw HTML after a </textarea> inside a
+  // comment in a paragraph. </scriptx> is no end tag, and the attribute of
+  // an end tag is not shown.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div><script>x</script >As of 2026-06-03.</div>\n\n${see}`,
+    `<div><style>p{}</style >As of 2026-06-03.</div>\n\n${see}`,
+    `<div><SCRIPT>x</SCRIPT\t>As of 2026-06-03.</div>\n\n${see}`,
+    `<div><style>p{}</style/>As of 2026-06-03.</div>\n\n${see}`,
+    `<div><script>x</script id="y">As of 2026-06-03.</div>\n\n${see}`,
+    `<div>\n<script>\nx\n</script\n>As of 2026-06-03.\n</div>\n\n${see}`,
+    `> <div><script>x</script >As of 2026-06-03.</div>\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script>x</script >As of 2026-06-03. --> world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    `<div><script>x</scriptx>As of 2026-06-03.</script></div>\n\n${see}`,
+    `<div><style>p{}</style title="As of 2026-06-03.">x</div>\n\n${see}`,
+    `<div><script>x</script\n  title="As of 2026-06-03.">y</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+});
+
+test("a dated page's note inside a <details> without the open attribute, but in its first <summary>, or inside a <dialog> without it, is not read, as a browser hides it until the reader opens the element", () => {
+  // A <details> without open shows only its first <summary>, also where it
+  // holds a paragraph of the page between blank lines, as a browser reads
+  // the HTML of the page as one document, and in a paragraph, a block
+  // quote or a table cell; a <dialog> without open shows nothing. The open
+  // attribute is read in any case, also after a line break, and not in the
+  // value of another attribute. Text before the <summary>, a second
+  // <summary> and an open <details> inside a closed one are hidden with
+  // the rest. The text after the element's end tag is shown, and a cell of
+  // a table row ends a <details> that opens in it.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<details><summary>Report</summary>As of 2026-06-03.</details>\n\n${see}`,
+    `<details>\n<summary>Report</summary>\nAs of 2026-06-03.\n</details>\n\n${see}`,
+    `<details>\n<summary>Report</summary>\n\nAs of 2026-06-03.\n\n</details>\n\n${see}`,
+    `<details>As of 2026-06-03.</details>\n\n${see}`,
+    `<details>As of 2026-06-03.<summary>Report</summary></details>\n\n${see}`,
+    `<details><summary>Report</summary><summary>As of 2026-06-03.</summary></details>\n\n${see}`,
+    `<details title="open"><summary>Report</summary>As of 2026-06-03.</details>\n\n${see}`,
+    `<details><summary>Report</summary><details open>As of 2026-06-03.</details></details>\n\n${see}`,
+    `Hello <details><summary>Report</summary>As of 2026-06-03.</details> world.\n\n${see}`,
+    `> <details><summary>Report</summary>As of 2026-06-03.</details>\n\n${see}`,
+    `| a | b |\n| - | - |\n| <details><summary>x</summary>As of 2026-06-03.</details> | y |\n\n${see}`,
+    `<dialog>As of 2026-06-03.</dialog>\n\n${see}`,
+    `<div>Report<dialog>As of 2026-06-03.</dialog></div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  for (const intro of [
+    `<details open><summary>Report</summary>As of 2026-06-03.</details>\n\n${see}`,
+    `<details OPEN=""><summary>Report</summary>As of 2026-06-03.</details>\n\n${see}`,
+    `<details\nopen><summary>Report</summary>As of 2026-06-03.</details>\n\n${see}`,
+    `<details><summary>As of 2026-06-03.</summary>Report</details>\n\n${see}`,
+    `<details><summary>Report</summary>x</details>As of 2026-06-03.\n\n${see}`,
+    `<details>\n<summary>Report</summary>\n\nx\n\n</details>\n\nAs of 2026-06-03.\n\n${see}`,
+    `| a | b |\n| - | - |\n| <details> | As of 2026-06-03. |\n\n${see}`,
+    `<dialog open>As of 2026-06-03.</dialog>\n\n${see}`,
+    `<div>A<dialog>x</dialog>s of 2026-06-03.</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test("a dated page's words on either side of a start tag of <dialog> with the open attribute, or of the end tag of such an element, are read apart, as a browser shows the element as a block", () => {
+  // Without the open attribute a <dialog> shows nothing, so the words on
+  // either side of it join, as do those on either side of a </dialog> that
+  // ends no element.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Report<dialog open>As of 2026-06-03.</dialog>\n\n${see}`,
+    `<div>Report<dialog open>As of 2026-06-03.</dialog></div>\n\n${see}`,
+    `<div><dialog open>Report</dialog>As of 2026-06-03.</div>\n\n${see}`,
+    `<div>Report<DIALOG Open="">As of 2026-06-03.</DIALOG></div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    `<div>Report<dialog>x</dialog>As of 2026-06-03.</div>\n\n${see}`,
+    `<div>Report</dialog>As of 2026-06-03.</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+});
+
 test('a declaration that runs on in a nested block quote is not ended by a > marker of the inner quote after more than one space', () => {
   // `>   > ` is two block quote markers, so the second > ends no
   // declaration; after 5 spaces the > is text in the paragraph, and ends it.
@@ -3383,7 +3527,7 @@ test('a note between backticks on a line of an HTML block marks a dated page, as
   // line, as an href there is: between two backticks on its line, also two
   // on two lines of the block, in a block quote, as a run of two, after a
   // backslash, on a line indented 4 columns, in a table row, in a block
-  // that <details> or <pre> opens, in a list item, and after the --> that
+  // that <details open> or <pre> opens, in a list item, and after the --> that
   // ends a comment, on its line.
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
@@ -3394,7 +3538,7 @@ test('a note between backticks on a line of an HTML block marks a dated page, as
     `<div>\n\\\`As of 2026-06-03.\\\`\n</div>\n\n${see}`,
     `<div>\n    \`As of 2026-06-03.\`\n</div>\n\n${see}`,
     `<div>\n| \`As of 2026-06-03.\` |\n| --- |\n</div>\n\n${see}`,
-    `<details>\n\`As of 2026-06-03.\`\n</details>\n\n${see}`,
+    `<details open>\n\`As of 2026-06-03.\`\n</details>\n\n${see}`,
     `<pre>\n\n\`As of 2026-06-03.\`\n</pre>\n\n${see}`,
     `- <div>\n  \`As of 2026-06-03.\`\n  </div>\n\n${see}`,
     `<!-- x --> \`As of 2026-06-03.\`\n\n${see}`,

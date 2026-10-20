@@ -1008,6 +1008,46 @@ stay on record here with the reason they changed.
   heading`, as it already did without the `  more` line. With the list's
   two lines `- <!--` and `  a note -->`, or `- <div>` and `  more`, it
   also exited 0 with `Quick Start at line 7` and exits 1 now.
+- `npm run check:readme` reads a dated page's "as of" note as a browser
+  shows it where a tag runs on to a later line of a paragraph, after a
+  `</script >` or `</style >` end tag, and in a `<details>` or `<dialog>`
+  element. With a README that links `docs/AUDIT-2026-06-03.md`, and these
+  lines after that page's H1 and a blank line, then a blank line and
+  `See the [README](../README.md) for the current figures.`: the two lines
+  `Hello <span` and `title="As of 2026-06-03.">x</span> world.` exited 0
+  and now exit 1 with `is a dated page, so above its first H2 it must say
+  "as of 2026-06-03"`, as CommonMark reads a line break inside a tag in a
+  paragraph as part of the tag, and a browser shows no part of it; so do
+  the two lines `Hello <span title="As of` and
+  `2026-06-03.">x</span> world.`, and the two lines `Hello <img` and
+  `alt="As of 2026-06-03."> world.`. The entry above that says the lines
+  `Hello <span` and `title="As of 2026-06-03.">x</span> world.` still exit
+  0 no longer holds. The line that such a tag ends on is read from after
+  its `>`, so the two lines `A<span` and
+  `class="x">s of 2026-06-03.</span>` exited 1 and now exit 0. What the
+  raw HTML after a `</textarea>` inside a comment leaves open hides the
+  rest of the paragraph, not only the rest of its line, so the two lines
+  `Hello <textarea><!-- </textarea title="x -->` and `As of 2026-06-03.`
+  exited 0 and now exit 1. A `<script>` or `<style>` element ends at an
+  end tag with white space or a `/` after its name, as a browser ends it,
+  so `<div><script>x</script >As of 2026-06-03.</div>` exited 1 and now
+  exits 0, as does `<div><style>p{}</style >As of 2026-06-03.</div>`. A
+  `<details>` element without the `open` attribute shows only its first
+  `<summary>`, so
+  `<details><summary>Report</summary>As of 2026-06-03.</details>` exited 0
+  and now exits 1, as do the lines `<details>`,
+  `<summary>Report</summary>`, a blank line, `As of 2026-06-03.`, a blank
+  line and `</details>`, where the element holds a paragraph of the page;
+  with `<details open>` in place of `<details>` both still exit 0. A
+  `<dialog>` element shows nothing without the `open` attribute, so
+  `<dialog>As of 2026-06-03.</dialog>` exited 0 and now exits 1, and shows
+  as a block with it, so the words on either side of its start tag and of
+  its end tag are read apart:
+  `Report<dialog open>As of 2026-06-03.</dialog>` exited 1 and now exits 0.
+  The entries above that say a note passes on a line indented 4 spaces
+  after `<details>`, between two `~~~` lines in `<details>`, and between
+  backticks in a block that `<details>` opens hold for `<details open>`:
+  with `<details>`, each of those exited 0 and now exits 1.
 
 ## 0.4.1 - 2026-10-17
 
