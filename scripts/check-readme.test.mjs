@@ -2200,6 +2200,30 @@ test("a dated page's link to the README is read from its lines as written, and n
   }
 });
 
+test('a note inside an indented code block does not mark a dated page, and one that goes on with a paragraph does', () => {
+  // The note sits in indented code: 4 columns in after a heading and a
+  // blank line, 4 columns past a block quote's "> ", after a tab, and 4
+  // columns past where a list item's text starts.
+  for (const intro of [
+    '    As of 2026-06-03.\n\nSee the [README](../README.md) for the current figures.\n',
+    '>     As of 2026-06-03.\n\nSee the [README](../README.md) for the current figures.\n',
+    '\tAs of 2026-06-03.\n\nSee the [README](../README.md) for the current figures.\n',
+    '- item\n\n      As of 2026-06-03.\n\nSee the [README](../README.md) for the current figures.\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  // Indented code does not interrupt a paragraph, so this indented line is
+  // paragraph text.
+  const lazy = check(
+    DATED_LINK,
+    datedPage('The counts below are kept as recorded,\n    as of 2026-06-03; see the [README](../README.md).\n'),
+  );
+  assert.equal(lazy.status, 0, lazy.stderr);
+});
+
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {
   const gaps = readFileSync(join(repo, 'docs', 'known-gaps.md'), 'utf8');
   assert.match(gaps, /\]\(AUDIT-2026-06-03\.md\)/, 'docs/known-gaps.md no longer links the 2026-06-03 audit');

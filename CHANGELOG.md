@@ -433,6 +433,17 @@ stay on record here with the reason they changed.
   an `opena2a benchmark` line in such a block is now checked, and a dated
   page's "as of" note or link to the README inside such a block no longer
   counts, while one after it now does.
+- `npm run check:readme` reads no "as of" note for a dated page inside an
+  indented code block, as it reads no inline link there. With a README that
+  links `docs/AUDIT-2026-06-03.md`, and the lines `    As of 2026-06-03.`,
+  a blank line and `See the [README](../README.md) for the current figures.`
+  after that page's H1 and a blank line, the check exited 0, and now exits 1
+  with `is a dated page, so above its first H2 it must say "as of
+  2026-06-03"`. So does the note 4 spaces past a block quote's `> `, after a
+  tab, or 4 spaces past where a list item's text starts. A note on an
+  indented line that goes on with a paragraph passes, as it did. The check
+  does not track HTML blocks, so a note indented 4 spaces inside a `<div>`
+  now fails the check too; it passed.
 
 ## 0.4.1 - 2026-10-17
 
