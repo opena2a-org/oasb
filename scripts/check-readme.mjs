@@ -86,7 +86,9 @@
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
 //      holds no definition; a backtick after a backslash (\`) is text and
-//      opens none. A `[` or `]` inside a code span, an autolink
+//      opens none. An href on a line of such an HTML block is read between
+//      backticks too, as a backtick in raw HTML is text. A `[` or `]` inside
+//      a code span, an autolink
 //      (`<https://...>`) or raw HTML (a tag, comment, processing
 //      instruction, declaration or CDATA section) neither opens nor closes
 //      link text, and of these the one that starts first holds the others
@@ -790,10 +792,12 @@ function inlineDestinations(line, open, spans) {
 
 // The targets of the HTML href="target" / href='target' attributes on one
 // line, after attribute values that may hold >, read on the line with its
-// code spans removed.
-function hrefTargets(line) {
+// code spans removed, or, when `raw` is true, on the whole line: on a line
+// of raw HTML, such as a line of an HTML block, a backtick is text and
+// opens no code span.
+function hrefTargets(line, raw = false) {
   const targets = [];
-  for (const m of withoutCodeSpans(line).matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+  for (const m of (raw ? line : withoutCodeSpans(line)).matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     targets.push(m[1] ?? m[2]);
   }
   return targets;
@@ -1311,19 +1315,21 @@ function blockReader(lines, quotedFences, htmlLines) {
 // HTML block, the line that opens it included, only the hrefs are read,
 // whatever lineStart() reads it as, as its inline links, definitions and
 // table cells are raw HTML too, and link text that opens on it holds no
-// link on a later line; the code spans of its paragraph are read on it as
-// on any other line. Given a set as `codeLines`, the reader adds to it
-// the index in `lines` of each line of a fenced code block inside a block
-// quote, its fences included, and of each line of indented code on which it
-// reads no inline link or definition, unless blockReader() reads that line
-// as a line of an HTML block: its text is then raw HTML, not code. Given a
-// map as `outside`, the reader sets in it, for the index in `lines` of each
-// line other than a table row that it reads inline links on, where the
-// part of the line that it reads hrefs on starts and ends, as a [start,
-// end) pair: the line outside the code spans that run on to it from an
-// earlier line of its paragraph or from it on to a later one. Given a map
-// as `htmlLines`, blockReader() sets in it the lines of each HTML block, as
-// it describes.
+// link on a later line. A backtick in raw HTML is text, so those hrefs are
+// read on the whole line; the code spans of its paragraph are read on it as
+// on any other line, for the lines after it. Given a set as `codeLines`, the
+// reader adds to it the index in `lines` of each line of a fenced code block
+// inside a block quote, its fences included, and of each line of indented
+// code on which it reads no inline link or definition, unless blockReader()
+// reads that line as a line of an HTML block: its text is then raw HTML, not
+// code. Given a map as `outside`, the reader sets in it, for the index in
+// `lines` of each line other than a table row that it reads inline links
+// on, where the line outside the code spans that run on to it from an
+// earlier line of its paragraph or from it on to a later one starts and
+// ends, as a [start, end) pair, which is the part of the line that it reads
+// hrefs on when the line is not a line of an HTML block. Given a map as
+// `htmlLines`, blockReader() sets in it the lines of each HTML block, as it
+// describes.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines, codeLines, outside, htmlLines) {
   let open = noOpenLinkText();
@@ -1359,22 +1365,23 @@ function linkReader(lines, codeLines, outside, htmlLines) {
     if (rest === 'fence' || l.fenceOpen || l.fenceClose) return [];
     if (rest === 'code') {
       if (!html) codeLines?.add(j);
-      return hrefTargets(l.line);
+      return hrefTargets(l.line, html);
     }
     // The cells of a table row of an HTML block are raw HTML as well.
-    if (rest === 'row') return html ? hrefTargets(l.line) : rowTargets(block.row, block.columns);
+    if (rest === 'row') return html ? hrefTargets(l.line, true) : rowTargets(block.row, block.columns);
     const spans = open.code();
     // A line of an HTML block is raw HTML, whatever lineStart() reads it
     // as: its inline links and definitions are text, link text that opens
-    // on it holds no link on a later line, and only its hrefs are links.
-    // lineStart() does not track HTML blocks, so the paragraph that it
-    // reads the line in may go on past the block, as past the line that
-    // ends a comment: the line is read as any other line of that paragraph,
-    // with link text of its own, so that each line after it is read with
-    // the code spans that run on to it.
+    // on it holds no link on a later line, and only its hrefs are links. A
+    // backtick in it is text, so they are read on the whole line, whatever
+    // code spans the paragraph that lineStart() reads it in has on it.
+    // lineStart() does not track HTML blocks, so that paragraph may go on
+    // past the block, as past the line that ends a comment: the line is read
+    // as any other line of that paragraph, with link text of its own, so
+    // that each line after it is read with the code spans that run on to it.
     const targets = linkTargets(l.line, html ? noOpenLinkText() : open, spans);
     outside?.set(j, [spans.from, spans.to]);
-    if (html) return hrefTargets(l.line.slice(spans.from, spans.to));
+    if (html) return hrefTargets(l.line, true);
     if (!paragraph) open = noOpenLinkText();
     return targets;
   };
@@ -2162,8 +2169,9 @@ for (const [file, { at, shown }] of datedPages) {
   // that blockReader() follows is not among them, also where lineStart()
   // reads it as indented code or as a fence, as its text is raw HTML. A code
   // span may run on from one line of a paragraph to a later one, so the note
-  // is read, as an href is, on the part of each line in `outside`, and on a
-  // table row whole, without the code spans in it. Of a line of an HTML
+  // is read, as an href on a line outside an HTML block is, on the part of
+  // each line in `outside`, and on a table row whole, without the code spans
+  // in it. Of a line of an HTML
   // block, it is read on the characters of that part outside its code spans
   // that shownHtml() also shows. shownHtml() reads the line's text after the
   // > markers of the block quotes that hold the block, so that such a > ends

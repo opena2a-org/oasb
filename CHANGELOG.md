@@ -465,6 +465,28 @@ stay on record here with the reason they changed.
   exited 0, and now exits 1 with `it must link to the README for the
   current figures`, while a note and a link to the README on the line
   right after `-->` pass as they did.
+- `npm run check:readme` reads an `href` between backticks on a line of an
+  HTML block as a link. The line is raw HTML, in which a backtick is text:
+  markdown-it 14.1.1 and micromark 4.0.2 pass the `<a>` tag there through
+  with the backticks around it. The check read the hrefs on such a line
+  with its code spans removed, so it did not resolve one there. With the
+  lines `<div>`, `` See `<a href="nope.md">the page</a>`. `` and `</div>`
+  in the README, the check exited 0, and now exits 1 with
+  `link target "nope.md" does not exist`. So do that line indented 4
+  spaces, the same text as the cell of a table row over `| --- |`, the
+  three lines in a block quote, and `` See `the `` and
+  `` <a href="nope.md">page</a>`. `` as two lines of the block, naming the
+  second. So does that line inside a comment, where the check already read
+  an href without backticks. In a paragraph, also one after the blank line
+  that ends such a block, the backticks still make a code span, which both
+  renderers show as code, and the check still exits 0. A dated page's link
+  to the README is read the same way: with `<div>`, `` As of 2026-06-03.
+  See the `<a href="../README.md">README</a>` for the current figures. ``
+  and `</div>` after the H1 of `docs/AUDIT-2026-06-03.md`, which the README
+  links, and a blank line, the check exited 1 with `it must link to the
+  README for the current figures`, and now exits 0. A block that `<span>`
+  alone on a line opens (CommonMark kind 7) is still not followed, so an
+  href between backticks there is still not read.
 - `npm run check:readme` opens a fenced code block on a line whose first
   characters other than white space are 3 or more backticks or tildes only
   when they start at most 3 columns past where the text of the list items
