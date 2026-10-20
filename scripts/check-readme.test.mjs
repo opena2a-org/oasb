@@ -2709,6 +2709,80 @@ test('a line of ``` inside an HTML block opens no code block to the other checks
   assert.match(href.stderr, /^README: line 13: link target "docs\/nowhere\.md" does not exist\.$/m);
 });
 
+test('a markdown link on a line of an HTML block is text, not a link, and an href there is a link', () => {
+  // The text of each line of an HTML block, the line that opens it
+  // included, is raw HTML, in which CommonMark reads no inline link,
+  // definition or table cell.
+  const see = 'See the [README](../README.md) for the current figures.';
+  for (const intro of [
+    `<div>\nAs of 2026-06-03. ${see}\n</div>\n`,
+    `<div>As of 2026-06-03. ${see}</div>\n`,
+    `> <div>\n> As of 2026-06-03. ${see}\n> </div>\n`,
+    `<div>\nAs of 2026-06-03.\n| ${see} |\n</div>\n`,
+    `<div>\nAs of 2026-06-03.\n[readme]: ../README.md\n</div>\n`,
+    // Link text that opens on such a line holds no link on a later line.
+    `As of 2026-06-03.\n\n<!--\nSee the [README\n-->\n](../README.md) for the current figures.\n`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must link to the README for the current figures; /, intro);
+  }
+  // An href on such a line is a link, and so is a markdown link on a line
+  // after the blank line that ends the block.
+  for (const intro of [
+    '<div>\nAs of 2026-06-03. See the <a href="../README.md">README</a> for the current figures.\n</div>\n',
+    `<div>\nAs of 2026-06-03.\n</div>\n\n${see}\n`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // Check 4 resolves no markdown link on such a line, and does resolve an
+  // href there.
+  const text = check('<div>\nSee [the page](nope.md).\n</div>\n');
+  assert.equal(text.status, 0, text.stderr);
+  const href = check('<div>\nSee <a href="nope.md">the page</a>.\n</div>\n');
+  assert.equal(href.status, 1);
+  assert.match(href.stderr, /^README: line 12: link target "nope\.md" does not exist\.$/m);
+});
+
+test('a note and link on the lines after the line that ends an HTML block are read with the code spans of their paragraph', () => {
+  // lineStart() reads the lines of a comment after its first, and the
+  // lines after the one that ends it, as one paragraph, each line of which
+  // is read with its own code spans. Read with those of another line, the
+  // note on a line after the comment is read on the wrong part of it, and
+  // a run of backticks there at an index on another line, which does not
+  // finish; so the check is run here with a time limit.
+  const see = 'See the [README](../README.md) for the current figures.';
+  const dated = (intro) => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+    try {
+      mkdirSync(join(dir, 'docs'));
+      writeFileSync(join(dir, 'README.md'), HEAD + DATED_LINK);
+      for (const [path, text] of Object.entries(datedPage(intro))) writeFileSync(join(dir, path), text);
+      const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8', timeout: 30_000 });
+      assert.equal(r.signal, null, `${intro}\nthe check did not finish in 30 seconds`);
+      return r;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  for (const intro of [
+    `<!--\na comment\n-->\nAs of 2026-06-03. ${see}\n`,
+    `<!--\n-->\nAs of 2026-06-03.\n${see}\n`,
+    `> <!--\n> a comment\n> -->\n> As of 2026-06-03. ${see}\n`,
+    `<script>\nlet a;\n</script>\nAs of 2026-06-03. ${see}\n`,
+  ]) {
+    const r = dated(intro);
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // A code span that a line after the comment opens holds the note.
+  const span = dated(`<!--\na comment\n-->\nx \`\nAs of 2026-06-03.\n\` y\n\n${see}\n`);
+  assert.equal(span.status, 1, span.stderr);
+  assert.match(span.stderr, DATED);
+  assert.match(span.stderr, /it must say "as of 2026-06-03"; /);
+});
+
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {
   const gaps = readFileSync(join(repo, 'docs', 'known-gaps.md'), 'utf8');
   assert.match(gaps, /\]\(AUDIT-2026-06-03\.md\)/, 'docs/known-gaps.md no longer links the 2026-06-03 audit');

@@ -446,6 +446,25 @@ stay on record here with the reason they changed.
   that line goes on with the HTML block the tag opens, so its text is raw
   HTML, not code. After the blank line that ends such a block, the note is
   code and fails the check.
+- `npm run check:readme` reads no markdown link on a line of an HTML block,
+  such as one that `<div>` opens, the `<div>` line included, as the text
+  there is raw HTML, which renders the link as literal text. It read such a
+  link as a link. With a README that links `docs/AUDIT-2026-06-03.md`, and
+  the lines `<div>`, `As of 2026-06-03. See the [README](../README.md) for
+  the current figures.` and `</div>` after that page's H1 and a blank line,
+  the check exited 0, and now exits 1 with `is a dated page, so above its
+  first H2 it must link to the README for the current figures`. So does
+  the link in a table row or a definition on such a line, and on such lines
+  in a block quote. An `<a href="../README.md">` on that line still
+  passes, and the markdown link on a line after the blank line that ends
+  the block passes too. A markdown link to a missing page on such a line
+  in the README exited 1 with `does not exist` and now exits 0; an href to
+  that page there still exits 1. Link text that opens on a line of an HTML
+  block holds no link after the block either: with `[README` on a line of
+  a comment and `](../README.md)` on the line after its `-->`, the check
+  exited 0, and now exits 1 with `it must link to the README for the
+  current figures`, while a note and a link to the README on the line
+  right after `-->` pass as they did.
 - `npm run check:readme` opens a fenced code block on a line whose first
   characters other than white space are 3 or more backticks or tildes only
   when they start at most 3 columns past where the text of the list items

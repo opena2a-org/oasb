@@ -1269,7 +1269,12 @@ function blockReader(lines, quotedFences) {
 // written. lineStart() does not track HTML blocks, and such a line may be
 // inside one instead: there it is raw HTML, whose inline links and
 // definitions are text as well, but whose hrefs are links. So the hrefs on
-// such a line are read. Given a set as `codeLines`, the reader adds to it
+// such a line are read. On a line that blockReader() reads as a line of an
+// HTML block, the line that opens it included, only the hrefs are read,
+// whatever lineStart() reads it as, as its inline links, definitions and
+// table cells are raw HTML too, and link text that opens on it holds no
+// link on a later line; the code spans of its paragraph are read on it as
+// on any other line. Given a set as `codeLines`, the reader adds to it
 // the index in `lines` of each line of a fenced code block inside a block
 // quote, its fences included, and of each line of indented code on which it
 // reads no inline link or definition, unless blockReader() reads that line
@@ -1316,10 +1321,20 @@ function linkReader(lines, codeLines, outside) {
       if (!html) codeLines?.add(j);
       return hrefTargets(l.line);
     }
-    if (rest === 'row') return rowTargets(block.row, block.columns);
+    // The cells of a table row of an HTML block are raw HTML as well.
+    if (rest === 'row') return html ? hrefTargets(l.line) : rowTargets(block.row, block.columns);
     const spans = open.code();
-    const targets = linkTargets(l.line, open, spans);
+    // A line of an HTML block is raw HTML, whatever lineStart() reads it
+    // as: its inline links and definitions are text, link text that opens
+    // on it holds no link on a later line, and only its hrefs are links.
+    // lineStart() does not track HTML blocks, so the paragraph that it
+    // reads the line in may go on past the block, as past the line that
+    // ends a comment: the line is read as any other line of that paragraph,
+    // with link text of its own, so that each line after it is read with
+    // the code spans that run on to it.
+    const targets = linkTargets(l.line, html ? noOpenLinkText() : open, spans);
     outside?.set(j, l.line.slice(spans.from, spans.to));
+    if (html) return hrefTargets(l.line.slice(spans.from, spans.to));
     if (!paragraph) open = noOpenLinkText();
     return targets;
   };
