@@ -2147,7 +2147,11 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // <div title="As of 2026-06-03.">x</div> holds no note, and the words on
 // either side of a tag, or of a line break inside one, are read as one
 // word when no space parts them, as <div>A<span class="x">s of</span> is
-// read as "As of". A block that one of the others opens, such as
+// read as "As of", but for a <br> or a start tag or an end tag of a block,
+// a list item or a table cell, such as <p>, <li> or <td> (BREAK_TAGS),
+// which parts them, as a browser shows the words on either side on lines
+// or in cells of their own: <p>Report</p><p>As of 2026-06-03.</p> holds
+// the note. A block that one of the others opens, such as
 // <!-- As of 2026-06-03. -->, holds the note only after the end of it, on
 // the line that holds that end. None of these starts inside a <textarea>
 // element, whose text, escapable raw text, a browser shows as written, so
@@ -2239,6 +2243,35 @@ const inTag = (state, then) => ({ state, then });
 // leaves open: a <textarea> element, as it shows no part of a tag.
 const showsOpen = (open) => open === TEXTAREA_END;
 
+// The elements that the rendering rules of the HTML standard show as a
+// block, a list item, a table, or a caption, row or cell of a table, and
+// <br>, a line break. A browser shows the words on either side of a start
+// tag or an end tag of one of these apart, on lines or in cells of their
+// own, and those on either side of any other tag, such as one of <span>,
+// <b>, <a>, <img> and <wbr>, as one word when no space parts them. Not
+// among them are <dialog>, which shows nothing until it is opened, and
+// <html> and <body>, of which a tag in the text of a page starts no
+// element. A tag of one of these that a browser drops, such as a <td>
+// outside a table or an end tag with no element to end, is read as a
+// break too.
+const BREAK_TAGS = new Set([
+  'address', 'article', 'aside', 'blockquote', 'br', 'caption', 'center', 'dd', 'details', 'dir', 'div', 'dl', 'dt',
+  'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr',
+  'legend', 'li', 'listing', 'main', 'menu', 'nav', 'ol', 'optgroup', 'option', 'p', 'plaintext', 'pre', 'search',
+  'section', 'summary', 'table', 'td', 'th', 'tr', 'ul', 'xmp',
+]);
+
+// The name of the tag that starts at text[at] with < or </ and a letter, up
+// to white space, a / or a >, as a browser reads it, in any case.
+const TAG_NAME = /<\/?([a-z][^\t\n\f\r />]*)/iy;
+
+// Whether the tag that starts at text[at] is a start tag or an end tag of
+// one of BREAK_TAGS, which parts the words on either side of it.
+const breaksWords = (text, at) => {
+  TAG_NAME.lastIndex = at;
+  return BREAK_TAGS.has(TAG_NAME.exec(text)?.[1].toLowerCase());
+};
+
 // The parts of the text of one line of an HTML block that a browser shows:
 // those outside the raw HTML that HIDDEN_HTML_START matches, and the text
 // of a <textarea> element, given `open`, what the line above in the block
@@ -2249,13 +2282,14 @@ const showsOpen = (open) => open === TEXTAREA_END;
 // or for a tag the end that tagEnd() finds, on its line or on a later line
 // of the block; the text of a <textarea> element ends where TEXTAREA_END
 // finds its end tag, and the rest of that tag is read as a tag. Returns the
-// parts that hold a character, as [start, end) pairs in order, as `shown`,
-// and what the line leaves open, in the same form, or null, as `open`. Each
-// search starts at most 9 characters before the end of the match before
-// it, and a tag is read once, so the time a line takes grows in proportion
-// to its length.
+// text of those parts in order, with a space in place of each start tag
+// and end tag of one of BREAK_TAGS (breaksWords()), as `shown`, and what
+// the line leaves open, in the same form, or null, as `open`. Each search
+// starts at most 9 characters before the end of the match before it, and
+// a tag is read once, and its name once more, so the time a line takes
+// grows in proportion to its length.
 function shownHtml(text, open) {
-  const shown = [];
+  let shown = '';
   let i = 0;
   let from = 0; // where the shown text that runs on to i starts
   for (;;) {
@@ -2270,12 +2304,12 @@ function shownHtml(text, open) {
       open.lastIndex = i;
       const end = open.exec(text);
       if (!end) {
-        if (open === TEXTAREA_END && from < text.length) shown.push([from, text.length]);
+        if (open === TEXTAREA_END) shown += text.slice(from);
         return { shown, open };
       }
       i = open.lastIndex;
       if (open === TEXTAREA_END) {
-        if (from < end.index) shown.push([from, end.index]);
+        shown += text.slice(from, end.index);
         open = inTag(IN_TAG, null);
         continue;
       }
@@ -2283,12 +2317,10 @@ function shownHtml(text, open) {
     }
     HIDDEN_HTML_START.lastIndex = i;
     const start = HIDDEN_HTML_START.exec(text);
-    if (!start) {
-      if (from < text.length) shown.push([from, text.length]);
-      return { shown, open: null };
-    }
-    if (from < start.index) shown.push([from, start.index]);
+    if (!start) return { shown: shown + text.slice(from), open: null };
+    shown += text.slice(from, start.index);
     const group = start.findIndex((g, k) => k > 0 && g !== undefined);
+    if (group > TEXTAREA_GROUP && breaksWords(text, start.index)) shown += ' ';
     open = group < TEXTAREA_GROUP ? HIDDEN_HTML_END[group] : inTag(IN_TAG, group === TEXTAREA_GROUP ? TEXTAREA_END : null);
     i = start.index + 1;
   }
@@ -2341,7 +2373,9 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // of an HTML block: a <textarea> that it opens and does not end is open
 // after it, and when it leaves a tag, a comment, processing instruction,
 // CDATA section, <script> or <style> open, the rest of the line is left
-// out, as no part of any of these is shown. Returns the text as `text`.
+// out, as no part of any of these is shown. A start tag or an end tag of
+// one of BREAK_TAGS is read as a space (breaksWords()), as a browser shows
+// the words on either side of it apart. Returns the text as `text`.
 const TEXTAREA_START_TAG = /<textarea[\s/>]/iy;
 function shownInline(line, open = null, start = 0, below = NO_ENDS) {
   let i = 0;
@@ -2394,7 +2428,7 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
         if (close && after <= end) {
           const rest = line.slice(after, end);
           const { shown, open: left } = shownHtml(rest, inTag(IN_TAG, null));
-          text += line.slice(from, close.index) + shown.map(([s, e]) => rest.slice(s, e)).join('');
+          text += line.slice(from, close.index) + shown;
           if (left && !showsOpen(left)) return { text, open: null };
           from = end;
           inTextarea = left === TEXTAREA_END;
@@ -2402,7 +2436,7 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
       } else if (unshown && end === i + 1 && below.has(unshown)) {
         return { text: text + line.slice(from, i), open: unshown };
       } else if ((unshown && end > i + 1) || tag) {
-        text += line.slice(from, i);
+        text += line.slice(from, i) + (tag && breaksWords(line, i) ? ' ' : '');
         from = end;
         if (tag && tagAt(TEXTAREA_START_TAG, i, end)) inTextarea = true;
       }
@@ -2510,9 +2544,7 @@ for (const [file, { at, shown }] of datedPages) {
       else {
         // The line's text after the block's > markers.
         const raw = afterQuotes(l.line, html.quotes);
-        let shownParts;
-        ({ shown: shownParts, open } = shownHtml(raw, open));
-        text = shownParts.map(([start, end]) => raw.slice(start, end)).join('');
+        ({ shown: text, open } = shownHtml(raw, open));
       }
     }
     intro += text.replace(/^\s*(?:>\s?)+/, '') + ((open && !showsOpen(open)) || unshown ? '' : ' ');
