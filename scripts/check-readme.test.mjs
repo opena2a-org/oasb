@@ -2282,6 +2282,44 @@ test('a link to the README inside a code span that runs on to the next line does
   assert.match(r.stderr, /it must link to the README for the current figures; /);
 });
 
+test('a note inside a code span that runs on to a later line of its paragraph does not mark a dated page, and one after that span does', () => {
+  // The span opens on one line of a paragraph and closes on a later one:
+  // with the note on a line of its own or across two lines, in a block
+  // quote, and in a list item whose paragraph goes on lazily.
+  for (const intro of [
+    'a `\nAs of 2026-06-03.\nd`\n\nSee the [README](../README.md) for the current figures.\n',
+    'a `As of\n2026-06-03.` d\n\nSee the [README](../README.md) for the current figures.\n',
+    '> a `\n> As of 2026-06-03.\n> d`\n\nSee the [README](../README.md) for the current figures.\n',
+    '- a `\nAs of 2026-06-03.\nd`\n\nSee the [README](../README.md) for the current figures.\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  // A blank line ends the paragraph, so the backtick above it opens no
+  // span; and the note after a span that closes on its line is read.
+  for (const intro of [
+    'a `\n\nAs of 2026-06-03; see the [README](../README.md). d`\n',
+    'The counts below, from `npm\ntest`, are as of 2026-06-03; see the [README](../README.md).\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test("a dated page's note is read without the code spans of its line as the links are", () => {
+  // A backtick after a backslash is text, so the note between two of them
+  // is read; a run of two backticks is closed by the next run of two, so
+  // the single backtick inside such a span does not close it.
+  const escaped = check(DATED_LINK, datedPage('\\`As of 2026-06-03.\\` See the [README](../README.md) for the current figures.\n'));
+  assert.equal(escaped.status, 0, escaped.stderr);
+  const doubled = check(DATED_LINK, datedPage('`` As of 2026-06-03 ` `` See the [README](../README.md) for the current figures.\n'));
+  assert.equal(doubled.status, 1);
+  assert.match(doubled.stderr, DATED);
+  assert.match(doubled.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./);
+});
+
 test("a dated page's link to the README before a fenced code block in a block quote, or after it, is read, and one inside it is not", () => {
   // In the first, the fence ends the paragraph, so the backtick before the
   // link is text; in the second, a fence closes the block before the link.
