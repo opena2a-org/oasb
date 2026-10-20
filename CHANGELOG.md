@@ -715,6 +715,30 @@ stay on record here with the reason they changed.
   hold no note, as on other lines. The words on either side of a comment
   in an HTML block are read together: `<div>As of <!--` and
   `--> 2026-06-03.</div>` on two lines failed and now pass.
+- `npm run check:readme` reads no "as of" note for a dated page inside an
+  HTML comment, processing instruction, declaration or CDATA section in a
+  paragraph, a heading or a table cell, also where one runs on to a later
+  line of its paragraph. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the lines
+  `Hello <!-- As of 2026-06-03. --> world.`, a blank line and
+  `See the [README](../README.md) for the current figures.` after that
+  page's H1 and a blank line, the check exited 0, and now exits 1 with
+  `is a dated page, so above its first H2 it must say "as of 2026-06-03"`.
+  So do the lines `| <!-- As of 2026-06-03. --> | x |` and `| - | - |` in
+  place of the paragraph, and `Hello <!-- As of` and
+  `2026-06-03. --> world.` on two lines, also in a block quote or a list
+  item. Text after the end of one of these is read, also on the line that
+  holds the end, and the words on either side of one are read together,
+  as in an HTML block: `As of <!--` and `--> 2026-06-03.` on two lines
+  failed and now pass. A `<!--` that no `-->` follows in its paragraph is
+  text, as is one that the `|` between two cells of a table row parts
+  from its `-->`. Whichever of a code span and raw HTML starts first holds
+  the other, as CommonMark reads them: a note after a comment that holds a
+  backtick, or after a tag whose attribute value holds one, and before a
+  backtick later on the line, failed and now passes, as that first
+  backtick opens no code span. The code spans of a table row are read in
+  each cell, so a note in a cell between a cell that holds a backtick and
+  a later one that holds another failed and now passes.
 - `npm run check:readme` takes no `##` line of an HTML block as the first
   H2 of the README or of a dated page, as CommonMark reads the line as raw
   HTML. The README's first H2 must be the Quick Start, and a dated page's
@@ -760,30 +784,6 @@ stay on record here with the reason they changed.
   comment inside a `<textarea>` is text between the words on either side
   of it: `<textarea>As of <!-- x --> 2026-06-03.</textarea>` passed and now
   fails. A comment after `</textarea>` still hides the note.
-- `npm run check:readme` reads no "as of" note for a dated page inside an
-  HTML comment, processing instruction, declaration or CDATA section in a
-  paragraph, a heading or a table cell, also where one runs on to a later
-  line of its paragraph. With a README that links
-  `docs/AUDIT-2026-06-03.md`, and the lines
-  `Hello <!-- As of 2026-06-03. --> world.`, a blank line and
-  `See the [README](../README.md) for the current figures.` after that
-  page's H1 and a blank line, the check exited 0, and now exits 1 with
-  `is a dated page, so above its first H2 it must say "as of 2026-06-03"`.
-  So do the lines `| <!-- As of 2026-06-03. --> | x |` and `| - | - |` in
-  place of the paragraph, and `Hello <!-- As of` and
-  `2026-06-03. --> world.` on two lines, also in a block quote or a list
-  item. Text after the end of one of these is read, also on the line that
-  holds the end, and the words on either side of one are read together,
-  as in an HTML block: `As of <!--` and `--> 2026-06-03.` on two lines
-  failed and now pass. A `<!--` that no `-->` follows in its paragraph is
-  text, as is one that the `|` between two cells of a table row parts
-  from its `-->`. Whichever of a code span and raw HTML starts first holds
-  the other, as CommonMark reads them: a note after a comment that holds a
-  backtick, or after a tag whose attribute value holds one, and before a
-  backtick later on the line, failed and now passes, as that first
-  backtick opens no code span. The code spans of a table row are read in
-  each cell, so a note in a cell between a cell that holds a backtick and
-  a later one that holds another failed and now passes.
 
 ## 0.4.1 - 2026-10-17
 
