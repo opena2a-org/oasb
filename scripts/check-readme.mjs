@@ -1893,32 +1893,35 @@ for (const [file, { at, shown }] of datedPages) {
   const page = readPage(file);
   if (!page) continue; // readPage has reported it
   const h2 = page.findIndex((l) => !l.inFence && /^##\s/.test(l.line));
-  // A line of a fenced code block is read as a blank line, which ends a
-  // paragraph. parse() reads the blocks whose fence starts a line or the
-  // text of a list item outside a block quote; the link reader below reads
-  // those inside a block quote.
-  const written = (h2 === -1 ? page : page.slice(0, h2)).map((l) => (l.inFence || l.fenceOpen || l.fenceClose ? '' : l.line));
+  const above = h2 === -1 ? page : page.slice(0, h2);
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
     if (!pathPart || ABSOLUTE.test(target)) return false;
     const path = decoded(pathPart);
     return path !== null && resolve(dirname(file), path) === readmePath;
   };
-  // The links are read from the lines as written, as check 4 reads them:
-  // without its code spans or > markers, a line could start 4 columns in
-  // and be read as indented code. Each line is read, also those after a
-  // link to the README, so that `codeLines` names each line of a fenced
-  // code block inside a block quote and each line of indented code on
-  // which the reader reads no inline link.
-  const writtenLines = written.map((line) => ({ line }));
+  // The links are read from the lines as written and as parse() tags them,
+  // as check 4 reads them: without its code spans or > markers, a line
+  // could start 4 columns in and be read as indented code, and a line of a
+  // fenced code block read as a blank line would keep open, or end, a list
+  // item that the block's lines do not. parse() tags the blocks whose fence
+  // starts a line or the text of a list item outside a block quote; the
+  // link reader reads those inside a block quote. Each line is read, also
+  // those after a link to the README, so that `codeLines` names each line
+  // of a fenced code block inside a block quote and each line of indented
+  // code on which the reader reads no inline link.
   const codeLines = new Set();
-  const read = linkReader(writtenLines, codeLines);
-  const linksReadme = writtenLines.map((l) => read(l).some(toReadme)).includes(true);
+  const read = linkReader(above, codeLines);
+  const linksReadme = above.map((l) => read(l).some(toReadme)).includes(true);
   // The note is read without code spans and > markers, and without the
-  // lines in `codeLines`. Like the link reader, this does not track HTML
-  // blocks, so a line inside one that the reader reads as indented code is
-  // left out here too.
-  const intro = written.map((line, k) => (codeLines.has(k) ? '' : line).replace(/`[^`]*`/g, '').replace(/^\s*(?:>\s?)+/, ''));
+  // lines of a fenced code block or in `codeLines`. Like the link reader,
+  // this does not track HTML blocks, so a line inside one that the reader
+  // reads as indented code is left out here too.
+  const intro = above.map((l, k) =>
+    (l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k) ? '' : l.line)
+      .replace(/`[^`]*`/g, '')
+      .replace(/^\s*(?:>\s?)+/, ''),
+  );
   const missing = [];
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.join(' ').replace(/\s+/g, ' '))) {
     missing.push(`say "as of ${date}"`);
