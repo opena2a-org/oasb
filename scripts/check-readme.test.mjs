@@ -635,6 +635,31 @@ test('a ## line of a fenced code block or of an HTML block does not end the MITR
   assert.equal(r.status, 0, r.stderr);
 });
 
+// CommonMark reads a ## line as code in a fenced code block, and as raw HTML
+// in a block that <!-- opens, up to the line that holds -->, or in one that
+// <div> opens, up to a blank line, so the section starts at the heading
+// below the block, and the table and the link below that heading are in it.
+// withAtlas() puts the row at line 45; the block and the blank line after
+// it, added before the heading, move it to 49.
+for (const [kind, block] of [
+  ['a block that <!-- opens', '<!--\n## MITRE ATLAS Coverage\n-->\n'],
+  ['a block that <div> opens', '<div>\n## MITRE ATLAS Coverage\n</div>\n'],
+  ['a fenced code block', '```markdown\n## MITRE ATLAS Coverage\n```\n'],
+]) {
+  test(`a ## MITRE ATLAS Coverage line of ${kind} does not start the MITRE ATLAS Coverage section`, () => {
+    const before = (readme) => readme.replace('## MITRE ATLAS Coverage\n', `${block}\n## MITRE ATLAS Coverage\n`);
+    let r = checkCounts(before(withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001, E2E-003 (skipped) |')));
+    assert.equal(r.status, 0, r.stderr);
+    r = checkCounts(before(withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001, E2E-003 |')));
+    assert.equal(r.status, 1);
+    assert.equal(r.stderr.trim(), `README: line 49: ${SKIPPED_E2E_003}`);
+    const linked = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](docs/atlas.md).');
+    r = checkCounts(before(linked), SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+    assert.equal(r.status, 1);
+    assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
+  });
+}
+
 // "constructor" and "toString" are inherited by every object, so a lookup
 // that is not limited to the counts' own keys finds a function for them.
 for (const key of ['nosuchkey', 'constructor', 'toString']) {
