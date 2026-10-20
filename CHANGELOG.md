@@ -869,6 +869,35 @@ stay on record here with the reason they changed.
   `<span>` alone on a line opens (CommonMark kind 7) is not followed, so
   with `<span>` and `</span>` in place of the `<div>` tags the check still
   exits 1 with the "Category" row's message.
+- `npm run check:readme` ends a `<textarea>` in a paragraph, a heading or a
+  table cell at a `</textarea>` end tag inside a comment, processing
+  instruction, CDATA section or declaration, or inside the quoted value of
+  an attribute of a tag. A renderer passes that raw HTML on as written,
+  and a browser ends the text of a `<textarea>`, escapable raw text, at the
+  first `</textarea>` in it; the check kept that raw HTML whole as the
+  element's text. With a README that links `docs/AUDIT-2026-06-03.md`, and
+  the line `Hello <textarea><!-- </textarea><!-- As of 2026-06-03. -->
+  --></textarea> world.` after that page's H1 and a blank line, then a
+  blank line and `See the [README](../README.md) for the current figures.`,
+  the check exited 0, and now exits 1 with `is a dated page, so above its
+  first H2 it must say "as of 2026-06-03"`, as it did with that line in a
+  `<div>` block: the second `<!--` starts a comment that hides the note.
+  It also exited 0 and now exits 1 with `</textarea >` in place of the
+  first `</textarea>`, with the line in a block quote or as an H3, with its
+  `<textarea>` element in a table cell, and with each of these lines in
+  its place:
+  `Hello <textarea><?x </textarea><!-- As of 2026-06-03. --> ?></textarea>
+  world.`, the same line with `<![CDATA[` and `]]>` in place of `<?x` and
+  `?>`, `Hello <textarea><!X </textarea><!-- As of 2026-06-03.
+  --></textarea> world.` and `Hello <textarea><b title="</textarea><!-- As
+  of 2026-06-03. -->"></textarea> world.` What follows the end tag, up to
+  the end of that raw HTML, is read as a line of an HTML block is read:
+  text there is shown, so
+  `Hello <textarea><!-- </textarea> As of 2026-06-03. --> world.` exits 0,
+  as it did, and a `<script>` or `<!--` there that it does not end hides
+  the rest of the line, so
+  `Hello <textarea><!-- </textarea><script> --> As of 2026-06-03. world.`
+  exited 0 and now exits 1.
 
 ## 0.4.1 - 2026-10-17
 
