@@ -502,6 +502,19 @@ stay on record here with the reason they changed.
   interrupt the paragraph above and opens no block. With the note on the
   link's line instead, `As of 2026-06-03; see the [README](../README.md).`,
   the first and last of these exited 1 and now exit 0.
+- `npm run check:readme` reads no link on the line of a fence. Outside a
+  block quote, it read the links on the line of the fence that opens a
+  fenced code block, which holds the block's info string, and on a line of
+  `` ``` `` or `~~~` with text after its run that it reads as the fence
+  that ends the block, which CommonMark reads as a line of code. With
+  `` ```bash [x](docs/nowhere.md) ``, `npm i` and `` ``` `` in a README,
+  and no `docs/nowhere.md`, the check exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exits 0, as it
+  does with `` ``` ``, `npm i` and `` ``` [x](docs/nowhere.md) ``. A dated
+  page whose link to the README sat on such a line, as in
+  `` ```text [README](../README.md) `` below `As of 2026-06-03.`, passed
+  check 9, and now fails it with
+  `it must link to the README for the current figures`.
 
 ## 0.4.1 - 2026-10-17
 

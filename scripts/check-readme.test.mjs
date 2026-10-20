@@ -1988,6 +1988,37 @@ test('no line after a fence where the text of a list item starts has links, to i
   }
 });
 
+test('no link is read on the opening or closing line of a fenced code block, and one after the block is', () => {
+  // What follows the run of an opening fence is the block's info string,
+  // and a line of ``` or ~~~ with text after its run closes no block as
+  // CommonMark reads it, so it is code. The fence starts the line, is
+  // indented for the list item that holds it, or follows a list marker.
+  for (const body of [
+    '```bash [x](docs/nowhere.md)\nnpm i\n```\n',
+    '```\nnpm i\n``` [x](docs/nowhere.md)\n',
+    '~~~ [x](docs/nowhere.md)\nnpm i\n~~~\n',
+    '~~~\nnpm i\n~~~ [x](docs/nowhere.md)\n',
+    '```html <a href="docs/nowhere.md">x</a>\nnpm i\n```\n',
+    '```\nnpm i\n``` <a href="docs/nowhere.md">x</a>\n',
+    '- a\n\n  ```bash [x](docs/nowhere.md)\n  npm i\n  ```\n',
+    '- ```bash [x](docs/nowhere.md)\n  npm i\n  ```\n',
+    '1. ~~~ [x](docs/nowhere.md)\n   npm i\n   ~~~\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // The link on the line after the block is read, and the one on its
+  // opening fence is not.
+  for (const body of [
+    '```bash [x](docs/nowhere.md)\nnpm i\n```\n[y](docs/nowhere.md)\n',
+    '- ```bash [x](docs/nowhere.md)\n  npm i\n  ```\n  [y](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(r.stderr.trim().split('\n'), ['README: line 14: link target "docs/nowhere.md" does not exist.'], body);
+  }
+});
+
 test('a heading after a fenced code block in a list item holds its anchor', () => {
   // The fence that closes the block starts its line, and was read as the
   // start of another block, which ran on to the end of the page.
@@ -2334,6 +2365,28 @@ test("a dated page's note and link to the README after a fenced code block in a 
     const r = check(DATED_LINK, datedPage(intro));
     assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
   }
+});
+
+test("a dated page's link to the README on the opening or closing line of a fenced code block is not read, and one after the block is", () => {
+  // The link sits in the info string of an opening fence that starts its
+  // line or follows a list marker, or after the run of a line of ``` that
+  // closes no block as CommonMark reads it.
+  for (const intro of [
+    'As of 2026-06-03.\n\n```text [README](../README.md)\nx\n```\n',
+    'As of 2026-06-03.\n\n~~~ See the [README](../README.md) for the current figures.\nx\n~~~\n',
+    'As of 2026-06-03.\n\n- ```text [README](../README.md)\n  x\n  ```\n',
+    'As of 2026-06-03.\n\n```\nx\n``` See the [README](../README.md) for the current figures.\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must link to the README for the current figures; /, intro);
+  }
+  const after = check(
+    DATED_LINK,
+    datedPage('As of 2026-06-03.\n\n```text [README](../README.md)\nx\n```\n\nSee the [README](../README.md) for the current figures.\n'),
+  );
+  assert.equal(after.status, 0, after.stderr);
 });
 
 test("a dated page's link to the README is read from its lines as written, and not from a line of indented code", () => {
