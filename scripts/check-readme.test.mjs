@@ -2143,6 +2143,38 @@ test('a # line of an HTML block holds no anchor, and a heading after the block d
   }
 });
 
+test("a ## line of an HTML block is not the README's first H2, and a ## line after the block is", () => {
+  // CommonMark reads each line of the block as raw HTML: in a block that
+  // <div> opens, up to a blank line, and in a comment, up to -->. No
+  // heading starts on such a line, so it is not the Quick Start.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    const run = (readme) => {
+      writeFileSync(join(dir, 'README.md'), readme);
+      return spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+    };
+    const command = '\n```bash\nnpm test\n```\n';
+    const none = run(`# Title\n\n<div>\n## Quick Start\n</div>\n${command}`);
+    assert.equal(none.status, 1);
+    assert.match(none.stderr, /^README: README has no H2 heading; the first one must be "## Quick Start"\.$/m);
+    const other = run(`# Title\n\n<div>\n## Quick Start\n</div>\n\n## Install\n${command}`);
+    assert.equal(other.status, 1);
+    assert.match(other.stderr, /^README: first H2 is "Install" at line 7; it must be "Quick Start"\.$/m);
+    // The line that holds a comment's --> ends the block, and a blank line
+    // ends a <div> block: the ## line after each is the first H2.
+    for (const [readme, at] of [
+      [`# Title\n\n<!--\n## Install\n-->\n## Quick Start\n${command}`, 6],
+      [`# Title\n\n<div>\n## Install\n</div>\n\n## Quick Start\n${command}`, 7],
+    ]) {
+      const r = run(readme);
+      assert.equal(r.status, 0, `${readme}\n${r.stderr}`);
+      assert.match(r.stdout, new RegExp(`, Quick Start at line ${at}, `), readme);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a fenced code block in a list item is a code block to the first-command and benchmark-comment checks', () => {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
   try {
@@ -2976,6 +3008,37 @@ test('a note in an HTML block is read without the code spans of its lines, as el
   ]) {
     const r = check(DATED_LINK, datedPage(intro));
     assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test("a ## line of an HTML block is not a dated page's first H2, so a note below it marks the page, and one below a ## line after the block does not", () => {
+  // CommonMark reads each line of the block as raw HTML: in a block that
+  // <div> or <details> opens, up to a blank line, also after a line of ```
+  // there, in one that <pre> opens, past a blank line up to </pre>, and in
+  // a comment, up to -->. No heading starts on such a line, so the page's
+  // first H2 is the first ## line after the block.
+  const page = (block) => ({
+    'docs/AUDIT-2026-06-03.md': `# Audit\n\n${block}\nAs of 2026-06-03. See the [README](../README.md).\n\n## Real\n\n| npm test total | 245 |\n`,
+  });
+  for (const block of [
+    '<div>\n## Counts\n</div>\n',
+    '<details>\n## Counts\n</details>\n',
+    '<div>\n```\n## Counts\n</div>\n',
+    '<!--\n## Counts\n-->\n',
+    '<pre>\n## Counts\n\n## More\n</pre>\n',
+  ]) {
+    const r = check(DATED_LINK, page(block));
+    assert.equal(r.status, 0, `${block}\n${r.stderr}`);
+  }
+  // A blank line ends a <div> block, a line without the ">" of the block
+  // quote that holds one ends that block quote, and so the block, and a
+  // comment that ends on its first line is that line alone: the ## line
+  // after each is the page's first H2, and the note below it is not read.
+  for (const block of ['<div>\n</div>\n\n## Counts\n', '> <div>\n## Counts\n', '<!-- x -->\n## Counts\n']) {
+    const r = check(DATED_LINK, page(block));
+    assert.equal(r.status, 1, block);
+    assert.match(r.stderr, DATED, block);
+    assert.match(r.stderr, /it must say "as of 2026-06-03" and link to the README for the current figures; /, block);
   }
 });
 

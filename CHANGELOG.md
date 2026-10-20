@@ -715,6 +715,35 @@ stay on record here with the reason they changed.
   hold no note, as on other lines. The words on either side of a comment
   in an HTML block are read together: `<div>As of <!--` and
   `--> 2026-06-03.</div>` on two lines failed and now pass.
+- `npm run check:readme` takes no `##` line of an HTML block as the first
+  H2 of the README or of a dated page, as CommonMark reads the line as raw
+  HTML. The README's first H2 must be the Quick Start, and a dated page's
+  "as of" note and link to the README must sit above its first H2; each
+  was the first line outside a fenced code block that starts with `##` and
+  white space, a line of an HTML block included. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the lines `<div>`, `## Counts`, `</div>`,
+  a blank line, `As of 2026-06-03. See the [README](../README.md).`, a
+  blank line, `## Real`, a blank line and `| npm test total | 245 |` after
+  that page's H1 and a blank line, the check exited 1 with `is a dated
+  page, so above its first H2 it must say "as of 2026-06-03" and link to
+  the README for the current figures`, and now exits 0. It also exits 0
+  with `<details>` and `</details>` in place of the tags, with a line of
+  `` ``` `` after `<div>`, with `<!--` and `-->` in place of the tags, and
+  with `<pre>` and `</pre>` in place of them and a blank line and
+  `## More` before `</pre>`. On that page, `## Counts` after `<div>`,
+  `</div>` and a blank line, after `<!-- x -->`, or after `> <div>`, on a
+  line without the `>`, is the first H2, and the page fails, as the note
+  is below it. A README with `# Title`, a blank line, `<div>`,
+  `## Quick Start`, `</div>`, a blank line and a shell code block passed,
+  with `Quick Start at line 4`, and now exits 1 with `README has no H2
+  heading`; with a blank line and `## Install` after its `</div>`, it exits
+  1 with `first H2 is "Install" at line 7`. With `<!--`, `## Install`,
+  `-->` and `## Quick Start` in place of its `<div>`, `## Quick Start` and
+  `</div>`, it passes, and so it does with `<div>`, `## Install`, `</div>`,
+  a blank line and `## Quick Start` there. A block that `<span>` alone on
+  a line opens (CommonMark kind 7) is not followed, so that README with
+  `<span>` and `</span>` in place of the `<div>` tags passes, with
+  `Quick Start at line 4`.
 
 ## 0.4.1 - 2026-10-17
 
