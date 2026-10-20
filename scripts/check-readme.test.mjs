@@ -3068,6 +3068,44 @@ test('a note in a comment inside a <textarea> in a paragraph, a heading or a tab
   }
 });
 
+test('a </textarea> end tag inside a comment, processing instruction, CDATA section, declaration or attribute value in a paragraph, a heading or a table cell ends the <textarea>, as a browser ends it there', () => {
+  // A renderer passes raw HTML on as written, and a browser ends the text of
+  // a <textarea> at the first </textarea> in it, so what follows that end
+  // tag inside the comment is raw HTML: a second <!-- there starts a comment
+  // that hides the note, as on a line of an HTML block, and a <script> or a
+  // <!-- that it leaves open hides the rest of the line.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Hello <textarea><!-- </textarea><!-- As of 2026-06-03. --> --></textarea> world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea ><!-- As of 2026-06-03. --> --></textarea> world.\n\n${see}`,
+    `<div>\nHello <textarea><!-- </textarea><!-- As of 2026-06-03. --> --></textarea> world.\n</div>\n\n${see}`,
+    `> Hello <textarea><!-- </textarea><!-- As of 2026-06-03. --> --></textarea> world.\n\n${see}`,
+    `### Hello <textarea><!-- </textarea><!-- As of 2026-06-03. --> --></textarea> world\n\n${see}`,
+    `| a | b |\n| - | - |\n| <textarea><!-- </textarea><!-- As of 2026-06-03. --> --></textarea> | x |\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- As of 2026-06-03. --> ?></textarea> world.\n\n${see}`,
+    `Hello <textarea><![CDATA[ </textarea><!-- As of 2026-06-03. --> ]]></textarea> world.\n\n${see}`,
+    `Hello <textarea><!X </textarea><!-- As of 2026-06-03. --></textarea> world.\n\n${see}`,
+    `Hello <textarea><b title="</textarea><!-- As of 2026-06-03. -->"></textarea> world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> --> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  // Text after that end tag inside the comment, and after the comment, is
+  // shown, and so is the text of a <textarea> that opens there.
+  for (const intro of [
+    `Hello <textarea><!-- </textarea> As of 2026-06-03. --> world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><!-- x --> --> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><textarea> --><!-- As of 2026-06-03. --></textarea> world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
 test('a <textarea> or <!-- inside the quoted value of an attribute on a line of an HTML block starts nothing, and a </textarea > end tag ends a <textarea>', () => {
   // A browser reads a < inside an attribute value as part of the value, so
   // a comment after it still hides the note, and a <!-- there hides none.

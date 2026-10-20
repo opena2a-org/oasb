@@ -2120,9 +2120,12 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // shownInline() finds them, such as <!-- As of 2026-06-03. --> after a word,
 // also one that runs on from one line of a paragraph to a later one, but for
 // one between a <textarea> start tag and its end tag on the same line, as a
-// browser shows it as the element's text. The page's first H2 is found as
-// check 2 finds the README's: a ## line of a fenced code block or of an HTML
-// block is none.
+// browser shows it as the element's text. That end tag may sit inside one
+// of these, as in x <textarea><!-- </textarea><!-- As of 2026-06-03. -->,
+// where a browser ends the element at it and reads the second <!-- as the
+// start of a comment that hides the note, as shownHtml() reads the line in
+// an HTML block. The page's first H2 is found as check 2 finds the README's:
+// a ## line of a fenced code block or of an HTML block is none.
 
 // The raw HTML that shownHtml() leaves out of the text of an HTML block,
 // each matched in any case: a <script> or a <style> element, from <script
@@ -2261,9 +2264,19 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // (TEXTAREA_START_TAG), also <textarea/>, which a browser reads as one, a
 // comment, processing instruction, CDATA section or declaration is text, as
 // the element's text is escapable raw text, up to a </textarea> end tag
-// (TEXTAREA_END_TAG) on the line. Returns the text as `text`.
+// (TEXTAREA_END_TAG) on the line. A renderer passes raw HTML on as
+// written, so that end tag may also sit inside what is read here as one
+// piece of raw HTML: a comment, processing instruction, CDATA section or
+// declaration, or the quoted value of an attribute of a tag. A browser ends
+// the element at the first such end tag, as shownHtml() does on a line of
+// an HTML block, and reads the rest of that piece as raw HTML, so the rest
+// is read as shownHtml() reads a line of an HTML block: a <textarea> that it
+// opens and does not end is open after it, a tag that it leaves open, whose
+// text shownHtml() shows, ends with it, and when it leaves a comment,
+// processing instruction, CDATA section, <script> or <style> open, the rest
+// of the line is left out. Returns the text as `text`.
 const TEXTAREA_START_TAG = /<textarea[\s/>]/iy;
-const TEXTAREA_END_TAG = /<\/textarea\s*>/iy;
+const TEXTAREA_END_TAG = /<\/textarea\s*>/gi;
 function shownInline(line, open = null, start = 0, below = NO_ENDS) {
   let i = 0;
   if (open) {
@@ -2280,6 +2293,17 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
     re.lastIndex = at;
     return end > at + 1 && re.test(line);
   };
+  // The first match of TEXTAREA_END_TAG at or after `at`, or null. The match
+  // found last is kept, and the line is searched again, from `at`, only when
+  // that match starts before `at`; once a search finds none, none is made.
+  let endTag = { index: -1 };
+  const endTagFrom = (at) => {
+    if (endTag && endTag.index < at) {
+      TEXTAREA_END_TAG.lastIndex = at;
+      endTag = TEXTAREA_END_TAG.exec(line);
+    }
+    return endTag;
+  };
   while (i < line.length) {
     const c = line[i];
     if (c === '\\') {
@@ -2294,7 +2318,20 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
     } else if (c === '<') {
       const { end, unshown } = htmlAt(i);
       if (inTextarea) {
-        if (!unshown && tagAt(TEXTAREA_END_TAG, i, end)) inTextarea = false;
+        // The element ends at a </textarea> end tag inside the tag, comment,
+        // processing instruction, CDATA section or declaration from i to
+        // end, which a renderer passes on as written, and what follows that
+        // end tag up to end is raw HTML.
+        const close = end > i + 1 ? endTagFrom(i) : null;
+        const after = close ? close.index + close[0].length : -1;
+        if (close && after <= end) {
+          const rest = line.slice(after, end);
+          const { shown, open: left } = shownHtml(rest, null);
+          text += line.slice(from, after) + shown.map(([s, e]) => rest.slice(s, e)).join('');
+          if (left && !showsOpen(left)) return { text, open: null };
+          from = end;
+          inTextarea = left === TEXTAREA_END;
+        }
       } else if (unshown && end === i + 1 && below.has(unshown)) {
         return { text: text + line.slice(from, i), open: unshown };
       } else if (unshown && end > i + 1) {
