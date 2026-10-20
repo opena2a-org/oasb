@@ -2101,21 +2101,22 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // sit in a blockquote, or in an HTML block of kind 1 to 6, such as one that
 // <div> or <details> opens, also on a line there that is indented 4 or more
 // columns or that follows a line of 3 or more backticks or tildes, which
-// opens no code block there; text in a code block or inline code is not the
-// note. Nor, in an HTML block, is text inside a comment, a processing
-// instruction, a declaration, a CDATA section, or a <script> or <style>
-// element, as shownHtml() finds them, as none of these holds text for the
-// reader. A block that one of these opens, such as
-// <!-- As of 2026-06-03. -->, holds the note only after the end of it, on
-// the line that holds that end. None of these starts inside a <textarea>
-// element, whose text, escapable raw text, a browser shows, so the line
-// <textarea><!-- As of 2026-06-03. --></textarea> holds the note. Nor, in a
-// paragraph, a heading or a cell of a table row, is text inside a comment, a
-// processing instruction, a declaration or a CDATA section, as shownInline()
-// finds them, such as <!-- As of 2026-06-03. --> after a word, also one that
-// runs on from one line of a paragraph to a later one. The page's first H2 is
-// found as check 2 finds the README's: a ## line of a fenced code block or of
-// an HTML block is none.
+// opens no code block there, and between backticks there, which open no
+// inline code, as the text of an HTML block is raw HTML; text in a code
+// block or inline code is not the note. Nor, in an HTML block, is text
+// inside a comment, a processing instruction, a declaration, a CDATA
+// section, or a <script> or <style> element, as shownHtml() finds them, as
+// none of these holds text for the reader. A block that one of these opens,
+// such as <!-- As of 2026-06-03. -->, holds the note only after the end of
+// it, on the line that holds that end. None of these starts inside a
+// <textarea> element, whose text, escapable raw text, a browser shows, so
+// the line <textarea><!-- As of 2026-06-03. --></textarea> holds the note.
+// Nor, in a paragraph, a heading or a cell of a table row, is text inside a
+// comment, a processing instruction, a declaration or a CDATA section, as
+// shownInline() finds them, such as <!-- As of 2026-06-03. --> after a word,
+// also one that runs on from one line of a paragraph to a later one. The
+// page's first H2 is found as check 2 finds the README's: a ## line of a
+// fenced code block or of an HTML block is none.
 
 // The raw HTML that shownHtml() leaves out of the text of an HTML block,
 // each matched in any case: a <script> or a <style> element, from <script
@@ -2170,20 +2171,6 @@ function shownHtml(text, open) {
     if (open !== TEXTAREA_END && from < start.index) shown.push([from, start.index]);
     i = start.index + 1;
   }
-}
-
-// The [start, end) pairs of the characters that lie in a pair of `a` and in
-// a pair of `b`, two lists of such pairs in order, none of which overlap.
-function inBoth(a, b) {
-  const both = [];
-  for (let i = 0, j = 0; i < a.length && j < b.length; ) {
-    const start = Math.max(a[i][0], b[j][0]);
-    const end = Math.min(a[i][1], b[j][1]);
-    if (start < end) both.push([start, end]);
-    if (a[i][1] < b[j][1]) i += 1;
-    else j += 1;
-  }
-  return both;
 }
 
 // The ends of the raw HTML that shownInline() leaves out, as inlineHtml()
@@ -2274,24 +2261,26 @@ for (const [file, { at, shown }] of datedPages) {
   const htmlLines = new Map();
   const read = linkReader(above, codeLines, outside, htmlLines);
   const linksReadme = above.map((l) => read(l).some(toReadme)).includes(true);
-  // The note is read without code spans and > markers, and without the
-  // lines of a fenced code block or in `codeLines`. A line of an HTML block
-  // that blockReader() follows is not among them, also where lineStart()
-  // reads it as indented code or as a fence, as its text is raw HTML. A code
-  // span may run on from one line of a paragraph to a later one, so the note
-  // is read, as an href on a line outside an HTML block is, on the part of
-  // each line in `outside`, and on each cell of a table row, as rowCells()
-  // splits it, on the text that shownInline() gives. A comment, processing
-  // instruction, CDATA section or declaration may run on to a later line of
-  // a paragraph as well, to the first line whose part, after the > markers,
-  // spaces and tabs that start it, holds its end. The lines of a paragraph
-  // here are those that `outside` gives the same first line, up to a line of
-  // an HTML block. Of a line of an HTML block, the note is read on the
-  // characters of that part outside its code spans that shownHtml() also
-  // shows. shownHtml() reads the line's text after the > markers of the
-  // block quotes that hold the block, so that such a > ends no declaration,
-  // and all of that text, code spans included: a renderer passes the text of
-  // an HTML block on as written, so a backtick there keeps no <!-- or -->
+  // The note is read without > markers, and without the lines of a fenced
+  // code block or in `codeLines`. A line of an HTML block that
+  // blockReader() follows is not among them, also where lineStart() reads
+  // it as indented code or as a fence, as its text is raw HTML. On a line
+  // outside an HTML block, the note is read without code spans: a code span
+  // may run on from one line of a paragraph to a later one, so the note is
+  // read, as an href on such a line is, on the part of each line in
+  // `outside`, and on each cell of a table row, as rowCells() splits it, on
+  // the text that shownInline() gives. A comment, processing instruction,
+  // CDATA section or declaration may run on to a later line of a paragraph
+  // as well, to the first line whose part, after the > markers, spaces and
+  // tabs that start it, holds its end. The lines of a paragraph here are
+  // those that `outside` gives the same first line, up to a line of an HTML
+  // block. A line of an HTML block is raw HTML, in which a backtick is text
+  // and opens no code span, so the note is read there, as an href there is,
+  // on the whole line, whatever code spans the paragraph that lineStart()
+  // reads it in has on it: on the characters that shownHtml() shows of the
+  // line's text after the > markers of the block quotes that hold the block,
+  // so that such a > ends no declaration. A renderer passes the text of an
+  // HTML block on as written, so a backtick there also keeps no <!-- or -->
   // from starting or ending a comment. A line break inside the raw HTML that
   // shownHtml() or shownInline() leaves out is left out with it, so it does
   // not join the words around it with a space; one inside a <textarea>
@@ -2339,19 +2328,11 @@ for (const [file, { at, shown }] of datedPages) {
       // row.
       if (!html) text = rowCells(l.line).map((cell) => shownInline(cell).text).join('|');
       else {
-        const [from, to] = outside.get(k) ?? [0, l.line.length];
-        const part = l.line.slice(from, to);
-        // The line's text after the block's > markers, and where it starts.
+        // The line's text after the block's > markers.
         const raw = afterQuotes(l.line, html.quotes);
-        const rawAt = l.line.length - raw.length;
         let shownParts;
         ({ shown: shownParts, open } = shownHtml(raw, open));
-        text = inBoth(
-          outsideCodeSpans(part).map(([start, end]) => [from + start, from + end]),
-          shownParts.map(([start, end]) => [rawAt + start, rawAt + end]),
-        )
-          .map(([start, end]) => l.line.slice(start, end))
-          .join('');
+        text = shownParts.map(([start, end]) => raw.slice(start, end)).join('');
       }
     }
     intro += text.replace(/^\s*(?:>\s?)+/, '') + ((open && open !== TEXTAREA_END) || unshown ? '' : ' ');
