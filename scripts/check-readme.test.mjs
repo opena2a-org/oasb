@@ -2224,6 +2224,38 @@ test("a ## line of an HTML block is not the README's first H2, and a ## line aft
   }
 });
 
+test('a line at column 0 after an HTML block in a list item ends the list, also after an indented line of the block, so an HTML block that a line below opens holds the ## lines after it', () => {
+  // A line of an HTML block is raw HTML, not paragraph text, so no line
+  // goes on with it lazily: plain, at column 0, ends the list item and
+  // starts a paragraph, which the indented <!-- below interrupts with a
+  // comment that runs to the end of the file. commonmark.js 0.31.2 and
+  // markdown-it 14.1.0 render no H2 for any of these: in a comment, after
+  // an indented line of it or after the indented line that ends it, and
+  // in a block that <div> opens, after an indented line of it.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    const run = (readme) => {
+      writeFileSync(join(dir, 'README.md'), readme);
+      return spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+    };
+    const after = '## Quick Start\n\n```bash\nnpm test\n```\n\n## Guide\n\nText.\n';
+    for (const item of ['- <!-- a note\n  more\n', '- <!--\n  a note -->\n', '- <div>\n  more\n', '- <!-- a note\n']) {
+      const readme = `# Title\n\n${item}plain\n  <!--\n${after}`;
+      const r = run(readme);
+      assert.equal(r.status, 1, `${readme}\n${r.stdout}`);
+      assert.match(r.stderr, /^README: README has no H2 heading; the first one must be "## Quick Start"\.$/m, readme);
+    }
+    // A line that goes on with the list item holds the <!-- in the item, so
+    // plain, after it, goes on with no paragraph and ends the item, and the
+    // ## line below it is the first H2.
+    const held = run(`# Title\n\n- <!-- a note\n  more -->\n  <!-- x -->\nplain\n${after}`);
+    assert.equal(held.status, 0, held.stderr);
+    assert.match(held.stdout, /, Quick Start at line 7, /);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a fenced code block in a list item is a code block to the first-command and benchmark-comment checks', () => {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
   try {
@@ -2969,12 +3001,12 @@ test('a line of an HTML block of 50,000 tag starts that no > follows is checked 
 });
 
 test('a note and link on the lines after the line that ends an HTML block are read with the code spans of their paragraph', () => {
-  // lineStart() reads the lines of a comment after its first, and the
-  // lines after the one that ends it, as one paragraph, each line of which
-  // is read with its own code spans. Read with those of another line, the
-  // note on a line after the comment is read on the wrong part of it, and
-  // a run of backticks there at an index on another line, which does not
-  // finish; so the check is run here with a time limit.
+  // The lines after the one that ends a comment start a paragraph of their
+  // own, each line of which is read with its own code spans. Read with
+  // those of another line, the note on a line after the comment is read on
+  // the wrong part of it, and a run of backticks there at an index on
+  // another line, which does not finish; so the check is run here with a
+  // time limit.
   const see = 'See the [README](../README.md) for the current figures.';
   const dated = (intro) => {
     const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
