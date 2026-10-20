@@ -461,6 +461,30 @@ stay on record here with the reason they changed.
   link to the README after such a line now counts, a comment on an
   `opena2a benchmark` line after it is no longer read as one in a code
   block, and it no longer opens the code block that holds the first command.
+- `npm run check:readme` reads the cells of a table row one at a time, as
+  markdown-it 14.1.0 and 14.1.1 and micromark 4.0.2 with
+  micromark-extension-gfm-table 2.1.1 read them: link text and code spans
+  do not run on from one cell to the next, a row holds no definition, and
+  the cells of a row past the number of cells of the header row, which
+  neither renderer shows, are not read. With `docs/nowhere.md` absent,
+  `| a |`, `| - |`, `[x]: docs/nowhere.md` exited 1 with
+  `link target "docs/nowhere.md" does not exist` and now exits 0, as do
+  `| a |`, `| - |`, `| b | [c](docs/nowhere.md) |`. An inline link on a
+  line of indented code after a table row is not read, as on indented code
+  anywhere else: `| a |`, `| - |`, `    [x](docs/nowhere.md)` exited 1 and
+  now exits 0, and the entry above that says the links on indented code
+  right after a table row are still read no longer holds. A line that
+  holds no `|` is a table's header row when the delimiter row holds a `|`
+  or a `:`, as micromark reads it (markdown-it starts no table there),
+  unless the line follows a table row or goes on with a paragraph lazily:
+  `[a`, `|:-`, `| e](docs/nowhere.md) |`, `---`, which neither renderer
+  renders with a link, exited 1 and now exits 0. A line that goes on with
+  a list item's paragraph lazily over a delimiter row in the item that is
+  4 or more columns past the block quotes and list items the line goes on
+  with starts a paragraph there, as markdown-it reads it: `- see`,
+  `` x | `y ``, `    |---|---|` and two lines indented 2 columns,
+  `` z` | [m](docs/nowhere.md) | `` and `` | `c | d | ``, exited 0 and now
+  exit 1, as both renderers render that link.
 
 ## 0.4.1 - 2026-10-17
 
