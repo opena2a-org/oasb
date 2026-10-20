@@ -3158,6 +3158,99 @@ test('a <textarea> or <!-- inside the quoted value of an attribute on a line of 
   }
 });
 
+test("a dated page's note inside the quoted value of an attribute is not read, on a line of an HTML block or in a paragraph, a heading or a table cell, as a browser shows no part of a tag", () => {
+  // A tag's text, with its attributes and their quoted values, also one
+  // that runs on to a later line of an HTML block, is left out, and the
+  // words on either side of a tag, or of a line break inside one, join
+  // with no space, as a browser shows them. Inside a <textarea> a tag is
+  // text, which a browser shows as written, and the target of an autolink
+  // is its text. A </textarea> inside a comment ends the <textarea>, and a
+  // quoted value that a tag after it opens in the comment runs on past the
+  // comment, so the rest of the line is left out.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div title="As of 2026-06-03.">x</div>\n\n${see}`,
+    `<div title='As of 2026-06-03.'>x</div>\n\n${see}`,
+    `<div title="\nAs of 2026-06-03.\n">x</div>\n\n${see}`,
+    `<div\n  title="As of 2026-06-03.">x</div>\n\n${see}`,
+    `> <div title="As of 2026-06-03.">x</div>\n\n${see}`,
+    '<div><a href="../README.md" title="As of 2026-06-03.">README</a></div>\n',
+    `<textarea title="As of 2026-06-03.">x</textarea>\n\n${see}`,
+    `<div>\n<textarea\n  title="As of 2026-06-03.">x</textarea>\n</div>\n\n${see}`,
+    `<textarea>As <b>of</b> 2026-06-03.</textarea>\n\n${see}`,
+    `Hello <span title="As of 2026-06-03.">x</span> world.\n\n${see}`,
+    `Hello <span title='As of 2026-06-03.'>x</span> world.\n\n${see}`,
+    `Hello <img alt="As of 2026-06-03."/> world.\n\n${see}`,
+    `> Hello <span title="As of 2026-06-03.">x</span> world.\n\n${see}`,
+    `### Hello <span title="As of 2026-06-03.">x</span> world\n\n${see}`,
+    `| a | b |\n| - | - |\n| <span title="As of 2026-06-03.">x</span> | x |\n\n${see}`,
+    `Hello <textarea title="As of 2026-06-03.">x</textarea> world.\n\n${see}`,
+    `Hello <textarea>As <b>of</b> 2026-06-03.</textarea> world.\n\n${see}`,
+    `As <https://example.com>of 2026-06-03.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><b title="x --> As of 2026-06-03." y> world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  for (const intro of [
+    `<div title="x">As of 2026-06-03.</div>\n\n${see}`,
+    `<div title="\nx\n">As of 2026-06-03.</div>\n\n${see}`,
+    `<div>As<span class="x"> of 2026-06-03.</span></div>\n\n${see}`,
+    `<div>A<span class="x">s of 2026-06-03.</span></div>\n\n${see}`,
+    `<div>A<span\n  class="x">s of 2026-06-03.</span></div>\n\n${see}`,
+    `<textarea title="x">As of 2026-06-03.</textarea>\n\n${see}`,
+    `<textarea\n  title="x">As of 2026-06-03.</textarea>\n\n${see}`,
+    `Hello <span title="x">As of 2026-06-03.</span> world.\n\n${see}`,
+    `Hello A<span class="x">s of 2026-06-03.</span> world.\n\n${see}`,
+    `Hello <textarea title="x">As of 2026-06-03.</textarea> world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><b title="x"> As of 2026-06-03. --> world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test('a <textarea> ends at an end tag with an attribute, on a line of an HTML block or inside raw HTML in a paragraph or a table cell, as a browser ends it, and no part of that tag is read', () => {
+  // A browser ends the element at </textarea before white space, a / or a
+  // >, so an end tag with an attribute, also one that runs on to a later
+  // line of the block, ends it, and no part of that tag is shown. In a
+  // paragraph such an end tag ends the element where the renderer passes it
+  // on as written, as inside a comment; outside raw HTML it is text, as
+  // CommonMark reads no attribute in an end tag, and so is shown as the
+  // element's text. </textareax is no end tag.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `${see}\n<textarea></textarea title="As of 2026-06-03.">\n`,
+    `<div>\n<textarea>x</textarea title="As of 2026-06-03.">\n</div>\n\n${see}`,
+    `<div>\n<textarea>x</textarea\n  title="As of 2026-06-03.">\n</div>\n\n${see}`,
+    `<div>\n<textarea>x</textarea/ title="As of 2026-06-03.">\n</div>\n\n${see}`,
+    `> <div>\n> <textarea>x</textarea title="As of 2026-06-03.">\n> </div>\n\n${see}`,
+    `Hello <textarea><!-- </textarea title="As of 2026-06-03."> --> world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea --><!-- As of 2026-06-03. --> world.\n\n${see}`,
+    `| a | b |\n| - | - |\n| <textarea><!-- </textarea title="As of 2026-06-03."> --> | x |\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  for (const intro of [
+    `<div>\n<textarea>As of 2026-06-03.</textarea title="x">\n</div>\n\n${see}`,
+    `<div>\n<textarea>x</textarea title="x"> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<textarea>As of 2026-06-03.</textarea >\n</div>\n\n${see}`,
+    `${see}\n<textarea>As of 2026-06-03.</textarea title="x">\n`,
+    `<textarea></textareax As of 2026-06-03.</textarea>\n\n${see}`,
+    `Hello <textarea><!-- </textarea title="x"> As of 2026-06-03. --> world.\n\n${see}`,
+    `Hello <textarea>x</textarea title="As of 2026-06-03."> world.\n\n${see}`,
+    `Hello <textarea>As of 2026-06-03.</textarea > world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
 test('a declaration that runs on in a nested block quote is not ended by a > marker of the inner quote after more than one space', () => {
   // `>   > ` is two block quote markers, so the second > ends no
   // declaration; after 5 spaces the > is text in the paragraph, and ends it.

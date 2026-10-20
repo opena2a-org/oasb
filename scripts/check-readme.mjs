@@ -678,7 +678,8 @@ function withoutCodeSpans(line) {
 // CDATA section from <![CDATA[ to the first ]]> after it, and a declaration
 // from <! and a letter to the first > after it. A backslash inside one is
 // text. For the < at line[i], htmlAt(i).end is the index after the autolink
-// or raw HTML that starts there, or i + 1 when none does, and
+// or raw HTML that starts there, or i + 1 when none does, htmlAt(i).tag is
+// whether an open tag or a closing tag starts there, and
 // htmlAt(i).unshown is the end that closes a comment, processing
 // instruction, CDATA section or declaration whose start is there, -->, ?>,
 // ]]> or >, whether or not the line holds that end, and null otherwise; an
@@ -691,7 +692,7 @@ const AUTOLINK = /<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^<>\x00-\x20]*>/;
 const EMAIL_AUTOLINK = /<[\w.!#$%&'*+\/=?^`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>/;
 const OPEN_TAG = /<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^"'=<>`\x00-\x20]+|'[^']*'|"[^"]*"))?)*\s*\/?>/;
 const CLOSING_TAG = /<\/[A-Za-z][A-Za-z0-9-]*\s*>/;
-const AUTOLINK_OR_TAG = new RegExp([AUTOLINK, EMAIL_AUTOLINK, OPEN_TAG, CLOSING_TAG].map((r) => r.source).join('|'), 'y');
+const AUTOLINK_OR_TAG = new RegExp(`${AUTOLINK.source}|${EMAIL_AUTOLINK.source}|(${OPEN_TAG.source}|${CLOSING_TAG.source})`, 'y');
 function inlineHtml(line) {
   const found = new Map(); // end -> where it was last found, or -1 when nowhere after
   const after = (end, from) => {
@@ -705,7 +706,7 @@ function inlineHtml(line) {
   return (i) => {
     AUTOLINK_OR_TAG.lastIndex = i;
     const tag = AUTOLINK_OR_TAG.exec(line);
-    if (tag) return { end: i + tag[0].length, unshown: null };
+    if (tag) return { end: i + tag[0].length, unshown: null, tag: tag[1] !== undefined };
     // The end that closes the raw HTML that starts there, and how many
     // characters after the < the search for it starts.
     let unshown = null;
@@ -715,7 +716,7 @@ function inlineHtml(line) {
     else if (line.startsWith('<![CDATA[', i)) [unshown, skip] = [']]>', 9];
     else if (line[i + 1] === '!' && /[A-Za-z]/.test(line[i + 2] ?? '')) [unshown, skip] = ['>', 3];
     const end = unshown ? after(unshown, i + skip) : -1;
-    return { end: end === -1 ? i + 1 : end, unshown };
+    return { end: end === -1 ? i + 1 : end, unshown, tag: false };
   };
 }
 
@@ -2140,15 +2141,27 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // block or inline code is not the note. Nor, in an HTML block, is text
 // inside a comment, a processing instruction, a declaration, a CDATA
 // section, or a <script> or <style> element, as shownHtml() finds them, as
-// none of these holds text for the reader. A block that one of these opens,
-// such as <!-- As of 2026-06-03. -->, holds the note only after the end of
-// it, on the line that holds that end. None of these starts inside a
-// <textarea> element, whose text, escapable raw text, a browser shows, so
-// the line <textarea><!-- As of 2026-06-03. --></textarea> holds the note.
-// Nor, in a paragraph, a heading or a cell of a table row, is text inside a
+// none of these holds text for the reader, nor the text of a tag, such as
+// the quoted value of an attribute, also one that runs on to a later line
+// of the block, as a browser shows no part of a tag: the line
+// <div title="As of 2026-06-03.">x</div> holds no note, and the words on
+// either side of a tag, or of a line break inside one, are read as one
+// word when no space parts them, as <div>A<span class="x">s of</span> is
+// read as "As of". A block that one of the others opens, such as
+// <!-- As of 2026-06-03. -->, holds the note only after the end of it, on
+// the line that holds that end. None of these starts inside a <textarea>
+// element, whose text, escapable raw text, a browser shows as written, so
+// the line <textarea><!-- As of 2026-06-03. --></textarea> holds the note,
+// and <textarea>As <b>of</b> 2026-06-03.</textarea> holds none. A browser
+// ends that element at an end tag with an attribute too, so
+// <textarea></textarea title="As of 2026-06-03."> holds no note. Nor, in a
+// paragraph, a heading or a cell of a table row, where the target of an
+// autolink is text, as a browser shows it as the link's, is text inside a
 // comment, a processing instruction, a declaration or a CDATA section, as
 // shownInline() finds them, such as <!-- As of 2026-06-03. --> after a word,
-// also one that runs on from one line of a paragraph to a later one, but for
+// also one that runs on from one line of a paragraph to a later one, nor
+// the text of an open tag or a closing tag on the line, such as
+// <span title="As of 2026-06-03.">, as in an HTML block, but for
 // one between a <textarea> start tag and its end tag on the same line, as a
 // browser shows it as the element's text. That end tag may sit inside one
 // of these, as in x <textarea><!-- </textarea><!-- As of 2026-06-03. -->,
@@ -2161,36 +2174,41 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // each matched in any case: a <script> or a <style> element, from <script
 // or <style and white space, a > or the end of the line, a comment, from
 // <!--, a processing instruction, from <?, a CDATA section, from
-// <![CDATA[, and a declaration, from <! and a letter. HIDDEN_HTML_START
-// also matches, with its seventh group, a <textarea> element, from
-// <textarea and white space, a /, a > or the end of the line, whose text
-// shownHtml() shows: it is escapable raw text, which runs to </textarea>,
-// also with white space before its > (TEXTAREA_END), and in which the start
-// of each of the others is literal text. With its last group it matches
-// the start of any other tag, < or </ and a letter, which shownHtml() reads
-// on to its end (tagEnd()), so that a <!-- or a <textarea inside the quoted
-// value of an attribute starts nothing. Each group of HIDDEN_HTML_START but
-// the last matches one of the others, and the entry of HIDDEN_HTML_END with
-// its number is what ends it: </script>, </style>, -->, ?>, ]]>, > or
-// TEXTAREA_END; the last entry, IN_TAG, is the state tagEnd() starts in. So
-// a comment, processing instruction, CDATA section or declaration that
-// opens an HTML block (HTML_BLOCK_START, CDATA_START) ends with the first
-// match of the end that HTML_BLOCK_END gives that block.
-const TEXTAREA_END = /<\/textarea[\t\n\f\r ]*>/gi;
+// <![CDATA[, a declaration, from <! and a letter, and, with its last two
+// groups, a tag: a <textarea> start tag, from <textarea and white space, a
+// /, a > or the end of the line, and any other tag, from < or </ and a
+// letter. shownHtml() reads a tag on to its end (tagEnd()), so that a <!--
+// or a <textarea inside the quoted value of an attribute starts nothing,
+// and shows no part of it, such as that value. The text of a <textarea>
+// element it shows: it is escapable raw text, which runs from the end of
+// the start tag to the start of its end tag, and in which the start of
+// each of the others is literal text. That end tag starts with </textarea
+// before white space, a /, a > or the end of the line (TEXTAREA_END), as a
+// browser ends the element there, also at an end tag with an attribute,
+// such as </textarea title="x">, and shownHtml() reads the rest of it as it
+// reads any other tag. Each group of HIDDEN_HTML_START before the
+// <textarea> group (TEXTAREA_GROUP) matches one of the others, and the
+// entry of HIDDEN_HTML_END with its number is what ends it: </script>,
+// </style>, -->, ?>, ]]> or >. So a comment, processing instruction, CDATA
+// section or declaration that opens an HTML block (HTML_BLOCK_START,
+// CDATA_START) ends with the first match of the end that HTML_BLOCK_END
+// gives that block.
+const TEXTAREA_END = /<\/textarea(?=[\t\n\f\r />]|$)/gi;
 const HIDDEN_HTML_START = /(<script(?:[\s>]|$))|(<style(?:[\s>]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s/>]|$))|(<\/?[a-z])/gi;
+const TEXTAREA_GROUP = 7;
+const HIDDEN_HTML_END = [null, /<\/script>/gi, /<\/style>/gi, /-->/g, /\?>/g, /\]\]>/g, />/g];
 
 // The states of a tag that tagEnd() reads, as the HTML tokenizer reads a
 // tag: in its name, an attribute name or an unquoted value (IN_TAG), after
 // the = of an attribute and the white space after it (AFTER_EQUALS), or in
-// a value in double or in single quotes, where a > is part of the value.
+// a value in double or in single quotes, '"' or "'", where a > is part of
+// the value.
 const IN_TAG = 'tag';
 const AFTER_EQUALS = '=';
-const TAG_STATES = new Set([IN_TAG, AFTER_EQUALS, '"', "'"]);
-const HIDDEN_HTML_END = [null, /<\/script>/gi, /<\/style>/gi, /-->/g, /\?>/g, /\]\]>/g, />/g, TEXTAREA_END, IN_TAG];
 
 // Where the tag that `text` holds from text[i] on in state `state`, one of
-// TAG_STATES, ends: returns the index after its > as `end`, or -1 when the
-// text ends first, with the state the tag is in there as `state`.
+// the states above, ends: returns the index after its > as `end`, or -1
+// when the text ends first, with the state the tag is in there as `state`.
 function tagEnd(text, i, state) {
   while (i < text.length) {
     if (state === '"' || state === "'") {
@@ -2212,42 +2230,56 @@ function tagEnd(text, i, state) {
   return { end: -1, state };
 }
 
-// Whether shownHtml() shows the text of what `open`, which it returns,
-// leaves open: a <textarea> element or a tag.
-const showsOpen = (open) => open === TEXTAREA_END || TAG_STATES.has(open);
+// What shownHtml() returns as `open` for a tag that a line leaves open: the
+// state that tagEnd() reads it in, and what the tag opens when it ends,
+// TEXTAREA_END for a <textarea> start tag, or null.
+const inTag = (state, then) => ({ state, then });
 
-// The parts of the text of one line of an HTML block outside the raw HTML
-// that HIDDEN_HTML_START matches, but for a <textarea> element and a tag,
-// which are shown with the text around them, given `open`, the entry of
-// HIDDEN_HTML_END that ends the one that the line above in the block leaves
-// open, or the state in TAG_STATES of the tag it leaves open, or null. The
+// Whether shownHtml() shows the text of what `open`, which it returns,
+// leaves open: a <textarea> element, as it shows no part of a tag.
+const showsOpen = (open) => open === TEXTAREA_END;
+
+// The parts of the text of one line of an HTML block that a browser shows:
+// those outside the raw HTML that HIDDEN_HTML_START matches, and the text
+// of a <textarea> element, given `open`, what the line above in the block
+// leaves open: the entry of HIDDEN_HTML_END that ends a comment, processing
+// instruction, CDATA section, declaration, <script> or <style> element,
+// TEXTAREA_END for a <textarea> element, inTag() for a tag, or null. The
 // end of each is the first match of its entry after the < that starts it,
 // or for a tag the end that tagEnd() finds, on its line or on a later line
-// of the block. Returns the parts that hold a character, as [start, end)
-// pairs in order, as `shown`, and the entry or the tag state of the one
-// that the line leaves open, or null, as `open`. Each search starts at most
-// 9 characters before the end of the match before it, and a tag is read
-// once, so the time a line takes grows in proportion to its length.
+// of the block; the text of a <textarea> element ends where TEXTAREA_END
+// finds its end tag, and the rest of that tag is read as a tag. Returns the
+// parts that hold a character, as [start, end) pairs in order, as `shown`,
+// and what the line leaves open, in the same form, or null, as `open`. Each
+// search starts at most 9 characters before the end of the match before
+// it, and a tag is read once, so the time a line takes grows in proportion
+// to its length.
 function shownHtml(text, open) {
   const shown = [];
   let i = 0;
   let from = 0; // where the shown text that runs on to i starts
   for (;;) {
-    if (TAG_STATES.has(open)) {
-      const tag = tagEnd(text, i, open);
-      if (tag.end === -1) {
-        if (from < text.length) shown.push([from, text.length]);
-        return { shown, open: tag.state };
-      }
-      i = tag.end;
-    } else if (open) {
+    if (open?.state) {
+      const tag = tagEnd(text, i, open.state);
+      if (tag.end === -1) return { shown, open: inTag(tag.state, open.then) };
+      i = from = tag.end;
+      open = open.then;
+      continue;
+    }
+    if (open) {
       open.lastIndex = i;
-      if (!open.exec(text)) {
+      const end = open.exec(text);
+      if (!end) {
         if (open === TEXTAREA_END && from < text.length) shown.push([from, text.length]);
         return { shown, open };
       }
       i = open.lastIndex;
-      if (open !== TEXTAREA_END) from = i;
+      if (open === TEXTAREA_END) {
+        if (from < end.index) shown.push([from, end.index]);
+        open = inTag(IN_TAG, null);
+        continue;
+      }
+      from = i;
     }
     HIDDEN_HTML_START.lastIndex = i;
     const start = HIDDEN_HTML_START.exec(text);
@@ -2255,8 +2287,9 @@ function shownHtml(text, open) {
       if (from < text.length) shown.push([from, text.length]);
       return { shown, open: null };
     }
-    open = HIDDEN_HTML_END[start.findIndex((group, k) => k > 0 && group !== undefined)];
-    if (!showsOpen(open) && from < start.index) shown.push([from, start.index]);
+    if (from < start.index) shown.push([from, start.index]);
+    const group = start.findIndex((g, k) => k > 0 && g !== undefined);
+    open = group < TEXTAREA_GROUP ? HIDDEN_HTML_END[group] : inTag(IN_TAG, group === TEXTAREA_GROUP ? TEXTAREA_END : null);
     i = start.index + 1;
   }
 }
@@ -2278,35 +2311,38 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // spans, as outsideCodeSpans() finds them, and without each comment,
 // processing instruction, CDATA section and declaration in it, as
 // inlineHtml() reads them inline, as none of these holds text for the
-// reader. The line is read from left to right, and whichever of a code span
-// and an autolink or raw HTML starts first holds the other: a backtick
-// inside an autolink or raw HTML, such as a comment or a tag, opens no code
-// span, and a <!-- inside a code span opens no comment. A comment,
-// processing instruction, CDATA section or declaration whose end the line
-// does not hold runs on to the first line below that holds that end when
-// `below`, the ends that the lines after this one in its paragraph hold,
-// has it, as CommonMark reads raw HTML on past a line break in a
-// paragraph: the rest of the line is left out, and that end is returned as
-// `open`. Otherwise its < is text. Given `open`, the end of the one that
-// the line above leaves open, the line is read from after the first match
-// of that end at or after `start`, and when there is none, the line is left
-// out whole and `open` is returned again. After a <textarea> start tag
-// (TEXTAREA_START_TAG), also <textarea/>, which a browser reads as one, a
-// comment, processing instruction, CDATA section or declaration is text, as
-// the element's text is escapable raw text, up to a </textarea> end tag
-// (TEXTAREA_END_TAG) on the line. A renderer passes raw HTML on as
-// written, so that end tag may also sit inside what is read here as one
-// piece of raw HTML: a comment, processing instruction, CDATA section or
-// declaration, or the quoted value of an attribute of a tag. A browser ends
-// the element at the first such end tag, as shownHtml() does on a line of
-// an HTML block, and reads the rest of that piece as raw HTML, so the rest
-// is read as shownHtml() reads a line of an HTML block: a <textarea> that it
-// opens and does not end is open after it, a tag that it leaves open, whose
-// text shownHtml() shows, ends with it, and when it leaves a comment,
-// processing instruction, CDATA section, <script> or <style> open, the rest
-// of the line is left out. Returns the text as `text`.
+// reader, nor each open tag and closing tag, as a browser shows no part of
+// a tag, such as the quoted value of an attribute; an autolink is kept, as
+// a browser shows its target as its text. The line is read from left to
+// right, and whichever of a code span and an autolink or raw HTML starts
+// first holds the other: a backtick inside an autolink or raw HTML, such
+// as a comment or a tag, opens no code span, and a <!-- inside a code span
+// opens no comment. A comment, processing instruction, CDATA section or
+// declaration whose end the line does not hold runs on to the first line
+// below that holds that end when `below`, the ends that the lines after
+// this one in its paragraph hold, has it, as CommonMark reads raw HTML on
+// past a line break in a paragraph: the rest of the line is left out, and
+// that end is returned as `open`. Otherwise its < is text, as is the < of
+// a tag whose > the line does not hold. Given `open`, the end of the one
+// that the line above leaves open, the line is read from after the first
+// match of that end at or after `start`, and when there is none, the line
+// is left out whole and `open` is returned again. After a <textarea> start
+// tag (TEXTAREA_START_TAG), also <textarea/>, which a browser reads as one,
+// raw HTML, such as a comment or a tag, is text, as the element's text is
+// escapable raw text, up to a </textarea> end tag on the line, which is
+// left out, as it is a tag. A renderer passes raw HTML on as written, so
+// that end tag may also sit inside what is read here as one piece of raw
+// HTML: a comment, processing instruction, CDATA section or declaration,
+// or the quoted value of an attribute of a tag. A browser ends the element
+// at the first such end tag, also one with an attribute, such as
+// </textarea title="x">, where TEXTAREA_END finds its start, as shownHtml()
+// does on a line of an HTML block, and reads the rest of that tag and of
+// that piece as raw HTML, so the rest is read as shownHtml() reads a line
+// of an HTML block: a <textarea> that it opens and does not end is open
+// after it, and when it leaves a tag, a comment, processing instruction,
+// CDATA section, <script> or <style> open, the rest of the line is left
+// out, as no part of any of these is shown. Returns the text as `text`.
 const TEXTAREA_START_TAG = /<textarea[\s/>]/iy;
-const TEXTAREA_END_TAG = /<\/textarea\s*>/gi;
 function shownInline(line, open = null, start = 0, below = NO_ENDS) {
   let i = 0;
   if (open) {
@@ -2323,14 +2359,14 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
     re.lastIndex = at;
     return end > at + 1 && re.test(line);
   };
-  // The first match of TEXTAREA_END_TAG at or after `at`, or null. The match
+  // The first match of TEXTAREA_END at or after `at`, or null. The match
   // found last is kept, and the line is searched again, from `at`, only when
   // that match starts before `at`; once a search finds none, none is made.
   let endTag = { index: -1 };
   const endTagFrom = (at) => {
     if (endTag && endTag.index < at) {
-      TEXTAREA_END_TAG.lastIndex = at;
-      endTag = TEXTAREA_END_TAG.exec(line);
+      TEXTAREA_END.lastIndex = at;
+      endTag = TEXTAREA_END.exec(line);
     }
     return endTag;
   };
@@ -2346,29 +2382,29 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
       }
       i = span.end;
     } else if (c === '<') {
-      const { end, unshown } = htmlAt(i);
+      const { end, unshown, tag } = htmlAt(i);
       if (inTextarea) {
         // The element ends at a </textarea> end tag inside the tag, comment,
         // processing instruction, CDATA section or declaration from i to
-        // end, which a renderer passes on as written, and what follows that
-        // end tag up to end is raw HTML.
+        // end, which a renderer passes on as written, and what follows the
+        // start of that end tag up to end is raw HTML, read from inside the
+        // end tag. That end tag is a tag, so no part of it is shown.
         const close = end > i + 1 ? endTagFrom(i) : null;
         const after = close ? close.index + close[0].length : -1;
         if (close && after <= end) {
           const rest = line.slice(after, end);
-          const { shown, open: left } = shownHtml(rest, null);
-          text += line.slice(from, after) + shown.map(([s, e]) => rest.slice(s, e)).join('');
+          const { shown, open: left } = shownHtml(rest, inTag(IN_TAG, null));
+          text += line.slice(from, close.index) + shown.map(([s, e]) => rest.slice(s, e)).join('');
           if (left && !showsOpen(left)) return { text, open: null };
           from = end;
           inTextarea = left === TEXTAREA_END;
         }
       } else if (unshown && end === i + 1 && below.has(unshown)) {
         return { text: text + line.slice(from, i), open: unshown };
-      } else if (unshown && end > i + 1) {
+      } else if ((unshown && end > i + 1) || tag) {
         text += line.slice(from, i);
         from = end;
-      } else if (!unshown && tagAt(TEXTAREA_START_TAG, i, end)) {
-        inTextarea = true;
+        if (tag && tagAt(TEXTAREA_START_TAG, i, end)) inTextarea = true;
       }
       i = end;
     } else {
@@ -2426,11 +2462,11 @@ for (const [file, { at, shown }] of datedPages) {
   // so that such a > ends no declaration. A renderer passes the text of an
   // HTML block on as written, so a backtick there also keeps no <!-- or -->
   // from starting or ending a comment. A line break inside the raw HTML that
-  // shownHtml() or shownInline() leaves out is left out with it, so it does
-  // not join the words around it with a space; one inside a <textarea>
-  // element is shown, as the element's text is, and is read as a space. What
-  // a block leaves open at its last line is not carried to the line after
-  // the block.
+  // shownHtml() or shownInline() leaves out, also one inside a tag, is left
+  // out with it, so it does not join the words around it with a space; one
+  // inside a <textarea> element, after its start tag, is shown, as the
+  // element's text is, and is read as a space. What a block leaves open at
+  // its last line is not carried to the line after the block.
   //
   // `inline` holds, for each line read with shownInline() but a table row,
   // its part in `outside`, where its text starts after the > markers,
@@ -2457,7 +2493,7 @@ for (const [file, { at, shown }] of datedPages) {
   }
   let intro = '';
   let block; // the HTML block that the line above is a line of, if any
-  let open = null; // the entry of HIDDEN_HTML_END that ends what the line above leaves open in that block
+  let open = null; // what the line above leaves open in that block, as shownHtml() returns it
   let unshown = null; // the end of the raw HTML that the line above leaves open in its paragraph
   above.forEach((l, k) => {
     const html = htmlLines.get(k);
