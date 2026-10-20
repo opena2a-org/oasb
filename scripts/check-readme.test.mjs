@@ -2019,6 +2019,48 @@ test('no link is read on the opening or closing line of a fenced code block, and
   }
 });
 
+test('a fenced code block whose fence starts a later line of a list item ends with the list items that hold it, and the lines after it are read', () => {
+  // The block ends at a line that is not indented for the list item that
+  // holds it: the link's line, after a blank line or none, in a bullet or
+  // an ordered item and in a block of backticks or of tildes; a list item
+  // that the link's line opens; the link's line indented for the outer item
+  // of two, when the block is in the inner one; and a fence of the same
+  // character, which opens another block, closed on the line above the
+  // link, rather than closing this one.
+  for (const [body, line] of [
+    ['- a\n\n  ```\n  x\n\n[y](docs/nowhere.md)\n', 16],
+    ['- a\n\n  ~~~\n  x\n[y](docs/nowhere.md)\n', 15],
+    ['1. a\n\n   ```\n   x\n\n[y](docs/nowhere.md)\n', 16],
+    ['- a\n  ```\n  x\n- [y](docs/nowhere.md)\n', 14],
+    ['- a\n  - b\n\n    ```\n    x\n\n  [y](docs/nowhere.md)\n', 17],
+    ['- a\n\n  ```\n  x\n```\n```\n[y](docs/nowhere.md)\n', 17],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+  // The block holds a line indented for the list items that hold it, past
+  // one blank line or two, in the inner item of two and further in. A fence
+  // that is not indented for the item opens a block that holds the link, and
+  // a line 4 columns in that is not indented for an item 5 columns wide is
+  // indented code.
+  for (const body of [
+    '- a\n\n  ```\n  x\n\n  [y](docs/nowhere.md)\n',
+    '- a\n\n  ```\n\n\n  [y](docs/nowhere.md)\n',
+    '- a\n  - b\n\n    ```\n    x\n\n    [y](docs/nowhere.md)\n',
+    '- a\n\n  ```\n  x\n      [y](docs/nowhere.md)\n',
+    '- a\n\n  ```\n  x\n```\n[y](docs/nowhere.md)\n```\n',
+    '10.  a\n\n     ```\n     x\n    [y](docs/nowhere.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // A heading after the list item is not in the block, so a link to it
+  // resolves.
+  const r = check('See [next](#next).\n\n- a\n\n  ```\n  x\n## Next\n');
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test('a heading after a fenced code block in a list item holds its anchor', () => {
   // The fence that closes the block starts its line, and was read as the
   // start of another block, which ran on to the end of the page.
@@ -2529,6 +2571,25 @@ test('a note on an indented line of an HTML block marks a dated page, and one af
     assert.match(r.stderr, DATED, intro);
     assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
   }
+});
+
+test('a fenced code block whose fence starts a later line of a list item ends with the list items that hold it to the other checks too', () => {
+  // A line that is not indented for the item is not in the block: it is not
+  // a command in a shell block, a comment on it is not one in a code block,
+  // and a dated page's note and link to the README on it are read.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    writeFileSync(join(dir, 'README.md'), '# Title\n\n## Quick Start\n\n- Install:\n\n  ```bash\n  # install\nnpm test\n');
+    const shell = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+    assert.equal(shell.status, 1);
+    assert.match(shell.stderr, /^README: no shell code block with a command starts before line 30; /m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const comment = check('- a\n\n  ```bash\n  x\nopena2a benchmark ./my-agent   # OASB-1 controls at level L2\n');
+  assert.equal(comment.status, 0, comment.stderr);
+  const dated = check(DATED_LINK, datedPage('- a\n\n  ```\n  x\nAs of 2026-06-03; see the [README](../README.md).\n'));
+  assert.equal(dated.status, 0, dated.stderr);
 });
 
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {
