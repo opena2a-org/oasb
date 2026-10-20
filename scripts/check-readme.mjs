@@ -113,10 +113,11 @@
 //      (a scenario file under the README's directory maps to ATLAS when it
 //      cites a technique ID), and each row of the
 //      "What Gets Tested" table, counted per source directory. The rows are
-//      read below the "## What Gets Tested" line up to the next H2, found as
-//      check 2 finds one, so a ## line of a fenced code block or of an HTML
-//      block ends no section, and a line of such a block that starts with |
-//      is no row, as its text is code or raw HTML. Without
+//      read below the "## What Gets Tested" H2 up to the next H2, each found
+//      as check 2 finds one, so a ## line of a fenced code block or of an
+//      HTML block neither starts nor ends the section, and a line of such
+//      a block that starts with | is no row, as its text is code or raw
+//      HTML. Without
 //      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
 //      --tests it reads a vitest JSON report (`vitest run --reporter=json`)
@@ -431,7 +432,8 @@ function anchors(lines) {
 // Whether a line, as parse() tags it, is an H2: a line that starts with ##
 // and white space. A ## line of a fenced code block or of an HTML block is
 // none, as its text is code or raw HTML. Checks 2 and 9 find the first H2
-// with it, and checks 5 and 7 the H2 that ends a section.
+// with it, check 5 the H2 that starts its section, and checks 5 and 7 the
+// H2 that ends a section.
 function isH2({ line, inFence, html }) {
   return !inFence && !html && /^##\s/.test(line);
 }
@@ -1659,14 +1661,15 @@ function checkCounts(tests) {
   // that holds it (and whose qualifier matches), and every test file must
   // belong to a row. The "Attack scenarios" and "npm test total" rows are
   // statements, compared above. Every copy of the table is checked. Its rows
-  // are read up to the next H2, as isH2() reads one: a ## line of a fenced
-  // code block or of an HTML block ends no section. A row is a line there
+  // are read below the "## What Gets Tested" H2 up to the next H2, each as
+  // isH2() reads one: a ## line of a fenced code block or of an HTML block
+  // neither starts nor ends the section. A row is a line there
   // that starts with |, other than one whose first cell starts with - or :-,
   // as a delimiter row's does; a line of a fenced code block or of an HTML
   // block, as parse() tags them, is none, as its text is code or raw HTML.
   const tables = [];
   for (const { prefix, lines } of documents) {
-    const start = lines.findIndex((l) => !l.inFence && /^##\s+What Gets Tested\s*$/.test(l.line));
+    const start = lines.findIndex((l) => isH2(l) && /^##\s+What Gets Tested\s*$/.test(l.line));
     const rows = [];
     for (let i = start + 1; start >= 0 && i < lines.length && !isH2(lines[i]); i++) {
       const { n, line, inFence, html } = lines[i];

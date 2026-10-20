@@ -3554,6 +3554,40 @@ test('a | line of a fenced code block or of an HTML block in the What Gets Teste
   }
 });
 
+test('a ## What Gets Tested line of a fenced code block or of an HTML block does not start the What Gets Tested section', () => {
+  // CommonMark reads the ## line as code in a fenced code block, as raw HTML
+  // in a block that <!-- opens, up to the line that holds -->, and in one
+  // that <div> opens, up to a blank line, so the section starts at the
+  // heading below the block, and the table checked is the one below that
+  // heading. The block and the blank line after it, added before the
+  // heading, move the "Pinned benchmark harness tests" row from line 36 to
+  // line 44, or 43 with the <div> block, which holds no blank line; on a
+  // page that took README text, where the README's text from the heading on
+  // moved to docs/test-catalog.md, from line 13 to line 21, or 20.
+  const TABLE = '| Category | Tests | Source | What |\n|---|---|---|---|\n| Fake | 99 | `src/atomic` | x |\n';
+  const before = (block, text) => text.replace('## What Gets Tested\n', `${block}\n## What Gets Tested\n`);
+  const wrong = (text) => text.replace('| Pinned benchmark harness tests | 3 |', '| Pinned benchmark harness tests | 4 |');
+  const ROW = 'the "Pinned benchmark harness tests" row says 4; the test report has 3 tests in src/benchmark/pinned.';
+  const at = COUNTED.indexOf('## What Gets Tested');
+  const page = (catalog) => checkCounts(COUNTED.slice(0, at), SUITE, report(SUITE), { ...SOURCES, 'docs/test-catalog.md': catalog });
+  for (const [block, line, pageLine] of [
+    [`<!--\n## What Gets Tested\n\n${TABLE}-->\n`, 44, 21],
+    [`<div>\n## What Gets Tested\n${TABLE}</div>\n`, 43, 20],
+    [`\`\`\`markdown\n## What Gets Tested\n\n${TABLE}\`\`\`\n`, 44, 21],
+  ]) {
+    const ok = checkCounts(before(block, COUNTED));
+    assert.equal(ok.status, 0, `${block}\n${ok.stderr}`);
+    const bad = checkCounts(wrong(before(block, COUNTED)));
+    assert.equal(bad.status, 1, block);
+    assert.equal(bad.stderr.trim(), `README: line ${line}: ${ROW}`, block);
+    const okPage = page(before(block, COUNTED.slice(at)));
+    assert.equal(okPage.status, 0, `${block}\n${okPage.stderr}`);
+    const badPage = page(wrong(before(block, COUNTED.slice(at))));
+    assert.equal(badPage.status, 1, block);
+    assert.equal(badPage.stderr.trim(), `README: docs/test-catalog.md line ${pageLine}: ${ROW}`, block);
+  }
+});
+
 // The README a library install holds in node_modules resolves its relative
 // links against the files of the package, not the repository. npm pack writes
 // the package as npm publish does, and the check runs on the README in it, so

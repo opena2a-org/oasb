@@ -910,6 +910,26 @@ stay on record here with the reason they changed.
   on that line instead it took 62.5 and 82.3 seconds. Each now takes 0.07
   to 0.42 seconds, and 0.18 to 0.82 seconds with the line ten times as
   long, over four runs of each.
+- `npm run check:readme` starts the "What Gets Tested" section only at a
+  `## What Gets Tested` line that is an H2 as the check reads the H2 that
+  ends the section: a line of a fenced code block or of an HTML block is
+  none, as CommonMark reads such a line as code or raw HTML, not as a
+  heading. It skipped such a line of a fenced code block, but not of an
+  HTML block. With `<!--`, `## What Gets Tested`, a blank line, a header
+  row, a delimiter row, a row that states 99 tests, `-->` and a blank line
+  right before `## What Gets Tested` in `docs/test-catalog.md`,
+  `node scripts/check-readme.mjs` exited 1 with `the "What Gets Tested"
+  table was not found`, as the section started at the commented-out line
+  and ended at the real heading, so the page's table was not checked. It
+  now exits 0, and with a wrong count in the page's table it exits 1 with
+  that row's line. `scripts/check-readme.test.mjs` also puts that
+  `## What Gets Tested` line and a table in a block that `<div>` opens,
+  which exited 1 the same way, and in a fenced code block, which the check
+  already skipped, on the README and on a page that took its text. A
+  block that `<span>` alone on a line opens (CommonMark kind 7) is still
+  not followed, so with `<span>` and `</span>` in place of the `<div>`
+  tags the section starts at the line inside it and the check exits 1,
+  reading the table in that block as the section's table.
 
 ## 0.4.1 - 2026-10-17
 
