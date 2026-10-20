@@ -2404,6 +2404,42 @@ test('a line of ``` 4 or more columns past where the text of the list items that
   assert.equal(dated.status, 0, dated.stderr);
 });
 
+test('a note on an indented line of an HTML block marks a dated page, and one after the block ends does not', () => {
+  // The line after a block tag such as <div> or <details> goes on with the
+  // HTML block that the tag opens, also in a block quote or a list item
+  // that holds the block, and the lines after <pre> go on with its block up
+  // to </pre>, past a blank line too. Their text is raw HTML, not indented
+  // code, and an href on such a line is a link.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n    As of 2026-06-03.\n</div>\n\n${see}`,
+    `<details>\n    As of 2026-06-03.\n</details>\n\n${see}`,
+    `> <div>\n>     As of 2026-06-03.\n> </div>\n\n${see}`,
+    `- <div>\n      As of 2026-06-03.\n  </div>\n\n${see}`,
+    `<pre>\nx\n\n    As of 2026-06-03.\n</pre>\n\n${see}`,
+    '<div>\n    As of 2026-06-03; see the <a href="../README.md">README</a>.\n</div>\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // A blank line ends a <div> block, and so does a ">" line in the block
+  // quote that holds it; a line without the ">" ends that block quote, and
+  // so the block. A <pre> block or a comment that ends on its first line is
+  // that line alone. The indented line after each is code.
+  for (const intro of [
+    `<div>\n\n    As of 2026-06-03.\n\n${see}`,
+    `> <div>\n>\n>     As of 2026-06-03.\n\n${see}`,
+    `> <div>\n    As of 2026-06-03.\n\n${see}`,
+    `<pre>x</pre>\n    As of 2026-06-03.\n\n${see}`,
+    `<!-- x -->\n    As of 2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+});
+
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {
   const gaps = readFileSync(join(repo, 'docs', 'known-gaps.md'), 'utf8');
   assert.match(gaps, /\]\(AUDIT-2026-06-03\.md\)/, 'docs/known-gaps.md no longer links the 2026-06-03 audit');
