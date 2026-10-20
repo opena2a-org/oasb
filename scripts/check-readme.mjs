@@ -2114,45 +2114,96 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // Nor, in a paragraph, a heading or a cell of a table row, is text inside a
 // comment, a processing instruction, a declaration or a CDATA section, as
 // shownInline() finds them, such as <!-- As of 2026-06-03. --> after a word,
-// also one that runs on from one line of a paragraph to a later one. The
-// page's first H2 is found as check 2 finds the README's: a ## line of a
-// fenced code block or of an HTML block is none.
+// also one that runs on from one line of a paragraph to a later one, but for
+// one between a <textarea> start tag and its end tag on the same line, as a
+// browser shows it as the element's text. The page's first H2 is found as
+// check 2 finds the README's: a ## line of a fenced code block or of an HTML
+// block is none.
 
 // The raw HTML that shownHtml() leaves out of the text of an HTML block,
 // each matched in any case: a <script> or a <style> element, from <script
 // or <style and white space, a > or the end of the line, a comment, from
 // <!--, a processing instruction, from <?, a CDATA section, from
 // <![CDATA[, and a declaration, from <! and a letter. HIDDEN_HTML_START
-// also matches, with its last group, a <textarea> element, from <textarea
-// and white space, a > or the end of the line, whose text shownHtml()
-// shows: it is escapable raw text, which runs to </textarea> and in which
-// the start of each of the others is literal text. Each group of
-// HIDDEN_HTML_START matches one of them, and the entry of HIDDEN_HTML_END
-// with its number is what ends it: </script>, </style>, -->, ?>, ]]>, > or
-// </textarea> (TEXTAREA_END). So a comment, processing instruction, CDATA
-// section or declaration that opens an HTML block (HTML_BLOCK_START,
-// CDATA_START) ends with the first match of the end that HTML_BLOCK_END
-// gives that block.
-const TEXTAREA_END = /<\/textarea>/gi;
-const HIDDEN_HTML_START = /(<script(?:[\s>]|$))|(<style(?:[\s>]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s>]|$))/gi;
-const HIDDEN_HTML_END = [null, /<\/script>/gi, /<\/style>/gi, /-->/g, /\?>/g, /\]\]>/g, />/g, TEXTAREA_END];
+// also matches, with its seventh group, a <textarea> element, from
+// <textarea and white space, a /, a > or the end of the line, whose text
+// shownHtml() shows: it is escapable raw text, which runs to </textarea>,
+// also with white space before its > (TEXTAREA_END), and in which the start
+// of each of the others is literal text. With its last group it matches
+// the start of any other tag, < or </ and a letter, which shownHtml() reads
+// on to its end (tagEnd()), so that a <!-- or a <textarea inside the quoted
+// value of an attribute starts nothing. Each group of HIDDEN_HTML_START but
+// the last matches one of the others, and the entry of HIDDEN_HTML_END with
+// its number is what ends it: </script>, </style>, -->, ?>, ]]>, > or
+// TEXTAREA_END; the last entry, IN_TAG, is the state tagEnd() starts in. So
+// a comment, processing instruction, CDATA section or declaration that
+// opens an HTML block (HTML_BLOCK_START, CDATA_START) ends with the first
+// match of the end that HTML_BLOCK_END gives that block.
+const TEXTAREA_END = /<\/textarea[\t\n\f\r ]*>/gi;
+const HIDDEN_HTML_START = /(<script(?:[\s>]|$))|(<style(?:[\s>]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s/>]|$))|(<\/?[a-z])/gi;
+
+// The states of a tag that tagEnd() reads, as the HTML tokenizer reads a
+// tag: in its name, an attribute name or an unquoted value (IN_TAG), after
+// the = of an attribute and the white space after it (AFTER_EQUALS), or in
+// a value in double or in single quotes, where a > is part of the value.
+const IN_TAG = 'tag';
+const AFTER_EQUALS = '=';
+const TAG_STATES = new Set([IN_TAG, AFTER_EQUALS, '"', "'"]);
+const HIDDEN_HTML_END = [null, /<\/script>/gi, /<\/style>/gi, /-->/g, /\?>/g, /\]\]>/g, />/g, TEXTAREA_END, IN_TAG];
+
+// Where the tag that `text` holds from text[i] on in state `state`, one of
+// TAG_STATES, ends: returns the index after its > as `end`, or -1 when the
+// text ends first, with the state the tag is in there as `state`.
+function tagEnd(text, i, state) {
+  while (i < text.length) {
+    if (state === '"' || state === "'") {
+      const close = text.indexOf(state, i);
+      if (close === -1) return { end: -1, state };
+      i = close + 1;
+      state = IN_TAG;
+      continue;
+    }
+    const c = text[i++];
+    if (c === '>') return { end: i, state: null };
+    if (state === AFTER_EQUALS) {
+      if (c === '"' || c === "'") state = c;
+      else if (!/[\t\n\f\r ]/.test(c)) state = IN_TAG;
+    } else if (c === '=') {
+      state = AFTER_EQUALS;
+    }
+  }
+  return { end: -1, state };
+}
+
+// Whether shownHtml() shows the text of what `open`, which it returns,
+// leaves open: a <textarea> element or a tag.
+const showsOpen = (open) => open === TEXTAREA_END || TAG_STATES.has(open);
 
 // The parts of the text of one line of an HTML block outside the raw HTML
-// that HIDDEN_HTML_START matches, but for a <textarea> element, which is
-// shown with the text around it, given `open`, the entry of HIDDEN_HTML_END
-// that ends the one that the line above in the block leaves open, or null.
-// The end of each is the first match of its entry after the < that starts
-// it, on its line or on a later line of the block. Returns the parts that
-// hold a character, as [start, end) pairs in order, as `shown`, and the
-// entry that ends the one that the line leaves open, or null, as `open`.
-// Each search starts at most 9 characters before the end of the match
-// before it, so the time a line takes grows in proportion to its length.
+// that HIDDEN_HTML_START matches, but for a <textarea> element and a tag,
+// which are shown with the text around them, given `open`, the entry of
+// HIDDEN_HTML_END that ends the one that the line above in the block leaves
+// open, or the state in TAG_STATES of the tag it leaves open, or null. The
+// end of each is the first match of its entry after the < that starts it,
+// or for a tag the end that tagEnd() finds, on its line or on a later line
+// of the block. Returns the parts that hold a character, as [start, end)
+// pairs in order, as `shown`, and the entry or the tag state of the one
+// that the line leaves open, or null, as `open`. Each search starts at most
+// 9 characters before the end of the match before it, and a tag is read
+// once, so the time a line takes grows in proportion to its length.
 function shownHtml(text, open) {
   const shown = [];
   let i = 0;
   let from = 0; // where the shown text that runs on to i starts
   for (;;) {
-    if (open) {
+    if (TAG_STATES.has(open)) {
+      const tag = tagEnd(text, i, open);
+      if (tag.end === -1) {
+        if (from < text.length) shown.push([from, text.length]);
+        return { shown, open: tag.state };
+      }
+      i = tag.end;
+    } else if (open) {
       open.lastIndex = i;
       if (!open.exec(text)) {
         if (open === TEXTAREA_END && from < text.length) shown.push([from, text.length]);
@@ -2168,7 +2219,7 @@ function shownHtml(text, open) {
       return { shown, open: null };
     }
     open = HIDDEN_HTML_END[start.findIndex((group, k) => k > 0 && group !== undefined)];
-    if (open !== TEXTAREA_END && from < start.index) shown.push([from, start.index]);
+    if (!showsOpen(open) && from < start.index) shown.push([from, start.index]);
     i = start.index + 1;
   }
 }
@@ -2178,6 +2229,12 @@ function shownHtml(text, open) {
 // declaration.
 const UNSHOWN_ENDS = ['-->', '?>', ']]>', '>'];
 const NO_ENDS = new Set();
+
+// The indentation and block quote markers that start a line: a > and the
+// up to 4 spaces or tabs after it, its optional space and the indentation
+// of up to 3 before the next marker, are a marker when a > follows them, so
+// the inner > of `>   > x` is one, and the > of `>     > x`, after 5, is text.
+const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 
 // The text of `line`, a line of a paragraph or a heading or a cell of a
 // table row, that check 9 reads the note on: the line without its code
@@ -2196,7 +2253,13 @@ const NO_ENDS = new Set();
 // `open`. Otherwise its < is text. Given `open`, the end of the one that
 // the line above leaves open, the line is read from after the first match
 // of that end at or after `start`, and when there is none, the line is left
-// out whole and `open` is returned again. Returns the text as `text`.
+// out whole and `open` is returned again. After a <textarea> start tag
+// (TEXTAREA_START_TAG), also <textarea/>, which a browser reads as one, a
+// comment, processing instruction, CDATA section or declaration is text, as
+// the element's text is escapable raw text, up to a </textarea> end tag
+// (TEXTAREA_END_TAG) on the line. Returns the text as `text`.
+const TEXTAREA_START_TAG = /<textarea[\s/>]/iy;
+const TEXTAREA_END_TAG = /<\/textarea\s*>/iy;
 function shownInline(line, open = null, start = 0, below = NO_ENDS) {
   let i = 0;
   if (open) {
@@ -2208,6 +2271,11 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
   const htmlAt = inlineHtml(line);
   let text = '';
   let from = i; // where the text not yet added starts
+  let inTextarea = false; // whether a <textarea> start tag before i has no end tag before i
+  const tagAt = (re, at, end) => {
+    re.lastIndex = at;
+    return end > at + 1 && re.test(line);
+  };
   while (i < line.length) {
     const c = line[i];
     if (c === '\\') {
@@ -2221,10 +2289,15 @@ function shownInline(line, open = null, start = 0, below = NO_ENDS) {
       i = span.end;
     } else if (c === '<') {
       const { end, unshown } = htmlAt(i);
-      if (unshown && end === i + 1 && below.has(unshown)) return { text: text + line.slice(from, i), open: unshown };
-      if (unshown && end > i + 1) {
+      if (inTextarea) {
+        if (!unshown && tagAt(TEXTAREA_END_TAG, i, end)) inTextarea = false;
+      } else if (unshown && end === i + 1 && below.has(unshown)) {
+        return { text: text + line.slice(from, i), open: unshown };
+      } else if (unshown && end > i + 1) {
         text += line.slice(from, i);
         from = end;
+      } else if (!unshown && tagAt(TEXTAREA_START_TAG, i, end)) {
+        inTextarea = true;
       }
       i = end;
     } else {
@@ -2298,7 +2371,7 @@ for (const [file, { at, shown }] of datedPages) {
     if (!at || htmlLines.has(k) || l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k)) return null;
     const [from, to, first] = at;
     const part = l.line.slice(from, to);
-    return { part, start: from === 0 ? part.match(/^\s*(?:>\s?)*/)[0].length : 0, first };
+    return { part, start: from === 0 ? part.match(QUOTE_MARKERS)[0].length : 0, first };
   });
   const below = [];
   for (let k = above.length - 1, ends = NO_ENDS; k >= 0; k--) {
@@ -2335,7 +2408,7 @@ for (const [file, { at, shown }] of datedPages) {
         text = shownParts.map(([start, end]) => raw.slice(start, end)).join('');
       }
     }
-    intro += text.replace(/^\s*(?:>\s?)+/, '') + ((open && open !== TEXTAREA_END) || unshown ? '' : ' ');
+    intro += text.replace(/^\s*(?:>\s?)+/, '') + ((open && !showsOpen(open)) || unshown ? '' : ' ');
   });
   const missing = [];
   if (!new RegExp(`\\bas of ${date}\\b`, 'i').test(intro.replace(/\s+/g, ' '))) {
