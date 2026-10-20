@@ -2592,6 +2592,60 @@ test('a fenced code block whose fence starts a later line of a list item ends wi
   assert.equal(dated.status, 0, dated.stderr);
 });
 
+test('a line of ``` or ~~~ inside an HTML block opens no code block, so a note after it marks a dated page, and one after the block ends does not', () => {
+  // Each line of an HTML block is raw HTML: in a block that a block tag
+  // such as <div> opens up to a blank line, in one that <pre> opens past a
+  // blank line up to </pre>, and in a comment up to -->. A line there that
+  // starts with 3 or more backticks or tildes, also after the > of a block
+  // quote that holds the block or a list marker, opens no fenced code block.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    '<div>\n```\n    As of 2026-06-03.\n```\n</div>\n\n' + see,
+    '<details>\n~~~\nAs of 2026-06-03.\n~~~\n</details>\n\n' + see,
+    '<pre>\n\n```\nAs of 2026-06-03.\n```\n</pre>\n\n' + see,
+    '<!--\n```\nAs of 2026-06-03.\n```\n-->\n\n' + see,
+    '> <div>\n> ```\n> As of 2026-06-03.\n> ```\n> </div>\n\n' + see,
+    '<div>\n- ```\n  As of 2026-06-03.\n  ```\n</div>\n\n' + see,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // A blank line ends a <div> block; a line without the ">" of the block
+  // quote that holds one ends that block quote, and so the block; and a
+  // comment that ends on its first line is that line alone. A fence after
+  // each opens a code block, which holds the note.
+  for (const intro of [
+    '<div>\n\n```\nAs of 2026-06-03.\n```\n\n' + see,
+    '> <div>\n```\nAs of 2026-06-03.\n```\n\n' + see,
+    '<!-- x -->\n```\nAs of 2026-06-03.\n```\n\n' + see,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+});
+
+test('a line of ``` inside an HTML block opens no code block to the other checks either', () => {
+  // The Quick Start's command in a <div> block is raw HTML, not a command
+  // block; a comment on an `opena2a benchmark` line there is not one in a
+  // code block; and an href on a line after such a line is a link.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    writeFileSync(join(dir, 'README.md'), '# Title\n\n## Quick Start\n\n<div>\n```bash\nnpm test\n```\n</div>\n');
+    const shell = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+    assert.equal(shell.status, 1);
+    assert.match(shell.stderr, /^README: no shell code block with a command starts before line 30; /m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const comment = check('<div>\n```bash\nopena2a benchmark ./my-agent   # OASB-1 controls at level L2\n```\n</div>\n');
+  assert.equal(comment.status, 0, comment.stderr);
+  const href = check('<div>\n```\n<a href="docs/nowhere.md">x</a>\n```\n</div>\n');
+  assert.equal(href.status, 1);
+  assert.match(href.stderr, /^README: line 13: link target "docs\/nowhere\.md" does not exist\.$/m);
+});
+
 test('the dated pages this repository\'s README and the pages that took its text link say "as of" their date and link to the README', () => {
   const gaps = readFileSync(join(repo, 'docs', 'known-gaps.md'), 'utf8');
   assert.match(gaps, /\]\(AUDIT-2026-06-03\.md\)/, 'docs/known-gaps.md no longer links the 2026-06-03 audit');
