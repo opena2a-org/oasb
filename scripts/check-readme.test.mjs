@@ -3161,12 +3161,12 @@ test('a <textarea> or <!-- inside the quoted value of an attribute on a line of 
 test("a dated page's note inside the quoted value of an attribute is not read, on a line of an HTML block or in a paragraph, a heading or a table cell, as a browser shows no part of a tag", () => {
   // A tag's text, with its attributes and their quoted values, also one
   // that runs on to a later line of an HTML block, is left out, and the
-  // words on either side of a tag, or of a line break inside one, join
-  // with no space, as a browser shows them. Inside a <textarea> a tag is
-  // text, which a browser shows as written, and the target of an autolink
-  // is its text. A </textarea> inside a comment ends the <textarea>, and a
-  // quoted value that a tag after it opens in the comment runs on past the
-  // comment, so the rest of the line is left out.
+  // words on either side of an inline tag, such as <span>, or of a line
+  // break inside one, join with no space, as a browser shows them. Inside
+  // a <textarea> a tag is text, which a browser shows as written, and the
+  // target of an autolink is its text. A </textarea> inside a comment ends
+  // the <textarea>, and a quoted value that a tag after it opens in the
+  // comment runs on past the comment, so the rest of the line is left out.
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
     `<div title="As of 2026-06-03.">x</div>\n\n${see}`,
@@ -3248,6 +3248,58 @@ test('a <textarea> ends at an end tag with an attribute, on a line of an HTML bl
   ]) {
     const r = check(DATED_LINK, datedPage(intro));
     assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test("a dated page's words on either side of a <br> or of a block's start or end tag are read apart, as a browser shows them on lines or in cells of their own", () => {
+  // A <br>, also <br/>, <BR> or </br>, and a start tag or an end tag of an
+  // element that a browser shows as a block, a list item, a table, or a
+  // caption, row or cell of a table, such as <p>, <div>, <li> or <td>, part
+  // the words on either side, on a line of an HTML block, also where the
+  // tag runs on to a later line, and in a paragraph, a heading or a table
+  // cell, also inside the raw HTML after a </textarea> in a comment. The
+  // words on either side of any other tag, such as <span>, <b>, <img> or
+  // <wbr>, or <brx>, whose name only starts with br, join.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Report<br>As of 2026-06-03.\n\n${see}`,
+    `Report<br/>As of 2026-06-03.\n\n${see}`,
+    `Report<BR>As of 2026-06-03.\n\n${see}`,
+    `Report</br>As of 2026-06-03.\n\n${see}`,
+    `Report<hr>As of 2026-06-03.\n\n${see}`,
+    `> Report<br>As of 2026-06-03.\n\n${see}`,
+    `### Audit<br>As of 2026-06-03\n\n${see}`,
+    `| Snapshot<br>As of 2026-06-03 | x |\n\n${see}`,
+    `| a | b |\n| - | - |\n| Report<br>As of 2026-06-03. | x |\n\n${see}`,
+    `Hello <textarea><!-- x</textarea><br>As of 2026-06-03. --> world.\n\n${see}`,
+    `<div>Report<br>As of 2026-06-03.</div>\n\n${see}`,
+    `<div>Report<br\n  class="x">As of 2026-06-03.</div>\n\n${see}`,
+    `<div>Report</div><div>As of 2026-06-03.</div>\n\n${see}`,
+    `<p>Report</p><p>As of 2026-06-03.</p>\n\n${see}`,
+    `<table><tr><td>Status</td><td>As of 2026-06-03.</td></tr></table>\n\n${see}`,
+    `<ul><li>Report</li><li>As of 2026-06-03.</li></ul>\n\n${see}`,
+    `<h3>Report</h3><p>As of 2026-06-03.</p>\n\n${see}`,
+    `> <div>Report<br>As of 2026-06-03.</div>\n\n${see}`,
+    '<p align="center"><b>OASB audit</b><br>As of 2026-06-03, see the <a href="../README.md">README</a> for the current figures.</p>\n',
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    `Report<span>As of 2026-06-03.</span>\n\n${see}`,
+    `Report<wbr>As of 2026-06-03.\n\n${see}`,
+    `Report<img src="x.png">As of 2026-06-03.\n\n${see}`,
+    `Report<brx>As of 2026-06-03.\n\n${see}`,
+    `### Audit<b>As of 2026-06-03</b>\n\n${see}`,
+    `| a | b |\n| - | - |\n| Report<b>As of 2026-06-03.</b> | x |\n\n${see}`,
+    `<div>Report<b>As of 2026-06-03.</b></div>\n\n${see}`,
+    `<div>Report<img src="x.png">As of 2026-06-03.</div>\n\n${see}`,
+    `<div>Report<br-x>As of 2026-06-03.</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
   }
 });
 

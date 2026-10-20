@@ -941,10 +941,15 @@ stay on record here with the reason they changed.
   as does `Hello <span title="As of 2026-06-03.">x</span> world.`, and so
   do the three lines `<div title="`, `As of 2026-06-03.` and `">x</div>`.
   `<div title="x">As of 2026-06-03.</div>` still exits 0. The words on
-  either side of a tag join with no space, as a browser shows them, so
+  either side of an inline tag, such as `<span>`, join with no space, as a
+  browser shows them, so
   `<div>As<span class="x"> of 2026-06-03.</span></div>` exited 1 and now
   exits 0, as does `Hello A<span class="x">s of 2026-06-03.</span> world.`.
-  Inside a `<textarea>` a tag is text, so
+  A `<br>` and a start tag or an end tag of a block, a list item or a table
+  cell, such as `<p>`, `<div>`, `<li>` or `<td>`, part the words on either
+  side, as a browser shows them on lines or in cells of their own, so
+  `Report<br>As of 2026-06-03.` and `<p>Report</p><p>As of 2026-06-03.</p>`
+  still exit 0. Inside a `<textarea>` a tag is text, so
   `<textarea>As <b>of</b> 2026-06-03.</textarea>` still exits 1. A
   `</textarea>` inside a comment ends the `<textarea>`, and a quoted value
   that a tag after it opens there runs on past the comment, so
