@@ -550,6 +550,37 @@ stay on record here with the reason they changed.
   block, a comment on an `opena2a benchmark` line there is no longer read
   as one in a code block, and a dated page's "as of" note and link to the
   README there now count.
+- `npm run check:readme` opens no fenced code block on a line of an HTML
+  block. A line of 3 or more backticks or tildes there, also after a block
+  quote's `>` or a list marker, opened one, and no "as of" note or link was
+  read up to the fence that closed it, while CommonMark reads each line of
+  the block as raw HTML: up to a blank line after a block tag such as
+  `<div>`, and up to the line that holds the block's end after `<pre>`, a
+  comment and the other kinds the check follows. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the lines `<div>`, `` ``` ``,
+  `    As of 2026-06-03.`, `` ``` ``, `</div>`, a blank line and
+  `See the [README](../README.md) for the current figures.` after that
+  page's H1 and a blank line, the check exited 1 with `is a dated page, so
+  above its first H2 it must say "as of 2026-06-03"`, and now exits 0. So
+  does the note between two `~~~` lines in `<details>`, between two
+  `` ``` `` lines after `<pre>` and a blank line, in a comment, in a
+  `<div>` in a block quote with `` > ``` `` lines, and after `` - ``` ``
+  in a `<div>`. A fence after the blank line that ends a `<div>` block, on
+  a line without the `>` of a block quote that holds one, or after a
+  comment that ends on its first line still opens a code block, and the
+  note in it still fails the check. The other checks read these lines the
+  same way: `<div>`, `` ```bash ``, `npm test`, `` ``` `` and `</div>` as
+  the Quick Start's only command exited 0 and now exit 1 with `no shell
+  code block with a command starts before line 30`; a comment on an
+  `opena2a benchmark` line there is no longer checked; and an `href` or an
+  inline link to `docs/nowhere.md` between two such lines exited 0 and now
+  exits 1 with `link target "docs/nowhere.md" does not exist`, as on the
+  other lines of an HTML block. A list marker on a line of an HTML block
+  still opens a list item for the check, so `<div>`, `` - ``` ``, a blank
+  line and the note indented 4 spaces, which CommonMark reads as code, now
+  pass, as the same lines with `- x` do. A block that `<span>` alone on a
+  line opens (CommonMark kind 7) is not followed, so a fence there still
+  opens a code block.
 
 ## 0.4.1 - 2026-10-17
 
