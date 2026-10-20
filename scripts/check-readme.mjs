@@ -748,14 +748,14 @@ function hrefTargets(line) {
 // on a line that starts inside a code span an earlier line of the
 // paragraph opened. `open` carries what an earlier line of the paragraph
 // left open: link text, as inlineDestinations reads it, and a code span.
-// open.code reads the code spans of the paragraph's lines, as
-// paragraphCodeSpans does, for inlineDestinations, which meets each run of
-// backticks after the autolinks, raw HTML and link destinations that start
-// before it. An href is read on the part of the line outside the code spans
-// that run on to it from an earlier line or from it on to a later one.
-function linkTargets(line, open) {
+// `spans`, which open.code gives for the line, reads the code spans of the
+// paragraph's lines, as paragraphCodeSpans does, for inlineDestinations,
+// which meets each run of backticks after the autolinks, raw HTML and link
+// destinations that start before it. An href is read on the part of the
+// line outside the code spans that run on to it from an earlier line or
+// from it on to a later one.
+function linkTargets(line, open, spans) {
   const targets = [];
-  const spans = open.code();
   const def = spans.from === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
   targets.push(...inlineDestinations(line, open, spans));
@@ -1224,9 +1224,14 @@ function blockReader(lines, quotedFences) {
 // the index in `lines` of each line of a fenced code block inside a block
 // quote, its fences included, and of each line of indented code on which it
 // reads no inline link or definition, unless blockReader() reads that line
-// as a line of an HTML block: its text is then raw HTML, not code.
+// as a line of an HTML block: its text is then raw HTML, not code. Given a
+// map as `outside`, the reader sets in it, for the index in `lines` of each
+// line other than a table row that it reads inline links on, the part of
+// the line that it reads hrefs on: the line outside the code spans that run
+// on to it from an earlier line of its paragraph or from it on to a later
+// one.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
-function linkReader(lines, codeLines) {
+function linkReader(lines, codeLines, outside) {
   let open = noOpenLinkText();
   const read = blockReader(lines, codeLines);
   // Whether lines[k] is text that goes on with the paragraph that the
@@ -1263,7 +1268,9 @@ function linkReader(lines, codeLines) {
       return hrefTargets(l.line);
     }
     if (rest === 'row') return rowTargets(block.row, block.columns);
-    const targets = linkTargets(l.line, open);
+    const spans = open.code();
+    const targets = linkTargets(l.line, open, spans);
+    outside?.set(j, l.line.slice(spans.from, spans.to));
     if (!paragraph) open = noOpenLinkText();
     return targets;
   };
@@ -1975,15 +1982,18 @@ for (const [file, { at, shown }] of datedPages) {
   // of a fenced code block inside a block quote and each line of indented
   // code outside an HTML block on which the reader reads no inline link.
   const codeLines = new Set();
-  const read = linkReader(above, codeLines);
+  const outside = new Map();
+  const read = linkReader(above, codeLines, outside);
   const linksReadme = above.map((l) => read(l).some(toReadme)).includes(true);
   // The note is read without code spans and > markers, and without the
   // lines of a fenced code block or in `codeLines`. A line of an HTML block
   // that blockReader() follows is not among them, also where lineStart()
-  // reads it as indented code, as its text is raw HTML.
+  // reads it as indented code, as its text is raw HTML. A code span may run
+  // on from one line of a paragraph to a later one, so the note is read, as
+  // an href is, on the part of each line in `outside`, and on a table row
+  // whole, without the code spans in it.
   const intro = above.map((l, k) =>
-    (l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k) ? '' : l.line)
-      .replace(/`[^`]*`/g, '')
+    (l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k) ? '' : withoutCodeSpans(outside.get(k) ?? l.line))
       .replace(/^\s*(?:>\s?)+/, ''),
   );
   const missing = [];

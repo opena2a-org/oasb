@@ -515,6 +515,22 @@ stay on record here with the reason they changed.
   `` ```text [README](../README.md) `` below `As of 2026-06-03.`, passed
   check 9, and now fails it with
   `it must link to the README for the current figures`.
+- `npm run check:readme` reads a dated page's "as of" note without the code
+  spans that run on from one line of its paragraph to a later one, as
+  check 4 reads the page's links. It took out the code spans of each line
+  on its own, so a note inside a span that a backtick on an earlier line
+  opens counted. With `` a ` ``, `As of 2026-06-03.`, `` d` ``, a blank
+  line and `See the [README](../README.md) for the current figures.` after
+  the H1 of `docs/AUDIT-2026-06-03.md`, which the README links, and a
+  blank line, the check exited 0, and now exits 1 with
+  `it must say "as of 2026-06-03"`. So do `` a `As of `` and
+  `` 2026-06-03.` d `` on two lines, and the three lines in a block quote
+  or in a list item whose paragraph goes on lazily. Inside a line, a
+  backtick after a backslash is now text, and a span that a run of two
+  backticks opens now ends at the next run of two, as check 4 reads them:
+  with `` \`As of 2026-06-03.\` `` before that link, on its line, the
+  check exited 1 and now exits 0, and with ``` `` As of 2026-06-03 ` `` ```
+  there instead, it exited 0 and now exits 1.
 
 ## 0.4.1 - 2026-10-17
 
