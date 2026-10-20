@@ -2921,6 +2921,28 @@ test('an href between backticks on a line of an HTML block is a link, as a backt
   assert.equal(dated.status, 0, dated.stderr);
 });
 
+test('a line of an HTML block of 50,000 tag starts that no > follows is checked in under 2 seconds', () => {
+  // Each < was read on to the end of the line for an href, so the time grew
+  // with the square of the line's length: the page with the line of <a took
+  // 17.8 seconds to check.
+  const see = 'See the [README](../README.md) for the current figures.';
+  for (const unit of ['<a', '<a b="', '<textarea ']) {
+    const line = unit.repeat(50000);
+    const started = process.hrtime.bigint();
+    const r = check(DATED_LINK, datedPage(`As of 2026-06-03.\n\n<div>\n${line}\n</div>\n\n${see}\n`));
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters of ${unit}`);
+  }
+  // A tag that no > ends reads on past the other < on the line to an href,
+  // and a tag that a > ends holds no href after it.
+  const open = check(`<div>\n${'<a'.repeat(50000)} href="docs/nowhere.md">x</a>\n</div>\n`);
+  assert.equal(open.status, 1);
+  assert.match(open.stderr, /^README: line 12: link target "docs\/nowhere\.md" does not exist\.$/m);
+  const ended = check(`<div>\n${'<a>'.repeat(50000)} href="docs/nowhere.md"\n</div>\n`);
+  assert.equal(ended.status, 0, ended.stderr);
+});
+
 test('a note and link on the lines after the line that ends an HTML block are read with the code spans of their paragraph', () => {
   // lineStart() reads the lines of a comment after its first, and the
   // lines after the one that ends it, as one paragraph, each line of which
