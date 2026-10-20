@@ -3041,6 +3041,80 @@ test('a note inside a <textarea> marks a dated page, also inside a comment, proc
   }
 });
 
+test('a note in a comment inside a <textarea> in a paragraph, a heading or a table cell marks a dated page, as a browser shows it as the text of the element', () => {
+  // <textarea/> is a start tag to a browser, and opens no HTML block, so the
+  // line is a paragraph. A comment after the element's end tag, also one
+  // with a space before its >, still hides the note.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Hello <textarea><!-- As of 2026-06-03. --></textarea> world.\n\n${see}`,
+    `<textarea/><!-- As of 2026-06-03. --></textarea>\n\n${see}`,
+    `Hello <TEXTAREA rows="2"><?note As of 2026-06-03. ?></TEXTAREA> world.\n\n${see}`,
+    `> Hello <textarea><!-- As of 2026-06-03. --></textarea> world.\n\n${see}`,
+    `### Hello <textarea><!-- As of 2026-06-03. --></textarea> world\n\n${see}`,
+    `| a | b |\n| - | - |\n| <textarea><!-- As of 2026-06-03. --></textarea> | x |\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    `Hello <textarea>x</textarea> <!-- As of 2026-06-03. --> world.\n\n${see}`,
+    `Hello <textarea>x</textarea > <!-- As of 2026-06-03. --> world.\n\n${see}`,
+    `Hello <!-- <textarea> As of 2026-06-03. --> world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+  }
+});
+
+test('a <textarea> or <!-- inside the quoted value of an attribute on a line of an HTML block starts nothing, and a </textarea > end tag ends a <textarea>', () => {
+  // A browser reads a < inside an attribute value as part of the value, so
+  // a comment after it still hides the note, and a <!-- there hides none.
+  // HTML ends a <textarea> at an end tag with white space before its >.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div title="<textarea>">\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div><img alt="<textarea>"> <!-- As of 2026-06-03. --></div>\n\n${see}`,
+    `<div title='<textarea>'>\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div\n  title="<textarea>">\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div title="a\n<textarea>">\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div>\n<textarea>\nx\n</textarea >\n<!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div>\n<textarea>x</TEXTAREA\t> <!-- As of 2026-06-03. -->\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./, intro);
+  }
+  for (const intro of [
+    `<div title="<!--">\nAs of 2026-06-03.\n</div>\n\n${see}`,
+    `<div title = '<script>'>\nAs of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<textarea/><!-- As of 2026-06-03. --></textarea>\n</div>\n\n${see}`,
+    `<div>\n<textarea>\n<!-- As of 2026-06-03. </textarea >\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test('a declaration that runs on in a nested block quote is not ended by a > marker of the inner quote after more than one space', () => {
+  // `>   > ` is two block quote markers, so the second > ends no
+  // declaration; after 5 spaces the > is text in the paragraph, and ends it.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `> > Hello <!NOTE x\n>   > As of 2026-06-03. y> world.\n\n${see}`,
+    `> > Hello <!NOTE x\n>    > As of 2026-06-03. y> world.\n\n${see}`,
+    `> > Hello <!NOTE x\n> > As of 2026-06-03. y> world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+  }
+  const r = check(DATED_LINK, datedPage(`> Hello <!NOTE x\n>     > As of 2026-06-03. world.\n\n${see}`));
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test('a note between backticks on a line of an HTML block marks a dated page, as a backtick in raw HTML is text, and a backtick there keeps no comment from opening', () => {
   // A renderer passes the text of an HTML block on as written, so a
   // backtick there opens no code span, and the note is read on the whole

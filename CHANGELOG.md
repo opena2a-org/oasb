@@ -828,6 +828,27 @@ stay on record here with the reason they changed.
   span, which both renderers show as code, and the note there still fails
   the check. The entry above that says the code spans of the block's lines
   still hold no note no longer holds.
+- `npm run check:readme` reads a dated page's "as of" note as a browser
+  shows it in four more places. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and these lines after that page's H1 and a
+  blank line, then a blank line and
+  `See the [README](../README.md) for the current figures.`:
+  `Hello <textarea><!-- As of 2026-06-03. --></textarea> world.` exited 1
+  with `is a dated page, so above its first H2 it must say "as of
+  2026-06-03"`, and now exits 0, as the text of a `<textarea>` in a
+  paragraph, a heading or a table cell is escapable raw text, in which a
+  `<!--` starts no comment; so does
+  `<textarea/><!-- As of 2026-06-03. --></textarea>`, which a browser reads
+  as a start tag. The lines `<div title="<textarea>">`,
+  `<!-- As of 2026-06-03. -->` and `</div>` exited 0 and now exit 1: a
+  `<textarea>` or `<!--` inside the quoted value of an attribute on a line
+  of an HTML block starts nothing, so `<div title="<!--">`,
+  `As of 2026-06-03.` and `</div>` exited 1 and now exit 0. The lines
+  `<div>`, `<textarea>`, `x`, `</textarea >`, `<!-- As of 2026-06-03. -->`
+  and `</div>` exited 0 and now exit 1, as `</textarea >` ends the
+  `<textarea>`. The lines `> > Hello <!NOTE x` and
+  `>   > As of 2026-06-03. y> world.` exited 0 and now exit 1: the second
+  `>` of `>   >` is a block quote marker, which ends no declaration.
 
 ## 0.4.1 - 2026-10-17
 
