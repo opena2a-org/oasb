@@ -441,9 +441,11 @@ stay on record here with the reason they changed.
   with `is a dated page, so above its first H2 it must say "as of
   2026-06-03"`. So does the note 4 spaces past a block quote's `> `, after a
   tab, or 4 spaces past where a list item's text starts. A note on an
-  indented line that goes on with a paragraph passes, as it did. The check
-  does not track HTML blocks, so a note indented 4 spaces inside a `<div>`
-  now fails the check too; it passed.
+  indented line that goes on with a paragraph passes, as it did, and so
+  does a note indented 4 spaces on the line after `<div>` or `<details>`:
+  that line goes on with the HTML block the tag opens, so its text is raw
+  HTML, not code. After the blank line that ends such a block, the note is
+  code and fails the check.
 - `npm run check:readme` opens a fenced code block on a line whose first
   characters other than white space are 3 or more backticks or tildes only
   when they start at most 3 columns past where the text of the list items
