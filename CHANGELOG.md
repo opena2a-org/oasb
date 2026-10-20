@@ -967,6 +967,29 @@ stay on record here with the reason they changed.
   three lines `<div>`, `<textarea>x</textarea title="As of 2026-06-03.">`
   and `</div>` exited 0 and now exit 1, as does
   `Hello <textarea><!-- </textarea title="As of 2026-06-03."> --> world.`.
+- `npm run check:readme` starts the "MITRE ATLAS Coverage" section only at
+  a `## MITRE ATLAS Coverage` line that is an H2 as the check reads the H2
+  that ends the section: a line of a fenced code block or of an HTML block
+  is none, as CommonMark reads such a line as code or raw HTML, not as a
+  heading. It skipped such a line of a fenced code block, but not of an
+  HTML block. With `<!--`, `## MITRE ATLAS Coverage`, `-->` and a blank
+  line right before `## MITRE ATLAS Coverage` in the README, and `E2E-003`
+  in place of `E2E-003 (skipped)` in the "Exfiltration via Cyber Means" row
+  of `docs/mitre-atlas-mapping.md`, `node scripts/check-readme.mjs` exited
+  0, as the section started at the commented-out line and ended at the
+  real heading, so the real section and the page it links to were not
+  read. It now exits 1 with `docs/mitre-atlas-mapping.md line 15: E2E-003
+  is listed as MITRE ATLAS coverage, but every test in
+  src/e2e/E2E-003.live-network-detection.test.ts is skipped`. With `<div>`
+  and `</div>` in place of `<!--` and `-->` it exited 0 the same way and
+  now exits 1 with that line; with the `##` line in a fenced code block
+  instead, which the check already skipped, it exited 1 and still does.
+  `scripts/check-readme.test.mjs` puts that `## MITRE ATLAS Coverage` line
+  in each of the three blocks right before the heading, with E2E-003
+  listed in the section's table and in a page the section links to. A
+  block that `<span>` alone on a line opens (CommonMark kind 7) is still
+  not followed, so with `<span>` and `</span>` in place of `<!--` and
+  `-->` the section starts at the line inside it and the check exits 0.
 
 ## 0.4.1 - 2026-10-17
 

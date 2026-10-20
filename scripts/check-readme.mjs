@@ -137,9 +137,11 @@
 //      command; remove it when the CLI ships the command.
 //   7. a scenario test that a MITRE ATLAS coverage table lists, and whose
 //      tests are all skipped, is marked as skipped there. The tables read are
-//      those in the README's "MITRE ATLAS Coverage" section, which runs up to
-//      the next H2, found as check 2 finds one, and in each .md page that
-//      section links to. A table lists a test by the ID its file
+//      those in the README's "MITRE ATLAS Coverage" section and in each .md
+//      page that section links to. The section runs from the
+//      "## MITRE ATLAS Coverage" H2 up to the next H2, each found as check 2
+//      finds one, so a ## line of a fenced code block or of an HTML block
+//      neither starts nor ends it. A table lists a test by the ID its file
 //      name starts with (E2E-003), or several with one prefix
 //      (AT-NET-001/002); a skipped one must be written out in full and
 //      followed by "(skipped", as in "E2E-003 (skipped)". Like the counts,
@@ -432,8 +434,8 @@ function anchors(lines) {
 // Whether a line, as parse() tags it, is an H2: a line that starts with ##
 // and white space. A ## line of a fenced code block or of an HTML block is
 // none, as its text is code or raw HTML. Checks 2 and 9 find the first H2
-// with it, check 5 the H2 that starts its section, and checks 5 and 7 the
-// H2 that ends a section.
+// with it, and checks 5 and 7 the H2 that starts a section and the H2 that
+// ends it.
 function isH2({ line, inFence, html }) {
   return !inFence && !html && /^##\s/.test(line);
 }
@@ -1761,9 +1763,10 @@ function checkSkippedCoverage(tests) {
   }
   const skipped = new Map([...byId].filter(([, v]) => v.states.every((s) => s === 'skipped')));
 
-  // The README's MITRE ATLAS Coverage section, up to the next H2 as isH2()
-  // reads one, and the .md pages it links to.
-  const start = readme.findIndex((l) => !l.inFence && /^##\s+MITRE ATLAS Coverage\s*$/.test(l.line));
+  // The README's MITRE ATLAS Coverage section, from its H2 up to the next H2,
+  // each as isH2() reads one, so a ## line of a fenced code block or of an
+  // HTML block neither starts nor ends it, and the .md pages it links to.
+  const start = readme.findIndex((l) => isH2(l) && /^##\s+MITRE ATLAS Coverage\s*$/.test(l.line));
   if (start < 0) return;
   let end = start + 1;
   while (end < readme.length && !isH2(readme[end])) end++;
