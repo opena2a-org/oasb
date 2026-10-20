@@ -611,6 +611,30 @@ test('a directory whose name ends in .md in the MITRE ATLAS Coverage section is 
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('a ## line of a fenced code block or of an HTML block does not end the MITRE ATLAS Coverage section, and a ## line outside one does', () => {
+  // CommonMark reads the ## line as code in a fenced code block, and as raw
+  // HTML in a block that <div> opens, up to a blank line, so the table and
+  // the link below the block are still in the section. withAtlas() puts the
+  // row at line 45; the four lines added after the heading move it to 49.
+  const below = (block, readme) => readme.replace('## MITRE ATLAS Coverage\n', `## MITRE ATLAS Coverage\n\n${block}`);
+  const listed = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001, E2E-003 |');
+  const linked = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](docs/atlas.md).');
+  const page = withPage('| E2E-003 | Outbound TCP |');
+  for (const block of ['<div>\n## Note\n</div>\n', '```bash\n## Note\n```\n']) {
+    let r = checkCounts(below(block, listed));
+    assert.equal(r.status, 1, block);
+    assert.equal(r.stderr.trim(), `README: line 49: ${SKIPPED_E2E_003}`, block);
+    r = checkCounts(below(block, linked), SUITE, report(SUITE), page);
+    assert.equal(r.status, 1, block);
+    assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`, block);
+  }
+  // An H2 ends the section, so what is below it is not read.
+  let r = checkCounts(below('## Note\n', listed));
+  assert.equal(r.status, 0, r.stderr);
+  r = checkCounts(below('## Note\n', linked), SUITE, report(SUITE), page);
+  assert.equal(r.status, 0, r.stderr);
+});
+
 // "constructor" and "toString" are inherited by every object, so a lookup
 // that is not limited to the counts' own keys finds a function for them.
 for (const key of ['nosuchkey', 'constructor', 'toString']) {
@@ -3308,6 +3332,38 @@ test('the counts and the What Gets Tested table on a page that took README text 
   assert.equal(gone.status, 1);
   assert.match(gone.stderr, /^README: the "What Gets Tested" table was not found; /m);
   assert.match(gone.stderr, /^README: the MITRE ATLAS Coverage line \(.*\) was not found; /m);
+});
+
+test('a ## line of a fenced code block or of an HTML block does not end the What Gets Tested section, and a ## line outside one does', () => {
+  // CommonMark reads the ## line as code in a fenced code block, and as raw
+  // HTML in a block that <div> opens, up to a blank line, so the table below
+  // it is still in the section. The four lines added after the heading move
+  // the "Pinned benchmark harness tests" row from line 36 to line 40.
+  const below = (block, text) => text.replace('## What Gets Tested\n', `## What Gets Tested\n\n${block}`);
+  const wrong = (text) => text.replace('| Pinned benchmark harness tests | 3 |', '| Pinned benchmark harness tests | 4 |');
+  const ROW = 'the "Pinned benchmark harness tests" row says 4; the test report has 3 tests in src/benchmark/pinned.';
+  for (const block of ['<div>\n## Note\n</div>\n', '```bash\n## Note\n```\n']) {
+    const ok = checkCounts(below(block, COUNTED));
+    assert.equal(ok.status, 0, `${block}\n${ok.stderr}`);
+    const bad = checkCounts(wrong(below(block, COUNTED)));
+    assert.equal(bad.status, 1, block);
+    assert.equal(bad.stderr.trim(), `README: line 40: ${ROW}`, block);
+  }
+  // The same on a page that took README text, where the README's text from
+  // the heading on moved to docs/test-catalog.md.
+  const at = COUNTED.indexOf('## What Gets Tested');
+  const page = (catalog) => checkCounts(COUNTED.slice(0, at), SUITE, report(SUITE), { ...SOURCES, 'docs/test-catalog.md': catalog });
+  const catalog = below('<div>\n## Note\n</div>\n', COUNTED.slice(at));
+  const ok = page(catalog);
+  assert.equal(ok.status, 0, ok.stderr);
+  const bad = page(wrong(catalog));
+  assert.equal(bad.status, 1);
+  assert.equal(bad.stderr.trim(), `README: docs/test-catalog.md line 17: ${ROW}`);
+  // An H2 ends the section, so the table below it is not read.
+  for (const r of [checkCounts(below('## Note\n', COUNTED)), page(below('## Note\n', COUNTED.slice(at)))]) {
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /^README: the "What Gets Tested" table was not found; /m);
+  }
 });
 
 // The README a library install holds in node_modules resolves its relative

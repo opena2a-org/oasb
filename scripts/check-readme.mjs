@@ -112,7 +112,10 @@
 //      comments, the scenario counts in the prose, the MITRE ATLAS counts
 //      (a scenario file under the README's directory maps to ATLAS when it
 //      cites a technique ID), and each row of the
-//      "What Gets Tested" table, counted per source directory. Without
+//      "What Gets Tested" table, counted per source directory. The rows are
+//      read below the "## What Gets Tested" line up to the next H2, found as
+//      check 2 finds one, so a ## line of a fenced code block or of an HTML
+//      block ends no section. Without
 //      --tests the check collects the suite with vitest (no test runs), so a
 //      "passing" count is compared with the tests that are not skipped; with
 //      --tests it reads a vitest JSON report (`vitest run --reporter=json`)
@@ -132,8 +135,9 @@
 //      command; remove it when the CLI ships the command.
 //   7. a scenario test that a MITRE ATLAS coverage table lists, and whose
 //      tests are all skipped, is marked as skipped there. The tables read are
-//      those in the README's "MITRE ATLAS Coverage" section and in each .md
-//      page that section links to. A table lists a test by the ID its file
+//      those in the README's "MITRE ATLAS Coverage" section, which runs up to
+//      the next H2, found as check 2 finds one, and in each .md page that
+//      section links to. A table lists a test by the ID its file
 //      name starts with (E2E-003), or several with one prefix
 //      (AT-NET-001/002); a skipped one must be written out in full and
 //      followed by "(skipped", as in "E2E-003 (skipped)". Like the counts,
@@ -423,6 +427,14 @@ function anchors(lines) {
   return out;
 }
 
+// Whether a line, as parse() tags it, is an H2: a line that starts with ##
+// and white space. A ## line of a fenced code block or of an HTML block is
+// none, as its text is code or raw HTML. Checks 2 and 9 find the first H2
+// with it, and checks 5 and 7 the H2 that ends a section.
+function isH2({ line, inFence, html }) {
+  return !inFence && !html && /^##\s/.test(line);
+}
+
 let readmeText;
 try {
   readmeText = readFileSync(readmePath, 'utf8');
@@ -460,7 +472,7 @@ if (readme.length >= MAX_LINES) {
 // 2. Quick Start is the first H2 and sits near the top. A ## line of a
 // fenced code block or of an HTML block, as parse() tags them, is no H2, as
 // its text is code or raw HTML.
-const firstH2 = readme.find((l) => !l.inFence && !l.html && /^##\s/.test(l.line));
+const firstH2 = readme.find(isH2);
 if (!firstH2) {
   fail('README has no H2 heading; the first one must be "## Quick Start".');
 } else {
@@ -1618,12 +1630,14 @@ function checkCounts(tests) {
   // text: each test file belongs to the row with the longest Source directory
   // that holds it (and whose qualifier matches), and every test file must
   // belong to a row. The "Attack scenarios" and "npm test total" rows are
-  // statements, compared above. Every copy of the table is checked.
+  // statements, compared above. Every copy of the table is checked. Its rows
+  // are read up to the next H2, as isH2() reads one: a ## line of a fenced
+  // code block or of an HTML block ends no section.
   const tables = [];
   for (const { prefix, lines } of documents) {
     const start = lines.findIndex((l) => !l.inFence && /^##\s+What Gets Tested\s*$/.test(l.line));
     const rows = [];
-    for (let i = start + 1; start >= 0 && i < lines.length && !/^##\s/.test(lines[i].line); i++) {
+    for (let i = start + 1; start >= 0 && i < lines.length && !isH2(lines[i]); i++) {
       const { n, line } = lines[i];
       if (!line.startsWith('|') || /^\|\s*:?-/.test(line)) continue;
       rows.push({ n, cells: line.split('|').slice(1, -1).map((c) => c.trim()) });
@@ -1712,11 +1726,12 @@ function checkSkippedCoverage(tests) {
   }
   const skipped = new Map([...byId].filter(([, v]) => v.states.every((s) => s === 'skipped')));
 
-  // The README's MITRE ATLAS Coverage section, and the .md pages it links to.
+  // The README's MITRE ATLAS Coverage section, up to the next H2 as isH2()
+  // reads one, and the .md pages it links to.
   const start = readme.findIndex((l) => !l.inFence && /^##\s+MITRE ATLAS Coverage\s*$/.test(l.line));
   if (start < 0) return;
   let end = start + 1;
-  while (end < readme.length && (readme[end].inFence || !/^##\s/.test(readme[end].line))) end++;
+  while (end < readme.length && !isH2(readme[end])) end++;
   const section = readme.slice(start + 1, end);
   const pages = [{ lines: section, prefix: '' }];
   const seen = new Set([readmePath]);
@@ -2236,7 +2251,7 @@ for (const [file, { at, shown }] of datedPages) {
   const date = basename(file).match(DATE_IN_NAME)[0];
   const page = readPage(file);
   if (!page) continue; // readPage has reported it
-  const h2 = page.findIndex((l) => !l.inFence && !l.html && /^##\s/.test(l.line));
+  const h2 = page.findIndex(isH2);
   const above = h2 === -1 ? page : page.slice(0, h2);
   const toReadme = (target) => {
     const pathPart = target.split('#')[0];
