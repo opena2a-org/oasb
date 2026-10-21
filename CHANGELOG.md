@@ -20,7 +20,9 @@ stay on record here with the reason they changed.
   `benchmark` only: a record labelled `wild` stops it with exit 1, as do
   a record it refuses for another field and a `runId` two records share.
   It exits 2 when the records measured no cell, and `--json` prints the
-  edition with the rate of each run that counts for a cell.
+  edition with the rate of each run that counts for a cell. `--json`
+  writes DEL and the C1 control characters in text from a record, U+007F
+  to U+009F, as `\u` escapes, such as `\u009b`, as the grid does.
   `docs/bait-compliance.md` describes the record and these rules, the
   README's Documentation list and `docs/how-it-works.md` link it, and
   `scripts/bait-edition.test.mjs` checks the rules and the page. The test

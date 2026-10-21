@@ -329,6 +329,26 @@ test('the command exits 0 with the grid when a cell is measured, 2 when none is,
   assert.deepEqual(edition.harnesses, [{ name: 'example-runner', version: '0.1.0', runs: 12 }]);
 });
 
+test('--json writes DEL and the C1 control characters in text from a record as \\u escapes, and its JSON reads back as the edition', () => {
+  // U+007F to U+009F. U+009B and U+009D start a control sequence and an
+  // operating system command, as ESC [ and ESC ] do.
+  const controls = Array.from({ length: 0x9f - 0x7f + 1 }, (_, i) => String.fromCharCode(0x7f + i));
+  const name = `agent ${controls.join('')}\u001b[2J`;
+  const runs = ['j1', 'j2', 'j3'].map((runId) =>
+    record(runId, name, { harness: { name: 'runner \u009b2J', version: '0.1.0' }, trials: pi('completed') }),
+  );
+  const json = runOn(runs, ['--json']);
+  assert.equal(json.status, 0, json.stderr);
+  // The code points of the control characters on stdout other than line
+  // feed, so that a failure prints none of the characters themselves.
+  const raw =[...json.stdout].filter((c) => /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(c)).map((c) => c.charCodeAt(0).toString(16));
+  assert.deepEqual(raw, []);
+  const escaped = controls.map((c) => `\\u00${c.charCodeAt(0).toString(16)}`).join('');
+  assert.ok(json.stdout.includes(`"name": "agent ${escaped}\\u001b[2J",`), json.stdout);
+  assert.ok(json.stdout.includes('"name": "runner \\u009b2J",'), json.stdout);
+  assert.deepEqual(JSON.parse(json.stdout), JSON.parse(JSON.stringify(buildEdition(runs))));
+});
+
 test('--help exits 0, and no path, an option the command does not take or two of its options exits 1 with the usage line', () => {
   const usage = 'Usage: node scripts/bait-edition.mjs [--json | --svg | --runs] <record.json | directory>...\n';
   const run = (...args) => spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
