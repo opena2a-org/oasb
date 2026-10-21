@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
+import type { VitestPluginContext } from 'vitest/node';
 
 // E2E-001 waits for file events the host delivers to a live fs.watch. Its
 // detection cases timed out in runs of the whole suite on a loaded host while
@@ -10,6 +11,25 @@ const LIVE_FILESYSTEM_TESTS = ['src/e2e/E2E-001.live-filesystem-detection.test.t
 // The readiness wait of an E2E-001 case is cut to what is left of the 10 s
 // hookTimeout (probeWaitMs in src/harness/filesystem-watch.ts).
 const timeouts = { testTimeout: 10000, hookTimeout: 10000 };
+
+// vitest adds the globs of a command-line --exclude to the exclude of the
+// project of this file, and not to a project defined inline below. A project
+// that lists this plugin adds them to its own exclude when vitest starts. A
+// glob that names a directory, such as src/e2e/, matches that directory and
+// no file in it: the files of src/e2e/ stay out of the project of this file
+// because the glob library does not walk into a directory an exclude glob
+// matches, and its walk for E2E-001 starts inside src/e2e/. So the plugin
+// adds a glob that does not end in a wildcard also with /** after it, and a
+// run with --exclude src/e2e/ leaves out E2E-001 as well.
+const cliExclude = {
+  name: 'oasb:cli-exclude',
+  configureVitest({ vitest, project }: VitestPluginContext) {
+    const globs = (vitest.config.cliExclude ?? []).flatMap((glob) =>
+      glob.endsWith('*') ? [glob] : [glob, `${glob.replace(/\/+$/, '')}/**`],
+    );
+    project.config.exclude = [...project.config.exclude, ...globs];
+  },
+};
 
 export default defineConfig({
   test: {
@@ -33,12 +53,14 @@ export default defineConfig({
     // every file of the group before it has finished, so E2E-001 runs after
     // the other test files, and none of them runs beside it. The second
     // project takes no option from this file, so it states the timeouts
-    // again, and it has no global setup: vitest runs those of this file once
-    // in every run, a run of E2E-001 alone included.
+    // again, it lists the plugin that gives it the globs of --exclude, and
+    // it has no global setup: vitest runs those of this file once in every
+    // run, a run of E2E-001 alone included.
     // scripts/e2e-001-runs-alone.test.mjs checks the split.
     projects: [
       fileURLToPath(import.meta.url),
       {
+        plugins: [cliExclude],
         test: {
           name: 'live-filesystem',
           include: LIVE_FILESYSTEM_TESTS,

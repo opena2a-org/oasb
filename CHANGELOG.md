@@ -218,6 +218,26 @@ stay on record here with the reason they changed.
   `scripts/e2e-001-runs-alone.test.mjs` reads the suite as vitest resolves
   the config and fails when E2E-001 shares its group or a later one with
   another test file.
+- A command-line `--exclude` applies to E2E-001's project as well. vitest
+  adds the globs of `--exclude` to the exclude of the root project, the
+  project of `vitest.config.ts`, and of no other project, so with E2E-001
+  in a project of its own, as the entry above records, the option did not
+  leave it out: before this change `vitest list --exclude src/e2e/` listed
+  413 tests, the 5 of E2E-001 among them, and
+  `vitest list --exclude '**/E2E-001*'` listed 430, as `vitest list` does.
+  CI and the release workflow run `npm test -- --exclude src/e2e/` for the
+  atomic, integration and baseline tests, and CI runs E2E-001 in a later
+  step. A plugin that E2E-001's project lists in `vitest.config.ts` now
+  adds the globs to that project's exclude, a glob that does not end in a
+  wildcard also with `/**` after it: a glob that names a directory, such
+  as `src/e2e/`, matches the directory and no file in it, and the search
+  for E2E-001 starts inside `src/e2e/`. Now
+  `vitest list --exclude src/e2e/` lists 408 tests, none in `src/e2e/`,
+  `vitest list --exclude '**/E2E-001*'` lists 425, none in E2E-001, and
+  `vitest list` lists 430, as before. `vitest run src/e2e/ --exclude
+  src/e2e/` finds no test file. `scripts/e2e-001-runs-alone.test.mjs`
+  checks the files `vitest list --filesOnly` lists with `--exclude
+  src/e2e/`, `--exclude '**/E2E-001*'` and `--exclude src/atomic/`.
 - The recording of a run the README links, `docs/oasb-demo.gif`, is
   recorded again from `docs/demo.tape` (618,598 bytes, 2026-10-21). The
   recording of 2026-03-11 (2,676,739 bytes) showed `npm test` with the test

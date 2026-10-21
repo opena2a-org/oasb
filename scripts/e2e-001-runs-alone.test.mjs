@@ -7,17 +7,22 @@
 // sequence.groupOrder than every other test file, and vitest starts the files
 // of a group only when every file of the group before it has finished. The
 // tests read the suite as vitest resolves the config, without running a test.
+// They also test, by the files `vitest list --filesOnly` lists, that the globs
+// of a command-line --exclude leave files out of E2E-001's project as they do
+// out of the root project, the only one vitest adds those globs to.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
-const vitestInstalled = existsSync(join(repo, 'node_modules', 'vitest', 'vitest.mjs'));
+const vitestCli = join(repo, 'node_modules', 'vitest', 'vitest.mjs');
+const vitestInstalled = existsSync(vitestCli);
 const skip = !vitestInstalled && 'vitest is not installed; run npm ci';
 
 const E2E_001 = 'src/e2e/E2E-001.live-filesystem-detection.test.ts';
@@ -60,6 +65,22 @@ async function resolveSuite() {
 
 let resolved;
 const suite = () => (resolved ??= resolveSuite());
+
+/**
+ * The test files `vitest list --filesOnly` lists for a run with the
+ * command-line options `args`, as paths from the repository root, each with
+ * the name of its project after it when it has one.
+ */
+function listedFiles(args) {
+  const r = spawnSync(process.execPath, [vitestCli, 'list', '--filesOnly', '--json', ...args], {
+    cwd: repo,
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0, `vitest list ${args.join(' ')} exited ${r.status}:\n${r.stderr.slice(-2000)}`);
+  return JSON.parse(r.stdout).map(({ file, projectName }) =>
+    projectName ? `${repoPath(file)} [${projectName}]` : repoPath(file),
+  );
+}
 
 test('the suite runs every test file under src/ once', { skip }, async () => {
   const files = (await suite()).map((s) => s.file).sort();
@@ -106,3 +127,21 @@ test("E2E-001 has the suite's timeouts, and each global setup is listed by one p
   assert.ok(listed.includes('scripts/scenario-floor.ts'), `no project lists scripts/scenario-floor.ts: ${JSON.stringify([...byProject])}`);
   assert.deepEqual(listed, [...new Set(listed)], `a global setup file is listed by more than one project: ${JSON.stringify([...byProject])}`);
 });
+
+// CI and the release workflow run the atomic, integration and baseline tests
+// with `npm test -- --exclude src/e2e/`, and CI runs the E2E files in steps of
+// their own. The last glob matches no E2E file, so E2E-001 stays in the run.
+const EXCLUDES = [
+  ['src/e2e/', 'leaves every file of src/e2e/ out of a run, E2E-001 included', (file) => file.startsWith('src/e2e/')],
+  ['**/E2E-001*', 'leaves E2E-001 out of a run', (file) => file === E2E_001],
+  ['src/atomic/', 'leaves the files of src/atomic/ out of a run and E2E-001 in it', (file) => file.startsWith('src/atomic/')],
+];
+
+for (const [glob, does, matches] of EXCLUDES) {
+  test(`--exclude ${glob} ${does}`, { skip }, () => {
+    const expected = testFilesUnder(join(repo, 'src'))
+      .filter((file) => !matches(file))
+      .map((file) => (file === E2E_001 ? `${file} [live-filesystem]` : file));
+    assert.deepEqual(listedFiles(['--exclude', glob]).sort(), expected.sort());
+  });
+}

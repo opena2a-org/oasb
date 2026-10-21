@@ -309,7 +309,13 @@ README's test counts do not include them.
   unnamed root project, when E2E-001's hookTimeout is not 10 seconds or its
   timeouts are not those of the other files, or when a global setup file
   is listed by more than one project or no project lists
-  `scripts/scenario-floor.ts`.
+  `scripts/scenario-floor.ts`. It also runs `vitest list --filesOnly`
+  with `--exclude src/e2e/`, `--exclude '**/E2E-001*'` and
+  `--exclude src/atomic/`, and fails when a list holds a file the glob
+  names, the files of `src/e2e/`, E2E-001 and the files of `src/atomic/`
+  in turn, or lacks another test file under `src/`. vitest adds the globs
+  of `--exclude` to the root project only; a plugin that E2E-001's project
+  lists in `vitest.config.ts` adds them to that project.
 
 ## The README checks on every pull request
 
