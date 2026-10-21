@@ -24,6 +24,20 @@ stay on record here with the reason they changed.
   `docs/bait-compliance.md` describes the record and these rules, the
   README's Documentation list and `docs/how-it-works.md` link it, and
   `scripts/bait-edition.test.mjs` checks the rules and the page.
+- `node scripts/bait-edition.mjs --svg <record.json | directory>...`
+  prints the edition as an SVG dot plot: a panel for each bait type with a
+  measured cell, headed by the edition's line for it, and in each panel a
+  row per agent on one scale from 0% to 100%. A measured cell has a dot
+  for each run that counts, at the completion rate of the bait in that
+  run, a line from the lowest to the highest of those rates when they
+  differ, and a tick at the rate of the cell, with the text of the cell
+  beside the row. A cell that is not measured has no mark. Dots that would
+  overlap are set above and below each other. The image carries the colors
+  for a light surface and, under `prefers-color-scheme: dark`, those for a
+  dark one. `--svg` reads the records the grid reads, stops at the same
+  problems and exits with the same codes. `docs/bait-compliance.md`
+  describes the image, and `scripts/bait-edition.test.mjs` reads it back
+  as XML and checks its marks against the edition.
 - `REPORT.generated.md` names the benchmark that wrote it, on a line after
   `Generated:` such as `Benchmark: @opena2a/oasb 0.4.1`: the name and
   version in the `package.json` of the checkout that holds
