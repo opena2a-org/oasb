@@ -117,7 +117,22 @@
 //      what <? or <![CDATA[ opens at the first > after it. It reads the
 //      rest of it as raw HTML, so an href in an open tag there is read:
 //      x <? > <a href="target">y</a> ?> links to target, and
-//      x <? <a href="target"> ?> does not. Other forms,
+//      x <? <a href="target"> ?> does not. Nor is an href read in the text
+//      of an element whose text a browser reads as text, not as HTML:
+//      <script>, <style>, <textarea>, <title>, <xmp>, <iframe>, <noembed>,
+//      <noframes>, <noscript> or <plaintext>. That text runs from a start
+//      tag of the element, in raw HTML read as above, to where a browser
+//      ends the element: at the first </ and its name, in any case, before
+//      white space, a / or a >, in that raw HTML or in later raw HTML of the
+//      paragraph, heading or cell, also inside a comment or another tag's
+//      quoted value, and in a <script> at the first that readScript() reads
+//      as its end. With none there, as for a <plaintext>, which none ends,
+//      it runs to the end of the paragraph, heading or cell, though a
+//      browser reads on past that end, as text of the element. So
+//      x <textarea> <a href="target">y</a> </textarea> does not link to
+//      target, and x <textarea> </textarea> <a href="target">y</a> does.
+//      An inline link in that text is read. The <svg> and <math> elements
+//      are not followed here. Other forms,
 //      such as an unquoted href or a definition on the same line as a list
 //      marker (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
@@ -694,9 +709,15 @@ function codeSpans(text) {
 // images in the lines joined, so an image whose ] is on a later line holds
 // the hrefs before it on its earlier lines too. markdown-it 14.1.0 writes
 // the description of an image, a tag in it as well, as escaped text in the
-// alt attribute of the <img>, so the tag makes no link. A reader asks
-// about the runs, the < and the ( it meets from left to right, and asks
-// for hrefs() once it has read the line.
+// alt attribute of the <img>, so the tag makes no link.
+// The elements whose text a browser reads as text (RAW_TEXT_ENDS) are
+// followed over that raw HTML with one tracker that rawTextElements()
+// makes of the lines: an open tag read while none of them is open is read
+// with tagHref() and then opens the one it starts, if any, and a tag read
+// while one is open is read with rawHtmlHrefs(), as raw HTML is, which
+// reads no href in it before the end tag that ends that element. A
+// reader asks about the runs, the < and the ( it meets from left to right,
+// and asks for hrefs() once it has read the line.
 function paragraphCodeSpans(lines, texts = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
@@ -706,6 +727,7 @@ function paragraphCodeSpans(lines, texts = []) {
   // destination), found the first time hrefs() has an href to give.
   let images;
   const inImage = (at) => partHolding((images ??= linkSyntax(text, ([start, , sure]) => sure && text[start] === '!')), at) !== undefined;
+  const elements = rawTextElements(text);
   const hrefs = []; // the hrefs of the tags read, as tagHref() gives them, in order
   let given = 0; // how many of them hrefs() has given
   let k = 0; // the line read next
@@ -729,11 +751,12 @@ function paragraphCodeSpans(lines, texts = []) {
       htmlAt: (i) => {
         const html = htmlAt(at + i);
         past = html.end;
-        if (html.tag) {
+        if (html.tag && !elements.open()) {
           const href = tagHref(text, at + i, html.end);
           if (href) hrefs.push(href);
-        } else if (html.unshown && html.end > at + i + 1) {
-          for (const href of rawHtmlHrefs(text, at + i, html.end)) hrefs.push(href);
+          elements.start(at + i);
+        } else if (html.tag || (html.unshown && html.end > at + i + 1)) {
+          for (const href of rawHtmlHrefs(text, at + i, html.end, elements)) hrefs.push(href);
         }
         return { ...html, end: html.end - at };
       },
@@ -1142,6 +1165,147 @@ function readTag(text, i) {
   }
 }
 
+// A search of `text` for the first match of a global regular expression at
+// or after an index: find(re, at) returns it, or null. The match found last
+// for each expression is kept, and `text` is searched again, from `at`,
+// only when that match starts before `at`; once a search finds none, none
+// is made. A searcher is asked about indexes that do not go down, so each
+// expression is read over the text about once.
+const searcher = (text) => {
+  const found = new Map();
+  return (re, at) => {
+    let match = found.has(re) ? found.get(re) : { index: -1 };
+    if (match && match.index < at) {
+      re.lastIndex = at;
+      match = re.exec(text);
+      found.set(re, match);
+    }
+    return match;
+  };
+};
+
+// In the text of a <script> element, what puts a browser's tokenizer in
+// the script data escaped state (COMMENT_START), what returns it from that
+// state or the double escaped state to the script data state
+// (ESCAPE_END), and what puts it in the double escaped state from the
+// escaped state (SCRIPT_START): <script before white space, a /, a > or the
+// end of the line. Unlike a comment, the escaped state does not end at --!>.
+const COMMENT_START = /<!--/g;
+const ESCAPE_END = /-->/g;
+const SCRIPT_START = /<script(?=[\t\n\f\r />]|$)/gi;
+
+// The elements whose text a browser reads as text, not as HTML, from the
+// end of a start tag of one of them: <script>; <style>, <xmp>, <iframe>,
+// <noembed>, <noframes> and <noscript>, whose text is raw text, that of
+// <noscript> where a browser runs scripts; <textarea> and <title>, whose
+// text is escapable raw text; and <plaintext>. RAW_TEXT_START matches the
+// < and the name of a start tag of one of them, in any case, before white
+// space, a / or a >, where a browser's tokenizer ends a tag's name. The
+// entry of RAW_TEXT_ENDS for each name finds the start of the end tag at
+// which a browser ends the element, </ and that name, in any case, before
+// white space, a /, a > or the end of the line, for a <script> as
+// readScript() reads its text; that of <plaintext> is null, as no end tag
+// ends that element. Check 4 runs at the top level of this file, above
+// check 9, so these patterns, searcher() and those that readScript() reads
+// are defined here, before check 4 runs; check 9 reads searcher(),
+// readScript(), SCRIPT_END, STYLE_END and TEXTAREA_END too.
+const SCRIPT_END = /<\/script(?=[\t\n\f\r />]|$)/gi;
+const STYLE_END = /<\/style(?=[\t\n\f\r />]|$)/gi;
+const TEXTAREA_END = /<\/textarea(?=[\t\n\f\r />]|$)/gi;
+const RAW_TEXT_START = /<(script|style|xmp|iframe|noembed|noframes|noscript|textarea|title|plaintext)(?=[\t\n\f\r />])/iy;
+const RAW_TEXT_ENDS = new Map([
+  ['script', SCRIPT_END],
+  ['style', STYLE_END],
+  ['xmp', /<\/xmp(?=[\t\n\f\r />]|$)/gi],
+  ['iframe', /<\/iframe(?=[\t\n\f\r />]|$)/gi],
+  ['noembed', /<\/noembed(?=[\t\n\f\r />]|$)/gi],
+  ['noframes', /<\/noframes(?=[\t\n\f\r />]|$)/gi],
+  ['noscript', /<\/noscript(?=[\t\n\f\r />]|$)/gi],
+  ['textarea', TEXTAREA_END],
+  ['title', /<\/title(?=[\t\n\f\r />]|$)/gi],
+  ['plaintext', null],
+]);
+
+// The </script that ends the <script> element whose text is text[from] to
+// text[to], read as a browser's tokenizer reads the text of a <script>
+// element from `state`: 0 in the script data state, 1 in the script data
+// escaped state, 2 in the script data double escaped state. In the script
+// data state, <!-- puts it in the escaped state, where --> returns it to
+// the script data state and <script before white space, a /, a > or the
+// end of the line (SCRIPT_START) puts it in the double escaped state, where
+// --> returns it to the script data state and </script before one of these
+// (SCRIPT_END) returns it to the escaped state; in the script data state
+// and in the escaped state such a </script ends the element. The -- of <!--
+// are read as the dashes before a > that ends the escaped state, so <!-->
+// ends it at once. `find` is a searcher() of the text. Returns the match of
+// that </script, or null, as `end`, and the state at `to`, or at that
+// </script, as `state`.
+function readScript(find, from, to, state) {
+  for (;;) {
+    const end = find(SCRIPT_END, from);
+    const endAt = end && end.index + end[0].length <= to ? end.index : to;
+    if (state === 0) {
+      const comment = find(COMMENT_START, from);
+      if (!comment || comment.index + 4 > to || comment.index > endAt) return { end: endAt < to ? end : null, state };
+      state = 1;
+      from = comment.index + 2;
+      continue;
+    }
+    const close = find(ESCAPE_END, from);
+    const closeAt = close && close.index + 3 <= to ? close.index : to;
+    const tag = state === 1 ? find(SCRIPT_START, from) : null;
+    const tagAt = tag && tag.index + 7 <= to ? tag.index : to;
+    const next = Math.min(closeAt, tagAt, endAt);
+    if (next === to) return { end: null, state };
+    if (next === closeAt) {
+      state = 0;
+      from = closeAt + 3;
+    } else if (next === tagAt) {
+      state = 2;
+      from = tagAt + 7;
+    } else if (state === 2) {
+      state = 1;
+      from = endAt + end[0].length;
+    } else {
+      return { end, state };
+    }
+  }
+}
+
+// Follows the elements of RAW_TEXT_ENDS over the raw HTML of `text`, one
+// line, a table cell or the lines of a paragraph joined by line breaks, as
+// the reader of that raw HTML gives it each piece of it from left to right.
+// start(at) opens the element whose start tag RAW_TEXT_START matches at
+// text[at], and says whether one does; open() says whether an element is
+// open; and end(from, to), while one is, gives the index in `text` of the
+// start of the end tag that ends it in text[from] to text[to], as its entry
+// of RAW_TEXT_ENDS finds that start, and ends it there, or -1 when none
+// ends it there. The state of the tokenizer in the text of a <script> is
+// kept from one call to the next, as readScript() takes it. The text is
+// searched with one searcher(), so a line of many tags inside an element
+// that no end tag ends is not read again from each one.
+function rawTextElements(text) {
+  const find = searcher(text);
+  let open = null; // the name of the element open, or null
+  let escape = 0; // the state of the tokenizer in the text of a <script>
+  return {
+    open: () => open !== null,
+    start: (at) => {
+      const start = matchAt(RAW_TEXT_START, text, at);
+      if (start) [open, escape] = [start[1].toLowerCase(), 0];
+      return start !== null;
+    },
+    end: (from, to) => {
+      let end = null;
+      if (open === 'script') ({ end, state: escape } = readScript(find, from, to, escape));
+      else if (RAW_TEXT_ENDS.get(open)) end = find(RAW_TEXT_ENDS.get(open), from);
+      if (!end || end.index >= to) return -1;
+      open = null;
+      return end.index;
+    },
+  };
+}
+
 // The hrefs of the open tags that a browser reads in text[from] to
 // text[to], raw HTML that a renderer passes on as written, such as a
 // comment, processing instruction, CDATA section or declaration that
@@ -1162,12 +1326,23 @@ function readTag(text, i) {
 // browser reads a comment, bogus comment or tag whose end is past `to` on
 // into what follows, so no href is read after its start. Each search for
 // the end of one of these starts at or just after the < that opens it, and
-// the search for the next < at that end.
+// the search for the next < at that end. A start tag of an element of
+// RAW_TEXT_ENDS opens it in `elements`, a tracker that rawTextElements()
+// makes of `text`, and what follows that tag is the element's text, in
+// which a browser reads no tag, up to the start of the end tag that
+// elements.end() finds, from which the text is read as above. When none is
+// there, no href is read after the start tag, and the element stays open
+// in `elements`, as a browser reads what follows text[to] as its text too.
+// When one is open at text[from], the text is read so from there. So
+// x <? > <textarea> <a href="target">y</a> </textarea> ?> holds no link,
+// and x <? > <textarea> </textarea> <a href="target">y</a> ?> holds one.
 const COMMENT_CLOSE = /--!?>/g;
-function rawHtmlHrefs(text, from, to) {
-  const html = text.slice(from, to);
+function rawHtmlHrefs(text, from, to, elements) {
   const hrefs = [];
-  for (let i = html.indexOf('<'); i !== -1; i = html.indexOf('<', i)) {
+  const start = elements.open() ? elements.end(from, to) : from;
+  if (start === -1) return hrefs;
+  const html = text.slice(from, to);
+  for (let i = html.indexOf('<', start - from); i !== -1; i = html.indexOf('<', i)) {
     const c = html[i + 1];
     let end = i + 1;
     if (html.startsWith('<!--', i)) {
@@ -1182,6 +1357,10 @@ function rawHtmlHrefs(text, from, to) {
       const tag = readTag(html, i);
       if (tag.href) hrefs.push({ target: tag.href.target, at: from + tag.href.at });
       end = tag.end;
+      if (end !== -1 && c !== '/' && elements.start(from + i)) {
+        const close = elements.end(from + end, to);
+        end = close === -1 ? -1 : close - from;
+      }
     }
     if (end === -1) break;
     i = end;
@@ -1195,7 +1374,9 @@ function rawHtmlHrefs(text, from, to) {
 // whose label may hold a code span or \], and the hrefs on the line that
 // spans.hrefs() gives, those of the open tags that inlineDestinations reads
 // as raw HTML and of those that a browser reads inside the comments,
-// processing instructions, CDATA sections and declarations it reads so.
+// processing instructions, CDATA sections and declarations it reads so,
+// but for those in the text of an element of RAW_TEXT_ENDS, which a
+// browser reads as text.
 // Links inside code spans are not read: inlineDestinations
 // reads past each code span, and so past the tags inside it. A definition
 // is matched on the whole line, as a code span in its label does not make
@@ -2633,14 +2814,13 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // instruction, CDATA section or declaration that opens an HTML block
 // (HTML_BLOCK_START, CDATA_START) ends at or before the first match of the
 // end that HTML_BLOCK_END gives that block.
-const TEXTAREA_END = /<\/textarea(?=[\t\n\f\r />]|$)/gi;
-const HIDDEN_HTML_START = /(<script(?=[\t\n\f\r />]|$))|(<style(?=[\t\n\f\r />]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s/>]|$))|(<\/?[a-z])/gi;
+const HIDDEN_HTML_START =/(<script(?=[\t\n\f\r />]|$))|(<style(?=[\t\n\f\r />]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s/>]|$))|(<\/?[a-z])/gi;
 const CDATA_GROUP = 5;
 const CDATA_START_LENGTH = '<![CDATA['.length;
 const CDATA_SECTION_END = /\]\]>/g;
 const CDATA_TEXT_END = /\]\]>/g;
 const TEXTAREA_GROUP = 7;
-const HIDDEN_HTML_END = [null, /<\/script(?=[\t\n\f\r />]|$)/gi, /<\/style(?=[\t\n\f\r />]|$)/gi, /--!?>/g, />/g, />/g, />/g];
+const HIDDEN_HTML_END = [null, SCRIPT_END, STYLE_END, /--!?>/g, />/g, />/g, />/g];
 // A <title> start tag that a browser reads as HTML, as rawTextEnd() finds
 // one, opens an element whose text, escapable raw text as in a <textarea>,
 // a browser does not show, as the text of a <script> or <style> element:
@@ -2649,84 +2829,7 @@ const HIDDEN_HTML_END = [null, /<\/script(?=[\t\n\f\r />]|$)/gi, /<\/style(?=[\t
 // of which shownHtml() reads as a tag too.
 const TITLE_END = /<\/title(?=[\t\n\f\r />]|$)/gi;
 const END_TAG_STARTS = new Set([HIDDEN_HTML_END[1], HIDDEN_HTML_END[2], TEXTAREA_END, TITLE_END]);
-const SCRIPT_END = HIDDEN_HTML_END[1];
-const STYLE_END = HIDDEN_HTML_END[2];
 const COMMENT_END = HIDDEN_HTML_END[3];
-
-// A search of `text` for the first match of a global regular expression at
-// or after an index: find(re, at) returns it, or null. The match found last
-// for each expression is kept, and `text` is searched again, from `at`,
-// only when that match starts before `at`; once a search finds none, none
-// is made. A searcher is asked about indexes that do not go down, so each
-// expression is read over the text about once.
-const searcher = (text) => {
-  const found = new Map();
-  return (re, at) => {
-    let match = found.has(re) ? found.get(re) : { index: -1 };
-    if (match && match.index < at) {
-      re.lastIndex = at;
-      match = re.exec(text);
-      found.set(re, match);
-    }
-    return match;
-  };
-};
-
-// In the text of a <script> element, what puts a browser's tokenizer in
-// the script data escaped state (COMMENT_START), what returns it from that
-// state or the double escaped state to the script data state
-// (ESCAPE_END), and what puts it in the double escaped state from the
-// escaped state (SCRIPT_START): <script before white space, a /, a > or the
-// end of the line. Unlike a comment, the escaped state does not end at --!>.
-const COMMENT_START = /<!--/g;
-const ESCAPE_END = /-->/g;
-const SCRIPT_START = /<script(?=[\t\n\f\r />]|$)/gi;
-
-// The </script that ends the <script> element whose text is text[from] to
-// text[to], read as a browser's tokenizer reads the text of a <script>
-// element from `state`: 0 in the script data state, 1 in the script data
-// escaped state, 2 in the script data double escaped state. In the script
-// data state, <!-- puts it in the escaped state, where --> returns it to
-// the script data state and <script before white space, a /, a > or the
-// end of the line (SCRIPT_START) puts it in the double escaped state, where
-// --> returns it to the script data state and </script before one of these
-// (SCRIPT_END) returns it to the escaped state; in the script data state
-// and in the escaped state such a </script ends the element. The -- of <!--
-// are read as the dashes before a > that ends the escaped state, so <!-->
-// ends it at once. `find` is a searcher() of the text. Returns the match of
-// that </script, or null, as `end`, and the state at `to`, or at that
-// </script, as `state`.
-function readScript(find, from, to, state) {
-  for (;;) {
-    const end = find(SCRIPT_END, from);
-    const endAt = end && end.index + end[0].length <= to ? end.index : to;
-    if (state === 0) {
-      const comment = find(COMMENT_START, from);
-      if (!comment || comment.index + 4 > to || comment.index > endAt) return { end: endAt < to ? end : null, state };
-      state = 1;
-      from = comment.index + 2;
-      continue;
-    }
-    const close = find(ESCAPE_END, from);
-    const closeAt = close && close.index + 3 <= to ? close.index : to;
-    const tag = state === 1 ? find(SCRIPT_START, from) : null;
-    const tagAt = tag && tag.index + 7 <= to ? tag.index : to;
-    const next = Math.min(closeAt, tagAt, endAt);
-    if (next === to) return { end: null, state };
-    if (next === closeAt) {
-      state = 0;
-      from = closeAt + 3;
-    } else if (next === tagAt) {
-      state = 2;
-      from = tagAt + 7;
-    } else if (state === 2) {
-      state = 1;
-      from = endAt + end[0].length;
-    } else {
-      return { end, state };
-    }
-  }
-}
 
 // The states of a tag that tagEnd() reads, as the HTML tokenizer reads a
 // tag: in its name, an attribute name or an unquoted value (IN_TAG), after

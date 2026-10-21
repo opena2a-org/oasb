@@ -1539,8 +1539,8 @@ stay on record here with the reason they changed.
   and now exits 1 with `link target "docs/nowhere.md" does not exist`,
   naming the line. What follows that end, up to the end at which
   CommonMark ends it, is read as the HTML tokenizer reads it from its data
-  state, without following the elements whose content a browser reads as
-  text, such as `<script>` or `<textarea>`, so
+  state, following the elements whose content a browser reads as text,
+  such as `<script>` or `<textarea>`, as the entry below says, so
   `x <? <a href="docs/nowhere.md"> ?>`, where the first `>` after the `<?`
   is the tag's own, still exits 0, as does
   `x <? > <!-- <a href="docs/nowhere.md"> --> ?>`, where the tag is inside
@@ -1605,6 +1605,30 @@ stay on record here with the reason they changed.
   none, as a browser reads it as the start of an SVG or MathML element
   there: with `<svg><title>x</title></svg> As of 2026-06-03.` as the
   second line, the check exits 0.
+- `npm run check:readme` reads no href in the text of a `<script>`,
+  `<style>`, `<textarea>`, `<title>`, `<xmp>`, `<iframe>`, `<noembed>`,
+  `<noframes>`, `<noscript>` or `<plaintext>` element in a paragraph, a
+  heading or a table cell, as a browser reads that text as text, not as
+  HTML. With `docs/nowhere.md` absent, the line
+  `x <textarea> <a href="docs/nowhere.md">y</a> </textarea>`, the lines
+  with each of the other nine elements in its place, and
+  `x <? > <textarea> <a href="docs/nowhere.md">y</a> </textarea> ?>` each
+  exited 1 with `link target "docs/nowhere.md" does not exist`, and now
+  exit 0. The text runs from the element's start tag to the end tag at
+  which a browser ends it, `</` and its name in any case, also inside a
+  comment or another tag's quoted value, so an href after that end tag is
+  still read: `x <textarea> </textarea> <a href="docs/nowhere.md">y</a>`
+  and `x <textarea> <!-- </textarea> <a href="docs/nowhere.md">y</a> -->`
+  exit 1. In a `<script>`, the check reads `<!--`, `<script>` and `-->` as
+  a browser does, so
+  `x <script> <!-- <script> </script> <a href="docs/nowhere.md"> -->`
+  exits 0: a browser ends no element at that `</script>`. With no end tag
+  in the paragraph, heading or cell, as for a `<plaintext>`, which none
+  ends, the text runs to the end of it, and an href after it is read,
+  though a browser reads on as text of the element: a README whose prose
+  is the line `x <textarea>`, a blank line and the line
+  `<a href="docs/nowhere.md">y</a>` exits 1. An inline link such as
+  `[y](docs/nowhere.md)` inside one of these elements is still read.
 
 ## 0.4.1 - 2026-10-17
 
