@@ -218,7 +218,7 @@ Agent consumes resources beyond reasonable bounds, causing denial of service or 
 |----------|----------|-----|
 | LLM03 | Supply Chain | Covered in the Scanner Benchmark corpus, not the runtime suite |
 | LLM04 | Data and Model Poisoning | No training-data / model integrity monitoring (out of runtime scope) |
-| LLM05 | Improper Output Handling | Output scanning covers leaks; raw HTTP response bodies are not inspected (gap) |
+| LLM05 | Improper Output Handling | Output scanning covers leaks, in model responses (AT-AI-002) and in raw HTTP response bodies through the proxy (INT-003); no scenario cites LLM05 |
 | LLM07 | System Prompt Leakage | No dedicated system-prompt-extraction detection (future AI-layer pattern) |
 | LLM08 | Vector and Embedding Weaknesses | No RAG / embedding-store monitoring |
 | LLM09 | Misinformation | Out of scope for runtime monitoring |

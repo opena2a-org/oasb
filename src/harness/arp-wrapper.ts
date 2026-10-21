@@ -9,6 +9,8 @@
  * never trigger the arp-guard import.
  */
 import * as fs from 'fs';
+import * as http from 'http';
+import type { AddressInfo } from 'net';
 import * as os from 'os';
 import * as path from 'path';
 import { EventCollector } from './event-collector';
@@ -24,6 +26,8 @@ import type {
   PatternScanner,
   BudgetManager,
   AnomalyScorer,
+  ConnectionBurstDetector,
+  HttpProxy,
   EventEngine,
   EnforcementEngine as EnforcementEngineInterface,
   ScanResult,
@@ -70,6 +74,31 @@ function anomalyPersistenceSupported(): boolean {
   const { AnomalyDetector } = arp();
   return typeof AnomalyDetector?.load === 'function'
     && typeof AnomalyDetector.prototype?.save === 'function';
+}
+
+/**
+ * True when the installed NetworkMonitor has the connection-rate check that
+ * its poll calls with the number of connections it listed.
+ */
+function connectionBurstDetectionSupported(): boolean {
+  return typeof arp().NetworkMonitor?.prototype?.checkConnectionBurst === 'function';
+}
+
+/**
+ * True when the installed ARPProxy scans the raw body of a response on a
+ * passthrough route, and has the request handler the adapter serves.
+ */
+function httpResponseScanningSupported(): boolean {
+  const proxy = arp().ARPProxy?.prototype;
+  return typeof proxy?.inspectRawResponseBody === 'function'
+    && typeof proxy.handleRequest === 'function';
+}
+
+/** True when the installed EventEngine correlates events across monitors. */
+function eventCorrelationSupported(): boolean {
+  const { EventEngine } = arp();
+  if (typeof EventEngine !== 'function') return false;
+  return typeof new EventEngine({ agentName: 'oasb-capability-check' }).correlation?.correlate === 'function';
 }
 
 export class ArpWrapper implements SecurityProductAdapter {
@@ -161,6 +190,9 @@ export class ArpWrapper implements SecurityProductAdapter {
       'pattern-scanning',
     ]);
     if (anomalyPersistenceSupported()) capabilities.add('baseline-persistence');
+    if (connectionBurstDetectionSupported()) capabilities.add('connection-burst-detection');
+    if (httpResponseScanningSupported()) capabilities.add('http-response-scanning');
+    if (eventCorrelationSupported()) capabilities.add('event-correlation');
     return {
       product: 'arp-guard',
       version: packageVersion('arp-guard', arp),
@@ -307,5 +339,80 @@ export class ArpWrapper implements SecurityProductAdapter {
       scorer.load = (dataDir: string) => { detector = AnomalyDetector.load(dataDir); };
     }
     return scorer;
+  }
+
+  createConnectionBurstDetector(): ConnectionBurstDetector {
+    const { NetworkMonitor } = arp();
+    const { engine, settle } = this.trackedEngine();
+    const monitor = new NetworkMonitor(engine);
+    return {
+      record: async (connectionCount: number) => {
+        monitor.checkConnectionBurst(connectionCount);
+        await settle();
+      },
+    };
+  }
+
+  createHttpProxy(upstreamUrl: string): HttpProxy {
+    const { ARPProxy, PromptInterceptor } = arp();
+    const { engine, settle } = this.trackedEngine();
+    const promptInterceptor = new PromptInterceptor(engine);
+    // A passthrough route forwards each request and its response, and scans
+    // the raw response body with the prompt interceptor's output patterns.
+    const proxy = new ARPProxy(
+      { port: 0, upstreams: [{ pathPrefix: '/', target: upstreamUrl, protocol: 'passthrough' }] },
+      { engine, promptInterceptor },
+    );
+    // ARPProxy.start() listens on every interface, so the adapter serves the
+    // proxy's request handler on the loopback interface instead.
+    const server = http.createServer((req, res) => {
+      proxy.handleRequest(req, res).catch(() => {
+        if (!res.headersSent) res.writeHead(502);
+        res.end();
+      });
+    });
+    return {
+      start: async () => {
+        await promptInterceptor.start();
+        await new Promise<void>((resolve, reject) => {
+          server.once('error', reject);
+          server.listen(0, '127.0.0.1', () => resolve());
+        });
+        return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      },
+      settle,
+      stop: async () => {
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        await promptInterceptor.stop();
+        await settle();
+      },
+    };
+  }
+
+  /**
+   * This instance's event engine for a component that emits without
+   * awaiting the result: settle() resolves once every event emitted through
+   * it has been handled by the event handlers, the rules and enforcement.
+   */
+  private trackedEngine(): { engine: { emit(event: unknown): Promise<unknown> }; settle(): Promise<void> } {
+    const engine = this.getEngine();
+    let pending: Promise<unknown>[] = [];
+    return {
+      engine: {
+        emit: (event: unknown) => {
+          const emitted = engine.emit(event);
+          pending.push(emitted);
+          return emitted;
+        },
+      },
+      settle: async () => {
+        while (pending.length > 0) {
+          const emitted = pending;
+          pending = [];
+          await Promise.all(emitted);
+        }
+      },
+    };
   }
 }

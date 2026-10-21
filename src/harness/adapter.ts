@@ -157,6 +157,36 @@ export interface AnomalyScorer {
   load?(dataDir: string): void;
 }
 
+// ─── Network and Proxy Interfaces ───────────────────────────────────
+
+/**
+ * The connection-rate check of the product's network monitor, fed the
+ * connection count of each poll by the test instead of the connections the
+ * monitor lists on the host, which other processes change. The events it
+ * raises go to the adapter's event engine: the rules apply to them and
+ * getEvents() returns them.
+ */
+export interface ConnectionBurstDetector {
+  /**
+   * One poll, at the current system time, that observed connectionCount
+   * connections. Resolves once the events it raised have been handled.
+   */
+  record(connectionCount: number): Promise<void>;
+}
+
+/**
+ * The product's HTTP proxy in front of one upstream service. The events its
+ * inspection raises go to the adapter's event engine: the rules apply to
+ * them and getEvents() returns them.
+ */
+export interface HttpProxy {
+  /** Listen on the loopback interface; resolves to the proxy's base URL, such as http://127.0.0.1:41234 */
+  start(): Promise<string>;
+  /** Resolves once the events raised for the requests answered so far have been handled */
+  settle(): Promise<void>;
+  stop(): Promise<void>;
+}
+
 // ─── LLM Adapter (for mock testing) ────────────────────────────────
 
 export interface LLMAdapter {
@@ -199,9 +229,13 @@ export interface EnforcementEngine {
 export type Capability =
   | 'process-monitoring'
   | 'network-monitoring'
+  /** The network monitor flags a minute with far more connections than its rolling average */
+  | 'connection-burst-detection'
   | 'filesystem-monitoring'
   | 'prompt-input-scanning'
   | 'prompt-output-scanning'
+  /** The product's HTTP proxy scans the raw body of each response it forwards */
+  | 'http-response-scanning'
   | 'mcp-scanning'
   | 'a2a-scanning'
   | 'anomaly-detection'
@@ -214,6 +248,11 @@ export type Capability =
   | 'enforcement-kill'
   | 'enforcement-resume'
   | 'pattern-scanning'
+  /**
+   * Events from two or more monitor sources within the product's correlation
+   * window raise an event of category 'threat' whose data.correlatedSources
+   * lists those sources
+   */
   | 'event-correlation';
 
 /** Full capability declaration for a product */
@@ -263,6 +302,19 @@ export interface SecurityProductAdapter {
   createPatternScanner(): PatternScanner;
   createBudgetManager(dataDir: string, config?: { budgetUsd?: number; maxCallsPerHour?: number }): BudgetManager;
   createAnomalyScorer(): AnomalyScorer;
+  /**
+   * The network monitor's connection-rate check, reporting to this adapter's
+   * event engine. Required when the adapter declares
+   * 'connection-burst-detection'.
+   */
+  createConnectionBurstDetector?(): ConnectionBurstDetector;
+  /**
+   * An HTTP proxy that forwards every request to upstreamUrl, and its
+   * response back, and scans the raw response body, reporting to this
+   * adapter's event engine. Required when the adapter declares
+   * 'http-response-scanning'.
+   */
+  createHttpProxy?(upstreamUrl: string): HttpProxy;
 }
 
 // ─── Lab Config ─────────────────────────────────────────────────────

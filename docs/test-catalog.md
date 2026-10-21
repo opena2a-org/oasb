@@ -103,7 +103,7 @@ Discrete tests that exercise individual detection capabilities. Each test inject
 |------|-------|-------------------------------|
 | AT-NET-001 | AML.T0025 | New outbound connection |
 | AT-NET-002 | AML.T0025 | Connection to suspicious host (webhook.site, ngrok) |
-| AT-NET-003 | AML.T0034.002 | Connection burst |
+| AT-NET-003 | AML.T0034.002 | Connection burst: a minute with ten times the connections of the minutes before it, from the connection counts the test reports to the monitor (N/A for a product without `connection-burst-detection`) |
 | AT-NET-004 | AML.T0025 | Subdomain bypass of allowlist |
 | AT-NET-005 | AML.T0025 | Exfiltration destination |
 
@@ -160,10 +160,10 @@ Multi-step attack chains that combine multiple techniques. Tests whether the pro
 |------|-------|-------------|
 | INT-001 | AML.T0086 | Data exfiltration: internal contact lookup → credential harvest → webhook.site POST |
 | INT-002 | AML.T0053 | MCP tool abuse: path traversal + command injection via tool arguments |
-| INT-003 | AML.T0051 | Prompt injection: establish baseline → inject malicious prompt → measure detection |
+| INT-003 | AML.T0051 | Prompt injection: establish baseline → inject malicious prompt → measure detection; a system prompt leak in the raw body of an HTTP response through the product's proxy (that test N/A for a product without `http-response-scanning`) |
 | INT-004 | AML.T0073 | A2A trust exploitation: spoofed agent identity → unauthorized data access |
 | INT-005 | AML.T0015 | Evasion: 60 minutes of timed normal traffic → burst of 20 normal-looking events in one minute → anomaly scorer flags the burst (z-score above 2); rule alert on a burst of pre-labelled violations |
-| INT-006 | capability | Multi-monitor correlation: single attack triggers process + network + filesystem events |
+| INT-006 | capability | Multi-monitor correlation: single attack triggers process + network + filesystem events → a correlation event, a critical threat that names the monitors, when a second monitor reports and again when a third does (N/A for a product without `event-correlation`) |
 | INT-007 | AML.T0046 | Budget exhaustion: noise flood (chaff) drains LLM budget → real attack goes unanalyzed |
 | INT-008 | response | Kill switch: critical threat → product kills agent → verify death → recovery |
 

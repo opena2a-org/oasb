@@ -149,6 +149,35 @@ stay on record here with the reason they changed.
   to a copy of the workflow or of the package files and fails when none of
   the first four tests fails on the copy. It does not check that the
   install succeeds, or the versions of the actions the job uses.
+- AT-NET-003, INT-006 and a test of INT-003 check connection bursts,
+  cross-monitor correlation and the raw body of HTTP responses as the
+  reference product detects them, and `docs/known-gaps.md` and the Known
+  Gaps that `npm run report` writes drop those three gaps. AT-NET-003
+  injected 15 events labelled as a burst and passed whether or not the
+  product flagged one. It now reports a connection count a minute to the
+  network monitor's check, through `createConnectionBurstDetector()`, new
+  in the adapter contract, and passes when 4 connections a minute for six
+  minutes raise no detection and no enforcement, and 40 after three
+  minutes of 4 raise one detection and one alert. The INT-003 test that
+  injected a threat event now sends requests through the product's HTTP
+  proxy, from `createHttpProxy()`, new in the contract, which the ARP
+  adapter serves on 127.0.0.1, to an upstream on 127.0.0.1, and passes
+  when a normal reply raises no threat and a reply that states the system
+  prompt raises one, with an alert. INT-006 replaces its test of the gap
+  with one of the 2 correlation events ARP raises for events from 3
+  monitors: each a critical threat whose `data.correlatedSources` names
+  the monitors, the first bringing the kill that no injected event brings.
+  The contract adds the capabilities `connection-burst-detection` and
+  `http-response-scanning`, and the ARP adapter declares them and
+  `event-correlation` when the installed hackmyagent has the code they
+  call, as 0.23.8, the version the lockfile installs, does. AT-NET-003,
+  INT-006 and the INT-003 proxy test report N/A for an adapter without
+  them. The llm-guard and rebuff adapters declare none of the three, and
+  lack the monitors these suites already needed. The LLM05 row of
+  `docs/owasp-agentic-mapping.md` names the tests that scan output in
+  place of saying raw HTTP response bodies are not inspected, and the note
+  at the top of `REPORT.md` says that the adapter declares event
+  correlation and that `docs/known-gaps.md` lists one of its four gaps.
 
 ### Fixed
 

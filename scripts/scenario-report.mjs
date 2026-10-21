@@ -306,9 +306,6 @@ export function generateReport({ scenarios, results = null, adapter = null, benc
     '| # | Gap | Severity | Test Coverage |',
     '|---|-----|----------|--------------|',
     '| 6 | Anomaly baselines not reloaded when the runtime restarts | Medium | BL-003 |',
-    '| 7 | No connection rate anomaly detection | Medium | AT-NET-003 |',
-    '| 8 | No HTTP response body monitoring | Low | INT-003 |',
-    '| 9 | No cross-monitor event correlation | Architectural | INT-006 |',
     '',
   );
 
