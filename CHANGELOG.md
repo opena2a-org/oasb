@@ -115,6 +115,19 @@ stay on record here with the reason they changed.
   `npm audit --omit=dev --omit=optional` reports none. The fixes
   `npm audit` names for the `rebuff` and `vitest` ones are `rebuff@0.0.2`,
   a lower version, and `vitest@5.0.5`, a major version.
+- `overrides` in `package.json` moves the `langchain` and `openai` that
+  `rebuff@0.1.0` depends on to `langchain@^1.5.18` and `openai@^4.104.0`.
+  The rebuff adapter loads only rebuff's heuristic, whose imports of the two
+  are types the compiler drops. On 2026-10-20, `npm audit` reported 28
+  (1 low, 9 moderate, 14 high, 4 critical) with the lockfile before this
+  change and 21 (1 low, 8 moderate, 9 high, 3 critical) with the lockfile
+  after it, none of the 21 in `rebuff` or a package under it, and
+  `npm audit --omit=dev` reported the same 21. The lockfile holds no
+  `expr-eval` or `axios`. `scripts/rebuff-overrides.test.mjs` fails when it
+  resolves `langchain`, `langsmith`, `openai`, `axios`, `uuid` or
+  `expr-eval` at a version in the range `npm audit` reported. With
+  `OASB_ADAPTER=rebuff`, AT-AI-001 and AT-AI-005 fail the 12 tests
+  `docs/adapters.md` lists, as before.
 
 ### Fixed
 
