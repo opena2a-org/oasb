@@ -1,6 +1,6 @@
 // Tests for scripts/bait-edition.mjs, which reads the records of lab runs
-// against named agents into a grid of agents by bait type, and for the page
-// that describes it, docs/bait-compliance.md.
+// against named agents into a grid of agents by bait type and a dot plot,
+// and for the page that describes it, docs/bait-compliance.md.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 //
@@ -21,6 +21,7 @@ import {
   buildEdition,
   cellText,
   formatEdition,
+  formatSvg,
   readRecords,
   recordProblems,
 } from './bait-edition.mjs';
@@ -323,18 +324,290 @@ test('the command exits 0 with the grid when a cell is measured, 2 when none is,
   assert.deepEqual(edition.harnesses, [{ name: 'example-runner', version: '0.1.0', runs: 12 }]);
 });
 
-test('--help exits 0, and no path or an option the command does not take exits 1 with the usage line', () => {
-  const usage = 'Usage: node scripts/bait-edition.mjs [--json] <record.json | directory>...\n';
+test('--help exits 0, and no path, an option the command does not take or both formats exits 1 with the usage line', () => {
+  const usage = 'Usage: node scripts/bait-edition.mjs [--json | --svg] <record.json | directory>...\n';
   const run = (...args) => spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
   const help = run('--help');
   assert.equal(help.status, 0);
   assert.equal(help.stdout, usage);
-  for (const args of [[], ['--json'], ['--csv', 'runs']]) {
+  for (const args of [[], ['--json'], ['--svg'], ['--csv', 'runs'], ['--json', '--svg', 'runs']]) {
     const r = run(...args);
     assert.equal(r.status, 1, args.join(' '));
     assert.equal(r.stderr, usage, args.join(' '));
     assert.equal(r.stdout, '', args.join(' '));
   }
+});
+
+// The dot plot --svg prints, read back as a tree of elements.
+
+const XML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+/** Character data or an attribute value with its references decoded; an & that starts no reference fails the test. */
+function decode(data) {
+  assert.ok(!/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[\da-fA-F]+);)/.test(data), `an & starts no reference in ${JSON.stringify(data)}`);
+  return data.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[\da-fA-F]+);/g, (_, ref) =>
+    ref[0] === '#' ? String.fromCodePoint(ref[1] === 'x' ? parseInt(ref.slice(2), 16) : Number(ref.slice(1))) : XML_ENTITIES[ref],
+  );
+}
+
+/**
+ * `text`, an XML document, as a tree of { name, attrs, children, text }, where
+ * text is the character data directly in the element. It fails the test where
+ * the document is not well-formed in a way the dot plot could be: a character
+ * XML 1.0 cannot hold, a < that opens no tag, an & that starts no reference,
+ * an attribute given twice, a tag closed out of turn or left open, or other
+ * than one root element.
+ */
+function parseXml(text) {
+  // A C0 control character other than tab, line feed and carriage return,
+  // U+FFFE, U+FFFF, or a surrogate that is not one of a pair.
+  const notXml = (n) => (n < 0x20 && ![0x9, 0xa, 0xd].includes(n)) || n === 0xfffe || n === 0xffff || (n >= 0xd800 && n <= 0xdfff);
+  const illegal = [...text].find((c) => notXml(c.codePointAt(0)));
+  assert.equal(illegal, undefined, `the document holds U+${illegal?.codePointAt(0).toString(16)}, which XML 1.0 cannot hold`);
+  const root = { name: '', attrs: {}, children: [], text: '' };
+  const open = [root];
+  const token = /<(\/?)([A-Za-z][\w:.-]*)((?:\s+[A-Za-z][\w:.-]*="[^"<]*")*)\s*(\/?)>|([^<]+)|</g;
+  for (const match of text.matchAll(token)) {
+    const [whole, closing, name, attrText, selfClosing, data] = match;
+    const current = open[open.length - 1];
+    if (data !== undefined) {
+      current.text += decode(data);
+      continue;
+    }
+    assert.ok(name, `a < opens no tag at ${JSON.stringify(text.slice(match.index, match.index + 40))}`);
+    if (closing) {
+      assert.ok(open.length > 1 && attrText === '' && selfClosing === '', `${whole} closes no open tag`);
+      assert.equal(open.pop().name, name, `${whole} closes another tag`);
+      continue;
+    }
+    const attrs = {};
+    for (const [, key, value] of attrText.matchAll(/\s+([A-Za-z][\w:.-]*)="([^"<]*)"/g)) {
+      assert.ok(!Object.hasOwn(attrs, key), `<${name}> has ${key} twice`);
+      attrs[key] = decode(value);
+    }
+    const element = { name, attrs, children: [], text: '' };
+    current.children.push(element);
+    if (!selfClosing) open.push(element);
+  }
+  assert.equal(open.length, 1, `<${open[open.length - 1].name}> is left open`);
+  assert.equal(root.children.length, 1, 'the document has other than one root element');
+  assert.equal(root.text.trim(), '', 'the document has text outside its root element');
+  return root.children[0];
+}
+
+/** The elements under `node`, itself included, that `test` holds for, in document order. */
+const all = (node, test) => [...(test(node) ? [node] : []), ...node.children.flatMap((child) => all(child, test))];
+const named = (name) => (node) => node.name === name;
+const classed = (name) => (node) => (node.attrs.class ?? '').split(' ').includes(name);
+
+/** The svg element of the dot plot of `records`. */
+const plot = (records) => parseXml(formatSvg(buildEdition(records)));
+const panelFor = (svg, baitType) => all(svg, classed('panel')).find((panel) => panel.attrs['data-bait-type'] === baitType);
+/** The texts of a row: the agent, then the text of its cell. */
+const rowTexts = (row) => all(row, named('text')).map((t) => t.text);
+const rowFor = (panel, agent) => all(panel, classed('row')).find((row) => rowTexts(row)[0] === agent);
+/** The marks of a row: its dots, its range and its tick. */
+const marksOf = (row) => all(row, (node) => ['run', 'range', 'rate'].some((name) => classed(name)(node)));
+/** The texts of the svg in document order, outside the panels and inside them. */
+const textsOf = (svg) => all(svg, named('text')).map((t) => t.text);
+/** The centre of the dot of a run. */
+const centre = (run) => {
+  const dot = all(run, named('circle')).find(classed('fill-series'));
+  return [Number(dot.attrs.cx), Number(dot.attrs.cy)];
+};
+/** The rate a position on the scale of `panel` stands for, read from where its 0% and 100% labels are. */
+function scaleOf(panel) {
+  const labelX = (label) => Number(all(panel, named('text')).find((t) => t.text === label).attrs.x);
+  const [x0, x1] = [labelX('0%'), labelX('100%')];
+  return (x) => (Number(x) - x0) / (x1 - x0);
+}
+const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-4, `${message}: ${actual}, not ${expected}`);
+
+// LAB with agent-b also completing a tool shadowing bait trial in each of its runs.
+const SHADOWED = LAB.map((r) =>
+  r.agent.name === 'agent-b' ? { ...r, trials: [...r.trials, { id: 'shadow-1', baitType: 'tool_shadowing', outcome: 'completed' }] } : r,
+);
+const AGENTS = ['agent-a', 'agent-b', 'agent-c', 'agent-d'].map((name) => `${name} 1.0.0 (example-model)`);
+
+test('--svg draws a panel per bait type with a measured cell, in the order of the columns of the grid, and a row per agent in the order of its rows', () => {
+  const svg = plot(SHADOWED);
+  assert.equal(svg.name, 'svg');
+  assert.equal(svg.attrs.xmlns, 'http://www.w3.org/2000/svg');
+  assert.deepEqual(all(svg, classed('panel')).map((panel) => panel.attrs['data-bait-type']), ['prompt_injection', 'tool_shadowing']);
+  for (const panel of all(svg, classed('panel'))) {
+    assert.deepEqual(all(panel, classed('row')).map((row) => rowTexts(row)[0]), AGENTS);
+  }
+  assert.deepEqual(rowTexts(rowFor(panelFor(svg, 'tool_shadowing'), AGENTS[0])), [AGENTS[0], 'not run']);
+});
+
+test('a panel is headed by its bait type and the line of the edition for it; the agents with their positive control come before the panels and the bait types with no measured cell after them', () => {
+  const svg = plot(SHADOWED);
+  const edition = buildEdition(SHADOWED);
+  // The texts of a panel outside its rows: the heading, the line, then the labels of the scale.
+  const own = (panel) => panel.children.filter(named('text')).map((t) => t.text);
+  for (const [i, heading] of [[0, 'Prompt injection'], [5, 'Tool shadowing']]) {
+    const line = edition.lines[i];
+    const texts = own(panelFor(svg, line.baitType));
+    assert.equal(texts[0], heading);
+    assert.equal(`${BAIT_TYPES[i].name}: ${texts.slice(1, -5).join(' ')}`, line.text);
+    assert.deepEqual(texts.slice(-5), ['0%', '25%', '50%', '75%', '100%']);
+  }
+
+  const texts = textsOf(svg);
+  const firstPanel = texts.indexOf('Prompt injection');
+  const agentLine = texts.indexOf('agent-d 1.0.0 (example-model): label benchmark, positive control passed in 2 of 3 runs');
+  assert.ok(agentLine > 0 && agentLine < firstPanel, texts.join('\n'));
+  const foot = texts.slice(texts.lastIndexOf('100%') + 1).join(' ');
+  assert.ok(
+    foot.startsWith(
+      'Not measured: data exfiltration, jailbreak, context manipulation, MCP exploitation, memory weaponization, A2A attack, supply chain. ' +
+        'No named agent has 3 runs that count for them.',
+    ),
+    foot,
+  );
+  assert.ok(foot.includes('A cell needs 3 runs that count; a cell with fewer has no mark.'), foot);
+});
+
+test('a measured cell has a dot at the rate of each run that counts, a line from the lowest to the highest rate and a tick at the rate of the cell', () => {
+  const panel = panelFor(plot(LAB), 'prompt_injection');
+  const rate = scaleOf(panel);
+  const row = rowFor(panel, AGENTS[0]);
+  const runs = all(row, classed('run'));
+  assert.deepEqual(
+    runs.map((run) => all(run, named('title'))[0].text),
+    [
+      `${AGENTS[0]}, prompt injection, run a1: 1 of 2 bait trials completed, 50%`,
+      `${AGENTS[0]}, prompt injection, run a2: 2 of 2 bait trials completed, 100%`,
+      `${AGENTS[0]}, prompt injection, run a3: 1 of 2 bait trials completed, 50%`,
+    ],
+  );
+  runs.forEach((run, i) => near(rate(centre(run)[0]), [0.5, 1, 0.5][i], `the dot of run a${i + 1}`));
+
+  const [range] = all(row, classed('range'));
+  const line = all(range, named('line'))[0];
+  near(rate(line.attrs.x1), 0.5, 'the start of the range');
+  near(rate(line.attrs.x2), 1, 'the end of the range');
+
+  const [tick] = all(row, classed('rate'));
+  assert.equal(all(tick, named('title'))[0].text, `${AGENTS[0]}, prompt injection: 4 of 6 bait trials completed over 3 runs, 67%`);
+  const mark = all(tick, named('rect')).find(classed('fill-ink'));
+  near(rate(Number(mark.attrs.x) + Number(mark.attrs.width) / 2), 4 / 6, 'the tick');
+  assert.equal(rowTexts(row)[1], '67% (50% to 100%, 3 runs)');
+
+  // agent-c did not complete the bait in a run: three dots and the tick at 0%, and no range.
+  const none = rowFor(panel, AGENTS[2]);
+  assert.deepEqual(all(none, classed('run')).map((run) => rate(centre(run)[0])), [0, 0, 0]);
+  assert.equal(all(none, classed('range')).length, 0);
+  assert.equal(all(none, classed('rate')).length, 1);
+});
+
+test('a cell that is not measured, or not run, has no mark: its row holds the agent and the text of the cell only', () => {
+  const svg = plot(SHADOWED);
+  const cells = [
+    [panelFor(svg, 'prompt_injection'), AGENTS[3], 'not measured (2 of 3 runs count)'],
+    [panelFor(svg, 'tool_shadowing'), AGENTS[0], 'not run'],
+    [panelFor(svg, 'tool_shadowing'), AGENTS[3], 'not run'],
+  ];
+  for (const [panel, agent, text] of cells) {
+    const row = rowFor(panel, agent);
+    assert.deepEqual(marksOf(row), [], `${agent}: ${text}`);
+    assert.deepEqual(row.children.map((child) => child.name), ['text', 'text'], `${agent}: ${text}`);
+    assert.deepEqual(rowTexts(row), [agent, text]);
+  }
+  // agent-d's two runs that count are not drawn either, and agent-a's one data exfiltration run has no panel.
+  assert.equal(panelFor(svg, 'data_exfiltration'), undefined);
+});
+
+test('dots of runs at the same or a near rate are set above and below each other, so that no ring covers another dot', () => {
+  const runs = [
+    record('s1', 'agent-s', { trials: [...pi('completed'), ...Array.from({ length: 49 }, () => ['prompt_injection', 'not_completed'])] }),
+    record('s2', 'agent-s', { trials: pi('not_completed') }),
+    record('s3', 'agent-s', { trials: pi('not_completed') }),
+    record('s4', 'agent-s', { trials: pi('not_completed') }),
+    record('s5', 'agent-s', { trials: pi('completed') }),
+  ];
+  const panel = panelFor(plot(runs), 'prompt_injection');
+  const rate = scaleOf(panel);
+  const dots = all(rowFor(panel, 'agent-s 1.0.0 (example-model)'), classed('run'));
+  assert.equal(dots.length, 5);
+  dots.forEach((dot, i) => near(rate(centre(dot)[0]), [0.02, 0, 0, 0, 1][i], `the dot of run s${i + 1}`));
+  const circles = all(dots[0], named('circle'));
+  const ringRadius = Number(circles.find(classed('fill-surface')).attrs.r);
+  const dotRadius = Number(circles.find(classed('fill-series')).attrs.r);
+  for (let i = 0; i < dots.length; i++) {
+    for (let j = i + 1; j < dots.length; j++) {
+      const [[x1, y1], [x2, y2]] = [centre(dots[i]), centre(dots[j])];
+      assert.ok(Math.hypot(x1 - x2, y1 - y2) >= ringRadius + dotRadius, `the dots of s${i + 1} and s${j + 1} are ${Math.hypot(x1 - x2, y1 - y2)} apart`);
+    }
+  }
+  assert.equal(new Set(dots.map((dot) => centre(dot)[1])).size, 4, 'the dots at 0% and 2% are on four levels');
+});
+
+test('text from a record reaches the SVG as text: markup characters, control characters and code units XML cannot hold are escaped', () => {
+  // An escape sequence, then U+FFFE, U+FFFF, a high surrogate with no low one
+  // after it, a space and a low surrogate with no high one before it.
+  const name = `agent <b> & "x" 'y'\u001b[2J${String.fromCharCode(0xfffe, 0xffff, 0xd800, 0x20, 0xdc00)}`;
+  const records = ['<r1>', 'r2', 'r3'].map((runId) => record(runId, name, { trials: pi('completed') }));
+  const svgText = formatSvg(buildEdition(records));
+  assert.ok(!svgText.includes('\u001b'));
+  const svg = parseXml(svgText);
+  const shown = 'agent <b> & "x" \'y\'\\u001b[2J\\ufffe\\uffff\\ud800 \\udc00 1.0.0 (example-model)';
+  const row = rowFor(panelFor(svg, 'prompt_injection'), shown);
+  assert.ok(row, textsOf(svg).join('\n'));
+  assert.equal(all(row, named('title'))[0].text, `${shown}, prompt injection, run <r1>: 1 of 1 bait trial completed, 100%`);
+});
+
+test('a line of text wider than the image is wrapped, inside a word where it has to be', () => {
+  const harness = `runner-${'x'.repeat(400)}`;
+  const svg = plot(['h1', 'h2', 'h3'].map((runId) => record(runId, 'agent-h', { trials: pi('completed'), harness: { name: harness, version: '0.1.0' } })));
+  const lines = textsOf(svg).filter((text) => text.includes('xxxx'));
+  assert.ok(lines.length > 1, lines.join('\n'));
+  assert.ok(lines.join('').includes(`${harness} 0.1.0 (3 runs).`), lines.join('\n'));
+  assert.ok(Number(svg.attrs.width) < 1000, `the image is ${svg.attrs.width} wide`);
+});
+
+test('the dot plot carries the colors of a light surface, and a prefers-color-scheme: dark rule gives each colored element those of a dark one', () => {
+  const svg = plot(SHADOWED);
+  const style = all(svg, named('style'))[0].text;
+  const block = /^@media \(prefers-color-scheme: dark\) \{(.*)\}$/s.exec(style.trim());
+  assert.ok(block, style);
+  const rules = new Map([...block[1].matchAll(/\.([\w-]+) \{ (fill|stroke): (#[0-9a-f]{6}) \}/g)].map(([, name, property, color]) => [name, { property, color }]));
+  const painted = (node, property) => node.attrs[property] !== undefined && !['none', 'transparent'].includes(node.attrs[property]);
+  const colored = all(svg, (node) => painted(node, 'fill') || painted(node, 'stroke'));
+  assert.ok(colored.length > 50, `${colored.length} colored elements`);
+  for (const node of colored) {
+    for (const property of ['fill', 'stroke'].filter((p) => painted(node, p))) {
+      const classes = (node.attrs.class ?? '').split(' ');
+      assert.ok(
+        classes.some((name) => rules.get(name)?.property === property),
+        `<${node.name} class="${node.attrs.class}"> has the ${property} ${node.attrs[property]} and no dark rule for it`,
+      );
+    }
+  }
+  // The surface: the light and dark chart surfaces of the reference palette.
+  const surface = svg.children.find(named('rect'));
+  assert.deepEqual([surface.attrs.width, surface.attrs.height], [svg.attrs.width, svg.attrs.height]);
+  assert.equal(surface.attrs.fill, '#fcfcfb');
+  assert.equal(rules.get(surface.attrs.class).color, '#1a1a19');
+});
+
+test('--svg prints the dot plot with the exit codes of the grid, and a record labelled wild stops it with nothing printed', () => {
+  const measured = runOn(LAB, ['--svg']);
+  assert.equal(measured.status, 0, measured.stderr);
+  assert.equal(measured.stderr, '');
+  assert.equal(measured.stdout, formatSvg(buildEdition(LAB)));
+
+  const few = LAB.filter((r) => r.agent.name === 'agent-d');
+  const none = runOn(few, ['--svg']);
+  assert.equal(none.status, 2, none.stderr);
+  assert.equal(none.stdout, formatSvg(buildEdition(few)));
+  assert.deepEqual(all(parseXml(none.stdout), classed('panel')), []);
+  assert.match(none.stderr, /the records measured no cell: no agent has 3 runs that count for a bait type\n$/);
+
+  const wild = runOn(LAB, ['--svg'], { 'wild.json': JSON.stringify(record('w1', 'agent-w', { label: 'wild', trials: pi('completed') })) });
+  assert.equal(wild.status, 1, wild.stderr);
+  assert.equal(wild.stdout, '');
+  assert.match(wild.stderr, /wild\.json: label is "wild", not "benchmark": the edition reads lab runs against named agents only\n/);
 });
 
 // docs/bait-compliance.md, held to the command it describes.
@@ -380,6 +653,26 @@ test(`the cells and lines ${PAGE} shows are what the edition prints for them`, (
   for (const code of ['0', '1', '2']) {
     assert.ok(section('## Exit codes').some((line) => line.startsWith(`| ${code} |`)), `${PAGE}: no row for exit code ${code}`);
   }
+});
+
+test(`the commands ${PAGE} shows take only the options of the usage line, and one of them is --svg`, () => {
+  const usage = spawnSync(process.execPath, [script, '--help'], { encoding: 'utf8' }).stdout;
+  const commands = page
+    .split('\n')
+    .filter((line) => line.startsWith('node scripts/bait-edition.mjs'))
+    .map((line) => line.split('#')[0]);
+  assert.ok(commands.some((command) => command.split(/\s+/).includes('--svg')), `${PAGE} shows no command with --svg`);
+  for (const command of commands) {
+    for (const option of command.split(/\s+/).filter((word) => word.startsWith('-'))) {
+      assert.ok(usage.includes(option), `${PAGE}: ${command.trim()}: ${option} is not in the usage line`);
+    }
+  }
+});
+
+test(`the title of a dot ${PAGE} shows is the title the dot plot gives that dot`, () => {
+  const [run] = all(rowFor(panelFor(plot(LAB), 'prompt_injection'), AGENTS[0]), classed('run'));
+  const title = all(run, named('title'))[0].text;
+  assert.ok(page.replace(/\s+/g, ' ').includes(`\`${title}\``), `${PAGE} does not show "${title}"`);
 });
 
 test('a directory gives the .json files directly in it, not those of a directory inside it, and a file is read on its own', () => {

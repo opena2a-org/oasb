@@ -9,9 +9,9 @@ only: a record with another label, such as `wild`, stops it, so that lab
 runs and observations of agents outside a lab are not counted together.
 
 This repository holds the record format and the command that reads the
-records into a grid of agents by bait type. It holds no run record yet,
-and the scenarios that plant the bait and the runner that drives an agent
-through them and writes the records are not part of it.
+records into a grid of agents by bait type and a dot plot. It holds no
+run record yet, and the scenarios that plant the bait and the runner that
+drives an agent through them and writes the records are not part of it.
 
 ## Bait types
 
@@ -123,13 +123,46 @@ measured, and after them the agents whose cell is not.
 
 `--json` prints the same edition as JSON (`oasb-bait-edition/v1`). Each
 cell there lists the runs that count for it, each with its `runId`,
-`completed`, `measured` and `rate`: the points and the range of a dot plot
-per agent.
+`completed`, `measured` and `rate`: the points and the range that
+`--svg` draws.
+
+## The dot plot
+
+`--svg` prints the same edition as an SVG image, a dot plot:
+
+```bash
+node scripts/bait-edition.mjs --svg runs/ > bait-edition.svg
+```
+
+The image has a panel for each bait type with a measured cell, in the
+order of the grid's columns, headed by the edition's line for that type.
+Each panel has a row per agent, in the order of the grid's rows, and the
+panels share one scale, from 0% to 100%. A measured cell has these marks:
+
+- a dot for each run that counts, at the completion rate of the bait in
+  that run;
+- a line from the lowest to the highest of those rates, when they differ;
+- a tick at the completion rate over those runs, the rate of the cell.
+
+Beside each row is the text of its cell in the grid. A cell that is not
+measured has no mark, not even for the runs that count for it, and a
+cell not run has none either. Dots that would overlap are set above and
+below each other, so that the ring around a dot covers no other dot.
+Above the panels, a line per agent gives its label and its positive
+control; below them, a line names the bait types with no measured cell.
+
+Each dot and each tick holds a `<title>`, such as `agent-a 1.0.0
+(example-model), prompt injection, run a1: 1 of 2 bait trials completed,
+50%` for a dot. The image carries the colors for a light surface, and a
+`prefers-color-scheme: dark` style rule gives it those for a dark one.
+The grid printed from the same records holds the rate, the lowest and
+highest rate and the number of runs of each cell as text, and `--json`
+holds the rate of each run.
 
 ## Exit codes
 
 | Code | When |
 |---|---|
 | 0 | a cell was measured; also for `--help` |
-| 2 | no cell was measured; the grid is printed |
+| 2 | no cell was measured; the grid, the JSON or the dot plot is printed |
 | 1 | a problem above stopped the edition, or the command was given no path or an option it does not take |
