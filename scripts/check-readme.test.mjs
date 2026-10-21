@@ -4958,3 +4958,77 @@ test('an inline link with a title in "", in \'\' or in (), or a destination or t
   assert.equal(after.status, 1);
   assert.match(after.stderr, /^README: line 12: link target "docs\/nowhere\.md" does not exist\./m);
 });
+
+test('a dated page with 80,000 tags open in an <svg> element and as many end tags that end none, or CDATA sections, is checked in under 2 seconds', () => {
+  // An end tag that ended no element read the names of all the elements
+  // open in foreign content, and each CDATA section read those of the
+  // <tspan> elements open above the <text> element, so the time grew with
+  // the square of the number of tags.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const line of [`<svg>${'<g>'.repeat(80000)}${'</math>'.repeat(80000)}</svg>`, `<svg><text>${'<tspan>'.repeat(80000)}${'<![CDATA[]]>'.repeat(80000)}`]) {
+    const started = process.hrtime.bigint();
+    const r = check(DATED_LINK, datedPage(`<div>\n${line}\n</div>\n\nAs of 2026-06-03. ${see}`));
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for ${line.slice(0, 16)}`);
+  }
+});
+
+test('in an <svg> or <math> element, text is the note only where a browser shows text there, as for the text of a CDATA section', () => {
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<svg>As of 2026-06-03.</svg>\n</div>\n\n${see}`,
+    `Hello <svg>As of 2026-06-03.</svg> world.\n\n${see}`,
+    `### Audit <svg>As of 2026-06-03.</svg>\n\n${see}`,
+    `| <svg>As of 2026-06-03.</svg> | x |\n| - | - |\n\n${see}`,
+    `Hello <svg>\nAs of 2026-06-03.\n</svg> world.\n\n${see}`,
+    `<div>\n<svg><g>As of 2026-06-03.</g></svg>\n</div>\n\n${see}`,
+    `<div>\n<svg><tspan>As of 2026-06-03.</tspan></svg>\n</div>\n\n${see}`,
+    `<div>\n<math>As of 2026-06-03.</math>\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+  for (const intro of [
+    `<div>\n<svg><text>As of 2026-06-03.</text></svg>\n</div>\n\n${see}`,
+    `<div>\n<svg><text><a><tspan>As of 2026-06-03.</tspan></a></text></svg>\n</div>\n\n${see}`,
+    `<div>\n<svg><foreignObject>As of 2026-06-03.</foreignObject></svg>\n</div>\n\n${see}`,
+    `<div>\n<math><mi>As of 2026-06-03.</mi></math>\n</div>\n\n${see}`,
+    `Hello <svg>x</svg> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test('on a dated page the text after a <title> start tag is hidden up to </title>, as a browser hides it, but for a <title> in an <svg> or <math> element', () => {
+  // A browser reads the text after an HTML <title> start tag as the
+  // element's text and does not show it, as for <style>; in an <svg> or
+  // <math> element, outside <desc> and the other integration points, it
+  // reads <title> as the start of an SVG or MathML element.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<title> x > As of 2026-06-03.\n</div>\n\n${see}`,
+    `Hello <title> As of 2026-06-03. world.\n\n${see}`,
+    `### Audit <title> As of 2026-06-03.\n\n${see}`,
+    `| <title> As of 2026-06-03. | x |\n| - | - |\n\n${see}`,
+    `<div>\n<TITLE/> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<title>\n</div>\n\nAs of 2026-06-03.\n\n${see}`,
+    `<div>\n<svg><desc><title> x > As of 2026-06-03.\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+  for (const intro of [
+    `<div>\n<title>x</title> As of 2026-06-03.\n</div>\n\n${see}`,
+    `Hello <title>x <!-- </title> As of 2026-06-03. --> world.\n\n${see}`,
+    `<div>\n<title>\n</div>\n\nx <b title="</title>"> As of 2026-06-03.\n\n${see}`,
+    `<div>\n<svg><title>x</title></svg> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<math><title>x</title></math> As of 2026-06-03.\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});

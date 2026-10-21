@@ -1486,8 +1486,21 @@ stay on record here with the reason they changed.
   the start of the next block end the element for the check. Headless
   Chromium 156 read the `<![CDATA[` after 2,000 random sequences of tags
   in a `<div>` as the check now reads it, but where the check ends the
-  element at a stray end tag such as `</a>`, or at a start tag inside
-  `<foreignObject>`, `<mi>` or `<mtext>`, which a browser does not.
+  element at a stray end tag such as `</a>`, or at a start tag inside an
+  element that it reads as an integration point and a browser does not
+  end the element there. The check reads each of `<foreignObject>`,
+  `<desc>`, `<title>`, `<annotation-xml>`, `<mi>`, `<mo>`, `<mn>`, `<ms>`
+  and `<mtext>` as one in `<svg>` and in `<math>` alike, and
+  `<annotation-xml>` with or without an `encoding` attribute, so it also
+  ends the element at a start tag such as `<g>` inside an `<ms>` in
+  `<svg>`, a `<desc>` in `<math>` or an `<annotation-xml>` whose
+  `encoding` is neither `text/html` nor `application/xhtml+xml`, each of
+  which the HTML standard reads as an element like any other there: with
+  the lines `<div>`,
+  `<svg><ms><g><![CDATA[ x > As of 2026-06-03. ]]></g></ms></svg>` and
+  `</div>` the check exits 0, as it reads that `<![CDATA[` outside the
+  `<svg>` element, and with
+  `<svg><g><![CDATA[ x > As of 2026-06-03. ]]></g></svg>` it exits 1.
 - `npm run check:readme` reads a `<` or a backtick in the destination or
   title of an inline link, or in an image, as text on a dated page, as a
   renderer writes these as an href, a title and alt text: with
@@ -1553,6 +1566,45 @@ stay on record here with the reason they changed.
   exit 0, as does that image in a heading or a table cell. A `![` that no
   destination follows opens no image, and both render an `<a>` after it
   as a link, so `![<a href='docs/nowhere.md'>x</a>] y` exits 1, as it did.
+- `npm run check:readme` counts the elements open of each name in an
+  `<svg>` or `<math>` element on a dated page, and keeps for each whether
+  a CDATA section in it is shown, so a CDATA section reads only the element
+  opened last. An end tag that ended no element, such as `</math>` in an
+  `<svg>` element, read the names of all the elements open there, and a
+  CDATA section in a `<text>` element read those of the `<tspan>` elements
+  open in it, so the time grew with the square of the number of tags: a
+  page whose note is `<div>`, then `<svg>`, 80,000 `<g>`, 80,000
+  `</math>` and `</svg>` on one line, and `</div>` took 8.7 seconds to
+  check (2.4 with 40,000 of each), and one with `<svg><text>`, 80,000
+  `<tspan>` and 80,000 `<![CDATA[]]>` on that line took 13.4 seconds
+  (3.7). Each now takes 0.2 seconds (0.1).
+- `npm run check:readme` reads text in an `<svg>` or `<math>` element on
+  a dated page as the note only where it reads the text of a CDATA section
+  there as one, as a browser reads both as text of the element that holds
+  them: in an SVG `<text>` element, also inside a `<tspan>`, `<textPath>`
+  or `<a>` element in it, in `<foreignObject>` and in a MathML token
+  element such as `<mi>`. A page whose note is `<div>`,
+  `<svg>As of 2026-06-03.</svg>` and `</div>`, or the line
+  `Hello <svg>As of 2026-06-03.</svg> world.`, exited 0 and now exits 1
+  with `is a dated page, so above its first H2 it must say "as of
+  2026-06-03"`, as it did with
+  `<svg><![CDATA[ x > As of 2026-06-03. ]]></svg>` in place of that
+  `<svg>` element.
+- `npm run check:readme` reads the text after a `<title>` start tag on a
+  dated page, up to `</title>`, as the text of a `<title>` element, which a
+  browser does not show, as it reads that of a `<style>` element. A page
+  whose note is `<div>`, `<title> x > As of 2026-06-03.` and `</div>`,
+  then a blank line and
+  `See the [README](../README.md) for the current figures.`, exited 0 and
+  now exits 1 with `is a dated page, so above its first H2 it must say "as
+  of 2026-06-03"`, as does the line
+  `Hello <title> As of 2026-06-03. world.`, and the line
+  `Hello <title>x <!-- </title> As of 2026-06-03. --> world.` exited 1 and
+  now exits 0, as that `<!--` is text of the element. A `<title>` start
+  tag that the check reads as part of an `<svg>` or `<math>` element opens
+  none, as a browser reads it as the start of an SVG or MathML element
+  there: with `<svg><title>x</title></svg> As of 2026-06-03.` as the
+  second line, the check exits 0.
 
 ## 0.4.1 - 2026-10-17
 
