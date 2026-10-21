@@ -131,6 +131,30 @@ for (const doc of ['README.md', 'docs/how-it-works.md']) {
   });
 }
 
+// Of the README's OASB-1 commands, only the hackmyagent ones exit non-zero on
+// a Not Passing rating: on a copy of DVAA 0.9.2 that both CLIs rate Not
+// Passing, `hackmyagent secure -b oasb-1` of hackmyagent 0.33.2 exits 1, and
+// `opena2a benchmark` of opena2a-cli 0.10.13 exits 0, also with --ci. When
+// opena2a benchmark gains a flag that exits non-zero on the rating, update
+// the README and this test.
+test('the README says which of its OASB-1 commands exit non-zero on a Not Passing rating', () => {
+  const section = read('README.md')
+    .split(/^## /m)
+    .find((s) => s.startsWith('Usage via OpenA2A CLI\n'))
+    ?.replace(/\s+/g, ' ');
+  assert.ok(section, 'the README has no Usage via OpenA2A CLI section; update this test with the heading');
+  const says = {
+    'only the hackmyagent commands exit non-zero on a Not Passing rating':
+      /only the `hackmyagent` ones exit non-zero on a Not Passing rating/,
+    'hackmyagent secure -b oasb-1 exits 1': /`hackmyagent secure -b oasb-1` \(hackmyagent \d+\.\d+\.\d+\) exits 1\b/,
+    'opena2a benchmark exits 0, also with --ci':
+      /`opena2a benchmark` \(opena2a-cli \d+\.\d+\.\d+\) prints the rating and exits 0, also with `--ci`/,
+  };
+  for (const [what, re] of Object.entries(says)) {
+    assert.match(section, re, `the README's Usage via OpenA2A CLI section does not say ${what}; update this test with the wording`);
+  }
+});
+
 // The commands that write the scorecard, from the Usage lines of the
 // generator's header, and the file the header says it writes.
 const usage = (() => {
