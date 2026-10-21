@@ -3471,6 +3471,212 @@ test('a <script> that a </textarea> end tag inside raw HTML in a paragraph, a he
   }
 });
 
+const NO_NOTE = /it must say "as of 2026-06-03"; its counts are those of 2026-06-03 and are not compared with the suite\./;
+
+test('a <script> on a line of an HTML block ends at a </script> only where a browser ends it: not after <!-- and then <script in its text with no --> between them', () => {
+  // A renderer passes the text of an HTML block on as written, and a
+  // browser's tokenizer reads <!-- in the text of a <script> element as the
+  // start of the script data escaped state, and <script after it as the
+  // start of the double escaped state, where </script> returns it to the
+  // escaped state and --> to the script data state; in the other two states
+  // </script> ends the element. The state runs on to the later lines of the
+  // block, and the element stays open past the end of the block.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<script><!-- <script></script> --> As of 2026-06-03. world.\n</div>\n\n${see}`,
+    `<div>\n<script><!--\n<script>\n</script>\n</div>\n\nAs of 2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+  for (const intro of [
+    `<div>\n<script><!-- <script></script></script> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<script><!-- <script> --></script> As of 2026-06-03.\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test('a comment, <script> or <style> that a paragraph or an HTML block leaves open hides the blocks after it up to its end inside later raw HTML, as a browser keeps it open past the end of the block', () => {
+  // A browser reads on in the comment or element over the blank lines,
+  // paragraphs, headings, table cells, code blocks and HTML blocks after
+  // it, up to the first match of its end in raw HTML, which a renderer
+  // passes on as written; it writes the > of a code block as &gt;, so a
+  // code block ends nothing. After a ]( or ![ in a paragraph, raw HTML ends
+  // nothing that hides text, so what is open stays open past that paragraph
+  // too: with a link before the </script> below the <script> line, where a
+  // browser ends the element, the check keeps it open. An HTML block of
+  // kind 1 ends at a </script> or </textarea> that ends no element.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  const script = 'Hello <textarea><!-- </textarea><script> -->';
+  for (const intro of [
+    `${script}\n\nAs of 2026-06-03.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\n\nAs of 2026-06-03.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><style> -->\n\nAs of 2026-06-03.\n\n${see}`,
+    `${script}\n\n<div>\nx\n</div>\n\nAs of 2026-06-03.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\n\n    -->\n\nAs of 2026-06-03.\n\n${see}`,
+    `${script}\n\n[x](https://example.com) </script>\n\nAs of 2026-06-03.\n\n${see}`,
+    `${script}\n\n| a | b |\n| - | - |\n| x | As of 2026-06-03. |\n\n${see}`,
+    `<div>\n<!-- x\n\nAs of 2026-06-03.\n\n${see}`,
+    `<script>\n<!-- <script>\n</script>\nAs of 2026-06-03.\n</script>\n\n${see}`,
+    `<script>\nx </textarea>\n\nAs of 2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+  for (const intro of [
+    `${script}\n\nx </script> As of 2026-06-03.\n\n${see}`,
+    `${script}\n\n<div>\n</script>\n</div>\n\nAs of 2026-06-03.\n\n${see}`,
+    `${script}\n\n### x </script> y\n\nAs of 2026-06-03.\n\n${see}`,
+    `${script}\n\n| a | b |\n| - | - |\n| </script> | x |\n\nAs of 2026-06-03.\n\n${see}`,
+    `<div>\n<!-- x\n\ny <!-- --> As of 2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test('a processing instruction ends at the first > after its <?, as a browser ends what <? opens there, on a line of an HTML block and in a paragraph', () => {
+  // A browser reads <? as the start of a bogus comment, which ends at the
+  // first >, and shows the text after it, also where CommonMark reads the
+  // processing instruction on to a later ?>, on its line or a later one: a
+  // renderer passes it on as written, so the rest of it is read as raw
+  // HTML, and what that leaves open, such as a comment, hides the text
+  // after it.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<?x> As of 2026-06-03.\n</div>\n\n${see}`,
+    `Hello <textarea><b title="</textarea><?x">\nAs of 2026-06-03. world.\n\n${see}`,
+    `<?x\n> As of 2026-06-03.\n?>\n\n${see}`,
+    `Hello <?x> As of 2026-06-03. ?>\n\n${see}`,
+    `Hello <?x>\nAs of 2026-06-03. ?>\n\n${see}`,
+    `Hello <?x\ny > As of 2026-06-03.\nz ?>\n\n${see}`,
+    `Hello <?x ><textarea ?> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [`Hello <?x > <!-- ?> As of 2026-06-03. world.\n\n${see}`, `Hello <?note As of 2026-06-03. ?> world.\n\n${see}`]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+});
+
+test('a comment ends at --!> as at -->, as a browser ends it, on a line of an HTML block and in a paragraph, but not at a --!> that takes its dashes from its <!--', () => {
+  // The -- of a <!-- end the comment only before a >, as in <!-->: <!--!>
+  // and <!---!> open a comment that runs on, and <!----!> is one. A --!>
+  // does not end the script data escaped state of a <script>, which only
+  // --> ends.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<!-- y --!> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<!----!> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<!-- y\nz --!> As of 2026-06-03.\n</div>\n\n${see}`,
+    `Hello <!-- y --!> As of 2026-06-03. -->\n\n${see}`,
+    `Hello <!-- y\nz --!> As of 2026-06-03. -->\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\nx <b title="--!>"> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    `<div>\n<!--!> As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `<div>\n<!---!> As of 2026-06-03. -->\n</div>\n\n${see}`,
+    `Hello <!--!> As of 2026-06-03. -->\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\nx <b title="<!--<script>--!>"></script> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+});
+
+test("a <script> or <style> start tag in a paragraph, a heading or a table cell hides the text after it up to its end tag inside later raw HTML, as a browser reads that text as the element's", () => {
+  // Also <script/>, a start tag that runs on to a later line, one with an
+  // attribute and one after a link, and past the end of the paragraph or
+  // cell. A </script> or </style> that a renderer passes on as written ends
+  // the element; a tag of another name, such as <scripts>, and an end tag
+  // alone open none. A <!-- that no --> follows in its paragraph is text,
+  // so it puts the tokenizer in no escaped state.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Hello <script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <style> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <script type="text/plain"> As of 2026-06-03. world.\n\n${see}`,
+    `See [x](https://example.com) <script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <script/> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <script\ntype="x"> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <script title="</script>"> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <script>\n\nAs of 2026-06-03.\n\n${see}`,
+    `### Hello <script> As of 2026-06-03. world\n\n${see}`,
+    `| a | b |\n| - | - |\n| <script> As of 2026-06-03. | x |\n\n${see}`,
+    `| a | b |\n| - | - |\n| <script> x | As of 2026-06-03. |\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+  for (const intro of [
+    `Hello <script>x</script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <style>p{}</style> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <script>\n\nx </script> As of 2026-06-03.\n\n${see}`,
+    `Hello <scripts> As of 2026-06-03. world.\n\n${see}`,
+    `Hello </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <script><!-- <script></script> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test("the attributes of a <script> start tag are not the element's text, on a line of an HTML block or in raw HTML in a paragraph, so a </script> or <!-- in one ends or escapes nothing", () => {
+  // A browser reads the start tag on to its >, also past a line break, and
+  // the element's text from there, and <script/> opens the element too.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<script title="</script>"> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<script\ntitle="</script>"> As of 2026-06-03.\n</div>\n\n${see}`,
+    `<div>\n<script/> As of 2026-06-03.\n</div>\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script title="</script>"> --> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+  const open = 'Hello <textarea><!-- </textarea><script> -->';
+  for (const intro of [
+    `${open}\nx <![CDATA[ </script><script title="<!--"> <script> ]]>\n</script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <b title="</script><script title='<!--'> <script>">\n</script> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
+test('raw HTML after a CDATA section in a paragraph ends what is open, as its ![ opens no image, and raw HTML after a <![CDATA[ that no ]]> follows ends nothing', () => {
+  // The ![ of a <![CDATA[ that a ]]> follows in the paragraph starts no
+  // image description, after which a renderer writes a < as text; without
+  // that ]]> the < is text and the ![ is read as one.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  const open = 'Hello <textarea><!-- </textarea><script> -->';
+  let r = check(DATED_LINK, datedPage(`${open}\nx <![CDATA[ y ]]> </script> As of 2026-06-03. world.\n\n${see}`));
+  assert.equal(r.status, 0, r.stderr);
+  r = check(DATED_LINK, datedPage(`${open}\nx <![CDATA[ y </script> As of 2026-06-03. world.\n\n${see}`));
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, DATED);
+  assert.match(r.stderr, NO_NOTE);
+});
+
 test('a <textarea> or <!-- inside the quoted value of an attribute on a line of an HTML block starts nothing, and a </textarea > end tag ends a <textarea>', () => {
   // A browser reads a < inside an attribute value as part of the value, so
   // a comment after it still hides the note, and a <!-- there hides none.
