@@ -204,8 +204,10 @@ README's test counts do not include them.
   a `hackmyagent` directory beside the package.
 - `scripts/doc-facts.test.mjs`: statements in `README.md`,
   `BENCHMARK-RESULTS.md` and `docs/pinned-benchmark.md` that must match the
-  corpus and scripts they describe, and that `docs/demo.tape` states no test
-  or scenario count.
+  corpus and scripts they describe, that `docs/demo.tape` states no test or
+  scenario count and writes the vitest JSON report its `npm run report` step
+  reads, and that the tape and `docs/oasb-demo.gif` are the files whose
+  SHA-256 `docs/captures/demo.json` records.
 - `scripts/placeholder-credentials.test.mjs`: the placeholder marking of
   API-key-shaped values in `src/`; fails when one does not spell FAKE.
 - `scripts/secret-scan-workflow.test.mjs`: the secret-scan job of

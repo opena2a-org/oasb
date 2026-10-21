@@ -181,6 +181,23 @@ stay on record here with the reason they changed.
 
 ### Fixed
 
+- The recording of a run the README links, `docs/oasb-demo.gif`, is
+  recorded again from `docs/demo.tape` (569,227 bytes, 2026-10-21). The
+  recording of 2026-03-11 (2,676,739 bytes) showed `npm test` with the test
+  total of that day, then the first rows of a report under the MITRE ATLAS
+  mapping withdrawn on 2026-06-03, each with status N/A. The tape now runs
+  the AI-layer scenario files against arp-guard with
+  `npx vitest run AT-AI --reporter=default --reporter=json
+  --outputFile=test-results.json`, writes their report with
+  `npm run report`, and shows the report's Summary and the 15 ATLAS
+  techniques it reads from the `// ATLAS:` header of each scenario file. It
+  runs those files and not the whole suite, whose totals
+  `docs/test-catalog.md` states. It ran `npm test`, which writes no JSON
+  report, before `npm run report`, which writes no report without one.
+  `docs/captures/demo.json` records the recording with the SHA-256 of the
+  tape and of the GIF, and `scripts/doc-facts.test.mjs` fails when either
+  file differs from that record, or when no step of the tape before
+  `npm run report` writes the JSON report it reads.
 - The package holds the files the README links by a relative path: `files`
   in `package.json` adds `docs/`, all but the recording of a run
   (`docs/oasb-demo.gif`, 2,676,739 bytes), and `REPORT.md`, 17 files. With

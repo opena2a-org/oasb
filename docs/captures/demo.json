@@ -1,0 +1,29 @@
+{
+  "command": "vhs docs/demo.tape",
+  "directory": "the root of a clone at /tmp/oasb, after npm ci, so the RUN line of vitest and the path npm run report prints show /private/tmp/oasb",
+  "environment": {
+    "HOME": "an empty directory",
+    "LANG": "en_US.UTF-8",
+    "npm_config_update_notifier": "false"
+  },
+  "versions": {
+    "vhs": "0.10.0",
+    "arp-guard": "0.3.0",
+    "vitest": "3.2.7",
+    "tsx": "4.23.15",
+    "node": "26.12.0",
+    "npm": "11.20.0"
+  },
+  "capturedOnUtc": "2026-10-21",
+  "tape": {
+    "path": "docs/demo.tape",
+    "sha256": "2d81c80bd7b520e7c00410565520b9b4fbb1430e46d7a2a4eac6b376f4024f84"
+  },
+  "outputs": {
+    "gif": {
+      "path": "docs/oasb-demo.gif",
+      "bytes": 569227,
+      "sha256": "e9e082f4ec571a64f71ec3bd035623f59554f8326da8b037c2b82658e04be4a1"
+    }
+  }
+}
