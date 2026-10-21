@@ -301,6 +301,15 @@ README's test counts do not include them.
   copy. It does not check that the install succeeds: the step ignores a
   failed `npm install`, and npx then downloads license-checker from the
   registry when `node_modules` holds none.
+- `scripts/e2e-001-runs-alone.test.mjs`: the projects of
+  `vitest.config.ts`, read as vitest resolves them, without running a
+  test. Fails when a test file under `src/` is not in the suite or is in
+  it twice, when another test file runs in the `sequence.groupOrder` of
+  E2E-001 or a later one, and so can run beside it, or is not in the
+  unnamed root project, when E2E-001's hookTimeout is not 10 seconds or its
+  timeouts are not those of the other files, or when a global setup file
+  is listed by more than one project or no project lists
+  `scripts/scenario-floor.ts`.
 
 ## The README checks on every pull request
 
