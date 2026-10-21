@@ -1861,6 +1861,25 @@ test('a line that opens a block quote or list item and then indented code after 
   assert.match(r.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
 });
 
+test('an inline link indented 4 or more columns after a | line that is paragraph text is read where that line keeps a list item or a paragraph open', () => {
+  // A line that starts with | is paragraph text when no table row precedes
+  // it and no delimiter row with as many cells follows it, also where it
+  // goes on with a list item's paragraph lazily. The list item then stays
+  // open, and after a blank line the line indented 5 columns, 3 past the
+  // item's text, is a paragraph in it. After b, | - | - | has 2 cells to
+  // b's 1, no delimiter row follows | a | b |, and no ordered list that
+  // starts at 2, empty list item or indented code interrupts a paragraph,
+  // so the line after two tabs goes on with b's paragraph.
+  for (const [body, n] of [
+    ['* item\n| a\n\n     [x](docs/nowhere.md)\n', 14],
+    ['b\n| - | - |\n| a | b |\n2) two\n1.\n\t\t[x](docs/nowhere.md)\n', 16],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`line ${n}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+});
+
 test('a line of ***, --- or ___ and 100,000 spaces or tabs before text is checked in under 2 seconds', () => {
   // The spaces and tabs could be split between the last mark and a [ \t]*
   // after the marks in every way: these three lines took 12.9 seconds.
