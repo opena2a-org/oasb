@@ -158,7 +158,8 @@ of the row's marks give the whole name.
 
 Each dot and each tick holds a `<title>`, such as `agent-a 1.0.0
 (example-model), prompt injection, run a1: 1 of 2 bait trials completed,
-50%` for a dot. The image carries the colors for a light surface, and a
+50%` for a dot, and a pointer resting on a dot shows the title of that
+dot. The image carries the colors for a light surface, and a
 `prefers-color-scheme: dark` style rule gives it those for a dark one.
 The grid printed from the same records holds the rate, the lowest and
 highest rate and the number of runs of each cell as text, and `--json`

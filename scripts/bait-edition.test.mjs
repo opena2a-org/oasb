@@ -544,15 +544,17 @@ test('a cell that is not measured, or not run, has no mark: its row holds the ag
   assert.equal(panelFor(svg, 'data_exfiltration'), undefined);
 });
 
+// Five runs of agent-s: one at 2%, three at 0% and one at 100%.
+const STACKED = [
+  record('s1', 'agent-s', { trials: [...pi('completed'), ...Array.from({ length: 49 }, () => ['prompt_injection', 'not_completed'])] }),
+  record('s2', 'agent-s', { trials: pi('not_completed') }),
+  record('s3', 'agent-s', { trials: pi('not_completed') }),
+  record('s4', 'agent-s', { trials: pi('not_completed') }),
+  record('s5', 'agent-s', { trials: pi('completed') }),
+];
+
 test('dots of runs at the same or a near rate are set above and below each other, so that no ring covers another dot', () => {
-  const runs = [
-    record('s1', 'agent-s', { trials: [...pi('completed'), ...Array.from({ length: 49 }, () => ['prompt_injection', 'not_completed'])] }),
-    record('s2', 'agent-s', { trials: pi('not_completed') }),
-    record('s3', 'agent-s', { trials: pi('not_completed') }),
-    record('s4', 'agent-s', { trials: pi('not_completed') }),
-    record('s5', 'agent-s', { trials: pi('completed') }),
-  ];
-  const panel = panelFor(plot(runs), 'prompt_injection');
+  const panel = panelFor(plot(STACKED), 'prompt_injection');
   const rate = scaleOf(panel);
   const dots = all(rowFor(panel, 'agent-s 1.0.0 (example-model)'), classed('run'));
   assert.equal(dots.length, 5);
@@ -567,6 +569,65 @@ test('dots of runs at the same or a near rate are set above and below each other
     }
   }
   assert.equal(new Set(dots.map((dot) => centre(dot)[1])).size, 4, 'the dots at 0% and 2% are on four levels');
+});
+
+/** Whether `node`, a circle, rect or line, paints (or has a transparent fill on) the point (x, y). */
+function covers(node, x, y) {
+  const n = (key) => Number(node.attrs[key] ?? 0);
+  const filled = node.attrs.fill !== 'none';
+  if (node.name === 'circle') return filled && Math.hypot(x - n('cx'), y - n('cy')) <= n('r');
+  if (node.name === 'rect') return filled && x >= n('x') && x <= n('x') + n('width') && y >= n('y') && y <= n('y') + n('height');
+  if (node.name !== 'line' || [undefined, 'none'].includes(node.attrs.stroke)) return false;
+  const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map(n);
+  const length2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+  const t = length2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / length2));
+  return Math.hypot(x - (x1 + t * (x2 - x1)), y - (y1 + t * (y2 - y1))) <= Number(node.attrs['stroke-width'] ?? 1) / 2;
+}
+
+/**
+ * The title a browser shows for a pointer at (x, y) on `svg`: that of the
+ * nearest element with a <title>, from the topmost element under the pointer
+ * up. The topmost is the last in document order of the circles, rects and
+ * lines that cover the point and whose pointer-events, their own or one they
+ * inherit from a group, is not none. Text is left out: the agent names end
+ * left of the scale and the texts of the cells start right of it.
+ */
+function titleAt(svg, x, y) {
+  let top = [];
+  const visit = (node, path, events) => {
+    const own = node.attrs['pointer-events'] ?? events;
+    const here = [...path, node];
+    if (own !== 'none' && covers(node, x, y)) top = here;
+    for (const child of node.children) visit(child, here, own);
+  };
+  visit(svg, [], 'visiblePainted');
+  const holder = [...top].reverse().find((node) => node.children.some(named('title')));
+  return holder?.children.find(named('title')).text;
+}
+
+test('a pointer resting on a dot shows the title of that dot, and one at the centre of a tick that no dot covers shows the title of the tick', () => {
+  let ticks = 0;
+  for (const svg of [plot(LAB), plot(SHADOWED), plot(STACKED)]) {
+    const runs = all(svg, classed('run'));
+    const rings = runs.map((run) => all(run, named('circle')).find(classed('fill-surface')));
+    for (const run of runs) {
+      const title = all(run, named('title'))[0].text;
+      const [x, y] = centre(run);
+      const r = Number(all(run, named('circle')).find(classed('fill-series')).attrs.r);
+      // The centre of the dot and eight points around it, nine tenths of its radius out.
+      const points = [[x, y], ...Array.from({ length: 8 }, (_, k) => [x + 0.9 * r * Math.cos((k * Math.PI) / 4), y + 0.9 * r * Math.sin((k * Math.PI) / 4)])];
+      for (const [px, py] of points) assert.equal(titleAt(svg, px, py), title, `a pointer at (${px.toFixed(2)}, ${py.toFixed(2)})`);
+    }
+    for (const tick of all(svg, classed('rate'))) {
+      const mark = all(tick, named('rect')).find(classed('fill-ink'));
+      const [x, y] = [Number(mark.attrs.x) + Number(mark.attrs.width) / 2, Number(mark.attrs.y) + Number(mark.attrs.height) / 2];
+      if (rings.some((ring) => Math.hypot(x - Number(ring.attrs.cx), y - Number(ring.attrs.cy)) <= Number(ring.attrs.r))) continue;
+      assert.equal(titleAt(svg, x, y), all(tick, named('title'))[0].text, `a pointer at the centre of the tick at (${x}, ${y})`);
+      ticks++;
+    }
+  }
+  // agent-a and agent-b in each prompt injection panel, and agent-s.
+  assert.equal(ticks, 5, 'ticks whose centre no dot covers');
 });
 
 test('text from a record reaches the SVG as text: markup characters, control characters and code units XML cannot hold are escaped', () => {

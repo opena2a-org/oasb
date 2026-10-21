@@ -37,7 +37,11 @@ stay on record here with the reason they changed.
   run, a line from the lowest to the highest of those rates when they
   differ, and a tick at the rate of the cell, with the text of the cell
   beside the row. A cell that is not measured has no mark. Dots that would
-  overlap are set above and below each other. The image carries the colors
+  overlap are set above and below each other. Each dot and each tick has a
+  title, and a pointer resting on a dot shows the title of that dot: the
+  transparent areas a pointer rests on are drawn under every mark, and the
+  tick takes no pointer, so neither the area of a dot beside it nor the
+  tick at its rate lies over it. The image carries the colors
   for a light surface and, under `prefers-color-scheme: dark`, those for a
   dark one. `--svg` reads the records the grid reads, stops at the same
   problems and exits with the same codes. A line of text is wrapped
