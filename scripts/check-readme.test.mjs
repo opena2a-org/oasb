@@ -1484,6 +1484,80 @@ test('an href is read in a tag that starts on an earlier line of its paragraph, 
   }
 });
 
+test('an href is read in a tag after the first > inside a processing instruction or CDATA section, or after a --!> inside a comment, where a browser ends it', () => {
+  // A browser reads <? and <![CDATA[ as the start of a bogus comment, which
+  // ends at the first > after it, and ends a comment at a --!> after its
+  // <!--, before the ?>, ]]> or --> at which CommonMark ends each of these.
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) pass each of
+  // these on as raw HTML, and parse5 7.3.0 reads a link to docs/nowhere.md
+  // in what they render: in a tag after that end, on its line or on a later
+  // line of the paragraph, also in a heading, a table row, a block quote or
+  // a list item, in a tag that CommonMark reads as text and the HTML
+  // tokenizer as a tag, such as <a b="c"href="docs/nowhere.md">, and after
+  // a comment or a bogus comment that ends before the tag.
+  for (const [body, line] of [
+    ['x <? > <a href="docs/nowhere.md">y</a> ?>\n', 11],
+    ['x <![CDATA[ > <a href="docs/nowhere.md">y</a> ]]>\n', 11],
+    ['x <!-- --!> <a href="docs/nowhere.md">y</a> -->\n', 11],
+    ['x <!----!> <a href="docs/nowhere.md">y</a> -->\n', 11],
+    ['x <? >\n<a href="docs/nowhere.md">y</a> ?>\n', 12],
+    ['x <? > <a title="z"\nhref="docs/nowhere.md">y</a> ?>\n', 12],
+    ['## x <? > <a href="docs/nowhere.md">y</a> ?>\n', 11],
+    ['| h |\n| - |\n| x <? > <a href="docs/nowhere.md">y</a> ?> |\n', 13],
+    ['> x <? >\n> <a href="docs/nowhere.md">y</a> ?>\n', 12],
+    ['- x <![CDATA[ >\n  <a href="docs/nowhere.md">y</a> ]]>\n', 12],
+    ["x <? > <A HREF='docs/nowhere.md'>y</A> ?>\n", 11],
+    ['x <? > <a b"c href="docs/nowhere.md">y</a> ?>\n', 11],
+    ['x <? > <a/href="docs/nowhere.md">y</a> ?>\n', 11],
+    ['x <? > <a b="c"href="docs/nowhere.md">y</a> ?>\n', 11],
+    ['x <!-- --!> <? > <a href="docs/nowhere.md"> ?> -->\n', 11],
+    ['x <? > </> <a href="docs/nowhere.md">y</a> ?>\n', 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // parse5 reads no link to docs/nowhere.md in what they render of these:
+  // the first > after the <? or <![CDATA[ is the tag's own; the --!> of
+  // <!--!> and <!---!> takes its dashes from the <!--, so the comment runs
+  // on to the -->; the tag is inside a comment or a bogus comment that the
+  // rest opens, from <!--, <?, <! or </ and a space, or inside the quoted
+  // value of another tag; the href is that of a closing tag; the tag's
+  // first attribute starts with =, so the > in its quoted value ends the
+  // tag; a quote in an attribute's name opens no value, so the href is
+  // inside the quoted value of the next attribute; or the tag's first href
+  // is docs/guide.md, as a browser drops a later one.
+  for (const body of [
+    'x <? <a href="docs/nowhere.md"> ?>\n',
+    'x <![CDATA[ <a href="docs/nowhere.md"> ]]>\n',
+    'x <!--!> <a href="docs/nowhere.md">y</a> -->\n',
+    'x <!---!> <a href="docs/nowhere.md">y</a> -->\n',
+    'x <? > <!-- <a href="docs/nowhere.md"> --> ?>\n',
+    'x <? > <?x <a href="docs/nowhere.md"> ?>\n',
+    'x <? > <!x <a href="docs/nowhere.md"> ?>\n',
+    'x <? > </ <a href="docs/nowhere.md"> ?>\n',
+    'x <? > <b title="<a href=\'docs/nowhere.md\'>">y</b> ?>\n',
+    'x <? > </b href="docs/nowhere.md"> ?>\n',
+    'x <? > <a ="z>" href="docs/nowhere.md">y</a> ?>\n',
+    'x <? > <a x\' b="y\' href=\'docs/nowhere.md">z</a> ?>\n',
+    'x <? > <a href="docs/guide.md" href="docs/nowhere.md">y</a> ?>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('a line of 200,000 tags with an href, outside a processing instruction or inside one, is checked without a RangeError', () => {
+  // Given as the arguments of one push(), the targets of a line of 130,000
+  // such tags threw a RangeError (Maximum call stack size exceeded) on
+  // Node.js 26.12.0, and those of a line of 120,000 did not.
+  const tags = '<a href="docs/guide.md">'.repeat(200000);
+  for (const line of [`x ${tags}`, `x <? >${tags} ?>`]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, r.stderr.slice(0, 500));
+  }
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a

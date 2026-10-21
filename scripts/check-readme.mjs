@@ -109,7 +109,13 @@
 //      starts on an earlier line of its paragraph; one inside another tag's
 //      quoted value, a comment, a processing instruction, a declaration, a
 //      CDATA section or a link's title is not read, nor is one in text that
-//      is not raw HTML, such as \<a href="target">. Other forms,
+//      is not raw HTML, such as \<a href="target">. A browser may end a
+//      comment, processing instruction or CDATA section before the end at
+//      which CommonMark ends it: a comment at a --!> after its <!--, and
+//      what <? or <![CDATA[ opens at the first > after it. It reads the
+//      rest of it as raw HTML, so an href in an open tag there is read:
+//      x <? > <a href="target">y</a> ?> links to target, and
+//      x <? <a href="target"> ?> does not. Other forms,
 //      such as an unquoted href or a definition on the same line as a list
 //      marker (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
@@ -676,10 +682,13 @@ function codeSpans(text) {
 // which answers as inlineLink does for the ( at line[i], with an index on
 // the line, past its end when the link closes on a later line, and
 // hrefs(), the targets on the line of the hrefs that tagHref() reads in
-// the open tags htmlAt() has read: those whose target opens on the line,
-// also those of a tag that starts on an earlier line. A reader asks about
-// the runs, the < and the ( it meets from left to right, and asks for
-// hrefs() once it has read the line.
+// the open tags htmlAt() has read, and of those that rawHtmlHrefs() reads
+// in each comment, processing instruction, CDATA section and declaration
+// htmlAt() has read, as a browser may end one before the end at which
+// CommonMark ends it and read the rest as raw HTML: those whose target
+// opens on the line, also those of a tag that starts on an earlier line. A
+// reader asks about the runs, the < and the ( it meets from left to right,
+// and asks for hrefs() once it has read the line.
 function paragraphCodeSpans(lines, texts = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
@@ -707,8 +716,12 @@ function paragraphCodeSpans(lines, texts = []) {
       htmlAt: (i) => {
         const html = htmlAt(at + i);
         past = html.end;
-        const href = html.tag ? tagHref(text, at + i, html.end) : null;
-        if (href) hrefs.push(href);
+        if (html.tag) {
+          const href = tagHref(text, at + i, html.end);
+          if (href) hrefs.push(href);
+        } else if (html.unshown && html.end > at + i + 1) {
+          for (const href of rawHtmlHrefs(text, at + i, html.end)) hrefs.push(href);
+        }
         return { ...html, end: html.end - at };
       },
       linkAt: (i) => {
@@ -999,7 +1012,7 @@ function inlineDestinations(line, open, spans) {
 // a >: that first href is noted for each index in one pass from the end of
 // the text, so a line of many < that no > follows is not read again from
 // each one. The hrefs of a paragraph, a heading or a table cell are read
-// with tagHref() instead.
+// with tagHref() and rawHtmlHrefs() instead.
 const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/iy;
 function hrefTargets(text) {
   // reach[i] is the index of the first href a tag meets from text[i] on, or
@@ -1057,12 +1070,117 @@ function tagHref(text, start, end) {
   return null;
 }
 
+// What a browser's tokenizer reads as white space in a tag: a tab, a line
+// break, a form feed, a carriage return or a space, and no other
+// character, such as a no-break space.
+const isHtmlSpace = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\f' || c === '\r';
+const isLetter = (c) => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+
+// The open tag or closing tag that starts at the < at text[i], before a
+// letter or before / and a letter, read as a browser's tokenizer reads a
+// tag: its name runs to white space, a / or a >, and each attribute after
+// it has a name, whose first character may be an = and which runs to white
+// space, a /, a > or an =, and may have, after any white space, an = and
+// any white space, a value in double or single quotes, or an unquoted one
+// that white space or a > ends. A / that no > follows is read as white
+// space, and a quoted value needs no white space after it, so
+// <a b="c"href="d"> holds two attributes. The tag ends at the first >
+// outside a quoted value, so <a ="x>" href="y"> ends after the x: its
+// first attribute is named ="x. Returns `end`, the index after that >, or
+// -1 when the text ends first, and `href`: for an open tag, the value of
+// its first attribute named href, whatever the case of its letters, as a
+// browser drops a later one, when that value is in quotes and holds no
+// line break, as { target, at }, `at` being the index of the quote that
+// opens it, as tagHref() gives one, and otherwise null.
+const HREF_NAME = /^href$/i;
+function readTag(text, i) {
+  const closing = text[i + 1] === '/';
+  let href = null;
+  let named = false; // whether an attribute named href has been read
+  i += closing ? 2 : 1;
+  while (i < text.length && !isHtmlSpace(text[i]) && text[i] !== '/' && text[i] !== '>') i++;
+  for (;;) {
+    while (i < text.length && (isHtmlSpace(text[i]) || text[i] === '/')) i++;
+    if (i === text.length) return { end: -1, href: null };
+    if (text[i] === '>') return { end: i + 1, href: closing ? null : href };
+    const name = i++;
+    while (i < text.length && !isHtmlSpace(text[i]) && text[i] !== '/' && text[i] !== '>' && text[i] !== '=') i++;
+    const isHref = !named && i - name === 4 && HREF_NAME.test(text.slice(name, i));
+    if (isHref) named = true;
+    while (i < text.length && isHtmlSpace(text[i])) i++;
+    if (text[i] !== '=') continue;
+    i++;
+    while (i < text.length && isHtmlSpace(text[i])) i++;
+    const quote = text[i];
+    if (quote === '"' || quote === "'") {
+      const close = text.indexOf(quote, i + 1);
+      if (close === -1) return { end: -1, href: null };
+      if (isHref) {
+        const target = text.slice(i + 1, close);
+        if (!target.includes('\n')) href = { target, at: i };
+      }
+      i = close + 1;
+    } else {
+      while (i < text.length && !isHtmlSpace(text[i]) && text[i] !== '>') i++;
+    }
+  }
+}
+
+// The hrefs of the open tags that a browser reads in text[from] to
+// text[to], raw HTML that a renderer passes on as written, such as a
+// comment, processing instruction, CDATA section or declaration that
+// CommonMark reads inline, in order, as readTag() gives them but with `at`
+// an index in `text`. The text is read as a browser's tokenizer reads raw
+// HTML from its data state: a comment runs from <!-- to the first --> or
+// --!> after its <!, but not to a --!> that takes its dashes from the
+// <!--, so <!--!> and <!---!> open one that runs on; a bogus comment runs
+// from <?, from <! before anything but --, or from </ before anything but
+// a letter or a >, to the first > after its start, and a browser drops
+// </>; and an open tag or a closing tag, from < or </ and a letter, is
+// read with readTag(). A <![CDATA[ is such a <!, as a browser reads it
+// outside an <svg> or <math> element; inside one, it opens a CDATA section
+// that ends at ]]>, but those elements are not followed here. So
+// x <? > <a href="target">y</a> ?>
+// holds a link to target, where CommonMark reads one processing
+// instruction from <? to ?>, and x <? <a href="target"> ?> holds none. A
+// browser reads a comment, bogus comment or tag whose end is past `to` on
+// into what follows, so no href is read after its start. Each search for
+// the end of one of these starts at or just after the < that opens it, and
+// the search for the next < at that end.
+const COMMENT_CLOSE = /--!?>/g;
+function rawHtmlHrefs(text, from, to) {
+  const html = text.slice(from, to);
+  const hrefs = [];
+  for (let i = html.indexOf('<'); i !== -1; i = html.indexOf('<', i)) {
+    const c = html[i + 1];
+    let end = i + 1;
+    if (html.startsWith('<!--', i)) {
+      COMMENT_CLOSE.lastIndex = i + 2;
+      let close = COMMENT_CLOSE.exec(html);
+      while (close && close[0].length === 4 && close.index < i + 4) close = COMMENT_CLOSE.exec(html);
+      end = close ? close.index + close[0].length : -1;
+    } else if (c === '?' || c === '!' || (c === '/' && !isLetter(html[i + 2]))) {
+      const close = html.indexOf('>', i + 2);
+      end = close === -1 ? -1 : close + 1;
+    } else if (isLetter(c) || c === '/') {
+      const tag = readTag(html, i);
+      if (tag.href) hrefs.push({ target: tag.href.target, at: from + tag.href.at });
+      end = tag.end;
+    }
+    if (end === -1) break;
+    i = end;
+  }
+  return hrefs;
+}
+
 // Link targets on one prose line: inline [text](target), whose destination
 // inlineDestinations reads, with spaces inside the parentheses, a
 // reference definition [label]: target (footnotes [^1]: are not links),
-// whose label may hold a code span or \], and the hrefs on the line of the
-// open tags that inlineDestinations reads as raw HTML, as spans.hrefs()
-// gives them. Links inside code spans are not read: inlineDestinations
+// whose label may hold a code span or \], and the hrefs on the line that
+// spans.hrefs() gives, those of the open tags that inlineDestinations reads
+// as raw HTML and of those that a browser reads inside the comments,
+// processing instructions, CDATA sections and declarations it reads so.
+// Links inside code spans are not read: inlineDestinations
 // reads past each code span, and so past the tags inside it. A definition
 // is matched on the whole line, as a code span in its label does not make
 // it text, but not on a line that starts inside a code span or raw HTML
@@ -1080,6 +1198,9 @@ function linkTargets(line, open, spans) {
   const targets = [];
   const def = spans.start === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
+  // One at a time: given as the arguments of one push(), the targets of a
+  // line of 200,000 tags with an href threw a RangeError (Maximum call
+  // stack size exceeded) on Node.js 26.12.0.
   for (const target of inlineDestinations(line, open, spans)) targets.push(target);
   for (const target of spans.hrefs()) targets.push(target);
   return targets;

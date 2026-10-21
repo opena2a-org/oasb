@@ -1511,6 +1511,32 @@ stay on record here with the reason they changed.
   `link target "docs/nowhere.md" does not exist`. A title is not read as
   text: `[x](docs/guide.md '[y](docs/nowhere.md)')` exited 1 and now exits
   0.
+- `npm run check:readme` reads the href of an open tag that a browser
+  reads after where it ends a comment, a processing instruction or a
+  CDATA section in a paragraph, a heading or a table cell, before the
+  `-->`, `?>` or `]]>` at which CommonMark ends it: a browser ends a
+  comment at a `--!>` after its `<!--`, and reads `<?` and `<![CDATA[` as
+  the start of a bogus comment, which ends at the first `>` after it.
+  With `docs/nowhere.md` absent, the lines
+  `x <? > <a href="docs/nowhere.md">y</a> ?>`,
+  `x <![CDATA[ > <a href="docs/nowhere.md">y</a> ]]>` and
+  `x <!-- --!> <a href="docs/nowhere.md">y</a> -->`, which commonmark.js
+  0.31.2 and markdown-it 14.1.0 pass on as raw HTML, and in whose
+  rendering parse5 7.3.0 reads a link to `docs/nowhere.md`, each exited 0
+  and now exits 1 with `link target "docs/nowhere.md" does not exist`,
+  naming the line. What follows that end, up to the end at which
+  CommonMark ends it, is read as the HTML tokenizer reads it, so
+  `x <? <a href="docs/nowhere.md"> ?>`, where the first `>` after the `<?`
+  is the tag's own, still exits 0, as does
+  `x <? > <!-- <a href="docs/nowhere.md"> --> ?>`, where the tag is inside
+  a comment that the rest opens. The check does not follow `<svg>` and
+  `<math>` elements, in which a browser ends a CDATA section at `]]>`, so
+  `x <svg><![CDATA[ > <a href="docs/nowhere.md">y</a> ]]></svg>`, in which
+  parse5 reads no link, exited 0 and now exits 1. On macOS arm64 with
+  Node.js 26.12.0, a README whose one prose line is `x ` and 200,000 tags
+  `<a href="docs/guide.md">` exited 1 with
+  `RangeError: Maximum call stack size exceeded`, and now exits 0, as does
+  that line with the tags inside one processing instruction.
 
 ## 0.4.1 - 2026-10-17
 
