@@ -1081,14 +1081,16 @@ stay on record here with the reason they changed.
   as a comment or the quoted value of an attribute, leaves open, where that
   end sits inside later raw HTML on its line or on a line below in the
   paragraph. Such a comment or element hid the rest of the paragraph; a
-  browser ends a comment at the first `-->`, and a `<style>` at the first
-  `</style>` or `</style >`, in the raw HTML that a renderer passes on as
-  written, also in a comment or a tag that runs on to a later line, and
-  shows the text after it, and a `<script>` at the first `</script>` or
-  `</script >` there that ends it for its tokenizer, which `<!--` in the
-  element's text puts in the script data escaped state and `<script>`
-  then in the double escaped state, where `</script>` ends nothing, until
-  a `-->`. With a README that links
+  browser ends a comment at the first `-->` or `--!>`, and a `<style>` at
+  the first `</style>` or `</style >`, in the raw HTML that a renderer
+  passes on as written, also in a comment or a tag that runs on to a later
+  line, and shows the text after it, and a `<script>` at the first
+  `</script>` or `</script >` there that ends it for its tokenizer, which
+  `<!--` in the element's text puts in the script data escaped state and
+  `<script>` then in the double escaped state. There a `</script>` returns
+  the tokenizer to the escaped state, where the next `</script>` ends the
+  element unless a `<script>` comes first, and a `-->` returns it to the
+  script data state. With a README that links
   `docs/AUDIT-2026-06-03.md`, and the lines
   `Hello <textarea><!-- </textarea><script> -->` and
   `x </script> As of 2026-06-03. world.` after that page's H1 and a blank
@@ -1176,6 +1178,67 @@ stay on record here with the reason they changed.
   `Text.`, `<span>` and that link line still exit 1; and an "as of" note
   between two `~~~` lines between `<span>` and `</span>` on a dated page
   that the README links failed the check and now marks the page.
+- `npm run check:readme` reads a dated page's "as of" note as a browser
+  shows it after a `<script>` or `<style>` start tag in a paragraph, a
+  heading or a table cell, after a comment, `<script>` or `<style>` that a
+  block leaves open, and in a `<script>` element, a comment or a
+  processing instruction. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the line
+  `Hello <script> As of 2026-06-03. world.` after that page's H1 and a
+  blank line, then a blank line and
+  `See the [README](../README.md) for the current figures.`, the check
+  exited 0, and now exits 1 with `is a dated page, so above its first H2
+  it must say "as of 2026-06-03"`, as a browser reads the text after the
+  start tag as the element's, up to a `</script>` that a renderer passes
+  on as written. So do the same line with `<style>`,
+  `<script type="text/plain">` or `<script/>` in place of `<script>`, the
+  line `See [x](https://example.com) <script> As of 2026-06-03. world.`,
+  and the line as an H3 or in a table cell. The `<script>` or comment that
+  the raw HTML after a `</textarea>` end tag inside raw HTML leaves open
+  stays open past the end of the paragraph, up to its end in raw HTML,
+  also over a `<div>` block or a table that holds none, so the lines
+  `Hello <textarea><!-- </textarea><script> -->`, a blank line and
+  `As of 2026-06-03.` exited 0 and now exit 1, as do the same with
+  `<style>` in place of `<script>` and with
+  `Hello <textarea><?x </textarea><!-- ?>` as the first line; with
+  `x </script>` before the note it exits 0, as it did. One that an HTML
+  block leaves open stays open past the block too, so the lines `<div>`
+  and `<!-- x`, a blank line and `As of 2026-06-03.` exited 0 and now
+  exit 1. A browser's tokenizer reads `<!--` and then `<script>` in the
+  text of a `<script>` element on a line of an HTML block as it does in a
+  paragraph, as the start of the double escaped state, where `</script>`
+  returns it to the escaped state and `-->` to the script data state, so
+  `<div>`, `<script><!-- <script></script> --> As of 2026-06-03. world.`
+  and `</div>`, where no `</script>` follows, exited 0 and now exit 1. It
+  reads a `<script>` start tag on to its `>`, also from one line of a
+  block to the next, and the element's text from there, so `<div>`,
+  `<script title="</script>"> As of 2026-06-03.` and `</div>`, and
+  `Hello <textarea><!-- </textarea><script title="</script>"> -->
+  As of 2026-06-03. world.` exited 0 and now exit 1, as do `<div>`,
+  `<script/> As of 2026-06-03.` and `</div>`, as a browser opens the
+  element at `<script/>` too. A browser ends a comment at `--!>` as at
+  `-->`, and reads `<?` as the start of a bogus comment, which ends at
+  the first `>`: the lines `<div>`, `<!-- y --!> As of 2026-06-03.` and
+  `</div>` exited 1 and now exit 0, as do `<div>`,
+  `<?x> As of 2026-06-03.` and `</div>`, the line
+  `Hello <?x> As of 2026-06-03. ?>`, the line
+  `Hello <!-- y --!> As of 2026-06-03. -->`, and the two lines
+  `Hello <textarea><b title="</textarea><?x">` and
+  `As of 2026-06-03. world.`. A `--!>` that takes its dashes from the
+  `<!--` ends nothing, so `<div>`, `<!--!> As of 2026-06-03. -->` and
+  `</div>` still exit 1. A `<!--` in an attribute value of a `<script>`
+  start tag puts its tokenizer in no escaped state, and the `![` of a
+  `<![CDATA[` that a `]]>` follows opens no image description, after
+  which raw HTML would end nothing, so the lines
+  `Hello <textarea><!-- </textarea><script> -->`,
+  `x <![CDATA[ </script><script title="<!--"> <script> ]]>` and
+  `</script> As of 2026-06-03. world.` exited 1 and now exit 0, as a
+  browser shows the note. After a `](` or `![`, raw HTML still ends
+  nothing that hides text, and what is open now stays open past the
+  paragraph: `Hello <textarea><!-- </textarea><script> -->`, a blank
+  line, `[x](https://example.com) </script>`, a blank line and
+  `As of 2026-06-03.` exited 0 and now exit 1, where a browser shows the
+  note.
 
 ## 0.4.1 - 2026-10-17
 
