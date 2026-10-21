@@ -3420,6 +3420,57 @@ test('raw HTML after a ]( or ![ in a paragraph, a heading or a table cell ends n
   }
 });
 
+test('a <script> that a </textarea> end tag inside raw HTML in a paragraph, a heading or a table cell leaves open ends at a </script> in later raw HTML only where a browser ends it: not after <!-- and then <script in its text with no --> between them', () => {
+  // A browser's tokenizer reads <!-- in the text of a <script> element as
+  // the start of the script data escaped state, where --> returns it to
+  // the script data state and <script before white space, a /, a > or the
+  // end of the line puts it in the double escaped state, where </script>
+  // returns it to the escaped state and ends no element; in the other two
+  // states </script> ends the element. Only raw HTML that a renderer passes
+  // on as written holds these for the browser: a <!-- that no --> ends in
+  // the paragraph is text. Where the first </script> in a tag or comment
+  // that runs on to a later line is not the one that ends the element, the
+  // rest of the paragraph is hidden, also where a later </script> there
+  // ends it for a browser.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  const open = 'Hello <textarea><!-- </textarea><script> -->';
+  for (const intro of [
+    `${open}\nx <!-- <script></script> --> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <b title="<!--<script>"></script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <!-- <SCRIPT/></script> --> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <!-- y -->\n<b title="<!--"> <b title="<script>"></script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <b title="<!--<script></script>\n"> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <b title="<!--<script></script>-->\n"></script> As of 2026-06-03. world.\n\n${see}`,
+    `### ${open} x <!-- <script></script> --> As of 2026-06-03. world\n\n${see}`,
+    `| a | b |\n| - | - |\n| <textarea><!-- </textarea><script> --> x <!-- <script></script> --> As of 2026-06-03. | y |\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+  }
+  // A --> after the <script, also the > of <!-->, returns the tokenizer to
+  // the script data state, where the next </script> ends the element, as
+  // it does in the escaped state; a </script> in the double escaped state
+  // is read past, to the </script> that ends the element on a later line;
+  // and a <!-- before the <script> start tag, such as in an attribute of
+  // the </textarea> end tag, or one that no --> ends in the paragraph, is
+  // not in the element's text.
+  for (const intro of [
+    `${open}\nx <!-- <script> --> </script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <!--><script></script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <!-- <script></script> -->\n</script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx </script><!--<script>--> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <!-- </script><script><!--<script> --> </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script><!--<script> -->\nx </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea title="<!--"><script> -->\nx </script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <!--<script>\n</script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <!-- y <b title="<script>"></script> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
 test('a <textarea> or <!-- inside the quoted value of an attribute on a line of an HTML block starts nothing, and a </textarea > end tag ends a <textarea>', () => {
   // A browser reads a < inside an attribute value as part of the value, so
   // a comment after it still hides the note, and a <!-- there hides none.

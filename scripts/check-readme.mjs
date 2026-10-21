@@ -2477,7 +2477,10 @@ function shownElements(outer = null) {
 // part that it says a browser hides is left out. Returns the text of those
 // parts in order, with the space that the tracker returns for a tag in
 // place of that tag, as `shown`, and what the line leaves open, in the
-// same form, or null, as `open`. Each search starts at most 9 characters
+// same form, or null, as `open`, and, where that is an entry of
+// HIDDEN_HTML_END or TEXTAREA_END, as `at` the index in `text` of the <
+// that opened it, or of the <textarea> start tag, or -1 when the line
+// above left it open. Each search starts at most 9 characters
 // before the end of the match before it, and a tag is read once, and its
 // name once more, so the time a line takes grows in proportion to its
 // length and to what the tracker takes for its tags.
@@ -2489,6 +2492,7 @@ function shownHtml(text, open, elements) {
   let i = 0;
   let from = 0; // where the shown text that runs on to i starts
   let tagFrom = 0; // where the tag that runs on to i starts on the line
+  let at = -1; // where the raw HTML that is open at i starts on the line
   for (;;) {
     if (open?.state) {
       const tag = tagEnd(text, i, open.state);
@@ -2506,7 +2510,7 @@ function shownHtml(text, open, elements) {
       const end = open.exec(text);
       if (!end) {
         if (open === TEXTAREA_END) show(text.slice(from));
-        return { shown, open };
+        return { shown, open, at };
       }
       i = open.lastIndex;
       if (open === TEXTAREA_END) show(text.slice(from, end.index));
@@ -2536,6 +2540,7 @@ function shownHtml(text, open, elements) {
       }
     }
     open = group < TEXTAREA_GROUP ? HIDDEN_HTML_END[group] : inTag(IN_TAG, group === TEXTAREA_GROUP ? TEXTAREA_END : null, element);
+    at = start.index;
     i = start.index + 1;
   }
 }
@@ -2613,9 +2618,14 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // the entry of HIDDEN_HTML_END that shownHtml() returns, inside a later
 // tag, comment, processing instruction, CDATA section or declaration, also
 // one that runs on to a later line of the paragraph, as a renderer passes
-// these on as written and a browser ends it there. A renderer writes the >
-// of text and of a code span as &gt;, and an autolink as a link, so a
-// match in one of these ends nothing. It also writes a < in the
+// these on as written and a browser ends a comment or a <style> there,
+// and a <script> at the first </script there that ends it for its
+// tokenizer, which the element's text may put in the script data escaped
+// state or the double escaped state, as scriptEnd() reads it; where the
+// first </script in a piece that runs on is not that one, the rest of the
+// paragraph is hidden. A renderer writes the > of text and of a code span
+// as &gt;, and an autolink as a link, so a match in one of these ends
+// nothing. It also writes a < in the
 // destination or title of an inline link, after the ]( that opens the
 // destination, and in the description of an image, after its ![, as text,
 // and whether a < after a ]( or ![ is in one of these is not read here: a
@@ -2626,12 +2636,14 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // the end tag of a <script> or <style> (END_TAG_STARTS), and what it
 // leaves open is read as above; a piece that runs on is read so on each of
 // its lines, from its < to its end, with the comment, <script> or <style>
-// open at its <. When the line ends with one of these open, the entry of
-// its end is returned as `open`, unless the paragraph ends on the line,
-// and inside a piece that runs on, { through, html }: the index in
-// paragraph.text after the end of the piece, and what shownHtml() leaves
-// open in the piece at the end of the line. Given that entry, the line is
-// read from `start` with it open; given { through, html }, the line's text
+// open at its <. When the line ends with one of these open,
+// { hides, escape } is returned as `open`, the entry of its end and the
+// state of the tokenizer in the text of a <script>, unless the paragraph
+// ends on the line, and inside a piece that runs on,
+// { through, html, escape }: the index in paragraph.text after the end of
+// the piece, what shownHtml() leaves open in the piece at the end of the
+// line, and that state. Given { hides, escape }, the line is read from
+// `start` with it open; given { through, html, escape }, the line's text
 // up to where `through` falls is read with shownHtml() first, as above.
 // Each open tag and closing tag that is not text is given to `elements`, a
 // tracker that shownElements() makes, and is read as the space that the
@@ -2644,6 +2656,14 @@ const RUN_ON_TAG = new RegExp(`${OPEN_TAG.source}|${CLOSING_TAG.source}`, 'y');
 // </textarea>: of a <script> element, of a <style> element and of a
 // comment.
 const RUNS_ON = new Set(HIDDEN_HTML_END.slice(1, 4));
+const SCRIPT_END = HIDDEN_HTML_END[1];
+const COMMENT_END = HIDDEN_HTML_END[3];
+// In the text of a <script> element, what puts a browser's tokenizer in
+// the script data escaped state, and what then puts it in the script data
+// double escaped state: <script before white space, a /, a > or the end of
+// the line.
+const COMMENT_START = /<!--/g;
+const SCRIPT_START = /<script(?=[\t\n\f\r />]|$)/gi;
 // Whether what shownHtml() leaves open at the end of raw HTML that
 // shownInline() reads with it hides the rest of the paragraph: a tag, a
 // processing instruction, a CDATA section or a declaration, unlike a
@@ -2665,6 +2685,11 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
   // TEXTAREA_END for a <textarea> element, an entry of RUNS_ON for raw HTML
   // whose text is left out, or null.
   let raw = null;
+  // The state of a browser's tokenizer in the text of the <script> element
+  // that is open when `raw` is SCRIPT_END, as scriptEnd() reads it: 0 in
+  // the script data state, 1 in the script data escaped state, 2 in the
+  // script data double escaped state.
+  let escape = 0;
   const lineEnd = paragraph && paragraph.at + line.length - start; // where the line's text ends in paragraph.text
   // `open` when the rest of the line and the lines after it in its
   // paragraph are left out.
@@ -2672,10 +2697,94 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
     const through = paragraph?.text.length;
     return through > lineEnd ? { through, textarea: false } : null;
   };
+  const found = new Map();
+  // The first match of `end`, TEXTAREA_END, an entry of RUNS_ON,
+  // COMMENT_START or SCRIPT_START, at or after `at`, or null. The match
+  // found last for each end is kept, and the line is searched again for
+  // it, from `at`, only when that match starts before `at`; once a search
+  // finds none, none is made.
+  const matchFrom = (end, at) => {
+    let match = found.has(end) ? found.get(end) : { index: -1 };
+    if (match && match.index < at) {
+      end.lastIndex = at;
+      match = end.exec(line);
+      found.set(end, match);
+    }
+    return match;
+  };
+  // The </script that ends the <script> element whose text line[from] to
+  // line[to] is, read as a browser's tokenizer reads the text of a <script>
+  // element: in the script data state, <!-- puts it in the script data
+  // escaped state, where --> returns it to the script data state and
+  // <script before white space, a /, a > or the end of the line
+  // (SCRIPT_START) puts it in the script data double escaped state, where
+  // --> returns it to the script data state and </script before one of
+  // these (SCRIPT_END) returns it to the escaped state; in the script data
+  // state and in the escaped state such a </script ends the element. The
+  // -- of <!-- are read as the dashes before a > that ends the escaped
+  // state, so <!--> ends it at once. Returns the match of that </script,
+  // as matchFrom() gives it, or null, and keeps the state at `to`, or at
+  // that </script, in `escape`.
+  const scriptEnd = (from, to) => {
+    for (;;) {
+      const end = matchFrom(SCRIPT_END, from);
+      const endAt = end && end.index + end[0].length <= to ? end.index : to;
+      if (escape === 0) {
+        const comment = matchFrom(COMMENT_START, from);
+        if (!comment || comment.index + 4 > to || comment.index > endAt) return endAt < to ? end : null;
+        escape = 1;
+        from = comment.index + 2;
+        continue;
+      }
+      const close = matchFrom(COMMENT_END, from);
+      const closeAt = close && close.index + 3 <= to ? close.index : to;
+      const tag = escape === 1 ? matchFrom(SCRIPT_START, from) : null;
+      const tagAt = tag && tag.index + 7 <= to ? tag.index : to;
+      const next = Math.min(closeAt, tagAt, endAt);
+      if (next === to) return null;
+      if (next === closeAt) {
+        escape = 0;
+        from = closeAt + 3;
+      } else if (next === tagAt) {
+        escape = 2;
+        from = tagAt + 7;
+      } else if (escape === 2) {
+        escape = 1;
+        from = endAt + end[0].length;
+      } else {
+        return end;
+      }
+    }
+  };
+  // Whether the </script that shownHtml() ends the <script> element at in
+  // line[from] to line[to], the first one there, is the one that ends it
+  // for a browser, as scriptEnd() finds it; when it is not, the rest of the
+  // paragraph is hidden.
+  const endsScript = (from, to) => {
+    const first = matchFrom(SCRIPT_END, from);
+    const end = scriptEnd(from, to);
+    return (first && first.index + first[0].length <= to ? first.index : -1) === (end ? end.index : -1);
+  };
+  // Reads the text of the <script> element that shownHtml() leaves open in
+  // line[from] to line[to] for its state, from after the <script start tag
+  // at line[from + at] when `at` is not -1.
+  const scriptState = (from, to, at) => {
+    if (at !== -1) {
+      escape = 0;
+      from += at + 7;
+    }
+    scriptEnd(from, to);
+  };
   if (open?.html !== undefined) {
     const to = start + open.through - paragraph.at;
-    const { shown, open: left } = shownHtml(line.slice(start, to), open.html, elements);
-    if (to > line.length) return { text: shown, open: { through: open.through, html: left } };
+    const stop = Math.min(to, line.length);
+    if (open.html === SCRIPT_END) {
+      escape = open.escape;
+      if (!endsScript(start, stop)) return { text, open: restLeftOut() };
+    }
+    const { shown, open: left, at } = shownHtml(line.slice(start, to), open.html, elements);
+    if (left === SCRIPT_END) scriptState(start, stop, at);
+    if (to > line.length) return { text: shown, open: { through: open.through, html: left, escape } };
     text = shown;
     if (hidesParagraph(left)) return { text, open: restLeftOut() };
     raw = left;
@@ -2684,8 +2793,9 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
     i = start + open.through - paragraph.at;
     if (i > line.length) return { text: '', open };
     if (open.textarea) raw = TEXTAREA_END;
-  } else if (open instanceof RegExp) {
-    raw = open;
+  } else if (open?.hides) {
+    raw = open.hides;
+    escape = open.escape;
     i = start;
   } else if (open) {
     const end = line.indexOf(open, start);
@@ -2710,20 +2820,6 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
   const tagAt = (re, at, end) => {
     re.lastIndex = at;
     return end > at + 1 && re.test(line);
-  };
-  // The first match of `end`, TEXTAREA_END or an entry of RUNS_ON, at or
-  // after `at`, or null. The match found last for each end is kept, and the
-  // line is searched again for it, from `at`, only when that match starts
-  // before `at`; once a search finds none, none is made.
-  const found = new Map();
-  const matchFrom = (end, at) => {
-    let match = found.has(end) ? found.get(end) : { index: -1 };
-    if (match && match.index < at) {
-      end.lastIndex = at;
-      match = end.exec(line);
-      found.set(end, match);
-    }
-    return match;
   };
   // Where the raw HTML that starts at line[at] and runs on to a later line
   // of the paragraph ends in paragraph.text: after the first match of
@@ -2771,23 +2867,30 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
         // Raw HTML whose text is left out is read on, with shownHtml(), in
         // raw HTML that runs on from i to a later line of the paragraph.
         // After a ]( or ![, raw HTML ends nothing whose text is left out,
-        // which then hides the rest of the paragraph.
+        // which then hides the rest of the paragraph. A <script> ends at the
+        // </script that ends it for a browser, as scriptEnd() finds it,
+        // which reads the rest of the piece, and the rest of the line in a
+        // piece that runs on, as the element's text.
         if (hidden() && afterLinkSyntax(i)) return { text, open: restLeftOut() };
-        const close = end > i + 1 && (tag || unshown) ? matchFrom(raw, i) : null;
+        const piece = end > i + 1 && (tag || unshown);
+        const close = piece ? (raw === SCRIPT_END ? scriptEnd(i, end) : matchFrom(raw, i)) : null;
         const after = close ? close.index + close[0].length : -1;
         if (close && after <= end) {
           if (!hidden()) show(line.slice(from, close.index));
           const rest = line.slice(after, end);
-          const { shown, open: left } = shownHtml(rest, END_TAG_STARTS.has(raw) ? inTag(IN_TAG, null) : null, elements);
+          const { shown, open: left, at } = shownHtml(rest, END_TAG_STARTS.has(raw) ? inTag(IN_TAG, null) : null, elements);
           text += shown;
           if (hidesParagraph(left)) return { text, open: restLeftOut() };
           raw = left;
           from = end;
+          if (raw === SCRIPT_END) scriptState(after, end, at);
         } else if (hidden() && end === i + 1 && paragraph) {
           const through = runsOnThrough(i, unshown);
           if (through !== -1) {
-            const { shown, open: left } = shownHtml(line.slice(i), raw, elements);
-            return { text: text + shown, open: { through, html: left } };
+            if (raw === SCRIPT_END && !endsScript(i, line.length)) return { text, open: restLeftOut() };
+            const { shown, open: left, at } = shownHtml(line.slice(i), raw, elements);
+            if (left === SCRIPT_END) scriptState(i, line.length, at);
+            return { text: text + shown, open: { through, html: left, escape } };
           }
         }
       } else if (unshown && end === i + 1 && below.has(unshown)) {
@@ -2814,7 +2917,7 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
       i += 1;
     }
   }
-  if (hidden()) return { text, open: paragraph?.text.length > lineEnd ? raw : null };
+  if (hidden()) return { text, open: paragraph?.text.length > lineEnd ? { hides: raw, escape } : null };
   show(line.slice(from));
   return { text, open: null };
 }

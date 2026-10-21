@@ -1034,10 +1034,14 @@ stay on record here with the reason they changed.
   as a comment or the quoted value of an attribute, leaves open, where that
   end sits inside later raw HTML on its line or on a line below in the
   paragraph. Such a comment or element hid the rest of the paragraph; a
-  browser ends it at the first match of its end, such as `-->`,
-  `</script>` or `</script >`, in the raw HTML that a renderer passes on as
+  browser ends a comment at the first `-->`, and a `<style>` at the first
+  `</style>` or `</style >`, in the raw HTML that a renderer passes on as
   written, also in a comment or a tag that runs on to a later line, and
-  shows the text after it. With a README that links
+  shows the text after it, and a `<script>` at the first `</script>` or
+  `</script >` there that ends it for its tokenizer, which `<!--` in the
+  element's text puts in the script data escaped state and `<script>`
+  then in the double escaped state, where `</script>` ends nothing, until
+  a `-->`. With a README that links
   `docs/AUDIT-2026-06-03.md`, and the lines
   `Hello <textarea><!-- </textarea><script> -->` and
   `x </script> As of 2026-06-03. world.` after that page's H1 and a blank
@@ -1074,7 +1078,16 @@ stay on record here with the reason they changed.
   paragraph is, so a `<details>` start tag there hides the paragraphs
   after it: the lines
   `Hello <textarea><!-- </textarea><script> -->` and `x </script><details>`,
-  a blank line and `As of 2026-06-03.` exited 0 and now exit 1. The end of
+  a blank line and `As of 2026-06-03.` exited 0 and now exit 1. With
+  `x <!-- <script></script> --> As of 2026-06-03. world.` or
+  `x <b title="<!--<script>"></script> As of 2026-06-03. world.` below
+  the `<script>` line, the check exits 1, as a browser shows no note
+  there, and with `x <!-- <script> --> </script> As of 2026-06-03. world.`
+  it exits 0. Where the first `</script>` in a tag or comment that runs on
+  to a later line is not the one that ends the element, the rest of the
+  paragraph is hidden: the lines `x <b title="<!--<script></script>-->`
+  and `"></script> As of 2026-06-03. world.` below the `<script>` line
+  exit 1, where a browser shows the note. The end of
   a comment, processing instruction, CDATA section or declaration that
   runs on to a later line is looked for in the rest of the paragraph from
   where it was last found, not again from each start on a line, so, on
