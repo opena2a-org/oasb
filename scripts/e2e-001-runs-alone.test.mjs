@@ -130,9 +130,12 @@ test("E2E-001 has the suite's timeouts, and each global setup is listed by one p
 
 // CI and the release workflow run the atomic, integration and baseline tests
 // with `npm test -- --exclude src/e2e/`, and CI runs the E2E files in steps of
-// their own. The last glob matches no E2E file, so E2E-001 stays in the run.
+// their own. src/e2e* ends in a wildcard and matches the directory src/e2e,
+// and no file in it. The last glob matches no E2E file, so E2E-001 stays in
+// the run.
 const EXCLUDES = [
   ['src/e2e/', 'leaves every file of src/e2e/ out of a run, E2E-001 included', (file) => file.startsWith('src/e2e/')],
+  ['src/e2e*', 'leaves every file of src/e2e/ out of a run, E2E-001 included', (file) => file.startsWith('src/e2e')],
   ['**/E2E-001*', 'leaves E2E-001 out of a run', (file) => file === E2E_001],
   ['src/atomic/', 'leaves the files of src/atomic/ out of a run and E2E-001 in it', (file) => file.startsWith('src/atomic/')],
 ];

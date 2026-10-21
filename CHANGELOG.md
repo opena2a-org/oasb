@@ -246,9 +246,14 @@ stay on record here with the reason they changed.
   `vitest list --exclude src/e2e/` lists 408 tests, none in `src/e2e/`,
   `vitest list --exclude '**/E2E-001*'` lists 425, none in E2E-001, and
   `vitest list` lists 430, as before. `vitest run src/e2e/ --exclude
-  src/e2e/` finds no test file. `scripts/e2e-001-runs-alone.test.mjs`
-  checks the files `vitest list --filesOnly` lists with `--exclude
-  src/e2e/`, `--exclude '**/E2E-001*'` and `--exclude src/atomic/`.
+  src/e2e/` finds no test file. The plugin adds a glob that ends in a
+  wildcard with `/**` after it too: `src/e2e*` matches the directory
+  `src/e2e` and no file in it, and `vitest list --exclude 'src/e2e*'`
+  listed 413 tests, the 5 of E2E-001 among them, and now lists 408, none
+  in `src/e2e/`. `scripts/e2e-001-runs-alone.test.mjs` checks the files
+  `vitest list --filesOnly` lists with `--exclude src/e2e/`,
+  `--exclude 'src/e2e*'`, `--exclude '**/E2E-001*'` and
+  `--exclude src/atomic/`.
 - The recording of a run the README links, `docs/oasb-demo.gif`, is
   recorded again from `docs/demo.tape` (618,598 bytes, 2026-10-21). The
   recording of 2026-03-11 (2,676,739 bytes) showed `npm test` with the test
@@ -1463,12 +1468,49 @@ stay on record here with the reason they changed.
   `Hello <![CDATA[ x > <!-- ]]> As of 2026-06-03. world.` exited 0 and
   now exits 1, as do the line
   `Hello <![CDATA[ x ><script ]]> As of 2026-06-03. world.` and the lines
-  `<div>`, `<![CDATA[ x > <!-- ]]> As of 2026-06-03.` and `</div>`. The
-  check does not follow `<svg>` and `<math>` elements, in which a browser
-  ends a CDATA section at `]]>`, and reads a `<![CDATA[` there as it reads
-  one elsewhere, so the lines `<div>`,
-  `<svg><![CDATA[ x > As of 2026-06-03. ]]></svg>` and `</div>` exited 1
-  and now exit 0.
+  `<div>`, `<![CDATA[ x > <!-- ]]> As of 2026-06-03.` and `</div>`. In
+  an `<svg>` or `<math>` element a browser ends a CDATA section at `]]>`,
+  as the next entry describes.
+- `npm run check:readme` follows `<svg>` and `<math>` elements on a dated
+  page, and in one ends a CDATA section at `]]>`, as a browser does. A
+  page whose note is `<div>`,
+  `<svg><![CDATA[ x > As of 2026-06-03. ]]></svg>` and `</div>` exited 0
+  and now exits 1 with `is a dated page, so above its first H2 it must say
+  "as of 2026-06-03"`, as a browser shows no text directly in an `<svg>`
+  element, and with `<div>`,
+  `<svg><![CDATA[ x > <!-- ]]></svg> As of 2026-06-03.` and `</div>` it
+  exited 1 and now exits 0. The text of such a section is shown in an SVG
+  `<text>` element and in a MathML token element such as `<mi>`, where a
+  browser shows it. A self-closing `<svg/>`, `</svg>`, a start tag such as
+  `<p>` or `<div>`, an end tag that ends no element in the `<svg>`, and
+  the start of the next block end the element for the check. Headless
+  Chromium 156 read the `<![CDATA[` after 2,000 random sequences of tags
+  in a `<div>` as the check now reads it, but where the check ends the
+  element at a stray end tag such as `</a>`, or at a start tag inside
+  `<foreignObject>`, `<mi>` or `<mtext>`, which a browser does not.
+- `npm run check:readme` reads a `<` or a backtick in the destination or
+  title of an inline link, or in an image, as text on a dated page, as a
+  renderer writes these as an href, a title and alt text: with
+  `Hello [x](https://example.com "<script>") As of 2026-06-03. world.` or
+  `Hello ![<script>](https://example.com/i.png) As of 2026-06-03. world.`
+  as the note, the check exited 1 with `is a dated page, so above its
+  first H2 it must say "as of 2026-06-03"`, and now exits 0, as does
+  `Hello [x](<script>) As of 2026-06-03. world.` where `docs/script`
+  exists. It read that syntax as text only while a comment, `<script>` or
+  `<style>` was open.
+- `npm run check:readme` reads a line of 150,000 inline links. It exited
+  1 with `RangeError: Maximum call stack size exceeded`, as it passed one
+  argument per link to one call; with `[y](docs/nowhere.md)` at the end of
+  such a line it now exits 1 with
+  `link target "docs/nowhere.md" does not exist`.
+- `npm run check:readme` checks the target of an inline link whose title
+  is in `''` or `()`, or whose destination or title is on the next line of
+  its paragraph, as CommonMark reads it. With `docs/nowhere.md` absent,
+  `[x](docs/nowhere.md 't')`, `[x](docs/nowhere.md (t))` and the two lines
+  `[x](docs/nowhere.md` and `"t")` exited 0, and now exit 1 with
+  `link target "docs/nowhere.md" does not exist`. A title is not read as
+  text: `[x](docs/guide.md '[y](docs/nowhere.md)')` exited 1 and now exits
+  0.
 
 ## 0.4.1 - 2026-10-17
 

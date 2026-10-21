@@ -4757,3 +4757,81 @@ test('docs/testing/release-smoke.md lists every file npm run test:scripts runs',
   const unlisted = files.filter((f) => !section[1].includes(`\`${f}\``));
   assert.deepEqual(unlisted, [], 'docs/testing/release-smoke.md does not list these files under "The tests in `scripts/`"');
 });
+
+test('a < or a backtick in the destination or title of an inline link, or in an image, opens nothing on a dated page', () => {
+  // A renderer writes the destination as an href, the title as a title
+  // attribute and the description of an image as alt text, so no <script>
+  // element opens there. [x](<script>) links docs/script.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Hello [x](<script>) As of 2026-06-03. world.\n\n${see}`,
+    `Hello [x](https://example.com "<script>") As of 2026-06-03. world.\n\n${see}`,
+    `Hello ![<script>](https://example.com/i.png) As of 2026-06-03. world.\n\n${see}`,
+    `Hello [x](https://example.com "\`") As of 2026-06-03. \`y\`\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, { ...datedPage(intro), 'docs/script': 'x\n' });
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  const r = check(DATED_LINK, datedPage(`Hello <script> As of 2026-06-03. world.\n\n${see}`));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, NO_NOTE);
+});
+
+test('in an <svg> or <math> element a CDATA section ends at ]]>, and its text is shown only where a browser shows text there', () => {
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<svg><![CDATA[ x > <!-- ]]></svg> As of 2026-06-03.\n</div>\n\n${see}`,
+    `Hello <svg><![CDATA[ x > <!-- ]]></svg> As of 2026-06-03. world.\n\n${see}`,
+    `<div>\n<svg><text><![CDATA[ x > As of 2026-06-03. ]]></text></svg>\n</div>\n\n${see}`,
+    `<div>\n<math><mi><![CDATA[As of 2026-06-03.]]></mi></math>\n</div>\n\n${see}`,
+    `<div>\n<svg/><![CDATA[ x > As of 2026-06-03. ]]>\n</div>\n\n${see}`,
+    `<div>\n<svg><p><![CDATA[ x > As of 2026-06-03. ]]>\n</div>\n\n${see}`,
+    `<div>\n<svg></svg><![CDATA[ x > As of 2026-06-03. ]]>\n</div>\n\n${see}`,
+    `Hello <svg> x\n\n<div>\n<![CDATA[ y > As of 2026-06-03. ]]>\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    `<div>\n<svg><![CDATA[ x > As of 2026-06-03. ]]></svg>\n</div>\n\n${see}`,
+    `<div>\n<math><![CDATA[ x > As of 2026-06-03. ]]></math>\n</div>\n\n${see}`,
+    `<div>\n<svg><g><rect/></g><![CDATA[ x > As of 2026-06-03. ]]></svg>\n</div>\n\n${see}`,
+    `Hello <svg><![CDATA[ x > As of 2026-06-03. ]]></svg> world.\n\n${see}`,
+    `### Audit <svg><![CDATA[ x > As of 2026-06-03. ]]></svg>\n\n${see}`,
+    `| <svg><![CDATA[ x > As of 2026-06-03. ]]></svg> | x |\n| - | - |\n\n${see}`,
+    `<div>\n<svg><![CDATA[ x\n</div>\n\nAs of 2026-06-03.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+});
+
+test('a line of 150,000 inline links is read without a RangeError, and a missing target on it is reported', () => {
+  const r = check('[x](https://example.com) '.repeat(150000) + '[y](docs/nowhere.md)\n');
+  assert.equal(r.status, 1, r.stderr.slice(0, 2000));
+  assert.equal(r.stderr.trim(), 'README: line 11: link target "docs/nowhere.md" does not exist.');
+});
+
+test('an inline link with a title in "", in \'\' or in (), or a destination or title on the next line, has its target checked', () => {
+  for (const line of [
+    "[x](docs/nowhere.md 't')",
+    '[x](docs/nowhere.md (t))',
+    '[x](docs/nowhere.md\n"t")',
+    '[x](\ndocs/nowhere.md)',
+    '> [x](docs/nowhere.md\n> \'t\')',
+    '| [x](docs/nowhere.md \'t\') | y |\n| - | - |',
+  ]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 1, line);
+    assert.match(r.stderr, /link target "docs\/nowhere\.md" does not exist\./, line);
+  }
+  // A title is not read as text, and the line goes on after the ).
+  for (const line of ["[x](docs/guide.md '[y](docs/nowhere.md)')", '[x](docs/guide.md\n"`") `[y](docs/nowhere.md)`', '[x](docs/nowhere.md\n\n"t")']) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+  const after = check('[x](docs/guide.md\n"t") [y](docs/nowhere.md)\n');
+  assert.equal(after.status, 1);
+  assert.match(after.stderr, /^README: line 12: link target "docs\/nowhere\.md" does not exist\./m);
+});

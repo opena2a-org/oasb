@@ -15,18 +15,17 @@ const timeouts = { testTimeout: 10000, hookTimeout: 10000 };
 // vitest adds the globs of a command-line --exclude to the exclude of the
 // project of this file, and not to a project defined inline below. A project
 // that lists this plugin adds them to its own exclude when vitest starts. A
-// glob that names a directory, such as src/e2e/, matches that directory and
-// no file in it: the files of src/e2e/ stay out of the project of this file
+// glob that matches a directory, such as src/e2e/ or src/e2e*, matches no
+// file in it: the files of src/e2e/ stay out of the project of this file
 // because the glob library does not walk into a directory an exclude glob
 // matches, and its walk for E2E-001 starts inside src/e2e/. So the plugin
-// adds a glob that does not end in a wildcard also with /** after it, and a
-// run with --exclude src/e2e/ leaves out E2E-001 as well.
+// adds each glob also with /** after it, a glob that ends in a wildcard
+// too, and a run with --exclude src/e2e/ or --exclude 'src/e2e*' leaves out
+// E2E-001 as well.
 const cliExclude = {
   name: 'oasb:cli-exclude',
   configureVitest({ vitest, project }: VitestPluginContext) {
-    const globs = (vitest.config.cliExclude ?? []).flatMap((glob) =>
-      glob.endsWith('*') ? [glob] : [glob, `${glob.replace(/\/+$/, '')}/**`],
-    );
+    const globs = (vitest.config.cliExclude ?? []).flatMap((glob) => [glob, `${glob.replace(/\/+$/, '')}/**`]);
     project.config.exclude = [...project.config.exclude, ...globs];
   },
 };

@@ -651,31 +651,35 @@ function codeSpans(text) {
   };
 }
 
-// Reads the code spans and the raw HTML in the lines of one paragraph,
-// given in order, as codeSpans and inlineHtml find them in the lines
-// joined by line breaks: a run of backticks that no run on its line closes
-// opens a span when a run of as many on a later line of the paragraph
-// closes it, and the lines between are inside that span; raw HTML, such as
-// a tag whose quoted value holds a line break, may run on to a later line
-// of the paragraph in the same way. `texts` gives, for each line after the
-// first, where its text starts, after the > markers and indentation that
-// CommonMark leaves out of the paragraph's text; those are read as spaces,
-// so a block quote's > there ends no tag. Each call reads the next line
-// and returns `from`, the index on it after a code span that an earlier
-// line opened (0 when none holds the start of the line, and its length or
-// more when one holds all of it), `start`, the index on it after a code
-// span or raw HTML that an earlier line opened, where a reader of the line
-// starts, codeSpanAt(i), which answers as codeSpans does for the run of
-// backticks at line[i], with an index on the line, past its end when the
-// span closes on a later line, `to`, the index of that run when there is
-// one, and otherwise the length of the line, htmlAt(i), which answers as
-// inlineHtml does for the < at line[i], with an index on the line, past
-// its end when the raw HTML ends on a later line, and hrefs(), the targets
-// on the line of the hrefs that tagHref() reads in the open tags htmlAt()
-// has read: those whose target opens on the line, also those of a tag that
-// starts on an earlier line. A reader asks about the runs and the < it
-// meets from left to right, and asks for hrefs() once it has read the
-// line.
+// Reads the code spans, the raw HTML and the inline links in the lines of
+// one paragraph, given in order, as codeSpans, inlineHtml and inlineLink
+// find them in the lines joined by line breaks: a run of backticks that no
+// run on its line closes opens a span when a run of as many on a later line
+// of the paragraph closes it, and the lines between are inside that span;
+// raw HTML, such as a tag whose quoted value holds a line break, may run on
+// to a later line of the paragraph in the same way, and so may the
+// destination and title of an inline link, as CommonMark reads a line break
+// in the white space around them and in a title. `texts` gives, for each
+// line after the first, where its text starts, after the > markers and
+// indentation that CommonMark leaves out of the paragraph's text; those are
+// read as spaces, so a block quote's > there ends no tag. Each call reads
+// the next line and returns `from`, the index on it after a code span that
+// an earlier line opened (0 when none holds the start of the line, and its
+// length or more when one holds all of it), `start`, the index on it after
+// a code span, raw HTML or inline link that an earlier line opened, where a
+// reader of the line starts, codeSpanAt(i), which answers as codeSpans does
+// for the run of backticks at line[i], with an index on the line, past its
+// end when the span closes on a later line, `to`, the index of that run
+// when there is one, and otherwise the length of the line, htmlAt(i), which
+// answers as inlineHtml does for the < at line[i], with an index on the
+// line, past its end when the raw HTML ends on a later line, linkAt(i),
+// which answers as inlineLink does for the ( at line[i], with an index on
+// the line, past its end when the link closes on a later line, and
+// hrefs(), the targets on the line of the hrefs that tagHref() reads in
+// the open tags htmlAt() has read: those whose target opens on the line,
+// also those of a tag that starts on an earlier line. A reader asks about
+// the runs, the < and the ( it meets from left to right, and asks for
+// hrefs() once it has read the line.
 function paragraphCodeSpans(lines, texts = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
@@ -685,7 +689,7 @@ function paragraphCodeSpans(lines, texts = []) {
   let k = 0; // the line read next
   let lineAt = 0; // the index in the joined lines where that line starts
   let after = 0; // the index in the joined lines after the code span read last
-  let past = 0; // the index in the joined lines after the code span or raw HTML read last
+  let past = 0; // the index in the joined lines after the code span, raw HTML or inline link read last
   return () => {
     const at = lineAt;
     const { length } = lines[k++];
@@ -706,6 +710,12 @@ function paragraphCodeSpans(lines, texts = []) {
         const href = html.tag ? tagHref(text, at + i, html.end) : null;
         if (href) hrefs.push(href);
         return { ...html, end: html.end - at };
+      },
+      linkAt: (i) => {
+        const link = inlineLink(text, at + i);
+        if (!link) return null;
+        past = link.end;
+        return { target: link.target, end: link.end - at };
       },
       hrefs: () => {
         const targets = [];
@@ -873,31 +883,37 @@ const PUNCTUATION = /[!-/:-@[-`{-~]/;
 const ESCAPE = /\\([!-/:-@[-`{-~])/g;
 const escapes = (line, i) => line[i] === '\\' && PUNCTUATION.test(line[i + 1] ?? '');
 
-// The inline link whose destination opens at the ( at line[paren], read as
-// CommonMark reads a link destination: <target> runs to the closing > and may
-// hold spaces but no unescaped < or >; a bare target ends at a space, at a
-// control character or at the ) that closes the link, and may hold balanced
-// parentheses, nested up to 32 deep as markdown-it allows. The destination
-// may be followed by a double-quoted title that may hold \". Returns the
-// target, with each escape read as the character it escapes, and the index
-// after the ) that closes the link, or null when no link closes there.
+// The inline link or image whose destination opens at the ( at text[paren],
+// read as CommonMark reads it, in `text`, a line, a table cell or the lines
+// of a paragraph joined by line breaks, also over a line break: white space,
+// a destination, white space and a title, then white space and the ) that
+// closes it. <target> runs to the closing > and may hold spaces but no line
+// break and no unescaped < or >; a bare target ends at a space, a line
+// break, a control character or the ) that closes the link, and may hold
+// balanced parentheses, nested up to 32 deep as markdown-it allows. The
+// title is optional and in "", in '' or in () with no ( inside that no
+// backslash escapes, in which a backslash escapes the character after it,
+// and may hold a line break. Returns the target, with each escape read as
+// the character it escapes, and the index after the ) that closes the
+// link, or null when no ) closes it there.
 const MAX_PAREN_DEPTH = 32;
-function inlineLink(line, paren) {
+const LINK_TITLE_AND_CLOSE = /(?:[ \t\n]+(?:"(?:[^"\\]|\\[^])*"|'(?:[^'\\]|\\[^])*'|\((?:[^()\\]|\\[^])*\)))?[ \t\n]*\)/y;
+function inlineLink(text, paren) {
   let i = paren + 1;
-  while (line[i] === ' ' || line[i] === '\t') i++;
+  while (text[i] === ' ' || text[i] === '\t' || text[i] === '\n') i++;
   let raw = null;
-  if (line[i] === '<') {
+  if (text[i] === '<') {
     let j = i + 1;
-    while (j < line.length && line[j] !== '>' && line[j] !== '<') j += escapes(line, j) ? 2 : 1;
-    if (line[j] !== '>') return null;
-    raw = line.slice(i + 1, j);
+    while (j < text.length && text[j] !== '>' && text[j] !== '<' && text[j] !== '\n') j += escapes(text, j) ? 2 : 1;
+    if (text[j] !== '>') return null;
+    raw = text.slice(i + 1, j);
     i = j + 1;
   } else {
     let j = i;
     let depth = 0;
-    for (; j < line.length; j++) {
-      const c = line[j];
-      if (escapes(line, j)) j++;
+    for (; j < text.length; j++) {
+      const c = text[j];
+      if (escapes(text, j)) j++;
       else if (c <= ' ' || c === '\x7f') break;
       else if (c === '(') {
         if (++depth > MAX_PAREN_DEPTH) break;
@@ -907,11 +923,12 @@ function inlineLink(line, paren) {
       }
     }
     if (depth !== 0) return null;
-    raw = line.slice(i, j);
+    raw = text.slice(i, j);
     i = j;
   }
-  const rest = line.slice(i).match(/^(?:[ \t]+"(?:[^"\\]|\\.)*")?[ \t]*\)/);
-  return rest && { target: raw.replace(ESCAPE, '$1'), end: i + rest[0].length };
+  LINK_TITLE_AND_CLOSE.lastIndex = i;
+  if (!LINK_TITLE_AND_CLOSE.test(text)) return null;
+  return { target: raw.replace(ESCAPE, '$1'), end: LINK_TITLE_AND_CLOSE.lastIndex };
 }
 
 // The destinations of the inline links [text](target) on one line, read as
@@ -924,12 +941,14 @@ function inlineLink(line, paren) {
 // or ] inside one is text: [a <b title="]"> c](target) is a link, and
 // <b title="[">c](target) is text. Whichever of them starts first holds the
 // others, so a backtick inside an HTML tag opens no code span, and a < inside
-// a code span opens no tag. `spans` reads the line's code spans and raw HTML
-// as paragraphCodeSpans reads those of a line of a paragraph, so a code
-// span or raw HTML may run on to a later line, and the line is read from
-// spans.start, after a code span or raw HTML that an earlier line opened:
-// after the lines [a <b title="] and "> b](target), as after the line
-// [a <b title="]"> b](target), the link is read. The line is read on from
+// a code span opens no tag. `spans` reads the line's code spans, raw HTML and
+// inline links as paragraphCodeSpans reads those of a line of a paragraph,
+// so a code span, raw HTML or the destination and title of a link may run
+// on to a later line, and the line is read from spans.start, after a code
+// span, raw HTML or link that an earlier line opened: after the lines
+// [a <b title="] and "> b](target), as after the line
+// [a <b title="]"> b](target), the link is read, and so is the link of the
+// lines [x](target and "title"). The line is read on from
 // the ) that closes a link, so its destination and title, which may hold a
 // backtick, are not read as text. open.brackets is the stack of the [ that
 // no ] has closed yet, true for one that opens an image, and open.aroundLink
@@ -939,7 +958,7 @@ function inlineLink(line, paren) {
 function inlineDestinations(line, open, spans) {
   const targets = [];
   const { brackets } = open;
-  const { codeSpanAt, htmlAt } = spans;
+  const { codeSpanAt, htmlAt, linkAt } = spans;
   for (let i = spans.start; i < line.length; i++) {
     const c = line[i];
     if (escapes(line, i)) {
@@ -956,7 +975,7 @@ function inlineDestinations(line, open, spans) {
       const holdsLink = !image && brackets.length < open.aroundLink;
       open.aroundLink = Math.min(open.aroundLink, brackets.length);
       if (holdsLink || line[i + 1] !== '(') continue;
-      const link = inlineLink(line, i + 1);
+      const link = linkAt(i + 1);
       if (!link) continue;
       targets.push(link.target);
       if (!image) open.aroundLink = brackets.length;
@@ -1053,13 +1072,16 @@ function tagHref(text, start, end) {
 // open.code gives for the line, reads the code spans and raw HTML of the
 // paragraph's lines, as paragraphCodeSpans does, for inlineDestinations,
 // which meets each run of backticks after the autolinks, raw HTML and link
-// destinations that start before it.
+// destinations that start before it. The targets are added one at a time:
+// push(...targets) passes one argument per target, and on a line of
+// 150,000 inline links that call threw a RangeError (Maximum call stack
+// size exceeded).
 function linkTargets(line, open, spans) {
   const targets = [];
   const def = spans.start === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
-  targets.push(...inlineDestinations(line, open, spans));
-  targets.push(...spans.hrefs());
+  for (const target of inlineDestinations(line, open, spans)) targets.push(target);
+  for (const target of spans.hrefs()) targets.push(target);
   return targets;
 }
 
@@ -2453,14 +2475,23 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // of the comment; for a processing instruction and a CDATA section, >, as
 // a browser reads <? as the start of a bogus comment, which ends at the
 // first >, and <![CDATA[ too, but in the content of an <svg> or <math>
-// element, where it opens a CDATA section that ends at ]]>; shownHtml()
-// does not follow those elements, and reads a <![CDATA[ in them as it
-// reads one elsewhere. A declaration ends at > too. So a comment, processing
+// element, where <![CDATA[, in that case only, opens a CDATA section that
+// ends at ]]>: shownHtml() reads it so where the tracker that it is given
+// says that such content is open (elements.foreign(), as shownElements()
+// follows it), as text that a browser shows where the tracker says it
+// shows text there (elements.showsForeignText()), such as in an SVG <text>
+// element, up to CDATA_TEXT_END, and as text that a browser does not show
+// elsewhere, such as in the <svg> element itself, up to
+// CDATA_SECTION_END. A declaration ends at > too. So a comment, processing
 // instruction, CDATA section or declaration that opens an HTML block
 // (HTML_BLOCK_START, CDATA_START) ends at or before the first match of the
 // end that HTML_BLOCK_END gives that block.
 const TEXTAREA_END = /<\/textarea(?=[\t\n\f\r />]|$)/gi;
 const HIDDEN_HTML_START = /(<script(?=[\t\n\f\r />]|$))|(<style(?=[\t\n\f\r />]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s/>]|$))|(<\/?[a-z])/gi;
+const CDATA_GROUP = 5;
+const CDATA_START_LENGTH = '<![CDATA['.length;
+const CDATA_SECTION_END = /\]\]>/g;
+const CDATA_TEXT_END = /\]\]>/g;
 const TEXTAREA_GROUP = 7;
 const HIDDEN_HTML_END = [null, /<\/script(?=[\t\n\f\r />]|$)/gi, /<\/style(?=[\t\n\f\r />]|$)/gi, /--!?>/g, />/g, />/g, />/g];
 const END_TAG_STARTS = new Set([HIDDEN_HTML_END[1], HIDDEN_HTML_END[2], TEXTAREA_END]);
@@ -2575,20 +2606,25 @@ function tagEnd(text, i, state) {
   return { end: -1, state };
 }
 
-// The names of the elements that shownElements() follows.
-const TRACKED = new Set(['details', 'summary', 'dialog']);
+// The names of the elements that shownElements() follows: <details>,
+// <summary> and <dialog>, for the text they hide, and <svg> and <math>,
+// whose start tag opens foreign content (FOREIGN_ROOTS).
+const FOREIGN_ROOTS = new Set(['svg', 'math']);
+const TRACKED = new Set(['details', 'summary', 'dialog', ...FOREIGN_ROOTS]);
 
 // What shownHtml() returns as `open` for a tag that a line leaves open: the
 // state that tagEnd() reads it in, what the tag opens when it ends,
 // TEXTAREA_END for a <textarea> start tag, or null, and, for a start tag or
-// an end tag of one of TRACKED, `element`: its name, whether it is an end
-// tag, and its text from its < to the end of the line, for the tracker that
-// shownHtml() gives the tag to at its end.
+// an end tag of one of TRACKED, or a tag in foreign content, `element`: its
+// name, whether it is an end tag, and its text from its < to the end of the
+// line, for the tracker that shownHtml() gives the tag to at its end.
 const inTag = (state, then, element = null) => ({ state, then, element });
 
 // Whether shownHtml() shows the text of what `open`, which it returns,
-// leaves open: a <textarea> element, as it shows no part of a tag.
-const showsOpen = (open) => open === TEXTAREA_END;
+// leaves open: a <textarea> element and a CDATA section in foreign content
+// whose text a browser shows (CDATA_TEXT_END), as it shows no part of a
+// tag.
+const showsOpen = (open) => open === TEXTAREA_END || open === CDATA_TEXT_END;
 
 // The elements that the rendering rules of the HTML standard show as a
 // block, a list item, a table, or a caption, row or cell of a table, and
@@ -2626,32 +2662,80 @@ const tagName = (text, at) => {
 // that ends the tag it matches nothing.
 const ATTRIBUTE = /[\t\n\f\r /]*([^\t\n\f\r />][^\t\n\f\r />=]*)[\t\n\f\r ]*(?:=[\t\n\f\r ]*(?:"[^"]*"|'[^']*'|[^\t\n\f\r >]*))?/y;
 
-// Whether `tag`, a start tag from its < to its >, has the open attribute,
-// whose name a browser reads in any case: <details open> and
-// <details OPEN=""> have it, also with a line break before open, and
-// <details title="open"> does not.
-const hasOpenAttribute = (tag) => {
+// Whether `tag`, a start tag from its < to its >, has an attribute whose
+// name, which a browser reads in any case, `name` matches: <details open>
+// and <details OPEN=""> have the open attribute (OPEN), also with a line
+// break before open, and <details title="open"> does not.
+const OPEN = /^open$/i;
+const hasAttribute = (tag, name) => {
   TAG_NAME.lastIndex = 0;
   ATTRIBUTE.lastIndex = TAG_NAME.exec(tag)[0].length;
-  for (let attribute; (attribute = ATTRIBUTE.exec(tag)); ) if (/^open$/i.test(attribute[1])) return true;
+  for (let attribute; (attribute = ATTRIBUTE.exec(tag)); ) if (name.test(attribute[1])) return true;
   return false;
 };
 
-// Follows the <details>, <summary> and <dialog> elements (TRACKED) of a
-// dated page's intro, for the text a browser hides until the reader opens
-// the element that holds it: a <details> element without the open
-// attribute shows only its first <summary>, which the reader clicks to see
-// the rest, and a <dialog> element without it shows nothing. The tracker is
-// given each start tag and end tag that the intro shows to a browser, in
-// order, as tag(name, end, text): the tag's name in lower case, whether it
-// is an end tag, and, for a start tag of <details> or <dialog>, the tag
-// from its < to its >. A start tag of one of TRACKED opens an element, and
-// an end tag ends the element of its name that was opened last and is not
-// ended, with those opened after it, or none when there is none, as a
-// browser nests them in the HTML that a renderer makes of the page, over
-// its lines and blocks: a <details> start tag in one HTML block, a
-// paragraph and a </details> end tag in a later block hold the paragraph in
-// the element. The first <summary> of a <details> element is the first
+// Whether `tag`, a start tag from its < to its >, is self-closing: a / is
+// right before its >, after the tag's name or an attribute, as in <svg/>
+// and <svg x="1" />, and not in <svg x=1/>, whose value is 1/, or in
+// <svg/ >. A browser ends an <svg> or <math> element, and an element in
+// foreign content, at a start tag of it that is self-closing.
+const selfClosing = (tag) => {
+  TAG_NAME.lastIndex = 0;
+  let after = TAG_NAME.exec(tag)[0].length;
+  ATTRIBUTE.lastIndex = after;
+  while (ATTRIBUTE.exec(tag)) after = ATTRIBUTE.lastIndex;
+  return tag.slice(after).endsWith('/>');
+};
+
+// The start tags that end foreign content, as the HTML standard reads a
+// start tag in it outside an element of INTEGRATION_POINTS: a browser ends
+// the elements open in it, the <svg> or <math> element that opens it
+// included, and reads the tag as HTML. So it does at a <font> start tag
+// with a color, face or size attribute (FONT_BREAKS_OUT) and at the end
+// tags </br> and </p>.
+const BREAK_OUT = new Set([
+  'b', 'big', 'blockquote', 'body', 'br', 'center', 'code', 'dd', 'div', 'dl', 'dt', 'em', 'embed', 'h1', 'h2', 'h3',
+  'h4', 'h5', 'h6', 'head', 'hr', 'i', 'img', 'li', 'listing', 'menu', 'meta', 'nobr', 'ol', 'p', 'pre', 'ruby', 's',
+  'small', 'span', 'strong', 'strike', 'sub', 'sup', 'table', 'tt', 'u', 'ul', 'var',
+]);
+const FONT_BREAKS_OUT = /^(?:color|face|size)$/i;
+
+// The elements of foreign content in which a browser reads a start tag as
+// HTML, which then opens an HTML element inside that element: the HTML
+// integration points <foreignObject>, <desc> and <title> of SVG, and
+// <annotation-xml> of MathML with an encoding attribute of text/html or
+// application/xhtml+xml, and the MathML text integration points <mi>, <mo>,
+// <mn>, <ms> and <mtext>, in which <mglyph> and <malignmark> are not read
+// so. shownElements() reads each of these names as one in any foreign
+// content, and any start tag in one as HTML.
+const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'annotation-xml', 'mi', 'mo', 'mn', 'ms', 'mtext']);
+
+// The elements of foreign content in which a browser shows text, the text
+// of a CDATA section too: an SVG <text> element, also through the <tspan>,
+// <textPath> and <a> elements in it (TEXT_CHILDREN), a <foreignObject>
+// element, and the MathML token elements <mi>, <mo>, <mn>, <ms> and
+// <mtext>. It shows none directly in an <svg> or <math> element, nor in
+// <desc>, <title> or <annotation-xml>, nor in a <tspan>, <textPath> or <a>
+// element that no <text> element holds.
+const SHOWS_TEXT = new Set(['text', 'foreignobject', 'mi', 'mo', 'mn', 'ms', 'mtext']);
+const TEXT_CHILDREN = new Set(['tspan', 'textpath', 'a']);
+
+// Follows the <details>, <summary> and <dialog> elements of a dated page's
+// intro, for the text a browser hides until the reader opens the element
+// that holds it: a <details> element without the open attribute shows only
+// its first <summary>, which the reader clicks to see the rest, and a
+// <dialog> element without it shows nothing. The tracker is given each
+// start tag and end tag that the intro shows to a browser, in order, as
+// tag(name, end, text): the tag's name in lower case, whether it is an end
+// tag, and, for a start tag of <details>, <dialog>, <svg> or <math> and a
+// start tag in foreign content, the tag from its < to its >. A start tag of
+// <details>, <summary> or <dialog> opens an element, and an end tag ends the
+// element of its name that was opened last and is not ended, with those
+// opened after it, or none when there is none, as a browser nests them in
+// the HTML that a renderer makes of the page, over its lines and blocks: a
+// <details> start tag in one HTML block, a paragraph and a </details> end
+// tag in a later block hold the paragraph in the element. The first
+// <summary> of a <details> element is the first
 // <summary> start tag given while that element is the last of these opened
 // and not ended. Other elements are not followed, so a <summary> that a
 // <div> in the <details> holds is read as its summary too, and an element
@@ -2669,14 +2753,39 @@ const hasOpenAttribute = (tag) => {
 // text on one side of it at least, and '' otherwise: a start tag or an end
 // tag of one of BREAK_TAGS, such as <details> or <summary>, parts them, and
 // so do a start tag of <dialog> with the open attribute and the end tag
-// that ends such an element, but no other tag of <dialog>. Each element is
-// opened once and ended at most once, so the time the tracker takes grows
-// in proportion to the number of tags it is given and the length of the
-// <details> and <dialog> start tags among them.
+// that ends such an element, but no other tag of <dialog>.
+//
+// The tracker also follows foreign content, in which shownHtml() reads a
+// <![CDATA[ as the start of a CDATA section that ends at ]]>: foreign()
+// says whether it is open. An <svg> or <math> start tag that is not
+// self-closing (selfClosing()) opens it, and the tracker keeps the name of
+// that element and of each element that a start tag in it, not
+// self-closing, opens there, as a browser opens one. An end tag ends the
+// element of its name opened last there, with those opened after it, so
+// </svg> ends the <svg> element that opened it, and one of a name that no
+// element open there has ends foreign content, the elements open in it
+// included, but for </svg> and </math>, which a browser then ignores, as
+// no HTML element has either name; so do a start tag of BREAK_OUT, a <font> start tag with a
+// color, face or size attribute, and any start tag in an element of
+// INTEGRATION_POINTS but <svg> or <math>, which then opens foreign content
+// again, as above, and endForeign(). A browser ends foreign content at
+// such an end tag only where an element of that name holds it, such as a
+// </div> after a <div> that holds the <svg> element, and keeps it open in
+// an element of INTEGRATION_POINTS, in which it reads the start tag as
+// HTML, so after the end of that HTML element it reads a <![CDATA[ as the
+// start of a CDATA section and the tracker does not. showsForeignText()
+// says whether a browser shows text where foreign content is now: in an
+// element of SHOWS_TEXT opened last, or in an element of TEXT_CHILDREN
+// that a <text> element holds through more of these. A cell starts outside
+// foreign content. Each element is opened once and ended at most once, and
+// an end tag reads only the names of the elements it ends, so the time the
+// tracker takes grows in proportion to the number of tags it is given and
+// the length of the start tags among them whose attributes it reads.
 function shownElements(outer = null) {
   const elements = []; // the elements open, the one opened last at the end
   const counts = new Map(); // element name -> how many of `elements` have it
   let hiding = 0; // how many of `elements` hide the text after them
+  const inForeign = []; // the names of the elements open in foreign content, the <svg> or <math> element that opened it first
   const hidden = () => hiding > 0 || (outer !== null && outer.hidden());
   const open = (element) => {
     elements.push(element);
@@ -2695,9 +2804,23 @@ function shownElements(outer = null) {
     }
     return element;
   };
+  // Follows foreign content over the tag, as described above.
+  const followForeign = (name, isEnd, text) => {
+    if (isEnd) {
+      const at = inForeign.lastIndexOf(name);
+      if (at !== -1 || !FOREIGN_ROOTS.has(name)) inForeign.length = Math.max(0, at);
+      return;
+    }
+    const top = inForeign.at(-1);
+    if (top !== undefined && (INTEGRATION_POINTS.has(top) || BREAK_OUT.has(name) || (name === 'font' && hasAttribute(text, FONT_BREAKS_OUT)))) {
+      inForeign.length = 0;
+    }
+    if ((inForeign.length > 0 || FOREIGN_ROOTS.has(name)) && !selfClosing(text)) inForeign.push(name);
+  };
   const tag = (name, isEnd, text) => {
     const before = !hidden();
     let breaks = BREAK_TAGS.has(name);
+    followForeign(name, isEnd, text);
     if (isEnd) {
       if (counts.get(name) > 0) {
         let element;
@@ -2706,7 +2829,7 @@ function shownElements(outer = null) {
         if (name === 'dialog') breaks = element.opened;
       }
     } else if (name === 'details' || name === 'dialog') {
-      const opened = hasOpenAttribute(text);
+      const opened = hasAttribute(text, OPEN);
       if (name === 'dialog') breaks = opened;
       open({ name, opened, hides: !opened, summary: false });
     } else if (name === 'summary') {
@@ -2725,7 +2848,17 @@ function shownElements(outer = null) {
     }
     return breaks && (before || !hidden()) ? ' ' : '';
   };
-  return { hidden, tag, cell: () => shownElements({ hidden }) };
+  const foreign = () => inForeign.length > 0;
+  const showsForeignText = () => {
+    let k = inForeign.length - 1;
+    if (SHOWS_TEXT.has(inForeign[k])) return true;
+    while (k > 0 && TEXT_CHILDREN.has(inForeign[k])) k--;
+    return inForeign[k] === 'text';
+  };
+  const endForeign = () => {
+    inForeign.length = 0;
+  };
+  return { hidden, tag, foreign, showsForeignText, endForeign, cell: () => shownElements({ hidden }) };
 }
 
 // The parts of the text of one line of an HTML block that a browser shows:
@@ -2733,7 +2866,9 @@ function shownElements(outer = null) {
 // of a <textarea> element, given `open`, what the line above in the block
 // leaves open: the entry of HIDDEN_HTML_END that ends a comment, processing
 // instruction, CDATA section, declaration, <script> or <style> element,
-// TEXTAREA_END for a <textarea> element, inTag() for a tag, the start tag
+// CDATA_SECTION_END for a CDATA section in foreign content, as
+// elements.foreign() says where its <![CDATA[ starts, TEXTAREA_END for a
+// <textarea> element, inTag() for a tag, the start tag
 // of one of these elements included, or null, and, where `open` is
 // SCRIPT_END, `escape`, the state of the tokenizer in the element's text,
 // as readScript() takes it. The end of each is the first match of its
@@ -2744,8 +2879,9 @@ function shownElements(outer = null) {
 // its end tag (END_TAG_STARTS), for a <script> as readScript() reads that
 // text, and the rest of that end tag is read as a tag. `elements`, a
 // tracker that shownElements() makes, is given each tag, at its end when
-// it is a start tag or an end tag of one of TRACKED and at its start
-// otherwise, and a part that it says a browser hides is left out. Returns
+// it is a start tag or an end tag of one of TRACKED or a tag in foreign
+// content, as elements.foreign() says where the tag starts, and at its
+// start otherwise, and a part that it says a browser hides is left out. Returns
 // the text of those parts in order, with the space that the tracker
 // returns for a tag in place of that tag, as `shown`, what the line leaves
 // open, in the same form, or null, as `open`, and, where that is
@@ -2789,11 +2925,11 @@ function shownHtml(text, open, elements, escape = 0) {
         while (end && open === COMMENT_END && at !== -1 && end[0].length === 4 && end.index < at + 4) end = find(open, end.index + 1);
       }
       if (!end) {
-        if (open === TEXTAREA_END) show(text.slice(from));
+        if (showsOpen(open)) show(text.slice(from));
         return { shown, open, escape };
       }
       i = end.index + end[0].length;
-      if (open === TEXTAREA_END) show(text.slice(from, end.index));
+      if (showsOpen(open)) show(text.slice(from, end.index));
       if (END_TAG_STARTS.has(open)) {
         open = inTag(IN_TAG, null);
         continue;
@@ -2812,12 +2948,20 @@ function shownHtml(text, open, elements, escape = 0) {
     if (group > TEXTAREA_GROUP) {
       const name = tagName(text, start.index);
       const end = text[start.index + 1] === '/';
-      if (TRACKED.has(name)) {
+      if (TRACKED.has(name) || elements.foreign()) {
         element = { name, end, text: '' };
         tagFrom = start.index;
       } else {
         shown += elements.tag(name, end);
       }
+    }
+    // In foreign content, <![CDATA[, in that case, opens a CDATA section,
+    // which ends at ]]>, and whose text starts after the <![CDATA[.
+    if (group === CDATA_GROUP && start[0] === '<![CDATA[' && elements.foreign()) {
+      open = elements.showsForeignText() ? CDATA_TEXT_END : CDATA_SECTION_END;
+      at = start.index;
+      i = from = start.index + CDATA_START_LENGTH;
+      continue;
     }
     // A <script>, <style> or <textarea> start tag is read on to its end, and
     // the element's text starts after it.
@@ -2952,10 +3096,12 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // tracker returns, and a part of the line that the tracker says a browser
 // hides is left out. Returns the text as `text`.
 const TEXTAREA_START_TAG = /<textarea[\s/>]/iy;
-// The entries of HIDDEN_HTML_END that end the raw HTML whose text
-// shownInline() leaves out past the end of the piece that opens it: of a
-// <script> element, of a <style> element and of a comment.
-const RUNS_ON = new Set(HIDDEN_HTML_END.slice(1, 4));
+// The ends of the raw HTML whose text shownInline() leaves out past the end
+// of the piece that opens it, the entries of HIDDEN_HTML_END of a <script>
+// element, of a <style> element and of a comment, and the end of a CDATA
+// section in foreign content (CDATA_SECTION_END), which a browser reads on
+// in, as in a comment, to its ]]>.
+const RUNS_ON = new Set([...HIDDEN_HTML_END.slice(1, 4), CDATA_SECTION_END]);
 // The entry of HIDDEN_HTML_END that ends the element that a start tag of
 // each of these names opens, whose text a browser reads as raw text, not
 // as HTML: <script> and <style>, also <script/>, as a browser opens the
@@ -2966,44 +3112,10 @@ const RAW_TEXT = new Map([
 ]);
 // Whether what shownHtml() leaves open at the end of raw HTML that
 // shownInline() reads with it hides the rest of the paragraph: a tag, a
-// processing instruction, a CDATA section or a declaration, unlike a
-// <textarea> element (TEXTAREA_END), whose text is shown, and the raw HTML
-// that an entry of RUNS_ON ends.
-const hidesParagraph = (left) => left !== null && left !== TEXTAREA_END && !RUNS_ON.has(left);
-// The index after the ) that closes the inline link or image whose
-// destination opens at the ( at text[paren], read as CommonMark reads it,
-// also over a line break: white space, a destination, as inlineLink() reads
-// one, which a line break ends, white space and a title, in "", in '' or in
-// () with no ( inside that no backslash escapes, in which a backslash
-// escapes the character after it and which may run on over a line break,
-// then white space; -1 when no ) closes it there.
-const LINK_TITLE_AND_CLOSE = /(?:[ \t\n]+(?:"(?:[^"\\]|\\[^])*"|'(?:[^'\\]|\\[^])*'|\((?:[^()\\]|\\[^])*\)))?[ \t\n]*\)/y;
-function inlineLinkEnd(text, paren) {
-  let i = paren + 1;
-  while (text[i] === ' ' || text[i] === '\t' || text[i] === '\n') i++;
-  if (text[i] === '<') {
-    let j = i + 1;
-    while (j < text.length && text[j] !== '>' && text[j] !== '<' && text[j] !== '\n') j += escapes(text, j) ? 2 : 1;
-    if (text[j] !== '>') return -1;
-    i = j + 1;
-  } else {
-    let depth = 0;
-    for (; i < text.length; i++) {
-      const c = text[i];
-      if (escapes(text, i)) i++;
-      else if (c <= ' ' || c === '\x7f') break;
-      else if (c === '(') {
-        if (++depth > MAX_PAREN_DEPTH) return -1;
-      } else if (c === ')') {
-        if (depth === 0) break;
-        depth--;
-      }
-    }
-    if (depth !== 0) return -1;
-  }
-  LINK_TITLE_AND_CLOSE.lastIndex = i;
-  return LINK_TITLE_AND_CLOSE.test(text) ? LINK_TITLE_AND_CLOSE.lastIndex : -1;
-}
+// processing instruction, a CDATA section outside foreign content or a
+// declaration, unlike a <textarea> element (TEXTAREA_END), whose text is
+// shown, and the raw HTML that an entry of RUNS_ON ends.
+const hidesParagraph = (left) => left !== null && !showsOpen(left) && !RUNS_ON.has(left);
 
 // The index after the label of a reference that starts at the [ at
 // text[at], right after the ] of an image's description: up to the first ]
@@ -3023,7 +3135,7 @@ function referenceLabelEnd(text, at) {
 // or the text of a heading or a table cell, that a renderer writes as text,
 // so that no part of it is raw HTML or a code span, as [start, end, sure],
 // in order: the destination and title of each inline link, from the ( after
-// its ] to the ) that closes them, as inlineLinkEnd() reads them, and each
+// its ] to the ) that closes them, as inlineLink() reads them, and each
 // image, from its ![ to that ), as a renderer writes the description of an
 // image as text as well, with `sure` true; and the description of an image
 // that no destination follows, from its ![ to its ] and on over the label
@@ -3058,7 +3170,7 @@ function linkSyntax(text) {
       const holdsLink = !image && brackets.length < aroundLink;
       aroundLink = Math.min(aroundLink, brackets.length);
       if (holdsLink) continue;
-      const end = text[i + 1] === '(' ? inlineLinkEnd(text, i + 1) : -1;
+      const end = text[i + 1] === '(' ? (inlineLink(text, i + 1)?.end ?? -1) : -1;
       if (end === -1) {
         if (image) parts.push([at, referenceLabelEnd(text, i + 1), false]);
         continue;
@@ -3093,8 +3205,9 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
   let i = 0;
   let text = '';
   // What is open at i that a piece of raw HTML before i, such as a start
-  // tag, or `open` opened: TEXTAREA_END for a <textarea> element, an entry
-  // of RUNS_ON for raw HTML whose text is left out, or null.
+  // tag, or `open` opened: TEXTAREA_END for a <textarea> element,
+  // CDATA_TEXT_END for a CDATA section whose text is shown, an entry of
+  // RUNS_ON for raw HTML whose text is left out, or null.
   let raw = null;
   // The state of a browser's tokenizer in the text of the <script> element
   // that is open when `raw` is SCRIPT_END, as scriptEnd() reads it: 0 in
@@ -3154,7 +3267,7 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
     escape = open.escape;
     i = start;
   }
-  const hidden = () => raw !== null && raw !== TEXTAREA_END;
+  const hidden = () => raw !== null && !showsOpen(raw);
   // The link syntax that holds line[at], as linkSyntax() reads it in the
   // paragraph, or on a line read without one: { end, sure }, with `end` the
   // index on the line after it, or null when none holds it.
@@ -3199,8 +3312,9 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
   while (i < line.length) {
     const c = line[i];
     // Link syntax that a renderer writes as text holds no code span and no
-    // raw HTML, so what hides text reads on over it.
-    const link = hidden() && (c === '`' || c === '<') ? linkSyntaxAt(i) : null;
+    // raw HTML, so a backtick or a < in it opens nothing, and what hides
+    // text reads on over it.
+    const link = c === '`' || c === '<' ? linkSyntaxAt(i) : null;
     if (link?.sure) {
       i = link.end;
     } else if (c === '\\') {
@@ -3230,7 +3344,7 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
         // A <script> ends at the </script that ends it for a browser, as
         // scriptEnd() finds it, which reads the rest of the piece, and the
         // rest of the line in a piece that runs on, as the element's text.
-        if (link) return { text, open: restLeftOut({ hides: raw, escape }) };
+        if (link && hidden()) return { text, open: restLeftOut({ hides: raw, escape }) };
         const piece = end > i + 1 && (tag || unshown);
         const close = piece ? (raw === SCRIPT_END ? scriptEnd(i, end) : matchFrom(raw, i)) : null;
         const after = close ? close.index + close[0].length : -1;
@@ -3349,7 +3463,8 @@ for (const [file, { at, shown }] of datedPages) {
   // holds its >, as CommonMark reads it on those parts of the paragraph's
   // lines joined by line breaks, and so may a comment, <script> or <style>
   // that the raw HTML after a </textarea> end tag inside one of these, or a
-  // <script> or <style> start tag, leaves open, to the first match of its
+  // <script> or <style> start tag, leaves open, and a CDATA section in
+  // foreign content that raw HTML leaves open, to the first match of its
   // end inside later raw HTML outside the link syntax that a renderer
   // writes as text, as shownInline() reads it, and on past the paragraph.
   // The lines of a paragraph here are those
@@ -3365,10 +3480,11 @@ for (const [file, { at, shown }] of datedPages) {
   // out with it, so it does not join the words around it with a space; one
   // inside a <textarea> element, after its start tag, is shown, as the
   // element's text is, and is read as a space. A tag, a processing
-  // instruction, a CDATA section, a declaration or a <textarea> that a
-  // block leaves open at its last line is not carried to the line after
-  // the block. A comment, <script> or <style> is, as a browser reads on in
-  // it past the end of the block, with the state of the tokenizer in the
+  // instruction, a CDATA section outside foreign content, a declaration or
+  // a <textarea> that a block leaves open at its last line is not carried
+  // to the line after the block. A comment, <script>, <style> or CDATA
+  // section in foreign content is, as a browser reads on in it past the end
+  // of the block, with the state of the tokenizer in the
   // text of a <script>: it hides the lines after it, in blank lines, code
   // blocks, paragraphs, headings, the cells of table rows in turn and HTML
   // blocks, up to the first match of its end that shownHtml() or
@@ -3379,7 +3495,17 @@ for (const [file, { at, shown }] of datedPages) {
   // one document, with one tracker that shownElements() makes, and each
   // cell of a table row with a tracker that its cell() makes: the text that
   // the tracker says a browser hides is not the note, and a line break
-  // there is not read as a space.
+  // there is not read as a space. The tracker follows foreign content as
+  // well, which it ends at the first line of each block, a blank line and
+  // an HTML block included: a renderer writes a start tag, such as <p>,
+  // <h3>, <table>, <pre>, <ul> or <blockquote>, before a paragraph, a
+  // heading, a table, a code block, a list or a block quote, and an end tag
+  // after it, and a browser ends foreign content at each, unless raw HTML
+  // that runs on, as above, holds that point, as a browser reads those tags
+  // there as its text, and so the tracker does not end it there. A browser
+  // keeps foreign content open from an HTML block on to the next one where
+  // the same block quotes and list items hold both, and the tracker does
+  // not.
   //
   // `inline` holds, for each line read with shownInline() but a table row,
   // its part in `outside`, where its text starts after the > markers,
@@ -3436,14 +3562,20 @@ for (const [file, { at, shown }] of datedPages) {
   let unshown = null;
   above.forEach((l, k) => {
     const html = htmlLines.get(k);
+    // Whether the line starts a block, rather than going on with the HTML
+    // block or the paragraph of the line above.
+    const starts = html ? html !== block : !inline[k] || inline[k].first === k;
     if (html !== block) {
-      // A comment, <script> or <style> that the HTML block above leaves open
-      // stays open after it, and an HTML block starts with what the blocks
-      // above leave open so.
+      // A comment, <script>, <style> or CDATA section in foreign content
+      // that the HTML block above leaves open stays open after it, and an
+      // HTML block starts with what the blocks above leave open so.
       if (block) unshown = RUNS_ON.has(open) ? { hides: open, escape } : null;
       [open, escape] = html && unshown?.hides ? [unshown.hides, unshown.escape] : [null, 0];
       if (html) unshown = null;
     }
+    // Foreign content ends at the start of each block, unless raw HTML that
+    // runs on holds it there.
+    if (starts && !(html ? RUNS_ON.has(open) : unshown?.hides)) elements.endForeign();
     block = html;
     let text = '';
     if (inline[k]) {
