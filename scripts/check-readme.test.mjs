@@ -1628,6 +1628,106 @@ test('a line of 100,000 tags inside a <textarea> or <script>, which no end tag e
   }
 });
 
+test('an href whose value is unquoted, or in quotes and holds a line break, is read, without the tabs and line breaks that a browser removes from a URL', () => {
+  // CommonMark reads an open tag as raw HTML when an attribute's value is
+  // unquoted, or in quotes and holds a line break. A browser reads an
+  // unquoted value up to white space or a >, and the URL parser removes
+  // each tab, line feed and carriage return from a URL: textutil on macOS
+  // 26.6.2 reads <a href=docs/one.md>, and <a href="docs/ with two.md"> on
+  // the next line, as links to docs/one.md and docs/two.md. Each of these
+  // has a link to docs/nowhere.md, named with the line that holds the quote
+  // that opens the href's value, or its first character when it is
+  // unquoted: in a paragraph, also in a block quote or a list item, whose
+  // > markers and indentation CommonMark leaves out of the paragraph's
+  // text, and in a tag that starts on an earlier line; in a heading and a
+  // table cell; after a > inside <? or <![CDATA[, or after a --!> inside a
+  // comment, where a browser ends it; and on a line of an HTML block or of
+  // indented code.
+  for (const [body, line] of [
+    ['x <a href=docs/nowhere.md>y</a>\n', 11],
+    ['x <a href="docs/\nnowhere.md">y</a>\n', 11],
+    ["x <a href='docs/\nnowhere.md'>y</a>\n", 11],
+    ['x <a href="docs/\r\nnowhere.md">y</a>\r\n', 11],
+    ['x <a href="docs/now\there.md">y</a>\n', 11],
+    ['> x <a href="docs/\n> nowhere.md">y</a>\n', 11],
+    ['- x <a href="docs/\n  nowhere.md">y</a>\n', 11],
+    ['x <a href="docs/\n   nowhere.md">y</a>\n', 11],
+    ['x <a\nhref=docs/nowhere.md>y</a>\n', 12],
+    ['x <a href=\ndocs/nowhere.md>y</a>\n', 12],
+    ['x <a href="\ndocs/nowhere.md">y</a>\n', 11],
+    ['x <a title=t href=docs/nowhere.md>y</a>\n', 11],
+    ['x <A HREF = docs/nowhere.md title="t">y</A>\n', 11],
+    ['## x <a href=docs/nowhere.md>y</a>\n', 11],
+    ['| h |\n| - |\n| <a href=docs/nowhere.md>x</a> |\n', 13],
+    ['x <? > <a href=docs/nowhere.md>y</a> ?>\n', 11],
+    ['x <![CDATA[ > <a href=docs/nowhere.md>y</a> ]]>\n', 11],
+    ['x <!-- --!> <a href=docs/nowhere.md>y</a> -->\n', 11],
+    ['x <? > <a href="docs/\nnowhere.md">y</a> ?>\n', 11],
+    ['> x <? > <a href="docs/\n> nowhere.md">y</a> ?>\n', 11],
+    ['<div>\n<a href=docs/nowhere.md>x</a>\n</div>\n', 12],
+    ['    <a href=docs/nowhere.md>x</a>\n', 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  const anchor = check('x <a href=#no-such-heading>y</a>\n');
+  assert.equal(anchor.status, 1);
+  assert.match(anchor.stderr, /^README: line 11: anchor "#no-such-heading" has no matching heading in README\.md\.$/m);
+  // Each of these links to docs/guide.md, which exists: CommonMark leaves
+  // the > of the block quote out of the paragraph's text, the URL parser
+  // removes the line break and the tab, and a browser reads the first href
+  // of a tag and drops a later one. textutil reads an href of docs/fo, a
+  // tab and ur.md as a link to docs/four.md, and <a href=docs/three.md
+  // href="docs/other.md"> as one to docs/three.md.
+  for (const body of [
+    'x <a href=docs/guide.md#setup-steps>y</a>\n',
+    'x <a href="docs/\nguide.md">y</a>\n',
+    '> x <a href="docs/\n> guide.md">y</a>\n',
+    'x <a href="docs/gu\tide.md">y</a>\n',
+    '<div>\n<a href="docs/gu\tide.md">x</a>\n</div>\n',
+    'x <? > <a href="docs/gu\tide.md">y</a> ?>\n',
+    'x <a href=docs/guide.md href="docs/nowhere.md">y</a>\n',
+    'x <? > <a href=docs/guide.md href="docs/nowhere.md">y</a> ?>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // None of these links to docs/nowhere.md: a backslash escapes the <; the
+  // tag is inside another tag's quoted value, a comment, a code span or a
+  // link's title; the first > after the <? is the tag's own; or the
+  // attribute is named data-href.
+  for (const body of [
+    '\\<a href=docs/nowhere.md>x\n',
+    '<b title="<a href=docs/nowhere.md>">x</b>\n',
+    'x <!-- <a href=docs/nowhere.md> -->\n',
+    '`<a href=docs/nowhere.md>`\n',
+    '[x](docs/guide.md "<a href=docs/nowhere.md>")\n',
+    'x <? <a href=docs/nowhere.md> ?>\n',
+    'x <a data-href=docs/nowhere.md>y</a>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('a line of a tag of 50,000 attributes href=a, each after a no-break space, is checked in under 2 seconds', () => {
+  // A line of an HTML block or of indented code is tested for an href at
+  // each index, and a no-break space is white space to that test, while an
+  // unquoted value runs on past one; a test that read the whole value would
+  // read the rest of the line from each no-break space. The line is checked
+  // in an HTML block, as indented code and in a paragraph. The tag's first
+  // href is docs/guide.md, which exists.
+  const tag = `<a href="docs/guide.md"${' href=a'.repeat(50000)}>x</a>`;
+  for (const body of [`<div>\n${tag}\n</div>\n`, `    ${tag}\n`, `x ${tag}\n`]) {
+    const started = process.hrtime.bigint();
+    const r = check(body);
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, 0, r.stderr.slice(0, 500));
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${tag.length} characters after ${JSON.stringify(body.slice(0, 4))}`);
+  }
+});
+
 test('a line of 200,000 tags with an href, outside a processing instruction or inside one, is checked without a RangeError', () => {
   // Given as the arguments of one push(), the targets of a line of 130,000
   // such tags threw a RangeError (Maximum call stack size exceeded) on

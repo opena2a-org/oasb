@@ -24,12 +24,16 @@ the claims this repository publishes:
    inline links (`[text](path)`, with an optional title in `""`, `''` or
    `()`, and a path written `<path>` or holding balanced parentheses,
    `[text](docs/a(b).md)`), whose path and title may start on the next line
-   of their paragraph, and, each written within one line, reference
-   definitions at the start of a line (`[label]: path`) and quoted HTML
-   `href` attributes. It
-   checks a `#anchor` only in links to `.md` files. Other forms, such as an
-   unquoted `href` or a definition on the same line as a list marker
-   (`- [label]: path`), are not checked. A linked `.md` page whose
+   of their paragraph, reference definitions at the start of a line
+   (`[label]: path`), written within one line, and HTML `href` attributes,
+   quoted or not (`href="path"`, `href='path'` or `href=path`). It reads
+   the path of an `href` without the tabs and line breaks that a browser
+   removes from a URL: in a paragraph a quoted value may run on to the next
+   line, whose `>` markers and indentation are no part of the path, and on
+   a line of an HTML block or of indented code an `href` is read when its
+   value ends on that line. It checks a `#anchor` only in links to `.md`
+   files. Other forms, such as a definition on the same line as a list
+   marker (`- [label]: path`), are not checked. A linked `.md` page whose
    file name carries a date (`docs/AUDIT-2026-06-03.md`) must say "as of"
    that date and link to the README above its first H2: its counts are those
    of that day and nothing compares them with the suite. Reference detail
