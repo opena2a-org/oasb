@@ -3696,6 +3696,46 @@ test('a processing instruction ends at the first > after its <?, as a browser en
   }
 });
 
+test('a CDATA section ends at the first > after its <![CDATA[, as a browser ends what <![CDATA[ opens there, on a line of an HTML block and in a paragraph, a heading or a table cell', () => {
+  // Outside an <svg> or <math> element, a browser reads <![CDATA[, also
+  // <![cdata[, as the start of a bogus comment, which ends at the first >,
+  // and shows the text after it, also where CommonMark reads the CDATA
+  // section, or the HTML block that it opens, on to a later ]]>, on its
+  // line or a later one: a renderer passes it on as written, so the rest of
+  // it is read as raw HTML, and what that leaves open, such as a comment or
+  // a <script>, hides the text after it.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `<div>\n<![CDATA[ x > As of 2026-06-03. ]]>\n</div>\n\n${see}`,
+    `<div><![CDATA[ x > As of 2026-06-03. ]]></div>\n\n${see}`,
+    `<div>\n<![cdata[ x > As of 2026-06-03. ]]>\n</div>\n\n${see}`,
+    `<![CDATA[ x > As of 2026-06-03. ]]>\n\n${see}`,
+    `<![CDATA[ x\n> As of 2026-06-03.\n]]>\n\n${see}`,
+    `Hello <![CDATA[ x > As of 2026-06-03. ]]> world.\n\n${see}`,
+    `### Audit <![CDATA[ x > As of 2026-06-03. ]]>\n\n${see}`,
+    `| <![CDATA[ x > As of 2026-06-03. ]]> | x |\n| - | - |\n\n${see}`,
+    `Hello <textarea><b title="</textarea><![CDATA[">\nAs of 2026-06-03. world.\n\n${see}`,
+    `Hello <![CDATA[ x >\nAs of 2026-06-03. ]]>\n\n${see}`,
+    `Hello <![CDATA[ x\ny > As of 2026-06-03.\nz ]]>\n\n${see}`,
+    `Hello <![CDATA[ x ><textarea ]]> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  for (const intro of [
+    `Hello <![CDATA[ x > <!-- ]]> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <![CDATA[ x ><script ]]> As of 2026-06-03. world.\n\n${see}`,
+    `<div>\n<![CDATA[ x > <!-- ]]> As of 2026-06-03.\n</div>\n\n${see}`,
+    `Hello <![CDATA[ note As of 2026-06-03. ]]> world.\n\n${see}`,
+    `<div>\n<![CDATA[ note As of 2026-06-03. ]]>\n</div>\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+    assert.match(r.stderr, NO_NOTE, intro);
+  }
+});
+
 test('a comment ends at --!> as at -->, as a browser ends it, on a line of an HTML block and in a paragraph, but not at a --!> that takes its dashes from its <!--', () => {
   // The -- of a <!-- end the comment only before a >, as in <!-->: <!--!>
   // and <!---!> open a comment that runs on, and <!----!> is one. A --!>

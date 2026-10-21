@@ -2335,9 +2335,11 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // block: it ends a comment at the first --> or --!> after its <!--, but not
 // at a --!> that takes its dashes from the <!--, so
 // <div><!-- x --!> As of 2026-06-03.</div> holds the note and
-// <div><!--!> As of 2026-06-03. --></div> holds none, and what <? opens at
-// the first > after it, so <div><?x> As of 2026-06-03.</div> holds the
-// note. None of these starts inside a <textarea>
+// <div><!--!> As of 2026-06-03. --></div> holds none, and what <? or
+// <![CDATA[ opens at the first > after it, so
+// <div><?x> As of 2026-06-03.</div> and
+// <div><![CDATA[ x > As of 2026-06-03. ]]></div> hold the note. None of
+// these starts inside a <textarea>
 // element, whose text, escapable raw text, a browser shows as written, so
 // the line <textarea><!-- As of 2026-06-03. --></textarea> holds the note,
 // and <textarea>As <b>of</b> 2026-06-03.</textarea> holds none. A browser
@@ -2362,7 +2364,9 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // <!-- As of 2026-06-03. --> after a word, also one that runs on from one
 // line of a paragraph to a later one, up to where a browser ends it, as in
 // an HTML block, after which a browser reads the rest of it as raw HTML,
-// so Hello <?x> As of 2026-06-03. ?> holds the note, nor the text of an
+// so Hello <?x> As of 2026-06-03. ?> and
+// Hello <![CDATA[ x > As of 2026-06-03. ]]> world. hold the note, nor the
+// text of an
 // open tag or a closing tag, such as <span title="As of 2026-06-03.">, as
 // in an HTML block, also one that runs on from one line of a paragraph to
 // a later one, as CommonMark reads a line break inside a tag, but for one
@@ -2419,16 +2423,19 @@ for (const { n, line, prefix } of documents.flatMap((d) => d.lines.map((l) => ({
 // (END_TAG_STARTS), and for a <script> the first such </script that
 // readScript() reads as its end; for a comment, --> or --!>, as a browser
 // ends one at either, but not a --!> that takes its dashes from the <!--
-// of the comment; for a processing instruction, >, as a browser reads <?
-// as the start of a bogus comment, which ends at the first >; and ]]> or >
-// for the others. So a comment, processing instruction, CDATA section or
-// declaration that opens an HTML block (HTML_BLOCK_START, CDATA_START)
-// ends at or before the first match of the end that HTML_BLOCK_END gives
-// that block.
+// of the comment; for a processing instruction and a CDATA section, >, as
+// a browser reads <? as the start of a bogus comment, which ends at the
+// first >, and <![CDATA[ too, but in the content of an <svg> or <math>
+// element, where it opens a CDATA section that ends at ]]>; shownHtml()
+// does not follow those elements, and reads a <![CDATA[ in them as it
+// reads one elsewhere. A declaration ends at > too. So a comment, processing
+// instruction, CDATA section or declaration that opens an HTML block
+// (HTML_BLOCK_START, CDATA_START) ends at or before the first match of the
+// end that HTML_BLOCK_END gives that block.
 const TEXTAREA_END = /<\/textarea(?=[\t\n\f\r />]|$)/gi;
 const HIDDEN_HTML_START = /(<script(?=[\t\n\f\r />]|$))|(<style(?=[\t\n\f\r />]|$))|(<!--)|(<\?)|(<!\[CDATA\[)|(<![a-z])|(<textarea(?:[\s/>]|$))|(<\/?[a-z])/gi;
 const TEXTAREA_GROUP = 7;
-const HIDDEN_HTML_END = [null, /<\/script(?=[\t\n\f\r />]|$)/gi, /<\/style(?=[\t\n\f\r />]|$)/gi, /--!?>/g, />/g, /\]\]>/g, />/g];
+const HIDDEN_HTML_END = [null, /<\/script(?=[\t\n\f\r />]|$)/gi, /<\/style(?=[\t\n\f\r />]|$)/gi, /--!?>/g, />/g, />/g, />/g];
 const END_TAG_STARTS = new Set([HIDDEN_HTML_END[1], HIDDEN_HTML_END[2], TEXTAREA_END]);
 const SCRIPT_END = HIDDEN_HTML_END[1];
 const STYLE_END = HIDDEN_HTML_END[2];
@@ -2797,8 +2804,8 @@ function shownHtml(text, open, elements, escape = 0) {
 // The ends of the raw HTML whose text shownInline() leaves out, as
 // inlineHtml() gives them, where CommonMark ends a comment, a processing
 // instruction, a CDATA section and a declaration, and so the piece of raw
-// HTML that a renderer passes on as written; a browser may end a comment
-// or a processing instruction before it.
+// HTML that a renderer passes on as written; a browser may end a comment,
+// a processing instruction or a CDATA section before it.
 const UNSHOWN_ENDS = ['-->', '?>', ']]>', '>'];
 const NO_ENDS = new Set();
 
@@ -2828,8 +2835,9 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // as written, so it is read from its <, on its line or, as below, on each
 // line of a piece that runs on, as shownHtml() reads a line of an HTML
 // block, which ends a comment at its first --> or --!> and a processing
-// instruction at its first >, where a browser ends them, before the end
-// that CommonMark reads in some pieces; the rest of the piece after that
+// instruction or a CDATA section at its first >, where a browser ends
+// them, before the end that CommonMark reads in some pieces; the rest of
+// the piece after that
 // is raw HTML, read as below for the rest of a piece after a </textarea>.
 // So is the < of a tag whose > the line does not hold, but for a tag that
 // runs on to a later line of the paragraph, as CommonMark reads a line
