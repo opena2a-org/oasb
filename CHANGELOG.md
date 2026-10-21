@@ -1400,6 +1400,35 @@ stay on record here with the reason they changed.
   text starts, so the `>` of a block quote that holds the paragraph ends
   no tag: the lines `> [a <b` and `> title="]"> b](docs/nowhere.md)`
   exited 0 and now exit 1.
+- `npm run check:readme` ends a CDATA section on a dated page at the first
+  `>` after its `<![CDATA[`, as it ends a processing instruction: outside
+  an `<svg>` or `<math>` element, a browser reads `<![CDATA[` as the
+  start of a bogus comment, which ends at that `>`. The check reads the
+  rest of the section, up to the `]]>` at which CommonMark ends it, as raw
+  HTML. With a README that links `docs/AUDIT-2026-06-03.md`, and the
+  lines `<div>`, `<![CDATA[ x > As of 2026-06-03. ]]>` and `</div>` after
+  that page's H1 and a blank line, then a blank line and
+  `See the [README](../README.md) for the current figures.`, the check
+  exited 1 with `is a dated page, so above its first H2 it must say "as
+  of 2026-06-03"`, and now exits 0, as a browser shows
+  `As of 2026-06-03. ]]>`. So do the line
+  `Hello <![CDATA[ x > As of 2026-06-03. ]]> world.` in place of those
+  three lines, an H3 or a table cell that holds
+  `<![CDATA[ x > As of 2026-06-03. ]]>`, the three lines `<![CDATA[ x`,
+  `> As of 2026-06-03.` and `]]>`, and the lines `<div>`,
+  `<![cdata[ x > As of 2026-06-03. ]]>` and `</div>`, as a browser ends
+  what `<![cdata[` opens at the first `>` too. What the rest of the
+  section opens hides the text after it, as a browser reads that text as
+  the text of a comment or of a `<script>` element, so the line
+  `Hello <![CDATA[ x > <!-- ]]> As of 2026-06-03. world.` exited 0 and
+  now exits 1, as do the line
+  `Hello <![CDATA[ x ><script ]]> As of 2026-06-03. world.` and the lines
+  `<div>`, `<![CDATA[ x > <!-- ]]> As of 2026-06-03.` and `</div>`. The
+  check does not follow `<svg>` and `<math>` elements, in which a browser
+  ends a CDATA section at `]]>`, and reads a `<![CDATA[` there as it reads
+  one elsewhere, so the lines `<div>`,
+  `<svg><![CDATA[ x > As of 2026-06-03. ]]></svg>` and `</div>` exited 1
+  and now exit 0.
 
 ## 0.4.1 - 2026-10-17
 
