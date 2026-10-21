@@ -1,9 +1,13 @@
 /**
  * Capability-aware test helpers.
  *
- * Tests call requireCapability() to skip gracefully when the
- * adapter under test doesn't support a given feature. This produces
- * an honest scorecard: N/A instead of FAIL.
+ * Tests call requireCapability() at the top of a describe() callback, or
+ * wrap the suite in describeWithCapability(), to skip the suite when the
+ * adapter under test doesn't support a given feature. The skipped suite's
+ * title ends in [requires: <capability>], and the report counts its tests
+ * in a scenario file as not applicable. Called in a test, at the top of a
+ * test file or outside a vitest run for a capability the adapter lacks,
+ * requireCapability() throws.
  *
  * @example
  *   import { requireCapability } from '../harness/capabilities';

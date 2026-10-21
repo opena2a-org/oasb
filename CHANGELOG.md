@@ -1719,6 +1719,26 @@ stay on record here with the reason they changed.
   attribute, and parse5 reads no link to `docs/nowhere.md` in what it
   renders; commonmark.js writes it there as written, which ends the
   `<textarea>`, and parse5 reads that link in what it renders.
+- `requireCapability(cap)`, which the package entry point and
+  `src/harness/capabilities` export, returned without doing anything when
+  the adapter under test lacked `cap`, while its documentation said it
+  skips the suite. Under an adapter that declares `prompt-input-scanning`
+  and no other capability, the 3 tests of a `describe()` block that calls
+  `requireCapability('mcp-scanning')` at the top of its callback, one of
+  them in a nested block, ran and passed. They are now reported skipped,
+  none of the block's hooks runs, and the block's title ends in
+  `[requires: mcp-scanning]`, the label `describeWithCapability` gives a
+  suite it skips, so the report counts the tests of such a block in a
+  scenario file as not applicable. A block that lacks two capabilities
+  names both in one label. Called in a test, at the top of a test file or
+  outside a vitest run for a capability the adapter lacks,
+  `requireCapability` now throws an error that names the capability and
+  the adapter and says to use `describeWithCapability(cap, name, fn)`.
+  With the capability declared, the call does nothing, as before. It loads
+  vitest's suite API inside the call, so the package entry point still
+  loads without vitest. `src/harness/capabilities-core.test.ts` checks
+  these cases; it passed with vitest 3.2.7 on Node 20.19.0, 20.20.0,
+  22.23.3, 24.17.0 and 26.12.0.
 
 ## 0.4.1 - 2026-10-17
 
