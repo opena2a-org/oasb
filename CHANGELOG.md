@@ -1033,8 +1033,11 @@ stay on record here with the reason they changed.
   (CommonMark kind 7), up to the line before the next blank line, as it
   follows one that `<div>` opens, but not from a line that goes on with a
   paragraph, also lazily, as such a block cannot interrupt one. A tag
-  with text after it on its line opens none. The check read the lines of
-  such a block as Markdown, so a `##` line there was a heading. With
+  with text after it on its line opens none, nor does one with a no-break
+  space after it, or in place of a space or tab in it, such as before an
+  attribute, as CommonMark reads only spaces and tabs as white space
+  there. The check read the lines of such a block as Markdown, so a `##`
+  line there was a heading. With
   `<span>`, `## MITRE ATLAS Coverage`, `</span>` and a blank line right
   before `## MITRE ATLAS Coverage` in the README, and `E2E-003` in place
   of `E2E-003 (skipped)` in the "Exfiltration via Cyber Means" row of
