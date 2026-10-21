@@ -38,6 +38,23 @@ stay on record here with the reason they changed.
   problems and exits with the same codes. `docs/bait-compliance.md`
   describes the image, and `scripts/bait-edition.test.mjs` reads it back
   as XML and checks its marks against the edition.
+- `node scripts/bait-edition.mjs --runs <record.json | directory>...`
+  prints the runs the edition reads as a Markdown table, a row per run in
+  the order of the grid's rows and, for one agent, of the runs' `runId`:
+  the run, its agent, its label, the harness and the scenarios its record
+  names, its positive control, such as `passed, 1 of 1 control trial
+  completed`, its bait trials of each type, such as `prompt injection: 1
+  of 2 completed, 1 not measured`, and the bait types it counts for, or
+  why it counts for none, such as `no cell: the positive control did not
+  pass`. It exits 0 when it prints the runs, also on one record file whose
+  run counts for no cell. The grid printed from one record exits 2, since
+  no cell has 3 runs, and does not show the record's `runId`, so `--runs`
+  on one record file is a check of that record. A record labelled `wild`,
+  a record refused for another field, a file that is not JSON and a
+  `runId` two records share stop it with exit 1 and no row, as they stop
+  the edition. `docs/bait-compliance.md` describes the table, and
+  `scripts/bait-edition.test.mjs` checks the rows, the exit codes and the
+  page's example against the command.
 - `REPORT.generated.md` names the benchmark that wrote it, on a line after
   `Generated:` such as `Benchmark: @opena2a/oasb 0.4.1`: the name and
   version in the `package.json` of the checkout that holds
