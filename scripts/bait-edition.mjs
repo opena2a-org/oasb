@@ -482,6 +482,7 @@ const MARGIN = 24;
 const GAP = 16; // between the agent names, the scale and the text of the cells
 const PLOT = 360; // the length of the scale, from 0% to 100%
 const MIN_WIDTH = 720;
+const NAME_WIDTH = 600; // the most width the name of an agent takes beside its row; a wider one is cut short with an ellipsis
 const ROW = 28;
 const DOT = 4; // the radius of the dot of a run
 const RING = 2; // the width of the ring in the surface color around a dot
@@ -509,32 +510,66 @@ const display = (text) => [...printable(text)].map((c) => (notXml(c.codePointAt(
  */
 function textWidth(text, size, bold = false) {
   let width = 0;
-  for (const c of text) width += c.codePointAt(0) >= 0x1100 ? 1 : bold ? 0.66 : 0.62;
+  for (const c of text) width += charWidth(c, bold);
   return width * size;
 }
 
-/** `text` in lines that textWidth puts at `width` or less: broken at spaces, and inside a word wider than a line. */
+/** The width textWidth gives the character `c`, in units of the font size. */
+const charWidth = (c, bold) => (c.codePointAt(0) >= 0x1100 ? 1 : bold ? 0.66 : 0.62);
+
+/**
+ * `text` in lines that textWidth puts at `width` or less: broken at spaces,
+ * and inside a word wider than a line. It keeps the width of the line it
+ * builds as it goes, adding each character once, so its time grows with the
+ * length of `text` and not with the square of the length of a line.
+ */
 function wrap(text, width, size, bold = false) {
   const lines = [];
   let line = '';
+  let units = 0; // the width of line, in units of the font size, summed in the order textWidth sums it
   for (const word of text.split(' ')) {
-    const joined = line === '' ? word : `${line} ${word}`;
-    if (textWidth(joined, size, bold) <= width) {
-      line = joined;
+    let joined = line === '' ? 0 : units + charWidth(' ', bold);
+    for (const c of word) joined += charWidth(c, bold);
+    if (joined * size <= width) {
+      line = line === '' ? word : `${line} ${word}`;
+      units = joined;
       continue;
     }
     if (line !== '') lines.push(line);
     line = '';
+    units = 0;
     for (const c of word) {
-      if (line !== '' && textWidth(line + c, size, bold) > width) {
+      const next = units + charWidth(c, bold);
+      if (line !== '' && next * size > width) {
         lines.push(line);
         line = '';
+        units = charWidth(c, bold);
+      } else {
+        units = next;
       }
       line += c;
     }
   }
   lines.push(line);
   return lines;
+}
+
+/**
+ * `text` as it fits on one line of `width` or less at font size `size`: the
+ * whole of it when it fits, and otherwise as much of its start as fits with
+ * an ellipsis after it.
+ */
+function fit(text, width, size) {
+  if (textWidth(text, size) <= width) return text;
+  const room = width / size - charWidth('…', false);
+  let units = 0;
+  let end = 0;
+  for (const c of text) {
+    units += charWidth(c, false);
+    if (units > room) break;
+    end += c.length;
+  }
+  return `${text.slice(0, end)}…`;
 }
 
 /** An element with `attrs`, leaving out each that is undefined, and `body`, markup, inside it when there is one. */
@@ -601,10 +636,13 @@ function levels(xs) {
 
 /** The edition as an SVG dot plot, the form described above FILLS. */
 export function formatSvg(edition) {
-  const agents = edition.agents.map((agent) => ({ agent, name: display(agentText(agent)) }));
+  const agents = edition.agents.map((agent) => {
+    const name = display(agentText(agent));
+    return { agent, name, label: fit(name, NAME_WIDTH, 12) };
+  });
   const panels = edition.baitTypes.filter((type) => edition.agents.some((agent) => agent.cells[type.id].status === 'measured'));
   const unmeasured = edition.baitTypes.filter((type) => !panels.includes(type));
-  const nameWidth = Math.max(0, ...agents.map(({ name }) => textWidth(name, 12)));
+  const nameWidth = Math.max(0, ...agents.map(({ label }) => textWidth(label, 12)));
   const cellWidth = Math.max(0, ...panels.flatMap((type) => edition.agents.map((agent) => textWidth(cellText(agent.cells[type.id]), 12))));
   const left = Math.ceil(MARGIN + nameWidth + GAP);
   const width = Math.max(MIN_WIDTH, Math.ceil(left + PLOT + GAP + cellWidth + MARGIN));
@@ -659,17 +697,17 @@ export function formatSvg(edition) {
     lines(parts, `${type.name[0].toUpperCase()}${type.name.slice(1)}`, { size: 13, bold: true, tone: 'ink' });
     lines(parts, line.text.startsWith(prefix) ? line.text.slice(prefix.length) : line.text);
     y += 4;
-    const rows = agents.map(({ name, agent }) => {
+    const rows = agents.map(({ name, label, agent }) => {
       const c = agent.cells[type.id];
       const xs = c.status === 'measured' ? c.runs.map((run) => at(run.rate)) : [];
       const dotLevels = levels(xs);
-      return { name, c, xs, dotLevels, height: ROW + 2 * STEP * Math.max(0, ...dotLevels.map((level) => Math.abs(level))) };
+      return { name, label, c, xs, dotLevels, height: ROW + 2 * STEP * Math.max(0, ...dotLevels.map((level) => Math.abs(level))) };
     });
     const bottom = y + sum(rows.map((row) => row.height));
     for (const rate of SCALE) parts.push(gridLine(at(rate), y, at(rate), bottom));
-    for (const { name, c, xs, dotLevels, height } of rows) {
+    for (const { name, label, c, xs, dotLevels, height } of rows) {
       const cy = y + height / 2;
-      const row = [textAt(name, MARGIN, cy + 4, { tone: 'ink' })];
+      const row = [textAt(label, MARGIN, cy + 4, { tone: 'ink' })];
       if (c.status === 'measured') {
         row.push(gridLine(at(0), cy, at(1), cy));
         if (c.range.max > c.range.min) row.push(el('g', { class: 'range' }, rangeMarks(at(c.range.min), at(c.range.max), cy)));

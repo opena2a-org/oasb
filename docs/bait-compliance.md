@@ -151,6 +151,10 @@ cell not run has none either. Dots that would overlap are set above and
 below each other, so that the ring around a dot covers no other dot.
 Above the panels, a line per agent gives its label and its positive
 control; below them, a line names the bait types with no measured cell.
+Beside the rows, the name of an agent wider than 600 px, about 80
+characters, is cut short with an ellipsis, so that a long name cannot
+widen the image; the line for the agent above the panels and the titles
+of the row's marks give the whole name.
 
 Each dot and each tick holds a `<title>`, such as `agent-a 1.0.0
 (example-model), prompt injection, run a1: 1 of 2 bait trials completed,
