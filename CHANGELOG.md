@@ -1629,6 +1629,28 @@ stay on record here with the reason they changed.
   is the line `x <textarea>`, a blank line and the line
   `<a href="docs/nowhere.md">y</a>` exits 1. An inline link such as
   `[y](docs/nowhere.md)` inside one of these elements is still read.
+- `npm run check:readme` reads an `href` whose value is unquoted, or in
+  quotes and holds a line break, and reads its path without the tabs, line
+  feeds and carriage returns that the URL parser removes from a URL. With
+  `docs/nowhere.md` absent, the line `x <a href=docs/nowhere.md>y</a>` and
+  the two lines `x <a href="docs/` and `nowhere.md">y</a>` exited 0, and
+  now exit 1 with `link target "docs/nowhere.md" does not exist`, naming
+  the line that holds the quote that opens the value, or its first
+  character when it is unquoted. textutil on macOS 26.6.2 reads
+  `<a href=docs/one.md>`, and `<a href="docs/` with `two.md">` on the next
+  line, as links to `docs/one.md` and `docs/two.md`. An unquoted value
+  runs to a space, a tab, a form feed, a line break or a `>`. The check
+  reads these in a paragraph, a heading or a table cell, after a `>`
+  inside `<?` or `<![CDATA[` or a `--!>` inside a comment, and on a line of
+  an HTML block or of indented code, where a quoted value that runs on to
+  the next line is still not read. The `>` markers and indentation of the
+  line that a quoted value in a block quote or list item runs on to are no
+  part of its path, so `> x <a href="docs/` and `> guide.md">y</a>` link to
+  `docs/guide.md`. The first `href` of a tag is read also when it is
+  unquoted, as a browser drops a later one:
+  `x <a href=docs/guide.md href="docs/nowhere.md">y</a>` exited 1 and now
+  exits 0. With a tab between `docs/gu` and `ide.md` in a quoted `href`,
+  the check exited 1 and now reads `docs/guide.md`.
 
 ## 0.4.1 - 2026-10-17
 

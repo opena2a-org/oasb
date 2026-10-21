@@ -18,12 +18,13 @@
 //      parentheses, whose target and title may start on the next line of
 //      its paragraph (`[x](target` and `"title")`), and whose text opens at
 //      a `[` that no backslash escapes, on that line or on an earlier line
-//      of its paragraph (`foo](target)` is text), and, each written within
-//      one line, a reference definition `[label]: target` at the start of a
-//      line (indented at most three spaces) and a quoted HTML
-//      `href="target"` or `href='target'` attribute. An inline link or
-//      definition on a line of
-//      indented code is not read: a line that does not go on with a
+//      of its paragraph (`foo](target)` is text),
+//      a reference definition `[label]: target`, written within one line,
+//      at the start of a line (indented at most three spaces), and an HTML
+//      href attribute, its value in double or single quotes or unquoted:
+//      `href="target"`, `href='target'` or `href=target`. An inline link
+//      or definition on a line of indented code is not read: a line that
+//      does not go on with a
 //      paragraph and starts 4 or more columns past where the text of the
 //      block quote or list item that holds it starts, a tab moving on to the
 //      next multiple of 4. An href on such a line is read, as the line may
@@ -132,9 +133,16 @@
 //      x <textarea> <a href="target">y</a> </textarea> does not link to
 //      target, and x <textarea> </textarea> <a href="target">y</a> does.
 //      An inline link in that text is read. The <svg> and <math> elements
-//      are not followed here. Other forms,
-//      such as an unquoted href or a definition on the same line as a list
-//      marker (`- [label]: target`), are not read. A link whose path, or
+//      are not followed here. The target of an href is its
+//      value without the tabs, line feeds and carriage returns that the URL
+//      parser removes from a URL, and without the > markers and indentation
+//      that start a line of a paragraph after its first, which CommonMark
+//      leaves out of the paragraph's text: x <a href="dir/ on one line of a
+//      paragraph and file.md">y</a> on the next, also in a block quote,
+//      link to dir/file.md. On a line of an HTML block or of indented code,
+//      an href is read when its value ends on that line. Other forms, such
+//      as a definition on the same line as a list marker
+//      (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
 //      (100%.md) fails with its line. For a path the message says to write
 //      a literal % as %25; a heading's anchor holds no %, so for an anchor it
@@ -1037,12 +1045,46 @@ function inlineDestinations(line, open, spans) {
   return targets;
 }
 
-// The targets of the HTML href="target" / href='target' attributes in
-// `text`, one line, after attribute values that may hold >, read on the
-// text as it is given: whole on a line of raw HTML, such as a line of an
-// HTML block, where a backtick is text and opens no code span, and without
-// its code spans on a line of indented code. A tag that starts at a < and
-// a letter is read on to the first > outside its quoted values, or to a
+// An href attribute, as HREF matches one: white space, href in any case,
+// =, with any white space around it, and a value in double or single
+// quotes or unquoted, which starts at a character other than white space,
+// a quote or a >. hrefAt(text, i) reads the one that starts at text[i], as
+// { target, at, end }, and gives null when none starts there. An unquoted
+// value runs to a tab, a line feed, a form feed, a carriage return, a
+// space or a >, as a browser's tokenizer reads one. `at` is the index of
+// the quote that opens the value, or of its first character when it is
+// unquoted, and `end` the index after the value and its closing quote. The
+// target is the value without the tabs, line feeds and carriage returns
+// that the URL parser removes from a URL, so docs/, a line break and
+// nowhere.md are docs/nowhere.md; in the lines of a paragraph that
+// paragraphCodeSpans() joins, the spaces after a line break stand for the
+// > markers and indentation that CommonMark leaves out of the paragraph's
+// text, and are removed with it. HREF matches only the first character of
+// an unquoted value: hrefTargets() tests it at each index of a line, and
+// an unquoted value may hold a no-break space, which is white space to
+// HREF, so a pattern of the whole value reads the rest of the line from
+// each no-break space before href=. On Node.js 26.12.0, with such a
+// pattern, that test took 0.9 seconds over a tag of 20,000 attributes
+// href=a, each after a no-break space, and 3.7 seconds over one of 40,000.
+const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|(?=[^\s"'>]))/iy;
+const UNQUOTED_VALUE = /[^\t\n\f\r >]*/y;
+const hrefUrl = (value) => value.replace(/\n */g, '').replace(/[\t\r]/g, '');
+function hrefAt(text, i) {
+  const href = matchAt(HREF, text, i);
+  if (!href) return null;
+  const quoted = href[1] ?? href[2];
+  if (quoted !== undefined) return { target: hrefUrl(quoted), at: HREF.lastIndex - quoted.length - 2, end: HREF.lastIndex };
+  const at = HREF.lastIndex;
+  const [value] = matchAt(UNQUOTED_VALUE, text, at);
+  return { target: value, at, end: at + value.length };
+}
+
+// The targets of the HTML href attributes in `text`, one line, as hrefAt()
+// reads them, after attribute values that may hold >, read on the text as
+// it is given: whole on a line of raw HTML, such as a line of an HTML
+// block, where a backtick is text and opens no code span, and without its
+// code spans on a line of indented code. A tag that starts at a < and a
+// letter is read on to the first > outside its quoted values, or to a
 // quote that no later quote of its kind closes, and its first href there
 // is a target; the text is read on after that href, or from the character
 // after the < when the tag holds none. From each index a tag meets an href
@@ -1052,7 +1094,6 @@ function inlineDestinations(line, open, spans) {
 // the text, so a line of many < that no > follows is not read again from
 // each one. The hrefs of a paragraph, a heading or a table cell are read
 // with tagHref() and rawHtmlHrefs() instead.
-const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/iy;
 function hrefTargets(text) {
   // reach[i] is the index of the first href a tag meets from text[i] on, or
   // -1 when it meets none; next[q] is the index of the next quote q after
@@ -1070,10 +1111,9 @@ function hrefTargets(text) {
   const targets = [];
   for (let i = 0; i + 1 < text.length; i++) {
     if (text[i] !== '<' || !/[a-z]/i.test(text[i + 1]) || reach[i + 2] === -1) continue;
-    HREF.lastIndex = reach[i + 2];
-    const [, double, single] = HREF.exec(text);
-    targets.push(double ?? single);
-    i = HREF.lastIndex - 1;
+    const href = hrefAt(text, reach[i + 2]);
+    targets.push(href.target);
+    i = href.end - 1;
   }
   return targets;
 }
@@ -1081,13 +1121,12 @@ function hrefTargets(text) {
 // The href of the tag that starts at text[start] and ends before
 // text[end], as inlineTagEnd() reads an open tag or a closing tag in
 // `text`, one line or the lines of a paragraph joined by line breaks: the
-// first href="target" or href='target' attribute, as HREF matches one,
-// outside the tag's quoted values, as { target, at }, `at` being the index
-// in `text` of the quote that opens the target. It is null when the tag
-// holds none, as a closing tag does, and when that attribute holds a line
-// break, as check 4 reads a quoted href written within one line. In an
-// open tag a quote outside a quoted value opens one, as neither its name,
-// an attribute's name nor an unquoted value holds a quote, so
+// first href attribute outside the tag's quoted values, as hrefAt() reads
+// one, its value in quotes, where it may hold a line break, or unquoted,
+// as { target, at, end }, `at` and `end` being indexes in `text`. It is
+// null when the tag holds none, as a closing tag does. In an open tag a
+// quote outside a quoted value opens one, as neither its name, an
+// attribute's name nor an unquoted value holds a quote, so
 // <b title="<a href='target'>"> holds no href: the <a> is inside the
 // quoted value.
 function tagHref(text, start, end) {
@@ -1099,12 +1138,8 @@ function tagHref(text, start, end) {
       continue;
     }
     if (text[i + 1] !== 'h' && text[i + 1] !== 'H') continue;
-    HREF.lastIndex = i;
-    const href = HREF.exec(text);
-    if (!href) continue;
-    if (text.slice(i + 1, HREF.lastIndex).includes('\n')) return null;
-    const target = href[1] ?? href[2];
-    return { target, at: HREF.lastIndex - target.length - 2 };
+    const href = hrefAt(text, i);
+    if (href) return href;
   }
   return null;
 }
@@ -1128,9 +1163,12 @@ const isLetter = (c) => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 // first attribute is named ="x. Returns `end`, the index after that >, or
 // -1 when the text ends first, and `href`: for an open tag, the value of
 // its first attribute named href, whatever the case of its letters, as a
-// browser drops a later one, when that value is in quotes and holds no
-// line break, as { target, at }, `at` being the index of the quote that
-// opens it, as tagHref() gives one, and otherwise null.
+// browser drops a later one, when that attribute has a value, as
+// { target, at }: the value, in quotes, where it may hold a line break, or
+// unquoted, without the tabs, line feeds and carriage returns, and the
+// spaces after a line feed, that hrefAt() removes from a target, and `at`
+// the index of the quote that opens it, or of its first character when it
+// is unquoted; and otherwise null.
 const HREF_NAME = /^href$/i;
 function readTag(text, i) {
   const closing = text[i + 1] === '/';
@@ -1154,13 +1192,12 @@ function readTag(text, i) {
     if (quote === '"' || quote === "'") {
       const close = text.indexOf(quote, i + 1);
       if (close === -1) return { end: -1, href: null };
-      if (isHref) {
-        const target = text.slice(i + 1, close);
-        if (!target.includes('\n')) href = { target, at: i };
-      }
+      if (isHref) href = { target: hrefUrl(text.slice(i + 1, close)), at: i };
       i = close + 1;
     } else {
+      const value = i;
       while (i < text.length && !isHtmlSpace(text[i]) && text[i] !== '>') i++;
+      if (isHref) href = { target: text.slice(value, i), at: value };
     }
   }
 }
