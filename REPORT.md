@@ -12,8 +12,11 @@ Generated: 2026-03-23
 > - The 222 tests of this run are the attack scenarios alone. The integration
 >   group now has 44 tests and the E2E group 23, one of them skipped. The
 >   README's Counts note has the current `npm test` totals.
-> - The arp-guard adapter declares 16 of the 17 capabilities; it does not
->   declare event correlation.
+> - With the hackmyagent version the lockfile installs, 0.23.8, the
+>   arp-guard adapter declares all 19 capabilities, event correlation among
+>   them, so key finding 4 and the Event correlation row below do not
+>   describe it. Of the four Known Gaps below, docs/known-gaps.md lists only
+>   the first, as anomaly baselines not reloaded when the runtime restarts.
 > - Since 2026-06-03 an AI-layer suite (AT-AI-001 to AT-AI-005) for a
 >   capability the adapter does not declare is skipped, not failed. Under
 >   llm-guard the prompt-output scanning suite (AT-AI-002) is skipped, so the

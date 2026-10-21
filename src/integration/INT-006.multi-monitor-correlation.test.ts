@@ -5,10 +5,13 @@
 // Scenario: Single attack triggers events across process, network, and filesystem monitors
 //
 // This test injects events from all 3 monitor types within a tight window
-// to simulate a coordinated attack. ARP should capture events from all sources.
-// NOTE: ARP does not yet have built-in cross-monitor event correlation.
-// This test documents the gap and verifies that multi-source events are
-// at least individually captured and enforced.
+// to simulate a coordinated attack. The product should capture events from
+// all sources, enforce each one, and correlate them: events from 2 or more
+// monitors within its correlation window raise a correlation event, a threat
+// whose data.correlatedSources names those monitors.
+//
+// Requires the 'event-correlation' capability. A product without it reports
+// N/A for this suite, not FAIL.
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../harness/capabilities';
@@ -23,7 +26,7 @@ function recentEvents(adapter: SecurityProductAdapter, windowMs: number, source?
     .filter((e) => (!e.timestamp || Date.parse(e.timestamp) >= since) && (!source || e.source === source));
 }
 
-describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-monitoring', 'enforcement-alert', 'enforcement-kill'], 'INT-006: Multi-Monitor Event Correlation', () => {
+describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-monitoring', 'enforcement-alert', 'enforcement-kill', 'event-correlation'], 'INT-006: Multi-Monitor Event Correlation', () => {
   let arp: SecurityProductAdapter;
 
   const correlationRules: AlertRule[] = [
@@ -223,50 +226,52 @@ describeWithCapability(['process-monitoring', 'network-monitoring', 'filesystem-
     expect(recentFilesystem.length).toBe(2);
   });
 
-  it('should document gap: no built-in cross-monitor correlation exists yet', async () => {
-    // This test documents the current limitation: ARP processes each event
-    // independently and does not correlate events across monitor sources.
-    //
-    // Future enhancement: An event correlation engine that detects patterns
-    // like "process + network + filesystem events within 5 seconds with
-    // matching attack signatures" and elevates the aggregate severity.
+  it('should correlate a coordinated attack across monitors into critical threat events', async () => {
+    const correlations = () => arp.getEvents().filter((e) => Array.isArray(e.data?.correlatedSources));
 
-    // Inject a coordinated attack across all monitors
+    // A coordinated attack across all monitors, each event below critical
     await arp.injectEvent({
       source: 'process',
       category: 'violation',
       severity: 'high',
       description: 'Coordinated: process component',
-      data: { attackId: 'gap-doc-001' },
+      data: { attackId: 'corr-001' },
     });
+    // One monitor so far: nothing to correlate
+    expect(correlations()).toEqual([]);
+
     await arp.injectEvent({
       source: 'network',
-      category: 'threat',
-      severity: 'critical',
+      category: 'violation',
+      severity: 'high',
       description: 'Coordinated: network component',
-      data: { attackId: 'gap-doc-001' },
+      data: { attackId: 'corr-001' },
     });
     await arp.injectEvent({
       source: 'filesystem',
       category: 'violation',
       severity: 'high',
       description: 'Coordinated: filesystem component',
-      data: { attackId: 'gap-doc-001' },
+      data: { attackId: 'corr-001' },
     });
 
-    // All events share the same attackId, but ARP processes them independently
-    // Cross-monitor correlation adds 2 synthetic events
-    const allEvents = arp.getEvents();
-    expect(allEvents.length).toBe(5); // 3 injected + 2 cross-monitor correlation
+    // One correlation event when the second monitor joins, one when the third does
+    expect(correlations().map((e) => e.data!.correlatedSources)).toEqual([
+      ['network', 'process'],
+      ['filesystem', 'network', 'process'],
+    ]);
 
-    // Injected events retain their severity; correlation events are critical
-    const highEvents = allEvents.filter((e) => e.severity === 'high');
-    const criticalEvents = allEvents.filter((e) => e.severity === 'critical');
-    expect(highEvents.length).toBe(2);
-    expect(criticalEvents.length).toBe(3); // 1 injected network threat + 2 correlation
+    // Each is a threat one severity level above the high events it joins
+    for (const event of correlations()) {
+      expect(event.category).toBe('threat');
+      expect(event.severity).toBe('critical');
+    }
 
-    // Each event triggers its own enforcement independently
-    const enforcements = arp.getEnforcements();
-    expect(enforcements.length).toBe(4); // 3 from injected + 1 from correlation matching rules
+    // No injected event reaches the critical network-threat kill rule; the
+    // correlation raised when the network event joined the process event does
+    const killActions = arp.getEnforcementsByAction('kill');
+    expect(killActions.length).toBe(1);
+    expect(killActions[0].reason).toContain('network-threat');
+    expect(killActions[0].event.data!.correlatedSources).toEqual(['network', 'process']);
   });
 });
