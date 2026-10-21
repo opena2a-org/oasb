@@ -3506,14 +3506,11 @@ test('a line of 10,000 comment starts, or 4,000 lines of one, that nothing below
   }
 });
 
-test('raw HTML after a ]( or ![ in a paragraph, a heading or a table cell ends no comment, <script> or <style> that a </textarea> end tag inside raw HTML leaves open, which then hides the rest of the paragraph', () => {
+test('a < in the destination or title of a link or in an image, in a paragraph, a heading or a table cell, ends no comment, <script> or <style> that a </textarea> end tag inside raw HTML leaves open, and raw HTML after the link or image ends it', () => {
   // A renderer writes a < in the destination or title of an inline link,
   // or in the description of an image, as text, so a --> or </script>
-  // there ends nothing, and a browser keeps hiding the text after it. The
-  // check does not read whether a < after a ]( or ![ is in one of these,
-  // so raw HTML after either ends nothing that hides text: with a link
-  // before the <textarea> line, the </script> on the line below is not
-  // read as the end of the <script>, though a browser ends it there.
+  // there ends nothing, and a browser keeps hiding the text after it, also
+  // where the title runs on to the next line.
   const see = 'See the [README](../README.md) for the current figures.\n';
   for (const intro of [
     `Hello <textarea><?x </textarea><!-- ?>\n[x](https://example.com "<!-- -->") As of 2026-06-03. world.\n\n${see}`,
@@ -3526,7 +3523,9 @@ test('raw HTML after a ]( or ![ in a paragraph, a heading or a table cell ends n
     `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com (</script>)) As of 2026-06-03. world.\n\n${see}`,
     `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com/a</script>b) As of 2026-06-03. world.\n\n${see}`,
     `Hello <textarea><!-- </textarea><script> -->\n![</script>](https://example.com/i.png) As of 2026-06-03. world.\n\n${see}`,
-    `[x](https://example.com) Hello <textarea><!-- </textarea><script> -->\nx </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](<https://example.com/a b> "</script>") As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com\n"</script>") As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><style> -->\n[x](https://example.com "</style>") As of 2026-06-03. world.\n\n${see}`,
     `### Hello <textarea><!-- </textarea><script> --> [x](https://example.com "</script>") As of 2026-06-03. world\n\n${see}`,
     `| a | b |\n| - | - |\n| <textarea><!-- </textarea><script> --> [x](https://example.com "</script>") As of 2026-06-03. | y |\n\n${see}`,
   ]) {
@@ -3534,17 +3533,52 @@ test('raw HTML after a ]( or ![ in a paragraph, a heading or a table cell ends n
     assert.equal(r.status, 1, intro);
     assert.match(r.stderr, DATED, intro);
   }
-  // Raw HTML in link text, which a renderer passes on as written, ends what
-  // is open, as does raw HTML before a ]( or ![ on the line, and the text
-  // after the end is shown.
+  // Raw HTML in link text, before a link and after the ) that closes a
+  // link or an image, which a renderer passes on as written, ends what is
+  // open, also after a link whose title holds a < or runs on to the next
+  // line, and the text after the end is shown. So does raw HTML after a ](
+  // that no [ opens, and after a ]( that opens no link, as no ) follows the
+  // destination or as a <target> destination holds a <.
   for (const intro of [
     `Hello <textarea><?x </textarea><!-- ?>\n[x <!-- --> y](https://example.com) As of 2026-06-03. world.\n\n${see}`,
     `Hello <textarea><!-- </textarea><script> -->\nx </script> As of 2026-06-03. [world](https://example.com).\n\n${see}`,
     `Hello <textarea><!-- </textarea><script> -->\nx </script> As of 2026-06-03. ![world](https://example.com/i.png).\n\n${see}`,
+    `[x](https://example.com) Hello <textarea><!-- </textarea><script> -->\nx </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com) </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n![x](https://example.com/i.png) </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com "<b>") </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com "a\nb") </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com) [y </script> z](https://example.com) As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\n[x](https://example.com "<!--") <!-- --> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><style> -->\n[x](https://example.com "</style>") </style> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\nx](https://example.com) </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com </script> As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](<https://example.com/</script>) As of 2026-06-03. world.\n\n${see}`,
+    `### Hello <textarea><!-- </textarea><script> --> [x](https://example.com) </script> As of 2026-06-03. world\n\n${see}`,
+    `| a | b |\n| - | - |\n| <textarea><!-- </textarea><script> --> [x](https://example.com) </script> As of 2026-06-03. | y |\n\n${see}`,
   ]) {
     const r = check(DATED_LINK, datedPage(intro));
     assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
   }
+});
+
+test('a < in the description of an image that no destination follows, or in the label of its reference, ends no <script> that a </textarea> end tag inside raw HTML leaves open, as a renderer passes neither on as written where the page defines the reference', () => {
+  // A renderer writes the description as text where the page defines the
+  // reference, and leaves the label out. The check does not read the
+  // page's definitions, so what is open hides the rest of the paragraph
+  // from that <, and raw HTML after the image ends what is open.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  const open = 'Hello <textarea><!-- </textarea><script> -->';
+  for (const intro of [
+    `${open}\n![</script>][i] As of 2026-06-03. world.\n\n[i]: https://example.com/i.png\n\n${see}`,
+    `${open}\n![x][</script>] As of 2026-06-03. world.\n\n[</script>]: https://example.com/i.png\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+  }
+  const r = check(DATED_LINK, datedPage(`${open}\n![x][i] </script> As of 2026-06-03. world.\n\n[i]: https://example.com/i.png\n\n${see}`));
+  assert.equal(r.status, 0, r.stderr);
 });
 
 test('a <script> that a </textarea> end tag inside raw HTML in a paragraph, a heading or a table cell leaves open ends at a </script> in later raw HTML only where a browser ends it: not after <!-- and then <script in its text with no --> between them', () => {
@@ -3632,11 +3666,10 @@ test('a comment, <script> or <style> that a paragraph or an HTML block leaves op
   // paragraphs, headings, table cells, code blocks and HTML blocks after
   // it, up to the first match of its end in raw HTML, which a renderer
   // passes on as written; it writes the > of a code block as &gt;, so a
-  // code block ends nothing. After a ]( or ![ in a paragraph, raw HTML ends
-  // nothing that hides text, so what is open stays open past that paragraph
-  // too: with a link before the </script> below the <script> line, where a
-  // browser ends the element, the check keeps it open. An HTML block of
-  // kind 1 ends at a </script> or </textarea> that ends no element.
+  // code block ends nothing, and it writes a < in the destination or title
+  // of a link as text, so a </script> there ends nothing either, while one
+  // after the link ends the element. An HTML block of kind 1 ends at a
+  // </script> or </textarea> that ends no element.
   const see = 'See the [README](../README.md) for the current figures.\n';
   const script = 'Hello <textarea><!-- </textarea><script> -->';
   for (const intro of [
@@ -3645,7 +3678,7 @@ test('a comment, <script> or <style> that a paragraph or an HTML block leaves op
     `Hello <textarea><!-- </textarea><style> -->\n\nAs of 2026-06-03.\n\n${see}`,
     `${script}\n\n<div>\nx\n</div>\n\nAs of 2026-06-03.\n\n${see}`,
     `Hello <textarea><?x </textarea><!-- ?>\n\n    -->\n\nAs of 2026-06-03.\n\n${see}`,
-    `${script}\n\n[x](https://example.com) </script>\n\nAs of 2026-06-03.\n\n${see}`,
+    `${script}\n\n[x](https://example.com "</script>")\n\nAs of 2026-06-03.\n\n${see}`,
     `${script}\n\n| a | b |\n| - | - |\n| x | As of 2026-06-03. |\n\n${see}`,
     `<div>\n<!-- x\n\nAs of 2026-06-03.\n\n${see}`,
     `<script>\n<!-- <script>\n</script>\nAs of 2026-06-03.\n</script>\n\n${see}`,
@@ -3658,6 +3691,7 @@ test('a comment, <script> or <style> that a paragraph or an HTML block leaves op
   }
   for (const intro of [
     `${script}\n\nx </script> As of 2026-06-03.\n\n${see}`,
+    `${script}\n\n[x](https://example.com) </script>\n\nAs of 2026-06-03.\n\n${see}`,
     `${script}\n\n<div>\n</script>\n</div>\n\nAs of 2026-06-03.\n\n${see}`,
     `${script}\n\n### x </script> y\n\nAs of 2026-06-03.\n\n${see}`,
     `${script}\n\n| a | b |\n| - | - |\n| </script> | x |\n\nAs of 2026-06-03.\n\n${see}`,
@@ -3830,15 +3864,22 @@ test("the attributes of a <script> start tag are not the element's text, on a li
   }
 });
 
-test('raw HTML after a CDATA section in a paragraph ends what is open, as its ![ opens no image, and raw HTML after a <![CDATA[ that no ]]> follows ends nothing', () => {
+test('raw HTML after a CDATA section in a paragraph ends what is open, as its ![ opens no image, and so does raw HTML after a <![CDATA[ that no ]]> follows, but for raw HTML in an image that the ![ of that <![CDATA[ opens', () => {
   // The ![ of a <![CDATA[ that a ]]> follows in the paragraph starts no
-  // image description, after which a renderer writes a < as text; without
-  // that ]]> the < is text and the ![ is read as one.
+  // image description. Without that ]]> the < is text, and the ![ opens an
+  // image only where a ] closes it and a destination follows, and a
+  // renderer writes the description of that image as text.
   const see = 'See the [README](../README.md) for the current figures.\n';
   const open = 'Hello <textarea><!-- </textarea><script> -->';
-  let r = check(DATED_LINK, datedPage(`${open}\nx <![CDATA[ y ]]> </script> As of 2026-06-03. world.\n\n${see}`));
-  assert.equal(r.status, 0, r.stderr);
-  r = check(DATED_LINK, datedPage(`${open}\nx <![CDATA[ y </script> As of 2026-06-03. world.\n\n${see}`));
+  for (const intro of [
+    `${open}\nx <![CDATA[ y ]]> </script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <![CDATA[ y </script> As of 2026-06-03. world.\n\n${see}`,
+    `${open}\nx <![CDATA[ y] z](https://example.com/i.png) </script> As of 2026-06-03. world.\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  const r = check(DATED_LINK, datedPage(`${open}\nx <![CDATA[ y] </script> z](https://example.com/i.png) As of 2026-06-03. world.\n\n${see}`));
   assert.equal(r.status, 1, r.stderr);
   assert.match(r.stderr, DATED);
   assert.match(r.stderr, NO_NOTE);

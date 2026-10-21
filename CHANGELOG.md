@@ -1224,18 +1224,24 @@ stay on record here with the reason they changed.
   as `&gt;`, and an autolink as a link, so a `-->` in one of these ends
   nothing: with `--> As of 2026-06-03. world.` below
   `Hello <textarea><?x </textarea><!-- ?>`, the check still exits 1. It
-  also writes a `<` in the destination or title of an inline link, or in
-  the description of an image, as text, and the check does not read
-  whether a `<` after a `](` or `![` is in one of these, so raw HTML after
-  either in the paragraph ends nothing that hides text, and what is open
-  hides the rest of the paragraph: with
+  also writes a `<` in the destination or title of an inline link, and in
+  an image, also in its description, as text, so a `-->` or `</script>`
+  there ends nothing: with
   `[x](https://example.com "<!-- -->") As of 2026-06-03. world.` below
   that line, or `[x](https://example.com "</script>") As of 2026-06-03.
   world.` or `![</script>](https://example.com/i.png) As of 2026-06-03.
   world.` below `Hello <textarea><!-- </textarea><script> -->`, the check
-  exits 1, as it does with `[x](https://example.com) ` before that line
-  and `x </script> As of 2026-06-03. world.` below it, where a browser
-  shows the note. The
+  exits 1. The check reads where each link and image ends, and raw HTML
+  after one ends what is open, so with `[x](https://example.com) ` before
+  that line and `x </script> As of 2026-06-03. world.` below it, or with
+  `[x](https://example.com "<b>") </script> As of 2026-06-03. world.`
+  below it, the check exits 0, as a browser shows the note. A renderer
+  writes the description of an image that no destination follows as text
+  where the page defines its reference, which the check does not read, so
+  a `<` there ends nothing and what is open hides the rest of the
+  paragraph: with `![</script>][i] As of 2026-06-03. world.` below that
+  line, a blank line and `[i]: https://example.com/i.png`, the check
+  exits 1. The
   entry above that says what the raw HTML after a `</textarea>` inside a
   comment leaves open hides the rest of the paragraph still holds for a
   tag, processing instruction, CDATA section or declaration, and for a
@@ -1345,17 +1351,20 @@ stay on record here with the reason they changed.
   `<!--` ends nothing, so `<div>`, `<!--!> As of 2026-06-03. -->` and
   `</div>` still exit 1. A `<!--` in an attribute value of a `<script>`
   start tag puts its tokenizer in no escaped state, and the `![` of a
-  `<![CDATA[` that a `]]>` follows opens no image description, after
-  which raw HTML would end nothing, so the lines
+  `<![CDATA[` that a `]]>` follows opens no image description, as it is
+  inside the CDATA section, so the lines
   `Hello <textarea><!-- </textarea><script> -->`,
   `x <![CDATA[ </script><script title="<!--"> <script> ]]>` and
   `</script> As of 2026-06-03. world.` exited 1 and now exit 0, as a
-  browser shows the note. After a `](` or `![`, raw HTML still ends
-  nothing that hides text, and what is open now stays open past the
-  paragraph: `Hello <textarea><!-- </textarea><script> -->`, a blank
-  line, `[x](https://example.com) </script>`, a blank line and
-  `As of 2026-06-03.` exited 0 and now exit 1, where a browser shows the
-  note.
+  browser shows the note. Raw HTML after the `)` that closes a link ends
+  what is open, and so does raw HTML after the `![` of a `<![CDATA[` that
+  no `]]>` and no `]` follow, which opens no image:
+  `Hello <textarea><!-- </textarea><script> -->`, a blank line,
+  `[x](https://example.com) </script>`, a blank line and
+  `As of 2026-06-03.` exit 0, as they did, and so do the lines
+  `Hello <textarea><!-- </textarea><script> -->` and
+  `x <![CDATA[ y </script> As of 2026-06-03. world.`, as a browser shows
+  the note.
 - `npm run check:readme` reads an open tag one character at a time, in
   each state that the characters read so far may leave it in, instead of
   with one pattern of the whole tag, the pattern that commonmark.js 0.31.2

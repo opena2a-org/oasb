@@ -2847,8 +2847,8 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // line's text, from line[start] on, starts in it, `ends`, a map, one for
 // the lines of the paragraph, of where the end of a comment, processing
 // instruction, CDATA section or declaration that runs on was last found in
-// `text`, or -1 where none was, and `link`, where a ]( or ![ first starts
-// in `text`, as linkSyntaxAt() finds it. A tag runs on when an open tag or
+// `text`, or -1 where none was, and `link`, which returns the link syntax
+// in `text`, as linkSyntax() finds it. A tag runs on when an open tag or
 // a closing tag, as inlineTagEnd() reads one, starts there at the < and ends past the line:
 // the rest of the line is left out, and { through, opens, escape } is
 // returned as `open`: the index in paragraph.text after the tag's >, what
@@ -2895,12 +2895,14 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // rest of the paragraph is hidden, and the <script> is open after it. A
 // renderer writes the > of text and of a code span as &gt;, and an
 // autolink as a link, so a match in one of these ends nothing. It also
-// writes a < in the destination or title of an inline link, after the ](
-// that opens the destination, and in the description of an image, after
-// its ![, as text, and whether a < after a ]( or ![ is in one of these is
-// not read here: a < met after either in the paragraph, or on the line of
-// a heading or a table cell, ends nothing that hides text, and what is
-// open hides the rest of the paragraph, as above, and is open after it.
+// writes the destination and title of an inline link, and an image with
+// its description, as text, as linkSyntax() finds them in the paragraph or
+// the heading, or in a table cell, so what is open reads on over them, and
+// raw HTML after them ends it. It writes the description of an image that
+// no destination follows as text only where the page defines the image's
+// reference, which is not read here, so a < met there ends nothing that
+// hides text, and what is open hides the rest of the paragraph, as above,
+// and is open after it.
 // The rest of that piece after the match is read as shownHtml() reads a
 // line of an HTML block, from inside the end tag of a <script> or <style>
 // (END_TAG_STARTS), and what it leaves open is read as above; a piece that
@@ -2941,18 +2943,125 @@ const RAW_TEXT = new Map([
 // <textarea> element (TEXTAREA_END), whose text is shown, and the raw HTML
 // that an entry of RUNS_ON ends.
 const hidesParagraph = (left) => left !== null && left !== TEXTAREA_END && !RUNS_ON.has(left);
-// Where link syntax after which a renderer writes a < as text first starts
-// in `text`: the ]( that opens the destination of an inline link, which a
-// title may follow, or the ![ that opens the description of an image, but
-// not the ![ of a <![CDATA[ that a ]]> follows, which starts a CDATA
-// section; Infinity when neither is there.
-const linkSyntaxAt = (text) => {
-  const cdataEnd = text.lastIndexOf(']]>');
-  let image = text.indexOf('![');
-  while (image > 0 && cdataEnd >= image + 8 && text.startsWith('<![CDATA[', image - 1)) image = text.indexOf('![', image + 2);
-  const at = [text.indexOf(']('), image].filter((i) => i !== -1);
-  return at.length > 0 ? Math.min(...at) : Infinity;
-};
+// The index after the ) that closes the inline link or image whose
+// destination opens at the ( at text[paren], read as CommonMark reads it,
+// also over a line break: white space, a destination, as inlineLink() reads
+// one, which a line break ends, white space and a title, in "", in '' or in
+// () with no ( inside that no backslash escapes, in which a backslash
+// escapes the character after it and which may run on over a line break,
+// then white space; -1 when no ) closes it there.
+const LINK_TITLE_AND_CLOSE = /(?:[ \t\n]+(?:"(?:[^"\\]|\\[^])*"|'(?:[^'\\]|\\[^])*'|\((?:[^()\\]|\\[^])*\)))?[ \t\n]*\)/y;
+function inlineLinkEnd(text, paren) {
+  let i = paren + 1;
+  while (text[i] === ' ' || text[i] === '\t' || text[i] === '\n') i++;
+  if (text[i] === '<') {
+    let j = i + 1;
+    while (j < text.length && text[j] !== '>' && text[j] !== '<' && text[j] !== '\n') j += escapes(text, j) ? 2 : 1;
+    if (text[j] !== '>') return -1;
+    i = j + 1;
+  } else {
+    let depth = 0;
+    for (; i < text.length; i++) {
+      const c = text[i];
+      if (escapes(text, i)) i++;
+      else if (c <= ' ' || c === '\x7f') break;
+      else if (c === '(') {
+        if (++depth > MAX_PAREN_DEPTH) return -1;
+      } else if (c === ')') {
+        if (depth === 0) break;
+        depth--;
+      }
+    }
+    if (depth !== 0) return -1;
+  }
+  LINK_TITLE_AND_CLOSE.lastIndex = i;
+  return LINK_TITLE_AND_CLOSE.test(text) ? LINK_TITLE_AND_CLOSE.lastIndex : -1;
+}
+
+// The index after the label of a reference that starts at the [ at
+// text[at], right after the ] of an image's description: up to the first ]
+// that no backslash escapes, with no [ before it that none escapes; `at`
+// when no such label starts there.
+function referenceLabelEnd(text, at) {
+  if (text[at] !== '[') return at;
+  for (let i = at + 1; i < text.length; i++) {
+    if (escapes(text, i)) i++;
+    else if (text[i] === ']') return i + 1;
+    else if (text[i] === '[') return at;
+  }
+  return at;
+}
+
+// The link syntax in `text`, the lines of a paragraph joined by line breaks
+// or the text of a heading or a table cell, that a renderer writes as text,
+// so that no part of it is raw HTML or a code span, as [start, end, sure],
+// in order: the destination and title of each inline link, from the ( after
+// its ] to the ) that closes them, as inlineLinkEnd() reads them, and each
+// image, from its ![ to that ), as a renderer writes the description of an
+// image as text as well, with `sure` true; and the description of an image
+// that no destination follows, from its ![ to its ] and on over the label
+// of a reference right after that ], with `sure` false, as a renderer
+// writes it as text only where a definition of that reference is on the
+// page, which is not read here. The brackets are paired as
+// inlineDestinations() pairs them on a line, also over line breaks: a code
+// span, an autolink or raw HTML is read whole where it starts, so a [ or ]
+// inside one is text, link text that holds a link is not a link's text, and
+// a ![ that no ] closes, such as that of a <![CDATA[ that no ]]> or ]
+// follows, opens no image. A link or an image inside the description of an
+// image is part of that image.
+function linkSyntax(text) {
+  const parts = [];
+  const brackets = []; // each [ that no ] has closed yet, as [where it starts, whether it opens an image]
+  let aroundLink = 0; // how many of them, from the bottom, were open when a link was read
+  const codeSpanAt = codeSpans(text);
+  const htmlAt = inlineHtml(text);
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (escapes(text, i)) {
+      i++;
+    } else if (c === '`') {
+      i = codeSpanAt(i).end - 1;
+    } else if (c === '<') {
+      i = htmlAt(i).end - 1;
+    } else if (c === '[' || (c === '!' && text[i + 1] === '[')) {
+      brackets.push([i, c === '!']);
+      if (c === '!') i++;
+    } else if (c === ']' && brackets.length > 0) {
+      const [at, image] = brackets.pop();
+      const holdsLink = !image && brackets.length < aroundLink;
+      aroundLink = Math.min(aroundLink, brackets.length);
+      if (holdsLink) continue;
+      const end = text[i + 1] === '(' ? inlineLinkEnd(text, i + 1) : -1;
+      if (end === -1) {
+        if (image) parts.push([at, referenceLabelEnd(text, i + 1), false]);
+        continue;
+      }
+      parts.push([image ? at : i + 1, end, true]);
+      if (!image) aroundLink = brackets.length;
+      i = end - 1;
+    }
+  }
+  // The parts nest as the brackets do, so one that starts inside the one
+  // kept before it is inside that one.
+  const outer = [];
+  for (const part of parts.sort((a, b) => a[0] - b[0])) {
+    if (outer.length === 0 || part[0] >= outer[outer.length - 1][1]) outer.push(part);
+  }
+  return outer;
+}
+
+// The part of `parts`, as linkSyntax() returns them, that holds the index
+// `at`, or undefined.
+function partHolding(parts, at) {
+  let lo = 0;
+  let hi = parts.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (parts[mid][0] <= at) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo > 0 && at < parts[lo - 1][1] ? parts[lo - 1] : undefined;
+}
 function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, paragraph = null) {
   let i = 0;
   let text = '';
@@ -3019,13 +3128,14 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
     i = start;
   }
   const hidden = () => raw !== null && raw !== TEXTAREA_END;
-  // Whether a ]( or ![ comes before line[at] in the paragraph, or on a line
-  // read without one, after which a < ends nothing that hides text.
-  let link; // where a ]( or ![ first starts on a line read without a paragraph
-  const afterLinkSyntax = (at) => {
-    if (paragraph) return paragraph.at + at - start > paragraph.link;
-    if (link === undefined) link = linkSyntaxAt(line);
-    return at > link;
+  // The link syntax that holds line[at], as linkSyntax() reads it in the
+  // paragraph, or on a line read without one: { end, sure }, with `end` the
+  // index on the line after it, or null when none holds it.
+  let links; // the link syntax of a line read without a paragraph
+  const linkSyntaxAt = (at) => {
+    const shift = paragraph ? paragraph.at - start : 0;
+    const part = partHolding(paragraph ? paragraph.link() : (links ??= linkSyntax(line)), at + shift);
+    return part ? { end: part[1] - shift, sure: part[2] } : null;
   };
   const codeSpanAt = codeSpans(line);
   const htmlAt = inlineHtml(line);
@@ -3061,7 +3171,12 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
   };
   while (i < line.length) {
     const c = line[i];
-    if (c === '\\') {
+    // Link syntax that a renderer writes as text holds no code span and no
+    // raw HTML, so what hides text reads on over it.
+    const link = hidden() && (c === '`' || c === '<') ? linkSyntaxAt(i) : null;
+    if (link?.sure) {
+      i = link.end;
+    } else if (c === '\\') {
       i += 2;
     } else if (c === '`') {
       const span = codeSpanAt(i);
@@ -3082,12 +3197,13 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
         // inside that end tag, which is a tag, so no part of it is shown.
         // Raw HTML whose text is left out is read on, with shownHtml(), in
         // raw HTML that runs on from i to a later line of the paragraph.
-        // After a ]( or ![, raw HTML ends nothing whose text is left out,
-        // which then hides the rest of the paragraph and is open after it.
+        // In the description of an image that no destination follows, raw
+        // HTML ends nothing whose text is left out, which then hides the
+        // rest of the paragraph and is open after it.
         // A <script> ends at the </script that ends it for a browser, as
         // scriptEnd() finds it, which reads the rest of the piece, and the
         // rest of the line in a piece that runs on, as the element's text.
-        if (hidden() && afterLinkSyntax(i)) return { text, open: restLeftOut({ hides: raw, escape }) };
+        if (link) return { text, open: restLeftOut({ hides: raw, escape }) };
         const piece = end > i + 1 && (tag || unshown);
         const close = piece ? (raw === SCRIPT_END ? scriptEnd(i, end) : matchFrom(raw, i)) : null;
         const after = close ? close.index + close[0].length : -1;
@@ -3207,9 +3323,9 @@ for (const [file, { at, shown }] of datedPages) {
   // lines joined by line breaks, and so may a comment, <script> or <style>
   // that the raw HTML after a </textarea> end tag inside one of these, or a
   // <script> or <style> start tag, leaves open, to the first match of its
-  // end inside later raw HTML that no ]( or ![ comes before, as
-  // shownInline() reads it, and on past the paragraph. The lines of a
-  // paragraph here are those
+  // end inside later raw HTML outside the link syntax that a renderer
+  // writes as text, as shownInline() reads it, and on past the paragraph.
+  // The lines of a paragraph here are those
   // that `outside` gives the same first line, up to a line of an HTML
   // block. A line of an HTML block is raw HTML, in which a backtick is text
   // and opens no code span, so the note is read there, as an href there is,
@@ -3244,9 +3360,10 @@ for (const [file, { at, shown }] of datedPages) {
   // first line of its paragraph, and `paragraph`, the text of the
   // paragraph, where the line's text starts in it, a map, one for the
   // paragraph, of where the end of raw HTML that runs on was last found in
-  // that text, and where a ]( or ![ first starts in it, as shownInline()
-  // takes them; `below`, for each line, the ends in UNSHOWN_ENDS that the
-  // lines after it in its paragraph hold there.
+  // that text, and a function, one for the paragraph, that returns the link
+  // syntax in that text, read the first time it is asked for, as
+  // shownInline() takes them; `below`, for each line, the ends in
+  // UNSHOWN_ENDS that the lines after it in its paragraph hold there.
   const inline = above.map((l, k) => {
     const at = outside.get(k);
     if (!at || htmlLines.has(k) || l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k)) return null;
@@ -3270,7 +3387,8 @@ for (const [file, { at, shown }] of datedPages) {
     if (lines.length > 0 && line?.first !== lines[0].first) {
       const text = lines.map(({ part, start }) => part.slice(start)).join('\n');
       const ends = new Map();
-      const link = linkSyntaxAt(text);
+      let syntax; // the link syntax in `text`, read the first time it is asked for
+      const link = () => (syntax ??= linkSyntax(text));
       let at = 0;
       for (const l of lines) {
         l.paragraph = { text, at, ends, link };
