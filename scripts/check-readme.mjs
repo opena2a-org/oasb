@@ -133,7 +133,14 @@
 //      x <textarea> <a href="target">y</a> </textarea> does not link to
 //      target, and x <textarea> </textarea> <a href="target">y</a> does.
 //      An inline link in that text is read. The <svg> and <math> elements
-//      are not followed here. The target of an href is its
+//      are not followed here. In an image that a destination follows, from
+//      its ![ to the ) that closes its destination and title, raw HTML is
+//      text, as a renderer writes the description of an image as alt text
+//      of the <img>: no href there is read, and no tag there opens or ends
+//      such an element. So
+//      ![<textarea>](a.png) <a href="target">y</a> links to target, and
+//      x <textarea> ![</textarea>](a.png) <a href="target">y</a> does not.
+//      The target of an href is its
 //      value without the tabs, line feeds and carriage returns that the URL
 //      parser removes from a URL, and without the > markers and indentation
 //      that start a line of a paragraph after its first, which CommonMark
@@ -717,22 +724,24 @@ function codeSpans(text) {
 // images in the lines joined, so an image whose ] is on a later line holds
 // the hrefs before it on its earlier lines too. markdown-it 14.1.0 writes
 // the description of an image, a tag in it as well, as escaped text in the
-// alt attribute of the <img>, so the tag makes no link.
+// alt attribute of the <img>, so the tag makes no link, and opens and ends
+// no element.
 // The elements whose text a browser reads as text (RAW_TEXT_ENDS) are
-// followed over that raw HTML with one tracker that rawTextElements()
-// makes of the lines: an open tag read while none of them is open is read
-// with tagHref() and then opens the one it starts, if any, and a tag read
-// while one is open is read with rawHtmlHrefs(), as raw HTML is, which
-// reads no href in it before the end tag that ends that element. A
-// reader asks about the runs, the < and the ( it meets from left to right,
-// and asks for hrefs() once it has read the line.
+// followed over that raw HTML, but for raw HTML that starts inside such an
+// image, with one tracker that rawTextElements() makes of the lines: an
+// open tag read while none of them is open is read with tagHref() and then
+// opens the one it starts, if any, and a tag read while one is open is
+// read with rawHtmlHrefs(), as raw HTML is, which reads no href in it
+// before the end tag that ends that element. A reader asks about the runs,
+// the < and the ( it meets from left to right, and asks for hrefs() once
+// it has read the line.
 function paragraphCodeSpans(lines, texts = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
   const htmlAt = inlineHtml(text);
   // The images that a destination follows, the parts of linkSyntax() that
   // are sure and start at a ! (a link's part starts at the ( of its
-  // destination), found the first time hrefs() has an href to give.
+  // destination), found the first time htmlAt() meets raw HTML.
   let images;
   const inImage = (at) => partHolding((images ??= linkSyntax(text, ([start, , sure]) => sure && text[start] === '!')), at) !== undefined;
   const elements = rawTextElements(text);
@@ -759,12 +768,15 @@ function paragraphCodeSpans(lines, texts = []) {
       htmlAt: (i) => {
         const html = htmlAt(at + i);
         past = html.end;
-        if (html.tag && !elements.open()) {
-          const href = tagHref(text, at + i, html.end);
-          if (href) hrefs.push(href);
-          elements.start(at + i);
-        } else if (html.tag || (html.unshown && html.end > at + i + 1)) {
-          for (const href of rawHtmlHrefs(text, at + i, html.end, elements)) hrefs.push(href);
+        const raw = html.tag || (html.unshown && html.end > at + i + 1);
+        if (raw && !inImage(at + i)) {
+          if (html.tag && !elements.open()) {
+            const href = tagHref(text, at + i, html.end);
+            if (href) hrefs.push(href);
+            elements.start(at + i);
+          } else {
+            for (const href of rawHtmlHrefs(text, at + i, html.end, elements)) hrefs.push(href);
+          }
         }
         return { ...html, end: html.end - at };
       },
@@ -776,10 +788,7 @@ function paragraphCodeSpans(lines, texts = []) {
       },
       hrefs: () => {
         const targets = [];
-        while (given < hrefs.length && hrefs[given].at < at + length) {
-          const href = hrefs[given++];
-          if (!inImage(href.at)) targets.push(href.target);
-        }
+        while (given < hrefs.length && hrefs[given].at < at + length) targets.push(hrefs[given++].target);
         return targets;
       },
     };
@@ -1413,7 +1422,8 @@ function rawHtmlHrefs(text, from, to, elements) {
 // as raw HTML and of those that a browser reads inside the comments,
 // processing instructions, CDATA sections and declarations it reads so,
 // but for those in the text of an element of RAW_TEXT_ENDS, which a
-// browser reads as text.
+// browser reads as text, and those inside an image that a destination
+// follows.
 // Links inside code spans are not read: inlineDestinations
 // reads past each code span, and so past the tags inside it. A definition
 // is matched on the whole line, as a code span in its label does not make

@@ -1651,6 +1651,24 @@ stay on record here with the reason they changed.
   `x <a href=docs/guide.md href="docs/nowhere.md">y</a>` exited 1 and now
   exits 0. With a tab between `docs/gu` and `ide.md` in a quoted `href`,
   the check exited 1 and now reads `docs/guide.md`.
+- `npm run check:readme` reads no tag inside an image that a destination
+  follows as the start or end of a `<script>`, `<textarea>` or other
+  element whose text a browser reads as text, as it already reads no href
+  there: a renderer writes the description of an image as alt text of the
+  `<img>`. With `docs/guide.md` present and `docs/nowhere.md` absent, the
+  line `![<textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>`, the
+  lines with each of the other nine elements in place of `<textarea>`,
+  and `![<? > <textarea> ?>](docs/guide.md) <a href="docs/nowhere.md">y</a>`
+  exited 0, and now exit 1 with
+  `link target "docs/nowhere.md" does not exist`, as does that image in a
+  heading or a table cell. WebKit (textutil on macOS 26.6.2) reads a link
+  to `docs/nowhere.md` in the HTML of each of these lines as a paragraph,
+  with the description in the alt attribute as escaped text or as written.
+  An end tag in the image ends no such element either:
+  `x <textarea> ![</textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>`
+  exited 1 and now exits 0. WebKit reads no link in the HTML of that line
+  with the description as escaped text, and reads one with `</textarea>`
+  as written in the alt attribute.
 
 ## 0.4.1 - 2026-10-17
 
