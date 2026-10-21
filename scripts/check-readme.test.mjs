@@ -1788,6 +1788,53 @@ test('an href inside an image that a destination follows is not read, in a parag
   assert.doesNotMatch(after.stderr, /nowhere/);
 });
 
+test('raw HTML inside an image that a destination follows opens and ends no <script>, <textarea> or other element whose text a browser reads as text, in a paragraph, a heading or a table cell', () => {
+  // markdown-it 14.1.0 writes the description of an image as escaped text
+  // in the alt attribute of the <img>. WebKit (the HTML import of textutil
+  // on macOS 26.6.2) reads a link to docs/nowhere.md in
+  // <p><img src="docs/guide.md" alt="&lt;textarea&gt;"> <a href="docs/nowhere.md">y</a></p>,
+  // also with each of the other nine names in place of textarea, with the
+  // alt text &lt;? &gt; &lt;textarea&gt; ?&gt;, and with the start tag as
+  // written in the alt attribute. In the HTML of each of these, with the
+  // description as escaped text in the alt attribute, it reads one too:
+  // the <a> follows the image, also where the image's ] is on the next
+  // line, in a block quote, in link text, in a heading or in a table cell,
+  // and after a </textarea> that follows the image and ends the <textarea>
+  // before it.
+  const NAMES = ['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext'];
+  for (const [body, line] of [
+    ...NAMES.map((name) => [`![<${name}>](docs/guide.md) <a href="docs/nowhere.md">y</a>\n`, 11]),
+    ['![<? > <textarea> ?>](docs/guide.md) <a href="docs/nowhere.md">y</a>\n', 11],
+    ['![<textarea>\n](docs/guide.md) <a href="docs/nowhere.md">y</a>\n', 12],
+    ['> ![<textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>\n', 11],
+    ['[![<textarea>](docs/guide.md)](docs/guide.md) <a href="docs/nowhere.md">y</a>\n', 11],
+    ['## ![<textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>\n', 11],
+    ['| h |\n| - |\n| ![<textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a> |\n', 13],
+    ['x <textarea> ![</textarea>](docs/guide.md) </textarea> <a href="docs/nowhere.md">y</a>\n', 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // WebKit reads no link to docs/nowhere.md in the HTML of these, with an
+  // image's description as escaped text in the alt attribute: the
+  // </textarea> in the image ends no <textarea>, and a <textarea> after the
+  // image, or after a ![ that opens no image, as no destination follows
+  // its ], opens one, as a renderer passes it on as written. Where the alt
+  // attribute holds </textarea> as written, WebKit ends the <textarea>
+  // there, and reads a link in the first of these and none in the second,
+  // whose <textarea> after that end opens another.
+  for (const body of [
+    'x <textarea> ![</textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>\n',
+    'x <textarea> ![</textarea><textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>\n',
+    '![x](docs/guide.md) <textarea> <a href="docs/nowhere.md">y</a>\n',
+    '![<textarea>] <a href="docs/nowhere.md">y</a>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
