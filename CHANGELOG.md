@@ -1353,6 +1353,50 @@ stay on record here with the reason they changed.
   line, `[x](https://example.com) </script>`, a blank line and
   `As of 2026-06-03.` exited 0 and now exit 1, where a browser shows the
   note.
+- `npm run check:readme` reads an open tag one character at a time, in
+  each state that the characters read so far may leave it in, instead of
+  with one pattern of the whole tag, the pattern that commonmark.js 0.31.2
+  and markdown-it 14.1.0 read a tag with. On macOS arm64, a README whose
+  one prose line is `<a ` and `b=c ` repeated 987,000 times (3.9 MB), with
+  or without a closing `>`, exited 1 with
+  `RangeError: Maximum call stack size exceeded`, as did such a line in the
+  paragraph of a dated page's note; each now exits 0, in 0.23 to 0.29
+  seconds, and in 0.30 to 0.45 seconds on the dated page. A paragraph line
+  of `<a`, 28 attributes `e=c`, a no-break space and `d`, and `!`, which
+  the pattern tried to split into attributes every way it can be split,
+  had not been checked after 60 seconds, and now takes 0.05 seconds. From
+  each `<` of 3,000,000 generated strings, the reader ends a tag where the
+  pattern ends one, and finds none where the pattern finds none.
+- `npm run check:readme` reads an href in a tag whose other attribute
+  holds a backtick. It read the hrefs of a line without the code spans
+  that its runs of backticks pair into, also a run inside a tag, a
+  comment, an autolink or a link's title, where a backtick is text, so
+  with `docs/nowhere.md` absent,
+  `` <a title="`" href="docs/nowhere.md">x</a> `y` `` exited 0. It now
+  leaves out only the code spans that the reader of inline links opens,
+  and the line exits 1 with `link target "docs/nowhere.md" does not
+  exist`, as it does in a table cell, and after such a backtick in a
+  comment, an autolink or a link's title, which commonmark.js 0.31.2 and
+  markdown-it 14.1.0 render with the href. A code span that opens after
+  such a tag still holds an href:
+  `` <b title="`"> `x <a href="docs/nowhere.md">y</a> ` ``, which neither
+  renders with the href, exited 1 and now exits 0.
+- `npm run check:readme` reads raw HTML that ends on a later line of its
+  paragraph as one piece, as it reads raw HTML that ends on its line: a
+  tag whose quoted value or white space holds the line break, or a
+  comment, processing instruction, CDATA section or declaration whose end
+  is on a later line. A `[` or `]` in it neither opens nor closes link
+  text, a backtick in it opens no code span, and a line that starts
+  inside it holds no link or definition before its end. With
+  `docs/nowhere.md` absent, the two lines `[a <b title="]` and
+  `"> b](docs/nowhere.md)`, which commonmark.js 0.31.2 and markdown-it
+  14.1.0 render as a link, exited 0 and now exit 1 with
+  `link target "docs/nowhere.md" does not exist`, and the two lines
+  `<b title="[` and `">x](docs/nowhere.md)`, which they render as text,
+  exited 1 and now exit 0. A line after the first is read from where its
+  text starts, so the `>` of a block quote that holds the paragraph ends
+  no tag: the lines `> [a <b` and `> title="]"> b](docs/nowhere.md)`
+  exited 0 and now exit 1.
 
 ## 0.4.1 - 2026-10-17
 

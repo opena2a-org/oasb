@@ -1336,7 +1336,51 @@ test('a [ or ] inside an autolink or raw HTML neither opens nor closes link text
   assert.match(wrapped.stderr, /line 12: link target "docs\/nowhere\.md" does not exist/);
 });
 
-test('a < that opens no autolink or raw HTML on its line is text, so a ] after it closes link text', () => {
+test('a [ or ] inside raw HTML that ends on a later line of its paragraph neither opens nor closes link text', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 read raw HTML in the lines
+  // of a paragraph joined by line breaks, so a tag's quoted value or white
+  // space may hold the break, and a comment, processing instruction, CDATA
+  // section or declaration may end on a later line. Both render each of
+  // these with a link to docs/nowhere.md, on the paragraph's last line.
+  for (const body of [
+    '[a <b title="]\n"> b](docs/nowhere.md)\n',
+    '[a <b title="]\nc\n"> b](docs/nowhere.md)\n',
+    '> [a <b title="]\n> "> b](docs/nowhere.md)\n',
+    '> [a <b title="]\n"> b](docs/nowhere.md)\n',
+    '- [a <b title="]\n  "> b](docs/nowhere.md)\n',
+    '[a <!-- ]\n--> b](docs/nowhere.md)\n',
+    '[a <? ]\n?> b](docs/nowhere.md)\n',
+    '[a <![CDATA[ ]\n]]> b](docs/nowhere.md)\n',
+    '[a <!X ]\nb> c](docs/nowhere.md)\n',
+    // The > of a block quote that a line goes on with is no part of the
+    // paragraph's text, so it ends no tag or declaration, while a > that
+    // starts the text of a line 4 or more columns in ends a closing tag.
+    '> [a <b\n> title="]"> b](docs/nowhere.md)\n',
+    '> [a <!X ]\n> b> c](docs/nowhere.md)\n',
+    '[a </b\n    > b](docs/nowhere.md)\n',
+    // A backtick inside such a tag opens no code span.
+    'x <b title="`\n"> [z](docs/nowhere.md) y`\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    const line = 10 + body.trimEnd().split('\n').length;
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+  // They render none of these with a link: the [ or ] is inside raw HTML
+  // that ends on the next line, or that line starts inside it and holds no
+  // link or definition.
+  for (const body of [
+    '<b title="[\n">x](docs/nowhere.md)\n',
+    'x <!-- [\n-->x](docs/nowhere.md)\n',
+    '<b title="x\n[y](docs/nowhere.md)">\n',
+    '<b title="x\n[a]: docs/nowhere.md">\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('a < that opens no autolink or raw HTML in its paragraph is text, so a ] after it closes link text', () => {
   for (const line of [
     '[a <b title="]" / > c](docs/nowhere.md)',
     '[a <a:x]y> c](docs/nowhere.md)',
@@ -1370,6 +1414,28 @@ test("an inline link's target or title may hold a backtick", () => {
   const title = check('[x](docs/guide.md "`") and [y](docs/nowhere.md "`")\n');
   assert.equal(title.status, 1);
   assert.match(title.stderr, /line 11: link target "docs\/nowhere\.md" does not exist/);
+});
+
+test('an href is read after a backtick inside a tag, a comment, an autolink or a link title, which opens no code span', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 render each of these with
+  // the href: the backtick inside the tag, the comment, the autolink or the
+  // title is text, so the backtick before y or z opens no code span with it.
+  for (const body of [
+    '<a title="`" href="docs/nowhere.md">x</a> `y`\n',
+    'x <!-- ` --> <a href="docs/nowhere.md">x</a> `y`\n',
+    'x <https://example.org/`> <a href="docs/nowhere.md">x</a> `y`\n',
+    '[x](docs/guide.md "`") <a href="docs/nowhere.md">y</a> `z`\n',
+    '| h |\n| - |\n| <a title="`" href="docs/nowhere.md">x</a> `y` |\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    const line = 10 + body.trimEnd().split('\n').length;
+    assert.match(r.stderr, new RegExp(`line ${line}: link target "docs/nowhere\\.md" does not exist`), body);
+  }
+  // Both render this one without the href: a code span opens at the
+  // backtick after the tag and holds the <a>.
+  const held = check('<b title="`"> `x <a href="docs/nowhere.md">y</a> `\n');
+  assert.equal(held.status, 0, held.stderr);
 });
 
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
@@ -3108,6 +3174,48 @@ test('a 4 MB line of a tag of 1,000,000 attributes in a code block is checked in
     const ms = Number(process.hrtime.bigint() - started) / 1e6;
     assert.equal(r.status, 0, r.stderr);
     assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters ending in ${end}`);
+  }
+});
+
+test('a 3.9 MB line of a tag of 987,000 attributes outside a code block is checked in under 2 seconds, also above a dated page\'s first H2', () => {
+  // The inline reader read a tag with one pattern of the whole tag, which
+  // threw a RangeError (Maximum call stack size exceeded) on such a line,
+  // with or without a > at its end, and the check exited 1 with its stack;
+  // so did the reader of a dated page's note, which reads a tag that runs
+  // on to a later line of its paragraph.
+  const see = 'See the [README](../README.md) for the current figures.';
+  for (const end of ['', '>']) {
+    const line = `<a ${'b=c '.repeat(987000)}${end}`;
+    for (const [body, pages] of [
+      [`${line}\n`, {}],
+      [DATED_LINK, datedPage(`As of 2026-06-03.\n${line}\nx\n\n${see}\n`)],
+    ]) {
+      const started = process.hrtime.bigint();
+      const r = check(body, pages);
+      const ms = Number(process.hrtime.bigint() - started) / 1e6;
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters${body === DATED_LINK ? ' on a dated page' : ''}`);
+    }
+  }
+});
+
+test('a paragraph line of a tag whose attributes hold no-break spaces, and that no > ends, is checked in under 2 seconds', () => {
+  // The inline reader's pattern of the whole tag tried every way such a line
+  // splits into attributes before it failed: with <a, 24 attributes e=c, a
+  // no-break space and d, and !, the check took 8.2 seconds, and with 28 of
+  // them it had not finished after 60 seconds; so it is run here with a
+  // time limit.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    writeFileSync(join(dir, 'README.md'), `${HEAD}<a${' e=c d'.repeat(28)}!\n`);
+    const started = process.hrtime.bigint();
+    const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8', timeout: 30_000 });
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.signal, null, 'the check did not finish in 30 seconds');
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
