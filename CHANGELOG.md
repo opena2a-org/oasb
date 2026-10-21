@@ -128,6 +128,27 @@ stay on record here with the reason they changed.
   `expr-eval` at a version in the range `npm audit` reported. With
   `OASB_ADAPTER=rebuff`, AT-AI-001 and AT-AI-005 fail the 12 tests
   `docs/adapters.md` lists, as before.
+- The license-check job of the security workflow runs the license-checker
+  that `npm install` puts in `node_modules`: 25.0.1, a devDependency
+  pinned to that version and locked in `package-lock.json` with its
+  integrity hash. The job runs `npm install` and then
+  `npx license-checker`, and as no license-checker was installed, npx
+  fetched one from the registry with no version named. The step still
+  goes on after a failed `npm install` (`|| true`), and npx then fetches
+  license-checker from the registry when `node_modules` holds none.
+  `npm ci` installs 54 more packages, license-checker and the packages it
+  pulls in. On 2026-10-21 `npm audit` reported the same 28 vulnerabilities
+  (1 low, 9 moderate, 14 high, 4 critical) in the same packages with and
+  without them, and the job's `npx license-checker` command, run offline
+  with an empty npm cache after `npm ci`, exited 0.
+  `scripts/license-check-workflow.test.mjs` checks the pin, the lock
+  entry, that the job installs the devDependencies before it runs
+  license-checker and runs it through npx at no other version, and that
+  `npx license-checker --help`, run offline with an empty npm cache, names
+  25.0.1. Its last test makes each of a list of changes that undo the pin
+  to a copy of the workflow or of the package files and fails when none of
+  the first four tests fails on the copy. It does not check that the
+  install succeeds, or the versions of the actions the job uses.
 
 ### Fixed
 
