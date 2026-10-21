@@ -721,29 +721,23 @@ export function formatSvg(edition) {
       if (c.status === 'measured') {
         row.push(gridLine(at(0), cy, at(1), cy));
         if (c.range.max > c.range.min) row.push(el('g', { class: 'range' }, rangeMarks(at(c.range.min), at(c.range.max), cy)));
-        c.runs.forEach((run, i) => {
-          const dy = cy + dotLevels[i] * STEP;
-          const title = `${name}, ${type.name}, run ${display(run.runId)}: ${trialsText(run.completed, run.measured)}, ${percent(run.rate)}`;
-          row.push(
-            el(
-              'g',
-              { class: 'run' },
-              el('title', {}, xml(title)) +
-                el('circle', { cx: xs[i], cy: round(dy), r: HIT, fill: 'transparent' }) +
-                dotMarks(xs[i], dy),
-            ),
-          );
-        });
+        const titled = (attrs, title, body) => el('g', attrs, el('title', {}, xml(title)) + body);
+        const dots = c.runs.map((run, i) => ({
+          x: xs[i],
+          y: round(cy + dotLevels[i] * STEP),
+          title: `${name}, ${type.name}, run ${display(run.runId)}: ${trialsText(run.completed, run.measured)}, ${percent(run.rate)}`,
+        }));
         const title = `${name}, ${type.name}: ${trialsText(c.completed, c.measured)} over ${runsText(c.runs.length)}, ${percent(c.rate)}`;
+        // The transparent areas a pointer rests on come first, under every
+        // mark, and the tick takes no pointer: the hit area of a dot reaches
+        // over the dots beside it, and the tick over the dots at its rate.
+        // A pointer on a dot then meets that dot's own marks.
+        for (const dot of dots) row.push(titled({ class: 'hit' }, dot.title, el('circle', { cx: dot.x, cy: dot.y, r: HIT, fill: 'transparent' })));
         row.push(
-          el(
-            'g',
-            { class: 'rate' },
-            el('title', {}, xml(title)) +
-              el('rect', { x: round(at(c.rate) - 4), y: round(cy - HIT), width: 8, height: 2 * HIT, fill: 'transparent' }) +
-              tickMarks(at(c.rate), cy),
-          ),
+          titled({ class: 'hit' }, title, el('rect', { x: round(at(c.rate) - 4), y: round(cy - HIT), width: 8, height: 2 * HIT, fill: 'transparent' })),
         );
+        for (const dot of dots) row.push(titled({ class: 'run' }, dot.title, dotMarks(dot.x, dot.y)));
+        row.push(titled({ class: 'rate', 'pointer-events': 'none' }, title, tickMarks(at(c.rate), cy)));
       }
       row.push(textAt(cellText(c), left + PLOT + GAP, cy + 4));
       parts.push(el('g', { class: 'row' }, row.join('')));
