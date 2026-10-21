@@ -217,11 +217,14 @@ test('each row of the grid is labelled benchmark, beside a positive control colu
 });
 
 test('text from a record can neither split a cell of the grid nor reach the terminal as a control character', () => {
-  const name = 'agent | x\u001b[2J';
+  // ESC [ 2 J, then the same control sequence with CSI (U+009B), a C1
+  // control character, in place of ESC [, then DEL (U+007F).
+  const name = 'agent | x\u001b[2J\u009b2J\u007f';
   const edition = buildEdition(['n1', 'n2', 'n3'].map((runId) => record(runId, name, { trials: pi('completed') })));
-  const row = formatEdition(edition).split('\n').find((line) => line.startsWith('| agent'));
-  assert.ok(row.startsWith('| agent \\| x\\u001b[2J 1.0.0 (example-model) | benchmark |'), row);
-  assert.ok(!row.includes('\u001b'), row);
+  const markdown = formatEdition(edition);
+  const row = markdown.split('\n').find((line) => line.startsWith('| agent'));
+  assert.ok(row.startsWith('| agent \\| x\\u001b[2J\\u009b2J\\u007f 1.0.0 (example-model) | benchmark |'), row);
+  assert.ok(!/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(markdown), markdown);
 });
 
 test('recordProblems names each field it refuses, and accepts a record with fields it does not read', () => {
@@ -696,11 +699,21 @@ test('a row gives the positive control, the bait trials of each type in the orde
 });
 
 test('text from a record can neither split a cell of the table of runs nor reach the terminal as a control character', () => {
-  const r = record('run | 1\u001b[2J', 'agent | x\u0007', { harness: { name: 'runner|y', version: '0.1.0' }, trials: pi('completed') });
+  // CSI (U+009B) after ESC [ 2 J and DEL (U+007F) after BEL, and the first
+  // and the last C1 control character, U+0080 and U+009F, in the harness,
+  // which the header lines name too.
+  const harness = { name: 'runner|y\u0080\u009f', version: '0.1.0' };
+  const r = record('run | 1\u001b[2J\u009b2J', 'agent | x\u0007\u007f', { harness, trials: pi('completed') });
   const markdown = formatRuns([r]);
   const [row] = runRows(markdown);
   assert.equal(row.length, 8, row.join(' | '));
-  assert.deepEqual(row.slice(0, 4), ['run \\| 1\\u001b[2J', 'agent \\| x\\u0007 1.0.0 (example-model)', 'benchmark', 'runner\\|y 0.1.0']);
+  assert.deepEqual(row.slice(0, 4), [
+    'run \\| 1\\u001b[2J\\u009b2J',
+    'agent \\| x\\u0007\\u007f 1.0.0 (example-model)',
+    'benchmark',
+    'runner\\|y\\u0080\\u009f 0.1.0',
+  ]);
+  assert.ok(markdown.includes('Harness: runner|y\\u0080\\u009f 0.1.0 (1 run).'), markdown);
   assert.ok(!/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(markdown), markdown);
 });
 
