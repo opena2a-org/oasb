@@ -1533,10 +1533,10 @@ stay on record here with the reason they changed.
   `<math>` elements, in which a browser ends a CDATA section at `]]>`, so
   `x <svg><![CDATA[ > <a href="docs/nowhere.md">y</a> ]]></svg>`, in which
   parse5 reads no link, exited 0 and now exits 1. On macOS arm64 with
-  Node.js 26.12.0, a README whose one prose line is `x ` and 200,000 tags
-  `<a href="docs/guide.md">` exited 1 with
-  `RangeError: Maximum call stack size exceeded`, and now exits 0, as does
-  that line with the tags inside one processing instruction.
+  Node.js 26.12.0, a README whose one prose line is `x <? >`, 200,000 tags
+  `<a href="docs/guide.md">` and ` ?>` still exits 0: the check now reads
+  the hrefs of those tags, and adds them one at a time to the targets it
+  checks.
 
 ## 0.4.1 - 2026-10-17
 
