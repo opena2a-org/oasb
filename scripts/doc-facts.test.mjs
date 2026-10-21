@@ -1,7 +1,9 @@
 // Tests that statements in README.md, BENCHMARK-RESULTS.md,
 // docs/pinned-benchmark.md, docs/test-catalog.md, docs/adapters.md and
 // docs/how-it-works.md match the corpus, scripts and adapters they describe,
-// that docs/demo.tape states no count, and that the verdict methodology in
+// that docs/demo.tape states no count and writes the results file its report
+// step reads, that docs/oasb-demo.gif is the recording of that tape
+// docs/captures/demo.json records, and that the verdict methodology in
 // scripts/run-benchmark-v2.ts, benchmark-results-v6.json and
 // src/benchmark/hma-pipeline-adapter.ts does not give the server count
 // BENCHMARK-RESULTS.md withdrew.
@@ -10,7 +12,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateReport, readPackage, readScenarios } from './scenario-report.mjs';
@@ -68,6 +71,47 @@ test('docs/demo.tape states no test or scenario count', () => {
     .map((line, i) => `docs/demo.tape:${i + 1}: ${line.trim()}`)
     .filter((line) => COUNT.test(line.replace(/^[^ ]+ /, '')));
   assert.deepEqual(counted, [], 'refer to the counts docs/test-catalog.md states instead');
+});
+
+// The text of each Type line of docs/demo.tape, in order: the commands the
+// recording types.
+const tapeCommands = () =>
+  read('docs/demo.tape')
+    .split('\n')
+    .map((line) => /^Type\s+(["'`])(.*)\1\s*$/.exec(line.trim())?.[2])
+    .filter((command) => command !== undefined);
+
+test('docs/demo.tape writes the vitest JSON report its npm run report step reads, in a step before it', () => {
+  // npm run report reads test-results.json, or the file named after "--", and
+  // writes no report when that file does not exist (scripts/generate-report.ts).
+  // The tape ran npm test, which writes no JSON report, before npm run report.
+  const commands = tapeCommands();
+  const at = commands.findIndex((command) => /^npm run report\b/.test(command));
+  assert.ok(at >= 0, 'docs/demo.tape types no npm run report; update this test with the step that writes the report');
+  const reads = /^npm run report -- (\S+)/.exec(commands[at])?.[1] ?? 'test-results.json';
+  const file = reads.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const writes = new RegExp(`\\bvitest run\\b.*--reporter[= ]json\\b.*--outputFile(?:\\.json)?[= ]${file}(?:\\s|$)`);
+  assert.ok(
+    commands.slice(0, at).some((command) => writes.test(command)),
+    `no step of docs/demo.tape before "${commands[at]}" writes ${reads} with vitest run --reporter=json --outputFile=${reads}`,
+  );
+});
+
+test('docs/demo.tape and docs/oasb-demo.gif are the files docs/captures/demo.json records', () => {
+  // The README links the GIF as a recording of a run. The recording of
+  // 2026-03-11 showed the test total and the MITRE ATLAS mapping of that day
+  // and was kept through later changes to the tape. The digests tie the GIF
+  // to the tape it was recorded from: a change to either fails here until
+  // the GIF is recorded again (vhs docs/demo.tape) and the record updated.
+  const record = 'docs/captures/demo.json';
+  assert.ok(existsSync(join(repo, record)), `${record} does not exist; record the GIF with vhs docs/demo.tape and describe the recording there`);
+  const capture = JSON.parse(read(record));
+  // The tape's digest is taken with LF line endings, so a checkout that
+  // writes CRLF ones matches too.
+  const tape = createHash('sha256').update(read('docs/demo.tape').replace(/\r\n/g, '\n')).digest('hex');
+  const gif = createHash('sha256').update(readFileSync(join(repo, 'docs/oasb-demo.gif'))).digest('hex');
+  assert.equal(tape, capture.tape?.sha256, `docs/demo.tape differs from the tape ${record} records; record the GIF again with vhs docs/demo.tape and update ${record}`);
+  assert.equal(gif, capture.outputs?.gif?.sha256, `docs/oasb-demo.gif differs from the recording ${record} records; update ${record} with the recording`);
 });
 
 // The README section shows the commands; docs/how-it-works.md took the
