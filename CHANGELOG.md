@@ -181,6 +181,33 @@ stay on record here with the reason they changed.
 
 ### Fixed
 
+- E2E-001, the live filesystem detection tests, has a vitest project of
+  its own, `live-filesystem`, which `vitest.config.ts` puts in
+  `sequence.groupOrder` 1, after group 0 of every other test file. vitest
+  starts the files of a group when every file of the group before it has
+  finished, so in a run of the suite no other test file runs beside
+  E2E-001 while its cases wait for the file events the host delivers. Its
+  detection cases timed out in runs of the whole suite on a loaded host
+  while the file run alone passed, as the 0.4.1 entries record; since
+  then such a case is skipped as inconclusive when the harness's own
+  watcher saw no event either. The other test files stay in the project
+  of `vitest.config.ts` itself, which has no name, so their lines print
+  without a project label, as they did; E2E-001's lines print under
+  `live-filesystem`. A run still writes one report, of the same tests:
+  `vitest list` lists 430, which with the E2E-003 test that is skipped on
+  every platform make the 431 the README states. The global setups run
+  once, also in a run of E2E-001 alone, which printed
+  `OASB: 5 of 5 attack scenarios evaluated` once. The 5-second detection
+  window and the 10-second timeouts do not change. In a run of `src/e2e/`
+  with four workers on a 16-core macOS host, E2E-001 ran beside 4 other
+  files before the change, at a 1-minute load of 16.8 to 17.7, and beside
+  none after it, at a load of 43.0, starting 174 ms after the last of them
+  ended; its 5 tests passed in both runs. Load from other processes still
+  reaches the file: the 0.4.1 entries also record runs of the file alone
+  in which the host delivered no file event to the process.
+  `scripts/e2e-001-runs-alone.test.mjs` reads the suite as vitest resolves
+  the config and fails when E2E-001 shares its group or a later one with
+  another test file.
 - The recording of a run the README links, `docs/oasb-demo.gif`, is
   recorded again from `docs/demo.tape` (569,227 bytes, 2026-10-21). The
   recording of 2026-03-11 (2,676,739 bytes) showed `npm test` with the test

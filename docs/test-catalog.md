@@ -54,6 +54,8 @@ npm run test:baseline       # 12 false-positive / baseline tests
 npm run test:e2e            # 23 E2E tests (real OS detection; E2E-003 currently skipped)
 ```
 
+`vitest.config.ts` puts E2E-001 (live filesystem detection) in a project of its own, `live-filesystem`, in a later `sequence.groupOrder` than every other test file, and vitest starts the files of a group when every file of the group before it has finished. So in a run of the suite or of `npm run test:e2e`, no other test file runs beside E2E-001 while its cases wait for file events, and its lines print under the project name `live-filesystem`.
+
 Write the scorecard from a JSON report of the suite:
 
 ```bash
