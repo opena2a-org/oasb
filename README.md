@@ -142,6 +142,7 @@ Each scenario that simulates an adversary maps to a [MITRE ATLAS](https://atlas.
 - [Test harness](docs/test-harness.md) and [release smoke test](docs/testing/release-smoke.md): harness files, package exports, build and type-check, and checks on documented counts and commands.
 - [Skills Security Benchmark](docs/pinned-benchmark.md#skills-security-benchmark): the scoring engine, the corpus, the runners, pinned runs and the latest results; only recall is retained.
 - [BENCHMARK-RESULTS.md](BENCHMARK-RESULTS.md): per-category counts, the verdict methodology and the DVAA breakdown.
+- [Bait compliance](docs/bait-compliance.md): the record a lab run against a named agent writes, and the command that reads the records into a grid of agents by bait type.
 - [MITRE ATLAS](docs/mitre-atlas-mapping.md) and [OWASP Agentic](docs/owasp-agentic-mapping.md) mappings, and the [known detection gaps](docs/known-gaps.md) of the reference adapter.
 - [Updates](docs/updates.md), [CHANGELOG.md](CHANGELOG.md), [STATUS.md](STATUS.md) and a [recording of a run](https://github.com/opena2a-org/oasb/blob/main/docs/oasb-demo.gif).
 - [Contributing](CONTRIBUTING.md): co-authors, a second implementation, new attack scenarios and adopters, before OASB goes to an external standards body.

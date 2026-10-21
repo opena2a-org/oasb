@@ -29,7 +29,7 @@
     "test": "vitest run",
     "smoke": "bash scripts/release-smoke.sh",
     "check:readme": "node scripts/check-readme.mjs",
-    "test:scripts": "node --test scripts/check-readme.test.mjs scripts/check-test-counts.test.mjs scripts/check-owasp-mapping.test.mjs scripts/check-maturity-page.test.mjs scripts/check-documented-commands.test.mjs scripts/changelog-width.test.mjs scripts/adapter-gating.test.mjs scripts/scenario-report.test.mjs scripts/dev-run-summary.test.mjs scripts/library-entry.test.mjs scripts/runner-loads-no-sibling-module.test.mjs scripts/doc-facts.test.mjs scripts/placeholder-credentials.test.mjs scripts/secret-scan-workflow.test.mjs scripts/typecheck-tests.test.mjs scripts/hmaignore.test.mjs scripts/scenario-floor.test.mjs scripts/oasb-bin.test.mjs",
+    "test:scripts": "node --test scripts/check-readme.test.mjs scripts/check-test-counts.test.mjs scripts/check-owasp-mapping.test.mjs scripts/check-maturity-page.test.mjs scripts/check-documented-commands.test.mjs scripts/changelog-width.test.mjs scripts/adapter-gating.test.mjs scripts/scenario-report.test.mjs scripts/dev-run-summary.test.mjs scripts/library-entry.test.mjs scripts/runner-loads-no-sibling-module.test.mjs scripts/doc-facts.test.mjs scripts/placeholder-credentials.test.mjs scripts/secret-scan-workflow.test.mjs scripts/typecheck-tests.test.mjs scripts/hmaignore.test.mjs scripts/scenario-floor.test.mjs scripts/oasb-bin.test.mjs scripts/bait-edition.test.mjs",
     "test:atomic": "vitest run src/atomic/",
     "test:integration": "vitest run src/integration/",
     "test:baseline": "vitest run src/baseline/",

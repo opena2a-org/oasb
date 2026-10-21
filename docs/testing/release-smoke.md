@@ -256,6 +256,20 @@ README's test counts do not include them.
   2, or an adapter given by a relative path whose scanner misses FAIL and
   exit 1, or when an unknown ID, an adapter that cannot be loaded or a
   missing vitest does not exit 1 with a line that says so.
+- `scripts/bait-edition.test.mjs`: the edition of lab runs against named
+  agents (`scripts/bait-edition.mjs`) and the page that describes it,
+  `docs/bait-compliance.md`. It runs the command on records of made-up
+  agents that it writes to a temporary directory. Fails when a run counts
+  for a cell without a passed positive control and a measured bait trial
+  of that type, when a cell is measured on fewer than 3 runs that count,
+  when text from a record can split a cell of the grid or reach the
+  terminal as a control character, when a record labelled `wild`, a record
+  refused for another field, a file that is not JSON, a directory that
+  holds no `.json` file, a path that cannot be read or a `runId` two
+  records share does not exit 1 with nothing on stdout, when records that
+  measure no cell do not exit 2, or when the bait types, the example
+  record, the cells and the lines the page shows are not those of the
+  command.
 
 ## The README checks on every pull request
 

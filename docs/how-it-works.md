@@ -12,6 +12,8 @@ against a security product.
 
 OASB evaluates **security products**, not agents. It answers: "does your runtime protection actually catch these attacks?"
 
+The [bait compliance](bait-compliance.md) track is the exception: it records whether named agents, run in a lab, do what an instruction planted in the content they read asks.
+
 | | OASB | [HackMyAgent](https://github.com/opena2a-org/hackmyagent) |
 |---|---|---|
 | **Purpose** | Evaluate security *products* | Pentest AI *agents* |
