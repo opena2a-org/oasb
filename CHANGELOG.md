@@ -1028,6 +1028,41 @@ stay on record here with the reason they changed.
   after `<details>`, between two `~~~` lines in `<details>`, and between
   backticks in a block that `<details>` opens hold for `<details open>`:
   with `<details>`, each of those exited 0 and now exits 1.
+- `npm run check:readme` reads a dated page's "as of" note after the end of
+  a comment, `<script>` or `<style>` that the raw HTML after a `</textarea>`
+  end tag inside raw HTML in a paragraph, a heading or a table cell, such
+  as a comment or the quoted value of an attribute, leaves open, where that
+  end sits inside later raw HTML on its line or on a line below in the
+  paragraph. Such a comment or element hid the rest of the paragraph; a
+  browser ends it at the first match of its end, such as `-->`,
+  `</script>` or `</script >`, in the raw HTML that a renderer passes on as
+  written, also in a comment or a tag that runs on to a later line, and
+  shows the text after it. With a README that links
+  `docs/AUDIT-2026-06-03.md`, and the lines
+  `Hello <textarea><!-- </textarea><script> -->` and
+  `x </script> As of 2026-06-03. world.` after that page's H1 and a blank
+  line, then a blank line and `See the [README](../README.md) for the
+  current figures.`, the check exited 1 with `is a dated page, so above its
+  first H2 it must say "as of 2026-06-03"` and now exits 0, as it does with
+  `Hello <textarea><!-- </textarea><script> --> x </script> As of
+  2026-06-03. world.` on one line. So do the lines `x <!-- y` and
+  `z --> As of 2026-06-03. world.` below
+  `Hello <textarea><?x </textarea><!-- ?>`, where the `-->` of the comment
+  that runs on to the third line ends the one above, and the lines
+  `x <b title="-->` and `"> As of 2026-06-03. world.` below that line,
+  where a tag runs on. A renderer writes the `>` of text and of a code span
+  as `&gt;`, and an autolink as a link, so a `-->` in one of these ends
+  nothing: with `--> As of 2026-06-03. world.` below
+  `Hello <textarea><?x </textarea><!-- ?>`, the check still exits 1. The
+  entry above that says what the raw HTML after a `</textarea>` inside a
+  comment leaves open hides the rest of the paragraph still holds for a
+  tag, processing instruction, CDATA section or declaration, and for a
+  comment, `<script>` or `<style>` whose end no later raw HTML in the
+  paragraph holds. The text after the end is read as the rest of a
+  paragraph is, so a `<details>` start tag there hides the paragraphs
+  after it: the lines
+  `Hello <textarea><!-- </textarea><script> -->` and `x </script><details>`,
+  a blank line and `As of 2026-06-03.` exited 0 and now exit 1.
 - `npm run check:readme` follows an HTML block that an open tag or a
   closing tag alone on a line opens, such as `<span>` or `</span>`
   (CommonMark kind 7), up to the line before the next blank line, as it
