@@ -1062,7 +1062,14 @@ stay on record here with the reason they changed.
   paragraph is, so a `<details>` start tag there hides the paragraphs
   after it: the lines
   `Hello <textarea><!-- </textarea><script> -->` and `x </script><details>`,
-  a blank line and `As of 2026-06-03.` exited 0 and now exit 1.
+  a blank line and `As of 2026-06-03.` exited 0 and now exit 1. The end of
+  a comment, processing instruction, CDATA section or declaration that
+  runs on to a later line is looked for in the rest of the paragraph from
+  where it was last found, not again from each start on a line, so, on
+  macOS arm64, a line of `x` and 10,000 `<!-- ` below
+  `Hello <textarea><!-- </textarea><script> -->`, above 500 KB of `a-- `
+  and `As of 2026-06-03.`, takes 0.09 seconds to check, as do 4,000 lines
+  of `x <!--` in place of that line above 200 KB of `a-- `; each exits 1.
 - `npm run check:readme` follows an HTML block that an open tag or a
   closing tag alone on a line opens, such as `<span>` or `</span>`
   (CommonMark kind 7), up to the line before the next blank line, as it

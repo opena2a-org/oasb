@@ -2573,8 +2573,11 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // later line of the paragraph, as CommonMark reads a line break inside a
 // tag. `paragraph`, given for a line of a paragraph or a heading, holds
 // `text`, the lines of the paragraph as they are given here, each from its
-// `start` on, joined by line breaks, and `at`, where this line's text,
-// from line[start] on, starts in it. A tag runs on when an open tag or a
+// `start` on, joined by line breaks, `at`, where this line's text, from
+// line[start] on, starts in it, and `ends`, a map, one for the lines of
+// the paragraph, of where the end of a comment, processing instruction,
+// CDATA section or declaration that runs on was last found in `text`, or
+// -1 where none was. A tag runs on when an open tag or a
 // closing tag (RUN_ON_TAG) starts there at the < and ends past the line:
 // the rest of the line is left out, and { through, textarea } is returned
 // as `open`, the index in paragraph.text after the tag's > and whether the
@@ -2703,10 +2706,19 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
   // of the paragraph ends in paragraph.text: after the first match of
   // `unshown`, the end of a comment, processing instruction, CDATA section
   // or declaration, on the lines below, or after the > of a tag that
-  // RUN_ON_TAG finds there; -1 when it runs on to no later line.
+  // RUN_ON_TAG finds there; -1 when it runs on to no later line. The match
+  // of `unshown` found last is kept in paragraph.ends, by the lines of the
+  // paragraph in turn, and the lines below are searched again, from this
+  // line's end, only when that match starts before it; once a search finds
+  // none, none is made, so a line of many starts that nothing below ends is
+  // not read again from each one.
   const runsOnThrough = (at, unshown) => {
     if (unshown) {
-      const end = paragraph.text.indexOf(unshown, lineEnd);
+      let end = paragraph.ends.get(unshown);
+      if (end === undefined || (end !== -1 && end < lineEnd)) {
+        end = paragraph.text.indexOf(unshown, lineEnd);
+        paragraph.ends.set(unshown, end);
+      }
       return end === -1 ? -1 : end + unshown.length;
     }
     RUN_ON_TAG.lastIndex = paragraph.at + at - start;
@@ -2856,9 +2868,11 @@ for (const [file, { at, shown }] of datedPages) {
   // its part in `outside`, where its text starts after the > markers,
   // spaces and tabs that start that part when the part starts the line, the
   // first line of its paragraph, and `paragraph`, the text of the
-  // paragraph and where the line's text starts in it, as shownInline()
-  // takes them; `below`, for each line, the ends in UNSHOWN_ENDS that the
-  // lines after it in its paragraph hold there.
+  // paragraph, where the line's text starts in it and a map, one for the
+  // paragraph, of where the end of raw HTML that runs on was last found in
+  // that text, as shownInline() takes them; `below`, for each line, the
+  // ends in UNSHOWN_ENDS that the lines after it in its paragraph hold
+  // there.
   const inline = above.map((l, k) => {
     const at = outside.get(k);
     if (!at || htmlLines.has(k) || l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k)) return null;
@@ -2881,9 +2895,10 @@ for (const [file, { at, shown }] of datedPages) {
     const line = inline[k];
     if (lines.length > 0 && line?.first !== lines[0].first) {
       const text = lines.map(({ part, start }) => part.slice(start)).join('\n');
+      const ends = new Map();
       let at = 0;
       for (const l of lines) {
-        l.paragraph = { text, at };
+        l.paragraph = { text, at, ends };
         at += l.part.length - l.start + 1;
       }
       lines = [];

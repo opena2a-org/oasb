@@ -3360,6 +3360,25 @@ test('a comment, <script> or <style> that a </textarea> end tag inside a comment
   }
 });
 
+test('a line of 10,000 comment starts, or 4,000 lines of one, that nothing below ends, in a paragraph that a <script> left open after a </textarea> hides, is checked in under 2 seconds', () => {
+  // The end of a comment that runs on to a later line was looked for in the
+  // rest of the paragraph from each start on the line, so the time grew
+  // with the starts times the length of the lines below: the first page
+  // took 17.6 seconds to check, the second 3.3 seconds.
+  const see = 'See the [README](../README.md) for the current figures.';
+  for (const intro of [
+    `Hello <textarea><!-- </textarea><script> -->\nx ${'<!-- '.repeat(10000)}\n${'a-- '.repeat(125000)}\nAs of 2026-06-03.\n\n${see}\n`,
+    `Hello <textarea><!-- </textarea><script> -->\n${'x <!--\n'.repeat(4000)}${'a-- '.repeat(50000)}\nAs of 2026-06-03.\n\n${see}\n`,
+  ]) {
+    const started = process.hrtime.bigint();
+    const r = check(DATED_LINK, datedPage(intro));
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stderr, DATED);
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a page of ${intro.length} characters`);
+  }
+});
+
 test('a <textarea> or <!-- inside the quoted value of an attribute on a line of an HTML block starts nothing, and a </textarea > end tag ends a <textarea>', () => {
   // A browser reads a < inside an attribute value as part of the value, so
   // a comment after it still hides the note, and a <!-- there hides none.
