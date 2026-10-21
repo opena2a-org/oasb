@@ -7,8 +7,8 @@
 // the named agents completed bait of that type in the lab. It reads records
 // labelled "benchmark" only: a record with another label, such as "wild",
 // stops the edition, as does each other problem readRecords finds. --json
-// prints the edition as JSON, --svg as a dot plot (formatSvg), and --runs
-// prints the runs it reads, a row each (formatRuns).
+// prints the edition as JSON (formatJson), --svg as a dot plot (formatSvg),
+// and --runs prints the runs it reads, a row each (formatRuns).
 // docs/bait-compliance.md describes the record and the rules below.
 //
 // A run's positive control passed when the run has a control trial and each
@@ -372,6 +372,16 @@ export function formatEdition(edition) {
     ...edition.lines.map((line) => `- ${line.text}`),
     '',
   ].join('\n');
+}
+
+/**
+ * The edition as JSON. JSON.stringify escapes U+0000-U+001F in a string but
+ * writes U+007F-U+009F as they are; this writes those as \u escapes too, as
+ * printable does, so that the JSON carries no terminal escape sequence. They
+ * stand only inside strings, where an escape reads back as the character.
+ */
+export function formatJson(edition) {
+  return `${JSON.stringify(edition, null, 2).replace(/[\u007f-\u009f]/g, unicodeEscape)}\n`;
 }
 
 /**
@@ -809,7 +819,7 @@ export function main(argv, out = process.stdout, err = process.stderr) {
     return 0;
   }
   const edition = buildEdition(records);
-  out.write(json ? `${JSON.stringify(edition, null, 2)}\n` : svg ? formatSvg(edition) : formatEdition(edition));
+  out.write(json ? formatJson(edition) : svg ? formatSvg(edition) : formatEdition(edition));
   if (edition.lines.some((line) => line.measuredAgents > 0)) return 0;
   err.write(`bait-edition: the records measured no cell: no agent has ${MIN_RUNS} runs that count for a bait type\n`);
   return 2;
