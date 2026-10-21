@@ -118,8 +118,17 @@
 //      what <? or <![CDATA[ opens at the first > after it. It reads the
 //      rest of it as raw HTML, so an href in an open tag there is read:
 //      x <? > <a href="target">y</a> ?> links to target, and
-//      x <? <a href="target"> ?> does not. Nor is an href read in the text
-//      of an element whose text a browser reads as text, not as HTML:
+//      x <? <a href="target"> ?> does not. Nor is an href inside an image
+//      read, as both renderers write the description of an image into the
+//      alt attribute of the <img>: an image that a destination follows, as
+//      in ![<a href="x">y</a>](target), or one whose reference a definition
+//      on the page names, as in ![<a href="x">y</a>][label] with
+//      [label]: target, where referenceLabel() gives the label that both
+//      look the reference up under and definedLabels() reads the
+//      definition: written whole on one line, where a paragraph starts or
+//      after the definitions that start one, outside a block quote and not
+//      on the line of a list marker. Nor is an href read in the text of an
+//      element whose text a browser reads as text, not as HTML:
 //      <script>, <style>, <textarea>, <title>, <xmp>, <iframe>, <noembed>,
 //      <noframes>, <noscript> or <plaintext>. That text runs from a start
 //      tag of the element, in raw HTML read as above, to where a browser
@@ -134,10 +143,12 @@
 //      target, and x <textarea> </textarea> <a href="target">y</a> does.
 //      An inline link in that text is read. The <svg> and <math> elements
 //      are not followed here. In an image that a destination follows, from
-//      its ![ to the ) that closes its destination and title, raw HTML is
-//      text, as a renderer writes the description of an image as alt text
-//      of the <img>: no href there is read, and no tag there opens or ends
-//      such an element. So
+//      its ![ to the ) that closes its destination and title, and in one
+//      whose reference a definition on the page names, as above, from its
+//      ![ to its ] and on over the label after that ], raw HTML is text, as
+//      a renderer writes the description of an image as alt text of the
+//      <img>: no href there is read, and no tag there opens or ends such an
+//      element. So
 //      ![<textarea>](a.png) <a href="target">y</a> links to target, and
 //      x <textarea> ![</textarea>](a.png) <a href="target">y</a> does not.
 //      The target of an href is its
@@ -719,13 +730,16 @@ function codeSpans(text) {
 // htmlAt() has read, as a browser may end one before the end at which
 // CommonMark ends it and read the rest as raw HTML: those whose target
 // opens on the line, also those of a tag that starts on an earlier line,
-// but none inside an image that a destination follows, from its ![ to the
-// ) that closes its destination and title, as linkSyntax() finds the
-// images in the lines joined, so an image whose ] is on a later line holds
-// the hrefs before it on its earlier lines too. markdown-it 14.1.0 writes
-// the description of an image, a tag in it as well, as escaped text in the
-// alt attribute of the <img>, so the tag makes no link, and opens and ends
-// no element.
+// but none inside an image: one that a destination follows, from its ![ to
+// the ) that closes its destination and title, and one whose reference
+// `defined`, a test of the label that linkSyntax() gives it, finds that
+// the page defines, from its ![ to its ] and on over the label after that
+// ], as linkSyntax() finds the images in the lines joined, so an image
+// whose ] is on a later line holds the hrefs before it on its earlier
+// lines too. markdown-it 14.1.0 writes the description of an image, a tag
+// in it as well, as escaped text in the alt attribute of the <img>, so the
+// tag makes no link, and opens and ends no element. Without `defined`, no
+// reference is defined.
 // The elements whose text a browser reads as text (RAW_TEXT_ENDS) are
 // followed over that raw HTML, but for raw HTML that starts inside such an
 // image, with one tracker that rawTextElements() makes of the lines: an
@@ -735,15 +749,17 @@ function codeSpans(text) {
 // before the end tag that ends that element. A reader asks about the runs,
 // the < and the ( it meets from left to right, and asks for hrefs() once
 // it has read the line.
-function paragraphCodeSpans(lines, texts = []) {
+function paragraphCodeSpans(lines, texts = [], defined = () => false) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
   const htmlAt = inlineHtml(text);
-  // The images that a destination follows, the parts of linkSyntax() that
-  // are sure and start at a ! (a link's part starts at the ( of its
-  // destination), found the first time htmlAt() meets raw HTML.
+  // The images, the parts of linkSyntax() that start at a ! (a link's part
+  // starts at the ( of its destination) and that are sure or whose label is
+  // that of a reference the page defines, found the first time htmlAt()
+  // meets raw HTML.
   let images;
-  const inImage = (at) => partHolding((images ??= linkSyntax(text, ([start, , sure]) => sure && text[start] === '!')), at) !== undefined;
+  const isImage = ([start, , sure, label]) => text[start] === '!' && (sure || (label !== null && defined(label)));
+  const inImage = (at) => partHolding((images ??= linkSyntax(text, isImage)), at) !== undefined;
   const elements = rawTextElements(text);
   const hrefs = []; // the hrefs of the tags read, as tagHref() gives them, in order
   let given = 0; // how many of them hrefs() has given
@@ -1423,7 +1439,8 @@ function rawHtmlHrefs(text, from, to, elements) {
 // processing instructions, CDATA sections and declarations it reads so,
 // but for those in the text of an element of RAW_TEXT_ENDS, which a
 // browser reads as text, and those inside an image that a destination
-// follows.
+// follows or whose reference a definition on the page names, as
+// paragraphCodeSpans() reads them.
 // Links inside code spans are not read: inlineDestinations
 // reads past each code span, and so past the tags inside it. A definition
 // is matched on the whole line, as a code span in its label does not make
@@ -1453,12 +1470,13 @@ function linkTargets(line, open, spans) {
 // Link targets in the first `count` cells of a table row, `row` being its
 // text from where it starts, the cells as rowCells() splits it. Each cell
 // is read on its own, with no link text, code span or raw HTML open before
-// it, as linkTargets reads a line; a cell holds no definition.
-function rowTargets(row, count) {
+// it, as linkTargets reads a line; a cell holds no definition. `defined`
+// says which references the page defines, as paragraphCodeSpans() takes it.
+function rowTargets(row, count, defined) {
   return rowCells(row)
     .slice(0, count)
     .flatMap((cell) => {
-      const spans = paragraphCodeSpans([cell])();
+      const spans = paragraphCodeSpans([cell], [], defined)();
       const targets = inlineDestinations(cell, noOpenLinkText(), spans);
       return [...targets, ...spans.hrefs()];
     });
@@ -1897,6 +1915,142 @@ function blockReader(lines, quotedFences, htmlLines) {
   return read;
 }
 
+// The keys under which commonmark.js 0.31.2 and markdown-it 14.1.0 look up
+// the label of a reference, in that order: the label trimmed, with each run
+// of spaces, tabs and line breaks in it (commonmark.js) or of white space,
+// a no-break space as well (markdown-it), made one space, and case-folded
+// as both fold it.
+const labelKeys = (label) => {
+  const trimmed = label.trim();
+  return [/[ \t\r\n]+/g, /\s+/g].map((space) => trimmed.replace(space, ' ').toLowerCase().toUpperCase());
+};
+
+// The label of the reference definition that `line`, a line of a page as
+// written, holds whole, where both renderers read one, or null: up to three
+// spaces, [, a label of at most 999 characters that is not only white
+// space, holds no other [ or ] and in which a backslash takes the
+// character after it, ]:, spaces, a destination, and then spaces and the
+// end of the line, or one or more spaces, a title, spaces and the end of
+// the line. So a definition that runs on to the next line is not read.
+// commonmark.js 0.31.2 reads only spaces there, where markdown-it 14.1.0
+// reads tabs as well, and reads no longer label. The destination is
+// <target>, with no < in it that no backslash escapes, or a bare target,
+// which ends at a space or the end of the line, holds no control character,
+// holds parentheses that no backslash escapes only where they are balanced,
+// nested at most 32 deep as markdown-it nests them, and holds no backslash
+// before a space or a control character: commonmark.js reads on past a
+// control character that is not white space, and the two end a target in
+// different places after a backslash before white space. markdown-it reads
+// no definition whose destination starts with javascript:, vbscript:, file:
+// or data:, other than data:image/ and gif, png, jpeg or webp and a ;, in
+// capitals or not, also after a space, a tab or a no-break space, so none
+// whose destination starts so after white space is read here, nor one
+// whose destination holds a & or a backslash before its first colon, or
+// anywhere when it holds none, as markdown-it reads the entities and
+// escapes in it before it looks at that start. The title is in "", '' or
+// (), a backslash taking the character after it, and in () holds no ( that
+// no backslash escapes.
+const BAD_SCHEME = /^(?:vbscript|javascript|file|data):/;
+const IMAGE_DATA = /^data:image\/(?:gif|png|jpeg|webp);/;
+function definitionLabel(line) {
+  const text = line.endsWith('\r') ? line.slice(0, -1) : line;
+  let i = 0;
+  while (i < 3 && text[i] === ' ') i++;
+  if (text[i] !== '[') return null;
+  const labelStart = ++i;
+  for (; i < text.length && text[i] !== ']'; i++) {
+    if (text[i] === '[') return null;
+    if (text[i] === '\\') i++;
+  }
+  const label = text.slice(labelStart, i);
+  if (text[i + 1] !== ':' || label.length > 999 || label.trim() === '') return null;
+  i += 2;
+  while (text[i] === ' ') i++;
+  let target;
+  if (text[i] === '<') {
+    const start = i + 1;
+    for (i = start; i < text.length && text[i] !== '>'; i++) {
+      if (text[i] === '<') return null;
+      if (text[i] === '\\') i++;
+    }
+    if (i >= text.length) return null;
+    target = text.slice(start, i++);
+  } else {
+    const start = i;
+    let depth = 0;
+    for (; i < text.length; i++) {
+      const c = text[i];
+      if (c <= ' ' || c === '\x7f') break;
+      if (c === '\\') {
+        if (text[i + 1] <= ' ' || text[i + 1] === '\x7f') return null;
+        i++;
+      } else if (c === '(') {
+        if (++depth > MAX_PAREN_DEPTH) return null;
+      } else if (c === ')') {
+        if (depth === 0) break;
+        depth--;
+      }
+    }
+    if (i === start || depth !== 0) return null;
+    target = text.slice(start, i);
+  }
+  const colon = target.indexOf(':');
+  const url = target.trim().toLowerCase();
+  if (/[&\\]/.test(colon === -1 ? target : target.slice(0, colon)) || (BAD_SCHEME.test(url) && !IMAGE_DATA.test(url))) return null;
+  const targetEnd = i;
+  while (text[i] === ' ') i++;
+  if (i === text.length) return label;
+  const open = text[i];
+  if (i === targetEnd || (open !== '"' && open !== "'" && open !== '(')) return null;
+  const close = open === '(' ? ')' : open;
+  for (i++; i < text.length && text[i] !== close; i++) {
+    if (open === '(' && text[i] === '(') return null;
+    if (text[i] === '\\') i++;
+  }
+  if (i >= text.length) return null;
+  for (i++; text[i] === ' '; i++);
+  return i === text.length ? label : null;
+}
+
+// The keys, as labelKeys() gives them, of the labels of the reference
+// definitions on a page, `lines` being its lines as parse() tags them, as
+// [the keys commonmark.js files them under, those markdown-it does]. A
+// definition is read as definitionLabel() reads one, on a line that
+// blockReader() reads as paragraph text outside an HTML block and that
+// starts its paragraph or follows lines of it that each hold one, as a
+// definition starts a paragraph or follows the definitions at its start:
+// both renderers read one after other text of the paragraph as text. None
+// is read after a line of the paragraph that holds none whole, such as the
+// title of a definition on the line above, nor on a line of a block quote
+// or one that opens a list item, which starts with its marker, as check 4
+// reads no definition there either.
+function definedLabels(lines) {
+  const keys = [new Set(), new Set()];
+  const read = blockReader(lines);
+  let defining = false; // whether each line of the paragraph read so far holds a definition
+  for (const l of lines) {
+    const block = read(l);
+    defining = block !== null && !block.html && block.rest === 'text' && (block.starts || defining);
+    const label = defining ? definitionLabel(l.line) : null;
+    if (label === null) defining = false;
+    else labelKeys(label).forEach((key, k) => keys[k].add(key));
+  }
+  return keys;
+}
+
+// Whether a page defines a reference, for paragraphCodeSpans(): a test of
+// a label, as linkSyntax() gives one, that says whether definedLabels()
+// reads, on `lines`, the lines of the page, a definition under each key of
+// that label, so that both renderers find one. The page is read the first
+// time the test is asked.
+function referencesOf(lines) {
+  let keys;
+  return (label) => {
+    keys ??= definedLabels(lines);
+    return labelKeys(label).every((key, k) => keys[k].has(key));
+  };
+}
+
 // Reads the link targets on the lines of one page, as linkTargets reads
 // them, with link text and code spans that wrap. The reader is made with the
 // page's lines and then called with each of them in order. The [ a
@@ -1971,12 +2125,16 @@ function blockReader(lines, quotedFences, htmlLines) {
 // ends, as a [start, end) pair, followed by the index in `lines` of the
 // line that starts the block, such as a paragraph, that the line is a line
 // of. Given a map as `htmlLines`, blockReader() sets in it the lines
-// of each HTML block, as it describes.
+// of each HTML block, as it describes. The reference definitions that an
+// image's reference is looked up in, as referencesOf() reads them, are
+// those on `page`, the lines of the page that `lines` are part of, or on
+// `lines` when it is not given.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
-function linkReader(lines, codeLines, outside, htmlLines) {
+function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   let open = noOpenLinkText();
   let first = 0; // the index in `lines` of the line that starts the block read last
   const read = blockReader(lines, codeLines, htmlLines);
+  const defined = referencesOf(page);
   // Where the text of lines[k] starts when it is text that goes on with the
   // paragraph that the reader's `containers` hold, as the reader reads it
   // below, and -1 when it is not: past the > markers of the block quotes of
@@ -2007,7 +2165,7 @@ function linkReader(lines, codeLines, outside, htmlLines) {
       // block are read on its line alone.
       const texts = [0];
       if (paragraph) for (let at; j + texts.length < lines.length && (at = textStart(j + texts.length)) !== -1; ) texts.push(at);
-      open.code = paragraphCodeSpans(lines.slice(j, j + texts.length).map(({ line }) => line), texts);
+      open.code = paragraphCodeSpans(lines.slice(j, j + texts.length).map(({ line }) => line), texts, defined);
     }
     // A fence holds no link, whether parse() tags it or not: what follows the
     // run of an opening fence is an info string, not text, and a line that
@@ -2020,7 +2178,7 @@ function linkReader(lines, codeLines, outside, htmlLines) {
       return hrefTargets(html ? l.line : withoutCodeSpans(l.line));
     }
     // The cells of a table row of an HTML block are raw HTML as well.
-    if (rest === 'row') return html ? hrefTargets(l.line) : rowTargets(block.row, block.columns);
+    if (rest === 'row') return html ? hrefTargets(l.line) : rowTargets(block.row, block.columns, defined);
     const spans = open.code();
     // A line of an HTML block is raw HTML, whatever lineStart() reads it
     // as: its inline links and definitions are text, link text that opens
@@ -2353,7 +2511,8 @@ function checkSkippedCoverage(tests) {
 
   // The README's MITRE ATLAS Coverage section, from its H2 up to the next H2,
   // each as isH2() reads one, so a ## line of a fenced code block or of an
-  // HTML block neither starts nor ends it, and the .md pages it links to.
+  // HTML block neither starts nor ends it, and the .md pages it links to,
+  // whose links are read with the reference definitions of the whole README.
   const start = readme.findIndex((l) => isH2(l) && /^##\s+MITRE ATLAS Coverage\s*$/.test(l.line));
   if (start < 0) return;
   let end = start + 1;
@@ -2361,7 +2520,7 @@ function checkSkippedCoverage(tests) {
   const section = readme.slice(start + 1, end);
   const pages = [{ lines: section, prefix: '' }];
   const seen = new Set([readmePath]);
-  const read = linkReader(section);
+  const read = linkReader(section, undefined, undefined, undefined, readme);
   for (const l of section) {
     for (const target of read(l)) {
       if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
@@ -3478,6 +3637,30 @@ function referenceLabelEnd(text, at) {
   return at;
 }
 
+// The label under which both renderers look up the reference of an image
+// that no destination follows, whose description runs from the ![ at
+// text[start] to the ] at text[close], `end` being where
+// referenceLabelEnd() ends the label of a reference after that ]: the text
+// of that label, or the description where the label is [] or none follows.
+// It is null where the two may look up different labels or none: where a
+// ( follows the ], as commonmark.js 0.31.2 then looks up the description
+// and markdown-it 14.1.0 reads no image; where a [ that opens no label
+// follows it, as markdown-it may read a label that holds brackets there;
+// where the label is longer than 999 characters, which commonmark.js reads
+// as no label, or holds a ` or a <, as markdown-it may read a code span, an
+// autolink or raw HTML there that the label's ] does not end; and, for the
+// description, where `holds` says that a [ opened inside it, as
+// commonmark.js then looks up nothing and no definition has a label that
+// holds one.
+function referenceLabel(text, start, close, end, holds) {
+  if (text[close + 1] === '(') return null;
+  if (text[close + 1] === '[' && end !== close + 3) {
+    const label = text.slice(close + 2, end - 1);
+    return end === close + 1 || label.length > 999 || /[`<]/.test(label) ? null : label;
+  }
+  return holds ? null : text.slice(start + 2, close);
+}
+
 // The link syntax in `text`, the lines of a paragraph joined by line breaks
 // or the text of a heading or a table cell, that a renderer writes as text,
 // so that no part of it is raw HTML or a code span, as [start, end, sure],
@@ -3488,7 +3671,8 @@ function referenceLabelEnd(text, at) {
 // that no destination follows, from its ![ to its ] and on over the label
 // of a reference right after that ], with `sure` false, as a renderer
 // writes it as text only where a definition of that reference is on the
-// page, which is not read here. The brackets are paired as
+// page, which is not read here, and with the label it is looked up under
+// as a fourth entry, as referenceLabel() gives it. The brackets are paired as
 // inlineDestinations() pairs them on a line, also over line breaks: a code
 // span, an autolink or raw HTML is read whole where it starts, so a [ or ]
 // inside one is text, link text that holds a link is not a link's text, and
@@ -3500,7 +3684,9 @@ function referenceLabelEnd(text, at) {
 // pass is returned.
 function linkSyntax(text, keep = () => true) {
   const parts = [];
-  const brackets = []; // each [ that no ] has closed yet, as [where it starts, whether it opens an image]
+  // Each [ that no ] has closed yet, as [where it starts, whether it opens
+  // an image, whether a [ opened while it was the last one open, inside it].
+  const brackets = [];
   let aroundLink = 0; // how many of them, from the bottom, were open when a link was read
   const codeSpanAt = codeSpans(text);
   const htmlAt = inlineHtml(text);
@@ -3513,16 +3699,20 @@ function linkSyntax(text, keep = () => true) {
     } else if (c === '<') {
       i = htmlAt(i).end - 1;
     } else if (c === '[' || (c === '!' && text[i + 1] === '[')) {
-      brackets.push([i, c === '!']);
+      if (brackets.length > 0) brackets[brackets.length - 1][2] = true;
+      brackets.push([i, c === '!', false]);
       if (c === '!') i++;
     } else if (c === ']' && brackets.length > 0) {
-      const [at, image] = brackets.pop();
+      const [at, image, holds] = brackets.pop();
       const holdsLink = !image && brackets.length < aroundLink;
       aroundLink = Math.min(aroundLink, brackets.length);
       if (holdsLink) continue;
       const end = text[i + 1] === '(' ? (inlineLink(text, i + 1)?.end ?? -1) : -1;
       if (end === -1) {
-        if (image) parts.push([at, referenceLabelEnd(text, i + 1), false]);
+        if (image) {
+          const labelEnd = referenceLabelEnd(text, i + 1);
+          parts.push([at, labelEnd, false, referenceLabel(text, at, i, labelEnd, holds)]);
+        }
         continue;
       }
       parts.push([image ? at : i + 1, end, true]);
@@ -3792,11 +3982,12 @@ for (const [file, { at, shown }] of datedPages) {
   // link reader reads those inside a block quote. Each line is read, also
   // those after a link to the README, so that `codeLines` names each line
   // of a fenced code block inside a block quote and each line of indented
-  // code outside an HTML block on which the reader reads no inline link.
+  // code outside an HTML block on which the reader reads no inline link. An
+  // image's reference is looked up in the definitions of the whole page.
   const codeLines = new Set();
   const outside = new Map();
   const htmlLines = new Map();
-  const read = linkReader(above, codeLines, outside, htmlLines);
+  const read = linkReader(above, codeLines, outside, htmlLines, page);
   const linksReadme = above.map((l) => read(l).some(toReadme)).includes(true);
   // The note is read without > markers, and without the lines of a fenced
   // code block or in `codeLines`. A line of an HTML block that

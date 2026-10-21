@@ -1669,6 +1669,35 @@ stay on record here with the reason they changed.
   exited 1 and now exits 0. WebKit reads no link in the HTML of that line
   with the description as escaped text, and reads one with `</textarea>`
   as written in the alt attribute.
+- `npm run check:readme` reads no href inside an image whose reference a
+  definition on the page names. markdown-it 14.1.0 writes the description
+  of such an image as escaped text into the alt attribute of the `<img>`,
+  and commonmark.js 0.31.2 writes it there too, so parse5 7.3.0 reads no
+  link to `docs/nowhere.md` in what either renders of the line
+  `![<a href='docs/nowhere.md'>x</a>][ref]` on a page that holds the line
+  `[ref]: docs/guide.md`. With `docs/guide.md` present and
+  `docs/nowhere.md` absent, that README exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exits 0, as it
+  does with the definition above the image, with the label in other case
+  and white space, and with the image in a block quote, a list item, link
+  text, a heading or a table cell. The check reads a definition written
+  whole on one line where a paragraph starts, or after the definitions that
+  start one, outside a block quote and not on the line of a list marker.
+  Both renderers read a definition in the image's paragraph, or after other
+  text of its paragraph, as text, so the `![` opens no image there and the
+  README exits 1, as it did, and the check still reads the href where the
+  two may read the definition or the label differently, such as a
+  definition with a tab after its `]:`, which commonmark.js does not read.
+  In `![<a href='docs/nowhere.md'>x</a>][]` and in
+  `![<a href='docs/nowhere.md'>x</a>]` the label is the description, so the
+  definition holds the same `<a>`, and the check now names the definition's
+  line alone, as it reads the hrefs on a line it reads a definition on. A
+  README whose MITRE ATLAS Coverage section links `docs/atlas.md` only in
+  such an image, with the definition below the section, exited 1 naming
+  the skipped test that page lists, and now exits 0; a dated page whose one
+  link to the README is in such an image, with the definition below its
+  first H2, exited 0 and now exits 1 with
+  `it must link to the README for the current figures`.
 
 ## 0.4.1 - 2026-10-17
 
