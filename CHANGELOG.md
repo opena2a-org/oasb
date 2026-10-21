@@ -1053,7 +1053,19 @@ stay on record here with the reason they changed.
   where a tag runs on. A renderer writes the `>` of text and of a code span
   as `&gt;`, and an autolink as a link, so a `-->` in one of these ends
   nothing: with `--> As of 2026-06-03. world.` below
-  `Hello <textarea><?x </textarea><!-- ?>`, the check still exits 1. The
+  `Hello <textarea><?x </textarea><!-- ?>`, the check still exits 1. It
+  also writes a `<` in the destination or title of an inline link, or in
+  the description of an image, as text, and the check does not read
+  whether a `<` after a `](` or `![` is in one of these, so raw HTML after
+  either in the paragraph ends nothing that hides text, and what is open
+  hides the rest of the paragraph: with
+  `[x](https://example.com "<!-- -->") As of 2026-06-03. world.` below
+  that line, or `[x](https://example.com "</script>") As of 2026-06-03.
+  world.` or `![</script>](https://example.com/i.png) As of 2026-06-03.
+  world.` below `Hello <textarea><!-- </textarea><script> -->`, the check
+  exits 1, as it does with `[x](https://example.com) ` before that line
+  and `x </script> As of 2026-06-03. world.` below it, where a browser
+  shows the note. The
   entry above that says what the raw HTML after a `</textarea>` inside a
   comment leaves open hides the rest of the paragraph still holds for a
   tag, processing instruction, CDATA section or declaration, and for a

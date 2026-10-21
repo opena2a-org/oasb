@@ -3379,6 +3379,47 @@ test('a line of 10,000 comment starts, or 4,000 lines of one, that nothing below
   }
 });
 
+test('raw HTML after a ]( or ![ in a paragraph, a heading or a table cell ends no comment, <script> or <style> that a </textarea> end tag inside raw HTML leaves open, which then hides the rest of the paragraph', () => {
+  // A renderer writes a < in the destination or title of an inline link,
+  // or in the description of an image, as text, so a --> or </script>
+  // there ends nothing, and a browser keeps hiding the text after it. The
+  // check does not read whether a < after a ]( or ![ is in one of these,
+  // so raw HTML after either ends nothing that hides text: with a link
+  // before the <textarea> line, the </script> on the line below is not
+  // read as the end of the <script>, though a browser ends it there.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  for (const intro of [
+    `Hello <textarea><?x </textarea><!-- ?>\n[x](https://example.com "<!-- -->") As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\n[x](https://example.com/<!--y-->) As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\n![a <!-- --> b](https://example.com/i.png) As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\n[x](https://example.com "<b title='-->'>") As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><?x </textarea><!-- ?>\n[x](https://example.com "<!-- y\nz -->") As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com "</script>") As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com '</script>') As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com (</script>)) As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n[x](https://example.com/a</script>b) As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\n![</script>](https://example.com/i.png) As of 2026-06-03. world.\n\n${see}`,
+    `[x](https://example.com) Hello <textarea><!-- </textarea><script> -->\nx </script> As of 2026-06-03. world.\n\n${see}`,
+    `### Hello <textarea><!-- </textarea><script> --> [x](https://example.com "</script>") As of 2026-06-03. world\n\n${see}`,
+    `| a | b |\n| - | - |\n| <textarea><!-- </textarea><script> --> [x](https://example.com "</script>") As of 2026-06-03. | y |\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+  }
+  // Raw HTML in link text, which a renderer passes on as written, ends what
+  // is open, as does raw HTML before a ]( or ![ on the line, and the text
+  // after the end is shown.
+  for (const intro of [
+    `Hello <textarea><?x </textarea><!-- ?>\n[x <!-- --> y](https://example.com) As of 2026-06-03. world.\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\nx </script> As of 2026-06-03. [world](https://example.com).\n\n${see}`,
+    `Hello <textarea><!-- </textarea><script> -->\nx </script> As of 2026-06-03. ![world](https://example.com/i.png).\n\n${see}`,
+  ]) {
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+});
+
 test('a <textarea> or <!-- inside the quoted value of an attribute on a line of an HTML block starts nothing, and a </textarea > end tag ends a <textarea>', () => {
   // A browser reads a < inside an attribute value as part of the value, so
   // a comment after it still hides the note, and a <!-- there hides none.

@@ -2574,10 +2574,11 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // tag. `paragraph`, given for a line of a paragraph or a heading, holds
 // `text`, the lines of the paragraph as they are given here, each from its
 // `start` on, joined by line breaks, `at`, where this line's text, from
-// line[start] on, starts in it, and `ends`, a map, one for the lines of
-// the paragraph, of where the end of a comment, processing instruction,
-// CDATA section or declaration that runs on was last found in `text`, or
-// -1 where none was. A tag runs on when an open tag or a
+// line[start] on, starts in it, `ends`, a map, one for the lines of the
+// paragraph, of where the end of a comment, processing instruction, CDATA
+// section or declaration that runs on was last found in `text`, or -1
+// where none was, and `link`, where a ]( or ![ first starts in `text`, as
+// linkSyntaxAt() finds it. A tag runs on when an open tag or a
 // closing tag (RUN_ON_TAG) starts there at the < and ends past the line:
 // the rest of the line is left out, and { through, textarea } is returned
 // as `open`, the index in paragraph.text after the tag's > and whether the
@@ -2614,7 +2615,13 @@ const QUOTE_MARKERS = /^\s*(?:>[ \t]{0,4}(?=>))*>?[ \t]?/;
 // one that runs on to a later line of the paragraph, as a renderer passes
 // these on as written and a browser ends it there. A renderer writes the >
 // of text and of a code span as &gt;, and an autolink as a link, so a
-// match in one of these ends nothing. The rest of that piece after the
+// match in one of these ends nothing. It also writes a < in the
+// destination or title of an inline link, after the ]( that opens the
+// destination, and in the description of an image, after its ![, as text,
+// and whether a < after a ]( or ![ is in one of these is not read here: a
+// < met after either in the paragraph, or on the line of a heading or a
+// table cell, ends nothing that hides text, and what is open hides the
+// rest of the paragraph, as above. The rest of that piece after the
 // match is read as shownHtml() reads a line of an HTML block, from inside
 // the end tag of a <script> or <style> (END_TAG_STARTS), and what it
 // leaves open is read as above; a piece that runs on is read so on each of
@@ -2643,6 +2650,14 @@ const RUNS_ON = new Set(HIDDEN_HTML_END.slice(1, 4));
 // <textarea> element (TEXTAREA_END), whose text is shown, and the raw HTML
 // that an entry of RUNS_ON ends.
 const hidesParagraph = (left) => left !== null && left !== TEXTAREA_END && !RUNS_ON.has(left);
+// Where link syntax after which a renderer writes a < as text first starts
+// in `text`: the ]( that opens the destination of an inline link, which a
+// title may follow, or the ![ that opens the description of an image;
+// Infinity when neither is there.
+const linkSyntaxAt = (text) => {
+  const at = [text.indexOf(']('), text.indexOf('![')].filter((i) => i !== -1);
+  return at.length > 0 ? Math.min(...at) : Infinity;
+};
 function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, paragraph = null) {
   let i = 0;
   let text = '';
@@ -2678,6 +2693,14 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
     i = end + open.length;
   }
   const hidden = () => raw !== null && raw !== TEXTAREA_END;
+  // Whether a ]( or ![ comes before line[at] in the paragraph, or on a line
+  // read without one, after which a < ends nothing that hides text.
+  let link; // where a ]( or ![ first starts on a line read without a paragraph
+  const afterLinkSyntax = (at) => {
+    if (paragraph) return paragraph.at + at - start > paragraph.link;
+    if (link === undefined) link = linkSyntaxAt(line);
+    return at > link;
+  };
   const codeSpanAt = codeSpans(line);
   const htmlAt = inlineHtml(line);
   const show = (part) => {
@@ -2747,6 +2770,9 @@ function shownInline(line, elements, open = null, start = 0, below = NO_ENDS, pa
         // inside that end tag, which is a tag, so no part of it is shown.
         // Raw HTML whose text is left out is read on, with shownHtml(), in
         // raw HTML that runs on from i to a later line of the paragraph.
+        // After a ]( or ![, raw HTML ends nothing whose text is left out,
+        // which then hides the rest of the paragraph.
+        if (hidden() && afterLinkSyntax(i)) return { text, open: restLeftOut() };
         const close = end > i + 1 && (tag || unshown) ? matchFrom(raw, i) : null;
         const after = close ? close.index + close[0].length : -1;
         if (close && after <= end) {
@@ -2841,8 +2867,9 @@ for (const [file, { at, shown }] of datedPages) {
   // holds its >, as CommonMark reads it on those parts of the paragraph's
   // lines joined by line breaks, and so may a comment, <script> or <style>
   // that the raw HTML after a </textarea> end tag inside one of these
-  // leaves open, to the first match of its end inside later raw HTML, as
-  // shownInline() reads it. The lines of a paragraph here are those
+  // leaves open, to the first match of its end inside later raw HTML that
+  // no ]( or ![ comes before, as shownInline() reads it. The lines of a
+  // paragraph here are those
   // that `outside` gives the same first line, up to a line of an HTML
   // block. A line of an HTML block is raw HTML, in which a backtick is text
   // and opens no code span, so the note is read there, as an href there is,
@@ -2868,11 +2895,11 @@ for (const [file, { at, shown }] of datedPages) {
   // its part in `outside`, where its text starts after the > markers,
   // spaces and tabs that start that part when the part starts the line, the
   // first line of its paragraph, and `paragraph`, the text of the
-  // paragraph, where the line's text starts in it and a map, one for the
+  // paragraph, where the line's text starts in it, a map, one for the
   // paragraph, of where the end of raw HTML that runs on was last found in
-  // that text, as shownInline() takes them; `below`, for each line, the
-  // ends in UNSHOWN_ENDS that the lines after it in its paragraph hold
-  // there.
+  // that text, and where a ]( or ![ first starts in it, as shownInline()
+  // takes them; `below`, for each line, the ends in UNSHOWN_ENDS that the
+  // lines after it in its paragraph hold there.
   const inline = above.map((l, k) => {
     const at = outside.get(k);
     if (!at || htmlLines.has(k) || l.inFence || l.fenceOpen || l.fenceClose || codeLines.has(k)) return null;
@@ -2896,9 +2923,10 @@ for (const [file, { at, shown }] of datedPages) {
     if (lines.length > 0 && line?.first !== lines[0].first) {
       const text = lines.map(({ part, start }) => part.slice(start)).join('\n');
       const ends = new Map();
+      const link = linkSyntaxAt(text);
       let at = 0;
       for (const l of lines) {
-        l.paragraph = { text, at, ends };
+        l.paragraph = { text, at, ends, link };
         at += l.part.length - l.start + 1;
       }
       lines = [];
