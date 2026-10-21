@@ -795,6 +795,13 @@ test(`the cells and lines ${PAGE} shows are what the edition prints for them`, (
   }
 });
 
+/** The words of `command` that start with a dash and are not, whole, one of the options the usage line `usage` names. */
+function unnamedOptions(command, usage) {
+  // The usage line names its options between brackets and bars: [--json | --svg | --runs].
+  const options = usage.split(/[\s[\]|]+/).filter((word) => word.startsWith('-'));
+  return command.split(/\s+/).filter((word) => word.startsWith('-') && !options.includes(word));
+}
+
 test(`the commands ${PAGE} shows take only the options of the usage line, and one of them is --svg`, () => {
   const usage = spawnSync(process.execPath, [script, '--help'], { encoding: 'utf8' }).stdout;
   const commands = page
@@ -803,9 +810,24 @@ test(`the commands ${PAGE} shows take only the options of the usage line, and on
     .map((line) => line.split('#')[0]);
   assert.ok(commands.some((command) => command.split(/\s+/).includes('--svg')), `${PAGE} shows no command with --svg`);
   for (const command of commands) {
-    for (const option of command.split(/\s+/).filter((word) => word.startsWith('-'))) {
-      assert.ok(usage.includes(option), `${PAGE}: ${command.trim()}: ${option} is not in the usage line`);
+    for (const option of unnamedOptions(command, usage)) {
+      assert.fail(`${PAGE}: ${command.trim()}: ${option} is not an option the usage line names`);
     }
+  }
+});
+
+test(`the check of the commands ${PAGE} shows takes an option of the usage line as a whole word: --run, --js and --sv, parts of --runs, --json and --svg, fail it, as the command refuses them`, () => {
+  const usage = spawnSync(process.execPath, [script, '--help'], { encoding: 'utf8' }).stdout;
+  for (const option of ['--json', '--svg', '--runs']) {
+    assert.deepEqual(unnamedOptions(`node scripts/bait-edition.mjs ${option} runs/`, usage), [], option);
+  }
+  for (const option of ['--run', '--js', '--sv']) {
+    assert.ok(usage.includes(option), `${option} is no part of the usage line; update this test with a part of one of its options`);
+    assert.deepEqual(unnamedOptions(`node scripts/bait-edition.mjs ${option} runs/`, usage), [option]);
+    const refused = runOn(LAB, [option]);
+    assert.equal(refused.status, 1, option);
+    assert.equal(refused.stderr, usage, option);
+    assert.equal(refused.stdout, '', option);
   }
 });
 

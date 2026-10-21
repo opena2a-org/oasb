@@ -23,7 +23,10 @@ stay on record here with the reason they changed.
   edition with the rate of each run that counts for a cell.
   `docs/bait-compliance.md` describes the record and these rules, the
   README's Documentation list and `docs/how-it-works.md` link it, and
-  `scripts/bait-edition.test.mjs` checks the rules and the page.
+  `scripts/bait-edition.test.mjs` checks the rules and the page. The test
+  fails when a command the page shows takes an option that is not, as a
+  whole word, one the usage line names, such as `--run`, `--js` or `--sv`,
+  which the command refuses with exit 1.
 - `node scripts/bait-edition.mjs --svg <record.json | directory>...`
   prints the edition as an SVG dot plot: a panel for each bait type with a
   measured cell, headed by the edition's line for it, and in each panel a
