@@ -20,11 +20,13 @@ the claims this repository publishes:
    the relative links it reads resolve, in the README, in the pages that
    took its text (`README_PAGES` in `scripts/readme-counts.mjs`) and in each
    other `.md` page a reader reaches from them by those links, each link
-   from the directory of the file it is in. It reads three link forms, each
-   written within one line: inline links (`[text](path)`, with an optional
-   double-quoted title, and a path written `<path>` or holding balanced
-   parentheses, `[text](docs/a(b).md)`), reference definitions at the
-   start of a line (`[label]: path`) and quoted HTML `href` attributes. It
+   from the directory of the file it is in. It reads three link forms:
+   inline links (`[text](path)`, with an optional title in `""`, `''` or
+   `()`, and a path written `<path>` or holding balanced parentheses,
+   `[text](docs/a(b).md)`), whose path and title may start on the next line
+   of their paragraph, and, each written within one line, reference
+   definitions at the start of a line (`[label]: path`) and quoted HTML
+   `href` attributes. It
    checks a `#anchor` only in links to `.md` files. Other forms, such as an
    unquoted `href` or a definition on the same line as a list marker
    (`- [label]: path`), are not checked. A linked `.md` page whose
@@ -310,10 +312,11 @@ README's test counts do not include them.
   timeouts are not those of the other files, or when a global setup file
   is listed by more than one project or no project lists
   `scripts/scenario-floor.ts`. It also runs `vitest list --filesOnly`
-  with `--exclude src/e2e/`, `--exclude '**/E2E-001*'` and
-  `--exclude src/atomic/`, and fails when a list holds a file the glob
-  names, the files of `src/e2e/`, E2E-001 and the files of `src/atomic/`
-  in turn, or lacks another test file under `src/`. vitest adds the globs
+  with `--exclude src/e2e/`, `--exclude 'src/e2e*'`,
+  `--exclude '**/E2E-001*'` and `--exclude src/atomic/`, and fails when a
+  list holds a file the glob names, the files of `src/e2e/` for the first
+  two, E2E-001 and the files of `src/atomic/` in turn, or lacks another
+  test file under `src/`. vitest adds the globs
   of `--exclude` to the root project only; a plugin that E2E-001's project
   lists in `vitest.config.ts` adds them to that project.
 
