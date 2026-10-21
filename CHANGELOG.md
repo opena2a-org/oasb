@@ -1525,12 +1525,15 @@ stay on record here with the reason they changed.
   rendering parse5 7.3.0 reads a link to `docs/nowhere.md`, each exited 0
   and now exits 1 with `link target "docs/nowhere.md" does not exist`,
   naming the line. What follows that end, up to the end at which
-  CommonMark ends it, is read as the HTML tokenizer reads it, so
+  CommonMark ends it, is read as the HTML tokenizer reads it from its data
+  state, without following the elements whose content a browser reads as
+  text, such as `<script>` or `<textarea>`, so
   `x <? <a href="docs/nowhere.md"> ?>`, where the first `>` after the `<?`
   is the tag's own, still exits 0, as does
   `x <? > <!-- <a href="docs/nowhere.md"> --> ?>`, where the tag is inside
-  a comment that the rest opens. The check does not follow `<svg>` and
-  `<math>` elements, in which a browser ends a CDATA section at `]]>`, so
+  a comment that the rest opens. The check follows `<svg>` and `<math>`
+  elements, in which a browser ends a CDATA section at `]]>`, on a dated
+  page, but not when it reads these hrefs, so
   `x <svg><![CDATA[ > <a href="docs/nowhere.md">y</a> ]]></svg>`, in which
   parse5 reads no link, exited 0 and now exits 1. On macOS arm64 with
   Node.js 26.12.0, a README whose one prose line is `x <? >`, 200,000 tags
