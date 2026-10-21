@@ -126,6 +126,8 @@ hackmyagent secure ./my-agent -b oasb-1                 # OASB-1 controls at lev
 hackmyagent secure ./my-agent -b oasb-1 --fail-below 80 # also exit 1 below 80% compliance, for CI
 ```
 
+Of the commands above, only the `hackmyagent` ones exit non-zero on a Not Passing rating, so use one of them for a CI step that should fail on that rating. On a copy of [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent) 0.9.2 that both CLIs rate Not Passing, `hackmyagent secure -b oasb-1` (hackmyagent 0.33.2) exits 1, and `opena2a benchmark` (opena2a-cli 0.10.13) prints the rating and exits 0, also with `--ci`.
+
 Both score only what they could evaluate. The rest are listed as not evaluated (OpenA2A CLI) or unverified (HackMyAgent), not counted as passing.
 
 The two percentages are different figures and are not comparable with each other; [How OASB works](docs/how-it-works.md#usage-via-opena2a-cli) says how each is computed.

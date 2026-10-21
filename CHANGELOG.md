@@ -178,6 +178,13 @@ stay on record here with the reason they changed.
   place of saying raw HTTP response bodies are not inspected, and the note
   at the top of `REPORT.md` says that the adapter declares event
   correlation and that `docs/known-gaps.md` lists one of its four gaps.
+- The README says which of its OASB-1 commands exit non-zero on a Not
+  Passing rating: only the `hackmyagent` ones. On a copy of DVAA 0.9.2 that
+  both CLIs rate Not Passing, `hackmyagent secure -b oasb-1` (hackmyagent
+  0.33.2) exits 1, with and without `--fail-below 80`, and
+  `opena2a benchmark` (opena2a-cli 0.10.13) exits 0, also with `--ci`,
+  `--level L2` and `--format json`. `scripts/doc-facts.test.mjs` checks
+  that the README's Usage via OpenA2A CLI section says so.
 
 ### Fixed
 
