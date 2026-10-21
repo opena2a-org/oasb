@@ -1547,6 +1547,87 @@ test('an href is read in a tag after the first > inside a processing instruction
   }
 });
 
+test('an href is not read in the text of a <script>, <style>, <textarea>, <title>, <xmp>, <iframe>, <noembed>, <noframes>, <noscript> or <plaintext> element in a paragraph, a heading or a table cell, up to the end tag at which a browser ends the element', () => {
+  // A browser reads the text of these elements as text, not as HTML. In the
+  // HTML a CommonMark renderer makes of each of these lines, which passes
+  // the elements and the <a> on as raw HTML, WebKit (the HTML import of
+  // textutil on macOS 26.6.2) reads no link to docs/nowhere.md: the <a> is
+  // inside the element, which the line opens, also after where a browser
+  // ends a processing instruction, in a heading, a table cell or on the
+  // next line of the paragraph, with its name in any case or a / before
+  // its >; a tag whose name only starts with the element's, an end tag in
+  // a code span, which a renderer writes as text, and </plaintext> end
+  // none of them; and in the <script> of each of the last three lines, the
+  // first </script>, which follows <!-- and then <script with no --> between
+  // them, ends none.
+  const NAMES = ['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext'];
+  for (const body of [
+    ...NAMES.map((name) => `x <${name}> <a href="docs/nowhere.md">y</a> </${name}>\n`),
+    ...NAMES.map((name) => `x <? > <${name}> <a href="docs/nowhere.md">y</a> </${name}> ?>\n`),
+    '## x <textarea> <a href="docs/nowhere.md">y</a> </textarea>\n',
+    '| h |\n| - |\n| x <textarea> <a href="docs/nowhere.md">y</a> </textarea> |\n',
+    'x <textarea>\n<a href="docs/nowhere.md">y</a> </textarea>\n',
+    'x <? > <textarea> ?> <a href="docs/nowhere.md">y</a>\n',
+    'x <TEXTAREA> <a href="docs/nowhere.md">y</a> </TEXTAREA>\n',
+    'x <textarea/> <a href="docs/nowhere.md">y</a> </textarea>\n',
+    'x <textarea> </textareax> <a href="docs/nowhere.md">y</a>\n',
+    'x <textarea> `</textarea>` <a href="docs/nowhere.md">y</a>\n',
+    'x <plaintext> </plaintext> <a href="docs/nowhere.md">y</a>\n',
+    'x <script> <!-- <script> </script> <a href="docs/nowhere.md">y</a> --> </script>\n',
+    'x <script> <!-- <script> </script> <a href="docs/nowhere.md"> -->\n',
+    'x <script> <? <!-- <script> ?> </script> <a href="docs/nowhere.md">y</a>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // WebKit reads a link to docs/nowhere.md in the HTML of each of these:
+  // the <a> follows the end tag at which a browser ends the element, in
+  // any case, also inside a comment, a processing instruction or another
+  // tag's quoted value, on a later line of the paragraph, in a heading or
+  // in a table cell, or in a <script> after <!-- and no <script>; or it
+  // comes before the start tag, or after a tag whose name only starts with
+  // the element's.
+  for (const [body, line] of [
+    ['x <textarea> </textarea> <a href="docs/nowhere.md">y</a>\n', 11],
+    ['x <textarea> </TEXTAREA> <a href="docs/nowhere.md">y</a>\n', 11],
+    ['x <? > <textarea> </textarea> <a href="docs/nowhere.md">y</a> ?>\n', 11],
+    ['x <textarea> <!-- </textarea> <a href="docs/nowhere.md">y</a> -->\n', 11],
+    ['x <textarea> <? </textarea> <a href="docs/nowhere.md">y</a> ?>\n', 11],
+    ['x <textarea> <b title="</textarea><a href=\'docs/nowhere.md\'>">y</b>\n', 11],
+    ['x <textarea>\ny </textarea> <a href="docs/nowhere.md">z</a>\n', 12],
+    ['## x <style> </style> <a href="docs/nowhere.md">y</a>\n', 11],
+    ['| h |\n| - |\n| x <title> </title> <a href="docs/nowhere.md">y</a> |\n', 13],
+    ['x <script> <!-- --> </script> <a href="docs/nowhere.md">y</a>\n', 11],
+    ['x <script> <? <!-- ?> </script> <a href="docs/nowhere.md">y</a>\n', 11],
+    ['x <a href="docs/nowhere.md">y</a> <textarea> z </textarea>\n', 11],
+    ['x <textareax> <a href="docs/nowhere.md">y</a>\n', 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+});
+
+test('a line of 100,000 tags inside a <textarea> or <script>, which no end tag ends or one ends at the end of the line, is checked in under 2 seconds', () => {
+  // The end tag of the element is searched for with one searcher() of the
+  // paragraph, so the line is not read again from each tag inside it. The
+  // href after the </textarea> at the end of the last line is the only
+  // one read on it.
+  const tags = '<a href="docs/nowhere.md">'.repeat(100000);
+  for (const [line, failures] of [
+    [`x <textarea>${tags}`, 0],
+    [`x <script>${'<!-- --><a href="docs/nowhere.md">'.repeat(100000)}`, 0],
+    [`x <textarea>${tags}</textarea><a href="docs/nowhere.md">`, 1],
+  ]) {
+    const started = process.hrtime.bigint();
+    const r = check(`${line}\n`);
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, failures === 0 ? 0 : 1, r.stderr.slice(0, 500));
+    assert.equal((r.stderr.match(/link target "docs\/nowhere\.md" does not exist/g) ?? []).length, failures, r.stderr.slice(0, 500));
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters`);
+  }
+});
+
 test('a line of 200,000 tags with an href, outside a processing instruction or inside one, is checked without a RangeError', () => {
   // Given as the arguments of one push(), the targets of a line of 130,000
   // such tags threw a RangeError (Maximum call stack size exceeded) on
