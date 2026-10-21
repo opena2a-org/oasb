@@ -1540,6 +1540,19 @@ stay on record here with the reason they changed.
   `<a href="docs/guide.md">` and ` ?>` still exits 0: the check now reads
   the hrefs of those tags, and adds them one at a time to the targets it
   checks.
+- `npm run check:readme` reads no href inside an image that a destination
+  follows. commonmark.js 0.31.2 writes the description of an image into
+  the alt attribute of the `<img>`, and markdown-it 14.1.0 writes it there
+  as escaped text, so parse5 7.3.0 reads no link to `docs/nowhere.md` in
+  what either renders of the line
+  `![<a href='docs/nowhere.md'>x</a>](docs/guide.md)`. With
+  `docs/guide.md` present and `docs/nowhere.md` absent, that line, the
+  two lines `![<a` and `href="docs/nowhere.md">x</a>](docs/guide.md)`, and
+  the two lines `![<a href='docs/nowhere.md'>x</a>` and `](docs/guide.md)`
+  exited 1 with `link target "docs/nowhere.md" does not exist`, and now
+  exit 0, as does that image in a heading or a table cell. A `![` that no
+  destination follows opens no image, and both render an `<a>` after it
+  as a link, so `![<a href='docs/nowhere.md'>x</a>] y` exits 1, as it did.
 
 ## 0.4.1 - 2026-10-17
 
