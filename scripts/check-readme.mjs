@@ -686,13 +686,24 @@ function codeSpans(text) {
 // in each comment, processing instruction, CDATA section and declaration
 // htmlAt() has read, as a browser may end one before the end at which
 // CommonMark ends it and read the rest as raw HTML: those whose target
-// opens on the line, also those of a tag that starts on an earlier line. A
-// reader asks about the runs, the < and the ( it meets from left to right,
-// and asks for hrefs() once it has read the line.
+// opens on the line, also those of a tag that starts on an earlier line,
+// but none inside an image that a destination follows, from its ![ to the
+// ) that closes its destination and title, as linkSyntax() finds the
+// images in the lines joined, so an image whose ] is on a later line holds
+// the hrefs before it on its earlier lines too. markdown-it 14.1.0 writes
+// the description of an image, a tag in it as well, as escaped text in the
+// alt attribute of the <img>, so the tag makes no link. A reader asks
+// about the runs, the < and the ( it meets from left to right, and asks
+// for hrefs() once it has read the line.
 function paragraphCodeSpans(lines, texts = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
   const htmlAt = inlineHtml(text);
+  // The images that a destination follows, the parts of linkSyntax() that
+  // are sure and start at a ! (a link's part starts at the ( of its
+  // destination), found the first time hrefs() has an href to give.
+  let images;
+  const inImage = (at) => partHolding((images ??= linkSyntax(text, ([start, , sure]) => sure && text[start] === '!')), at) !== undefined;
   const hrefs = []; // the hrefs of the tags read, as tagHref() gives them, in order
   let given = 0; // how many of them hrefs() has given
   let k = 0; // the line read next
@@ -732,7 +743,10 @@ function paragraphCodeSpans(lines, texts = []) {
       },
       hrefs: () => {
         const targets = [];
-        while (given < hrefs.length && hrefs[given].at < at + length) targets.push(hrefs[given++].target);
+        while (given < hrefs.length && hrefs[given].at < at + length) {
+          const href = hrefs[given++];
+          if (!inImage(href.at)) targets.push(href.target);
+        }
         return targets;
       },
     };
@@ -3268,8 +3282,11 @@ function referenceLabelEnd(text, at) {
 // inside one is text, link text that holds a link is not a link's text, and
 // a ![ that no ] closes, such as that of a <![CDATA[ that no ]]> or ]
 // follows, opens no image. A link or an image inside the description of an
-// image is part of that image.
-function linkSyntax(text) {
+// image is part of that image. Given `keep`, a test of a part, only the
+// parts it passes are returned, in the same way: one inside another that
+// it passes is part of that one, and one inside a part that it does not
+// pass is returned.
+function linkSyntax(text, keep = () => true) {
   const parts = [];
   const brackets = []; // each [ that no ] has closed yet, as [where it starts, whether it opens an image]
   let aroundLink = 0; // how many of them, from the bottom, were open when a link was read
@@ -3304,7 +3321,7 @@ function linkSyntax(text) {
   // The parts nest as the brackets do, so one that starts inside the one
   // kept before it is inside that one.
   const outer = [];
-  for (const part of parts.sort((a, b) => a[0] - b[0])) {
+  for (const part of parts.filter(keep).sort((a, b) => a[0] - b[0])) {
     if (outer.length === 0 || part[0] >= outer[outer.length - 1][1]) outer.push(part);
   }
   return outer;

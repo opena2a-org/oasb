@@ -1558,6 +1558,55 @@ test('a line of 200,000 tags with an href, outside a processing instruction or i
   }
 });
 
+test('an href inside an image that a destination follows is not read, in a paragraph, a heading or a table cell, and one after a ![ that opens no image is', () => {
+  // commonmark.js 0.31.2 writes the description of an image into the alt
+  // attribute of the <img>, and markdown-it 14.1.0 writes it there as
+  // escaped text, so parse5 7.3.0 reads no link to docs/nowhere.md in what
+  // either renders of these: the <a> is in an image that a destination
+  // follows, also where the tag starts on an earlier line or the ] or the
+  // title is on a later line, in a block quote, in a list item, in the
+  // description of another image, in link text, inside a ![ that opens no
+  // image, in a heading or in a table cell.
+  for (const body of [
+    "![<a href='docs/nowhere.md'>x</a>](docs/guide.md)\n",
+    '![<a\nhref="docs/nowhere.md">x</a>](docs/guide.md)\n',
+    "![<a href='docs/nowhere.md'>x</a>\n](docs/guide.md)\n",
+    "![<a href='docs/nowhere.md'>x</a>](docs/guide.md\n\"t\")\n",
+    "> ![<a\n> href='docs/nowhere.md'>x</a>](docs/guide.md)\n",
+    "- ![<a\n  href='docs/nowhere.md'>x</a>](docs/guide.md)\n",
+    "![a ![<a href='docs/nowhere.md'>x</a>](docs/guide.md)](docs/guide.md)\n",
+    "![[<a href='docs/nowhere.md'>x</a>](docs/guide.md)](docs/guide.md)\n",
+    "[![<a href='docs/nowhere.md'>x</a>](docs/guide.md)](docs/guide.md)\n",
+    "![![<a href='docs/nowhere.md'>x</a>](docs/guide.md)] y\n",
+    "## ![<a href='docs/nowhere.md'>x</a>](docs/guide.md)\n",
+    "| h |\n| - |\n| ![<a href='docs/nowhere.md'>x</a>](docs/guide.md) |\n",
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // Both render these with a link to docs/nowhere.md: the ![ opens no
+  // image, as no destination follows its ], the paragraph ends before a ]
+  // closes it or a backslash escapes the !, in a paragraph, a heading or a
+  // table cell.
+  for (const [body, line] of [
+    ["![<a href='docs/nowhere.md'>x</a>] y\n", 11],
+    ["![<a href='docs/nowhere.md'>x</a>] (docs/guide.md)\n", 11],
+    ["![<a href='docs/nowhere.md'>x</a>\nmore\n", 11],
+    ["\\![<a href='docs/nowhere.md'>x</a>](docs/guide.md)\n", 11],
+    ["## ![<a href='docs/nowhere.md'>x</a>] y\n", 11],
+    ["| h |\n| - |\n| ![<a href='docs/nowhere.md'>x</a>] y |\n", 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // An href after an image is read, and the one inside it is not.
+  const after = check("![<a href='docs/nowhere.md'>x</a>](docs/guide.md) <a href='docs/missing.md'>y</a>\n");
+  assert.equal(after.status, 1);
+  assert.match(after.stderr, /^README: line 11: link target "docs\/missing\.md" does not exist\.$/m);
+  assert.doesNotMatch(after.stderr, /nowhere/);
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
