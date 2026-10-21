@@ -276,6 +276,12 @@ README's test counts do not include them.
   the cells, the lines, the title of a dot and the table of runs the page
   shows are not those of the command, or a command it shows takes an
   option the usage line does not name.
+- `scripts/rebuff-overrides.test.mjs`: the `overrides` in `package.json`
+  for the `langchain` and `openai` that `rebuff` depends on. Fails when
+  `package.json` has no `overrides.rebuff` for either, or when
+  `package-lock.json` resolves `langchain`, `langsmith`, `openai`, `axios`,
+  `uuid` or `expr-eval` at a version in the range `npm audit` reported for
+  it.
 
 ## The README checks on every pull request
 
