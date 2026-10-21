@@ -78,16 +78,16 @@
 //      opens a block on a line of an HTML block, which is raw HTML: a block
 //      that a block tag such as <div> opens runs to the line before the next
 //      blank line, as does one that another open tag or closing tag alone on
-//      a line but for white space after it opens, such as <span> or </span>,
-//      on a line that does not go on with a paragraph, also lazily, which
-//      such a block cannot interrupt; one that <pre>, <script>, <style>,
-//      <textarea>, a comment, a processing instruction, a declaration or
-//      CDATA opens runs to the line that holds its end, and each ends before
-//      a line that does not go on with the block quotes and list items that
-//      hold it. Nor does a > or a list marker open a block quote or list
-//      item on a line of such a block after its first, as the line is raw
-//      HTML, so a line after the block is read with the block quotes and
-//      list items that held it.
+//      a line but for spaces and tabs after it opens, such as <span> or
+//      </span>, on a line that does not go on with a paragraph, also lazily,
+//      which such a block cannot interrupt; one that <pre>, <script>,
+//      <style>, <textarea>, a comment, a processing instruction, a
+//      declaration or CDATA opens runs to the line that holds its end, and
+//      each ends before a line that does not go on with the block quotes and
+//      list items that hold it. Nor does a > or a list marker open a block
+//      quote or list item on a line of such a block after its first, as the
+//      line is raw HTML, so a line after the block is read with the block
+//      quotes and list items that held it.
 //      Links inside code spans are not read, a
 //      code span ending at the next run of as many backticks, on its line or
 //      on a later line of its paragraph, and a line that starts inside one
@@ -268,16 +268,15 @@ const fail = (msg) => failures.push(msg);
 // matched in capitals only, or a block tag such as <div> or </p>), the
 // first line of an HTML block of kind 7, which cannot interrupt one (an
 // open tag or a closing tag that starts none of the other kinds, such as
-// <span> or </span>, with only white space after it on the line), and a
+// <span> or </span>, with only spaces and tabs after it on the line), and a
 // list marker. The spaces and tabs after a thematic break's last mark are
 // matched by that mark's [ \t]* alone: with a second [ \t]* after the
 // marks, the two could share them in every way, which took seconds on a
 // line of 100,000 of them.
 // HTML_BLOCK_START matches the first line of an HTML block of kind 1, 2, 3
 // or 4 with the group of that number, and one of kind 6, a block tag, with
-// none of them; CDATA_START matches one of kind 5, and HTML_BLOCK_7_START
-// one of kind 7, whose tag is read as OPEN_TAG and CLOSING_TAG read one, as
-// inlineHtml() reads a tag inline.
+// none of them; CDATA_START matches one of kind 5, and htmlBlock7At(),
+// below, reads one of kind 7.
 const ATX_HEADING = /#{1,6}(?:[ \t]|$)/y;
 const SETEXT_UNDERLINE = /(?:=+|-+)[ \t]*$/y;
 const THEMATIC_BREAK = /(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/y;
@@ -290,9 +289,6 @@ const HTML_BLOCK_START = new RegExp(
   'iy',
 );
 const CDATA_START = /<!\[CDATA\[/y;
-const OPEN_TAG = /<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^"'=<>`\x00-\x20]+|'[^']*'|"[^"]*"))?)*\s*\/?>/;
-const CLOSING_TAG = /<\/[A-Za-z][A-Za-z0-9-]*\s*>/;
-const HTML_BLOCK_7_START = new RegExp(`(?:${OPEN_TAG.source}|${CLOSING_TAG.source})\\s*$`, 'y');
 // What ends an HTML block of kinds 1 to 5, as CommonMark ends it: the first
 // line of the block, its first line included, that holds the pattern after
 // the block quote markers that hold the block. A block of kind 6 or 7 ends
@@ -308,6 +304,32 @@ const FENCE = /`{3,}(?=[^`]*$)|~{3,}/y;
 const matchAt = (re, text, i) => {
   re.lastIndex = i;
   return re.exec(text);
+};
+
+// Whether `text`, from text[j], is the first line of an HTML block of kind
+// 7: an open tag or a closing tag, then only spaces and tabs. The tag is
+// read as OPEN_TAG and CLOSING_TAG, further down, read one inline, but with
+// only spaces and tabs as its white space, as CommonMark allows no other in
+// a tag on one line, and one attribute at a time: TAG_7_START reads its <
+// or </ and its name, TAG_7_ATTRIBUTE an attribute of an open tag with the
+// spaces and tabs before it, and OPEN_TAG_7_END or CLOSING_TAG_7_END the
+// rest of the line. A pattern of the whole tag with \s, which matches a
+// no-break space, as an unquoted attribute value does, tried every way a
+// line of attributes that hold one splits into attributes: in a code block,
+// a line of 26 of them, 160 characters, took 5.4 seconds to check, and one
+// of 28 of them 15.5 seconds. It also threw a RangeError on a line of
+// 1,000,000 attributes, which are read here one at a time.
+const TAG_7_START = /<(\/?)[A-Za-z][A-Za-z0-9-]*/y;
+const TAG_7_ATTRIBUTE = /[ \t]+[A-Za-z_:][\w.:-]*(?:[ \t]*=[ \t]*(?:[^"'=<>`\x00-\x20]+|'[^']*'|"[^"]*"))?/y;
+const OPEN_TAG_7_END = /[ \t]*\/?>[ \t]*$/y;
+const CLOSING_TAG_7_END = /[ \t]*>[ \t]*$/y;
+const htmlBlock7At = (text, j) => {
+  const start = matchAt(TAG_7_START, text, j);
+  if (!start) return false;
+  let i = j + start[0].length;
+  if (start[1] === '/') return matchAt(CLOSING_TAG_7_END, text, i) !== null;
+  for (let attribute; (attribute = matchAt(TAG_7_ATTRIBUTE, text, i)); ) i += attribute[0].length;
+  return matchAt(OPEN_TAG_7_END, text, i) !== null;
 };
 
 // A table's delimiter row, such as | - | :-: | or --- | ---, once the block
@@ -704,10 +726,11 @@ function withoutCodeSpans(line) {
 // < it meets from left to right, and the line is searched for the end of a
 // comment, processing instruction, CDATA section or declaration on from
 // where that end was last found, so a line of many <!-- that no --> follows
-// is not read again from each one. OPEN_TAG and CLOSING_TAG are set above
-// parse(), as lineStart() reads the first line of an HTML block with them.
+// is not read again from each one.
 const AUTOLINK = /<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^<>\x00-\x20]*>/;
 const EMAIL_AUTOLINK = /<[\w.!#$%&'*+\/=?^`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>/;
+const OPEN_TAG = /<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^"'=<>`\x00-\x20]+|'[^']*'|"[^"]*"))?)*\s*\/?>/;
+const CLOSING_TAG = /<\/[A-Za-z][A-Za-z0-9-]*\s*>/;
 const AUTOLINK_OR_TAG = new RegExp(`${AUTOLINK.source}|${EMAIL_AUTOLINK.source}|(${OPEN_TAG.source}|${CLOSING_TAG.source})`, 'y');
 function inlineHtml(line) {
   const found = new Map(); // end -> where it was last found, or -1 when nowhere after
@@ -1109,7 +1132,7 @@ function lineStart(line, containers, paragraph, stops) {
     // line that goes on with the paragraph above, lazily or not: only on a
     // line whose line above is no paragraph text, or that opens a block
     // quote or list item first.
-    if (!(paragraph && opened.length === 0) && matchAt(HTML_BLOCK_7_START, text, j)) return { matched, opened, rest: 'block', html: 7 };
+    if (!(paragraph && opened.length === 0) && htmlBlock7At(text, j)) return { matched, opened, rest: 'block', html: 7 };
     const marker = matchAt(LIST_MARKER, text, j);
     if (!marker) return { matched, opened, rest: 'text', row: text.slice(j) };
     const width = c - col + marker[0].length;

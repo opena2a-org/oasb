@@ -717,6 +717,23 @@ test('a markdown link on a line of an HTML block that a tag alone on a line open
   }
 });
 
+test('a tag with a no-break space after it, or in place of a space or tab in it, opens no HTML block, so a markdown link on the line below it is resolved', () => {
+  // CommonMark reads only spaces and tabs as white space in a tag and after
+  // the tag that opens a block of kind 7, so with a no-break space (U+00A0)
+  // in either place the tag line is paragraph text, and so is the link
+  // below it. With a tab in its place, the tag opens such a block, as it
+  // does with a no-break space inside a quoted attribute value.
+  for (const tag of ['<span> ', '<span class="note">', '</span >']) {
+    const r = check(`${tag}\nSee [the page](docs/nowhere.md).\n`);
+    assert.equal(r.status, 1, tag);
+    assert.match(r.stderr, /^README: line 12: link target "docs\/nowhere\.md" does not exist\.$/m, tag);
+  }
+  for (const tag of ['<span>\t', '<span\tclass="note">', '</span\t>', '<span title="a b">']) {
+    const r = check(`${tag}\nSee [the page](docs/nowhere.md).\n`);
+    assert.equal(r.status, 0, `${tag}\n${r.stderr}`);
+  }
+});
+
 // "constructor" and "toString" are inherited by every object, so a lookup
 // that is not limited to the counts' own keys finds a function for them.
 for (const key of ['nosuchkey', 'constructor', 'toString']) {
@@ -3063,6 +3080,35 @@ test('a line of an HTML block of 50,000 tag starts that no > follows is checked 
   assert.match(open.stderr, /^README: line 12: link target "docs\/nowhere\.md" does not exist\.$/m);
   const ended = check(`<div>\n${'<a>'.repeat(50000)} href="docs/nowhere.md"\n</div>\n`);
   assert.equal(ended.status, 0, ended.stderr);
+});
+
+test('a line of a tag whose attributes hold no-break spaces is checked in under 2 seconds in a code block and at the start of a paragraph', () => {
+  // A no-break space matched both the white space between attributes and an
+  // unquoted value in the pattern that read a tag alone on a line, which
+  // tried every way such a line splits into attributes: in a code block,
+  // the line of 28 of them and >x took 15.5 seconds to check.
+  const line = (end) => `<a${' e=c d'.repeat(28)}${end}`;
+  for (const body of [`\`\`\`text\n${line('>x')}\n\`\`\`\n`, `\`\`\`text\n${line('!')}\n\`\`\`\n`, `${line('>x')}\n`]) {
+    const started = process.hrtime.bigint();
+    const r = check(body);
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for ${JSON.stringify(body)}`);
+  }
+});
+
+test('a 4 MB line of a tag of 1,000,000 attributes in a code block is checked in under 2 seconds', () => {
+  // A pattern of the whole tag threw a RangeError (Maximum call stack size
+  // exceeded) on such a line, with > or >x at its end, and the check exited
+  // 1 with its stack.
+  for (const end of ['>', '>x']) {
+    const line = `<a${' b=c'.repeat(1000000)}${end}`;
+    const started = process.hrtime.bigint();
+    const r = check(`\`\`\`text\n${line}\n\`\`\`\n`);
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters ending in ${end}`);
+  }
 });
 
 test('a note and link on the lines after the line that ends an HTML block are read with the code spans of their paragraph', () => {
