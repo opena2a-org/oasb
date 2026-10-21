@@ -22,8 +22,8 @@
   "outputs": {
     "gif": {
       "path": "docs/oasb-demo.gif",
-      "bytes": 569227,
-      "sha256": "e9e082f4ec571a64f71ec3bd035623f59554f8326da8b037c2b82658e04be4a1"
+      "bytes": 618598,
+      "sha256": "f1c35e4f4689579feff7998cba90ef5960d641086e7f04767889a26636e63bbb"
     }
   }
 }

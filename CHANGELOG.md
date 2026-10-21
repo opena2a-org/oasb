@@ -209,7 +209,7 @@ stay on record here with the reason they changed.
   the config and fails when E2E-001 shares its group or a later one with
   another test file.
 - The recording of a run the README links, `docs/oasb-demo.gif`, is
-  recorded again from `docs/demo.tape` (569,227 bytes, 2026-10-21). The
+  recorded again from `docs/demo.tape` (618,598 bytes, 2026-10-21). The
   recording of 2026-03-11 (2,676,739 bytes) showed `npm test` with the test
   total of that day, then the first rows of a report under the MITRE ATLAS
   mapping withdrawn on 2026-06-03, each with status N/A. The tape now runs
