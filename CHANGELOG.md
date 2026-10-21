@@ -38,7 +38,12 @@ stay on record here with the reason they changed.
   overlap are set above and below each other. The image carries the colors
   for a light surface and, under `prefers-color-scheme: dark`, those for a
   dark one. `--svg` reads the records the grid reads, stops at the same
-  problems and exits with the same codes. `docs/bait-compliance.md`
+  problems and exits with the same codes. A line of text is wrapped
+  keeping the width of the line as it is built, so a 239,999-character
+  agent name of two-letter words takes 0.08 s, where measuring the whole
+  line again for each word took 46 s, and beside the rows a name wider
+  than 600 px is cut short with an ellipsis, so that name gives an image
+  1,241 px wide instead of 1,786,398. `docs/bait-compliance.md`
   describes the image, and `scripts/bait-edition.test.mjs` reads it back
   as XML and checks its marks against the edition.
 - `node scripts/bait-edition.mjs --runs <record.json | directory>...`

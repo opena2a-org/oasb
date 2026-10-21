@@ -572,6 +572,42 @@ test('a line of text wider than the image is wrapped, inside a word where it has
   assert.ok(Number(svg.attrs.width) < 1000, `the image is ${svg.attrs.width} wide`);
 });
 
+test('a long agent name of many words is wrapped in time that grows with its length, and is cut short beside its rows, so it cannot make the image wide', () => {
+  // 239,999 characters of two-letter words: wrapped by measuring each line
+  // again for each word it adds, this took tens of seconds and gave an image
+  // more than 1,700,000 px wide.
+  const name = 'ab cd '.repeat(40000).trim();
+  const records = ['l1', 'l2', 'l3'].map((runId) => record(runId, name, { trials: pi('completed') }));
+  const edition = buildEdition(records);
+  const start = performance.now();
+  const svgText = formatSvg(edition);
+  const seconds = (performance.now() - start) / 1000;
+  assert.ok(seconds < 5, `--svg took ${seconds.toFixed(1)} s`);
+  const svg = parseXml(svgText);
+  assert.ok(Number(svg.attrs.width) < 1400, `the image is ${svg.attrs.width} wide`);
+  const shown = `${name} 1.0.0 (example-model)`;
+  const panel = panelFor(svg, 'prompt_injection');
+  const [row] = all(panel, classed('row'));
+  const [label] = rowTexts(row);
+  assert.ok(label.endsWith('…') && shown.startsWith(label.slice(0, -1)) && label.length < 100, label);
+  // The titles of the row's marks and the line for the agent above the panels hold the whole name.
+  assert.equal(all(row, named('title'))[0].text, `${shown}, prompt injection, run l1: 1 of 1 bait trial completed, 100%`);
+  const outside = all(svg, named('text')).filter((t) => !all(panel, named('text')).includes(t)).map((t) => t.text);
+  assert.ok(outside.join(' ').includes(`${shown}: label benchmark`));
+});
+
+test('an agent name that fits beside its rows is shown whole there, and one a character too wide is cut short', () => {
+  // textWidth gives a character below U+1100 0.62 of the font size, 12, so 80 of them take 595.2 px of the 600.
+  const fits = `${'n'.repeat(80 - ' 1.0.0 (example-model)'.length)}`;
+  const tooWide = `${fits}nn`;
+  const records = [fits, tooWide].flatMap((name) => ['1', '2', '3'].map((n) => record(`${name.length}-${n}`, name, { trials: pi('completed') })));
+  const panel = panelFor(plot(records), 'prompt_injection');
+  const labels = all(panel, classed('row')).map((row) => rowTexts(row)[0]);
+  assert.ok(labels.includes(`${fits} 1.0.0 (example-model)`), labels.join('\n'));
+  const cut = labels.find((label) => label.endsWith('…'));
+  assert.ok(cut && `${tooWide} 1.0.0 (example-model)`.startsWith(cut.slice(0, -1)), labels.join('\n'));
+});
+
 test('the dot plot carries the colors of a light surface, and a prefers-color-scheme: dark rule gives each colored element those of a dark one', () => {
   const svg = plot(SHADOWED);
   const style = all(svg, named('style'))[0].text;
