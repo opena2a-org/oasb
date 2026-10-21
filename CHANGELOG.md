@@ -8,6 +8,22 @@ stay on record here with the reason they changed.
 
 ### Added
 
+- `node scripts/bait-edition.mjs <record.json | directory>...` reads the
+  records of lab runs against named agents, one `oasb-bait-run/v1` JSON
+  file per run, and prints a grid of the agents by bait type, with a
+  column for each of nine bait types and a positive-control column, and
+  one line per bait type, such as `prompt injection: 1 of 3 named agents
+  completed the bait in the lab in every run, 1 in some runs and 1 in
+  none`. A run counts for a cell when its positive control passed and it
+  has a bait trial of that type that completed or did not complete, and a
+  cell needs 3 runs that count. The command reads records labelled
+  `benchmark` only: a record labelled `wild` stops it with exit 1, as do
+  a record it refuses for another field and a `runId` two records share.
+  It exits 2 when the records measured no cell, and `--json` prints the
+  edition with the rate of each run that counts for a cell.
+  `docs/bait-compliance.md` describes the record and these rules, the
+  README's Documentation list and `docs/how-it-works.md` link it, and
+  `scripts/bait-edition.test.mjs` checks the rules and the page.
 - `REPORT.generated.md` names the benchmark that wrote it, on a line after
   `Generated:` such as `Benchmark: @opena2a/oasb 0.4.1`: the name and
   version in the `package.json` of the checkout that holds
