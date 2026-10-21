@@ -103,7 +103,13 @@
 //      tag whose other attribute holds a backtick is read. An autolink is
 //      read when it opens and closes on the same line, and raw HTML when it
 //      closes on its line or on a later line of its paragraph, such as a
-//      tag whose quoted value holds the line break. Other forms,
+//      tag whose quoted value holds the line break. In a paragraph, a
+//      heading or a table cell, an href is read only in an open tag read so,
+//      the first one outside the tag's quoted values, also when the tag
+//      starts on an earlier line of its paragraph; one inside another tag's
+//      quoted value, a comment, a processing instruction, a declaration, a
+//      CDATA section or a link's title is not read, nor is one in text that
+//      is not raw HTML, such as \<a href="target">. Other forms,
 //      such as an unquoted href or a definition on the same line as a list
 //      marker (`- [label]: target`), are not read. A link whose path, or
 //      whose anchor in a link to a .md file, has a malformed %-escape
@@ -662,16 +668,20 @@ function codeSpans(text) {
 // starts, codeSpanAt(i), which answers as codeSpans does for the run of
 // backticks at line[i], with an index on the line, past its end when the
 // span closes on a later line, `to`, the index of that run when there is
-// one, and otherwise the length of the line, `codes`, the code spans that
-// open and close on the line, as [start, end) pairs in the order the
-// reader opens them, and htmlAt(i), which answers as inlineHtml does for
-// the < at line[i], with an index on the line, past its end when the raw
-// HTML ends on a later line. A reader asks about the runs and the < it
-// meets from left to right.
+// one, and otherwise the length of the line, htmlAt(i), which answers as
+// inlineHtml does for the < at line[i], with an index on the line, past
+// its end when the raw HTML ends on a later line, and hrefs(), the targets
+// on the line of the hrefs that tagHref() reads in the open tags htmlAt()
+// has read: those whose target opens on the line, also those of a tag that
+// starts on an earlier line. A reader asks about the runs and the < it
+// meets from left to right, and asks for hrefs() once it has read the
+// line.
 function paragraphCodeSpans(lines, texts = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
   const htmlAt = inlineHtml(text);
+  const hrefs = []; // the hrefs of the tags read, as tagHref() gives them, in order
+  let given = 0; // how many of them hrefs() has given
   let k = 0; // the line read next
   let lineAt = 0; // the index in the joined lines where that line starts
   let after = 0; // the index in the joined lines after the code span read last
@@ -684,18 +694,23 @@ function paragraphCodeSpans(lines, texts = []) {
       from: Math.max(0, after - at),
       start: Math.max(0, past - at),
       to: length,
-      codes: [],
       codeSpanAt: (i) => {
         const span = codeSpanAt(at + i);
         if (span.opens) after = past = span.end;
         if (span.opens && span.end - at > length) spans.to = i;
-        else if (span.opens) spans.codes.push([i, span.end - at]);
         return { opens: span.opens, end: span.end - at };
       },
       htmlAt: (i) => {
         const html = htmlAt(at + i);
         past = html.end;
+        const href = html.tag ? tagHref(text, at + i, html.end) : null;
+        if (href) hrefs.push(href);
         return { ...html, end: html.end - at };
+      },
+      hrefs: () => {
+        const targets = [];
+        while (given < hrefs.length && hrefs[given].at < at + length) targets.push(hrefs[given++].target);
+        return targets;
       },
     };
     return spans;
@@ -952,19 +967,20 @@ function inlineDestinations(line, open, spans) {
 }
 
 // The targets of the HTML href="target" / href='target' attributes in
-// `text`, one line or a part of one, after attribute values that may hold
-// >, read on the text as it is given: without the code spans of a line of
-// prose, which hrefText() leaves out, and whole on a line of raw HTML, such
-// as a line of an HTML block, where a backtick is text and opens no code
-// span. A tag that starts at a < and a letter is read on to the first >
-// outside its quoted values, or to a quote that no later quote of its kind
-// closes, and its first href there is a target; the text is read on after
-// that href, or from the character after the < when the tag holds none.
-// From each index a tag meets an href that starts there, or else the first
-// href it meets from the next character, or from after the quoted value
-// that starts there, and none at a >: that first href is noted for each
-// index in one pass from the end of the text, so a line of many < that no >
-// follows is not read again from each one.
+// `text`, one line, after attribute values that may hold >, read on the
+// text as it is given: whole on a line of raw HTML, such as a line of an
+// HTML block, where a backtick is text and opens no code span, and without
+// its code spans on a line of indented code. A tag that starts at a < and
+// a letter is read on to the first > outside its quoted values, or to a
+// quote that no later quote of its kind closes, and its first href there
+// is a target; the text is read on after that href, or from the character
+// after the < when the tag holds none. From each index a tag meets an href
+// that starts there, or else the first href it meets from the next
+// character, or from after the quoted value that starts there, and none at
+// a >: that first href is noted for each index in one pass from the end of
+// the text, so a line of many < that no > follows is not read again from
+// each one. The hrefs of a paragraph, a heading or a table cell are read
+// with tagHref() instead.
 const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/iy;
 function hrefTargets(text) {
   // reach[i] is the index of the first href a tag meets from text[i] on, or
@@ -991,60 +1007,73 @@ function hrefTargets(text) {
   return targets;
 }
 
-// The text of a line of prose, or of a table cell, that hrefTargets reads
-// once inlineDestinations has read the line with `spans`: from spans.from
-// to spans.to, without the code spans that run on to the line from an
-// earlier line or from it on to a later one, and without each code span
-// that the reader opened between them (spans.codes). A run of backticks
-// that the reader read as part of an autolink, raw HTML or a link's
-// destination or title opens no code span, so after
-// <a title="`" href="target">x</a> `y` the href is read.
-function hrefText(line, spans) {
-  let text = '';
-  let from = spans.from;
-  for (const [start, end] of spans.codes) {
-    text += line.slice(from, start);
-    from = end;
+// The href of the tag that starts at text[start] and ends before
+// text[end], as inlineTagEnd() reads an open tag or a closing tag in
+// `text`, one line or the lines of a paragraph joined by line breaks: the
+// first href="target" or href='target' attribute, as HREF matches one,
+// outside the tag's quoted values, as { target, at }, `at` being the index
+// in `text` of the quote that opens the target. It is null when the tag
+// holds none, as a closing tag does, and when that attribute holds a line
+// break, as check 4 reads a quoted href written within one line. In an
+// open tag a quote outside a quoted value opens one, as neither its name,
+// an attribute's name nor an unquoted value holds a quote, so
+// <b title="<a href='target'>"> holds no href: the <a> is inside the
+// quoted value.
+function tagHref(text, start, end) {
+  for (let i = start; i < end; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      i = text.indexOf(c, i + 1);
+      if (i === -1) break;
+      continue;
+    }
+    if (text[i + 1] !== 'h' && text[i + 1] !== 'H') continue;
+    HREF.lastIndex = i;
+    const href = HREF.exec(text);
+    if (!href) continue;
+    if (text.slice(i + 1, HREF.lastIndex).includes('\n')) return null;
+    const target = href[1] ?? href[2];
+    return { target, at: HREF.lastIndex - target.length - 2 };
   }
-  return text + line.slice(from, spans.to);
+  return null;
 }
 
 // Link targets on one prose line: inline [text](target), whose destination
 // inlineDestinations reads, with spaces inside the parentheses, a
 // reference definition [label]: target (footnotes [^1]: are not links),
-// whose label may hold a code span or \], and the hrefs hrefTargets reads.
-// Links inside code spans are not read: inlineDestinations reads past each
-// code span, and hrefText() leaves them out. A definition is matched on the
-// whole line, as a code span in its label does not make it text, but not
-// on a line that starts inside a code span or raw HTML that an earlier
-// line of the paragraph opened. `open` carries what an earlier line of the
-// paragraph left open: link text, as inlineDestinations reads it, and a
-// code span or raw HTML. `spans`, which open.code gives for the line, reads
-// the code spans and raw HTML of the paragraph's lines, as
-// paragraphCodeSpans does, for inlineDestinations, which meets each run of
-// backticks after the autolinks, raw HTML and link destinations that start
-// before it.
+// whose label may hold a code span or \], and the hrefs on the line of the
+// open tags that inlineDestinations reads as raw HTML, as spans.hrefs()
+// gives them. Links inside code spans are not read: inlineDestinations
+// reads past each code span, and so past the tags inside it. A definition
+// is matched on the whole line, as a code span in its label does not make
+// it text, but not on a line that starts inside a code span or raw HTML
+// that an earlier line of the paragraph opened. `open` carries what an
+// earlier line of the paragraph left open: link text, as
+// inlineDestinations reads it, and a code span or raw HTML. `spans`, which
+// open.code gives for the line, reads the code spans and raw HTML of the
+// paragraph's lines, as paragraphCodeSpans does, for inlineDestinations,
+// which meets each run of backticks after the autolinks, raw HTML and link
+// destinations that start before it.
 function linkTargets(line, open, spans) {
   const targets = [];
   const def = spans.start === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
   if (def) targets.push(def[1] || def[2]);
   targets.push(...inlineDestinations(line, open, spans));
-  targets.push(...hrefTargets(hrefText(line, spans)));
+  targets.push(...spans.hrefs());
   return targets;
 }
 
 // Link targets in the first `count` cells of a table row, `row` being its
 // text from where it starts, the cells as rowCells() splits it. Each cell
 // is read on its own, with no link text, code span or raw HTML open before
-// it, as inlineDestinations and hrefTargets read a line; a cell holds no
-// definition.
+// it, as linkTargets reads a line; a cell holds no definition.
 function rowTargets(row, count) {
   return rowCells(row)
     .slice(0, count)
     .flatMap((cell) => {
       const spans = paragraphCodeSpans([cell])();
       const targets = inlineDestinations(cell, noOpenLinkText(), spans);
-      return [...targets, ...hrefTargets(hrefText(cell, spans))];
+      return [...targets, ...spans.hrefs()];
     });
 }
 
@@ -1552,11 +1581,9 @@ function blockReader(lines, quotedFences, htmlLines) {
 // `lines` of each line other than a table row that it reads inline links
 // on, where the line outside the code spans that run on to it from an
 // earlier line of its paragraph or from it on to a later one starts and
-// ends, as a [start, end) pair, which is the part of the line that it reads
-// hrefs on, without the code spans that open and close in it, when the
-// line is not a line of an HTML block, followed by the index in `lines` of
-// the line that starts the block, such as a paragraph, that the line is a
-// line of. Given a map as `htmlLines`, blockReader() sets in it the lines
+// ends, as a [start, end) pair, followed by the index in `lines` of the
+// line that starts the block, such as a paragraph, that the line is a line
+// of. Given a map as `htmlLines`, blockReader() sets in it the lines
 // of each HTML block, as it describes.
 const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines, codeLines, outside, htmlLines) {
@@ -3313,9 +3340,9 @@ for (const [file, { at, shown }] of datedPages) {
   // it as indented code or as a fence, as its text is raw HTML. On a line
   // outside an HTML block, the note is read without code spans: a code span
   // may run on from one line of a paragraph to a later one, so the note is
-  // read, as an href on such a line is, on the part of each line in
-  // `outside`, and on each cell of a table row, as rowCells() splits it, on
-  // the text that shownInline() gives. A comment, processing instruction,
+  // read on the part of each line in `outside`, and on each cell of a table
+  // row, as rowCells() splits it, on the text that shownInline() gives.
+  // A comment, processing instruction,
   // CDATA section or declaration may run on to a later line of a paragraph
   // as well, to the first line whose part, after the > markers, spaces and
   // tabs that start it, holds its end, and so may a tag, to the line that

@@ -1438,6 +1438,52 @@ test('an href is read after a backtick inside a tag, a comment, an autolink or a
   assert.equal(held.status, 0, held.stderr);
 });
 
+test('an href is read in a tag that starts on an earlier line of its paragraph, and not inside another tag\'s quoted value, a comment or a link title', () => {
+  // markdown-it 14.1.0 and commonmark.js 0.31.2 render each of these with
+  // the <a>, and parse5 7.3.0, which parses HTML as the HTML standard
+  // does, reads a link to docs/nowhere.md in what they render. The href is
+  // on the paragraph's last line, in a tag that starts on an earlier line,
+  // also in a block quote, in a list item or after a code span that runs on
+  // to the line the tag starts on, or in a tag after one that does.
+  for (const [body, line] of [
+    ['<a title="x\ny" href="docs/nowhere.md">z</a>\n', 12],
+    ['x <a title="x"\nhref="docs/nowhere.md">z</a>\n', 12],
+    ['<a title="x\ny\nz" href="docs/nowhere.md">w</a>\n', 13],
+    ['> <a title="x\n> y" href="docs/nowhere.md">z</a>\n', 12],
+    ['- <a title="x\n  y" href="docs/nowhere.md">z</a>\n', 12],
+    ['a `x\ny` <a title="p\nq" href="docs/nowhere.md">z</a>\n', 13],
+    ['<b title="x\ny">z</b> <a href="docs/nowhere.md">w</a>\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // parse5 reads no link to docs/nowhere.md in what they render of these:
+  // the <a> is inside the quoted value of another tag, which may hold a
+  // line break, in a paragraph, a block quote, a heading or a table cell;
+  // inside a comment, a processing instruction, a declaration, a CDATA
+  // section or a link's title; or it is text, as a backslash escapes its <
+  // or no white space follows its quoted value.
+  for (const body of [
+    '<b title="<a href=\'docs/nowhere.md\'>">x</b>\n',
+    '<b title="x\n<a href=\'docs/nowhere.md\'>">\n',
+    'x <b title=\'<a href="docs/nowhere.md">\'>y</b>\n',
+    '> <b title="<a href=\'docs/nowhere.md\'>">x</b>\n',
+    '## <b title="<a href=\'docs/nowhere.md\'>">x</b>\n',
+    '| h |\n| - |\n| <b title="<a href=\'docs/nowhere.md\'>">x</b> |\n',
+    'x <!-- <a href="docs/nowhere.md"> -->\n',
+    'x <? <a href="docs/nowhere.md"> ?>\n',
+    'x <!X <a href="docs/nowhere.md">\n',
+    'x <![CDATA[ <a href="docs/nowhere.md"> ]]>\n',
+    '[x](docs/guide.md "<a href=\'docs/nowhere.md\'>")\n',
+    '\\<a href="docs/nowhere.md">x\n',
+    '<a href="docs/nowhere.md"y>x</a>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
