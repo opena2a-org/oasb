@@ -137,8 +137,8 @@ stay on record here with the reason they changed.
   goes on after a failed `npm install` (`|| true`), and npx then fetches
   license-checker from the registry when `node_modules` holds none.
   `npm ci` installs 54 more packages, license-checker and the packages it
-  pulls in. On 2026-10-21 `npm audit` reported the same 28 vulnerabilities
-  (1 low, 9 moderate, 14 high, 4 critical) in the same packages with and
+  pulls in. On 2026-10-21 `npm audit` reported the same 21 vulnerabilities
+  (1 low, 8 moderate, 9 high, 3 critical) in the same packages with and
   without them, and the job's `npx license-checker` command, run offline
   with an empty npm cache after `npm ci`, exited 0.
   `scripts/license-check-workflow.test.mjs` checks the pin, the lock
