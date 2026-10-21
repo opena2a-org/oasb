@@ -1835,6 +1835,131 @@ test('raw HTML inside an image that a destination follows opens and ends no <scr
   }
 });
 
+test('an href inside an image whose reference a definition on the page names is not read, and one inside an image whose reference none names is', () => {
+  // markdown-it 14.1.0 (html: true) writes the description of an image whose
+  // reference a definition on the page names, a tag in it as well, as
+  // escaped text into the alt attribute of the <img>, and commonmark.js
+  // 0.31.2 writes it there too, so parse5 7.3.0 reads no link to
+  // docs/nowhere.md in what either renders of these: the label after the ]
+  // names a definition after the image or before it, also one written in
+  // other case and white space, one on the line after another definition,
+  // one with a title, one in a list item, one above a line of dashes and one
+  // of a data:image/png destination, and the image is in a paragraph, a
+  // block quote, a list item, link text, the description of a ![ that opens
+  // no image, a heading or a table cell.
+  for (const body of [
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md\n",
+    "[ref]: docs/guide.md\n\n![<a href='docs/nowhere.md'>x</a>][ref]\n",
+    "![<a\nhref='docs/nowhere.md'>x</a>][My\n  REF]\n\n[my\tref]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][a b]\n\n[A B]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[a]: docs/guide.md\n[ref]: <docs/guide.md> \"Guide\"\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n- item\n\n  [ref]: docs/guide.md 'Guide'\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md (Guide)\n---\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: data:image/png;base64,x\n",
+    "> ![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md\n",
+    "- ![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md\n",
+    "[![<a href='docs/nowhere.md'>x</a>][ref]](docs/guide.md)\n\n[ref]: docs/guide.md\n",
+    "![a ![<a href='docs/nowhere.md'>x</a>][ref] b][none]\n\n[ref]: docs/guide.md\n",
+    "## ![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md\n",
+    "| h |\n| - |\n| ![<a href='docs/nowhere.md'>x</a>][ref] |\n\n[ref]: docs/guide.md\n",
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // Both render these with a link to docs/nowhere.md, as no definition
+  // names the image's reference and the ![ opens no image: the page holds
+  // none of that label ([nope] after the ] is looked up, not the
+  // description), or what reads as one goes on with the image's paragraph,
+  // follows other text of its paragraph, is code, raw HTML or the header row
+  // of a table, has more than spaces after its destination or title, or has
+  // a title with no space before it or one that does not close.
+  for (const body of [
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[other]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][nope]\n\n[ref]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n[ref]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\ntext\n[ref]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[a]: docs/guide.md\ntext\n[ref]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n```\n[ref]: docs/guide.md\n```\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n<div>\n[ref]: docs/guide.md\n</div>\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n    [ref]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md | y\n--- | ---\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md junk\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md \"Guide\" junk\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: <docs/guide.md>\"Guide\"\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: docs/guide.md \"Guide\n",
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m, body);
+  }
+  // One of the two renders a link to docs/nowhere.md in each of these, so
+  // the href is read. commonmark.js reads no definition with a tab after
+  // its ]: and no label longer than 999 characters, and does not make a
+  // no-break space in a label a space. markdown-it reads no definition whose
+  // destination starts with javascript:, so it reads the line after one as
+  // text of that paragraph; it reads the label after a ] up to the ] that
+  // closes the [ before b, and a ` in a label as the start of a code span
+  // that the ` after c ends; and it reads no image where the ( after the ]
+  // starts no destination, where commonmark.js looks up the description.
+  for (const body of [
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]:\tdocs/guide.md\n",
+    `![<a href='docs/nowhere.md'>x</a>][${'a'.repeat(1000)}]\n\n[${'a'.repeat(1000)}]: docs/guide.md\n`,
+    "![<a href='docs/nowhere.md'>x</a>][a b]\n\n[a b]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[ref]: javascript:alert(1)\n",
+    "![<a href='docs/nowhere.md'>x</a>][ref]\n\n[a]: javascript:alert(1)\n[ref]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][a[b]c]\n\n[<a href='docs/nowhere.md'>x</a>]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>][a`b] `c]`\n\n[a`b]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>](\n\n[<a href='docs/nowhere.md'>x</a>]: docs/guide.md\n",
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m, body);
+  }
+  // A label of [] after the ], or none, is the description, so the
+  // definition that names the image holds the same <a> in its label, which
+  // neither renders either. Check 4 reads that href on the definition's
+  // line, as it reads the hrefs on each line it reads a definition on, and
+  // reports that line (13) alone.
+  for (const body of [
+    "![<a href='docs/nowhere.md'>x</a>][]\n\n[<a href='docs/nowhere.md'>x</a>]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>]\n\n[<A HREF='docs/nowhere.md'>X</A>]: docs/guide.md\n",
+    "![<a href='docs/nowhere.md'>x</a>] [ref]\n\n[<a href='docs/nowhere.md'>x</a>]: docs/guide.md\n",
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), 'README: line 13: link target "docs/nowhere.md" does not exist.', body);
+  }
+  // An href after such an image is read, and the one inside it is not.
+  const after = check("![<a href='docs/nowhere.md'>x</a>][ref] <a href='docs/missing.md'>y</a>\n\n[ref]: docs/guide.md\n");
+  assert.equal(after.status, 1);
+  assert.match(after.stderr, /^README: line 11: link target "docs\/missing\.md" does not exist\.$/m);
+  assert.doesNotMatch(after.stderr, /nowhere/);
+});
+
+test('the MITRE ATLAS Coverage section and a dated page read no link inside an image whose reference a definition elsewhere on the page names', () => {
+  // The definition is below the section and below the dated page's first
+  // H2, outside the lines that checks 7 and 9 read links on, and both
+  // renderers write the <a> in the image into its alt attribute, so the
+  // section links no page and the dated page does not link the README.
+  const readme = (definition) =>
+    `${withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', " Detail: ![<a href='docs/atlas.md'>mapping</a>][atlas].")}\n${definition}\n`;
+  let r = checkCounts(readme('[atlas]: docs/atlas.md'), SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+  assert.equal(r.status, 0, r.stderr);
+  r = checkCounts(readme('[other]: docs/atlas.md'), SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
+
+  const page = (definition) => ({
+    'docs/AUDIT-2026-06-03.md': `# Audit\n\n> As of 2026-06-03, see ![<a href="../README.md">the README</a>][readme].\n\n## Counts\n\n| npm test total | 245 |\n\n${definition}\n`,
+  });
+  r = check(DATED_LINK, page('[readme]: ../README.md'));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, DATED);
+  assert.match(r.stderr, /it must link to the README for the current figures; /);
+  r = check(DATED_LINK, page('[other]: ../README.md'));
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
