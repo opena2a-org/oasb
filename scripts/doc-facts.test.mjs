@@ -1,12 +1,12 @@
 // Tests that statements in README.md, BENCHMARK-RESULTS.md,
-// docs/pinned-benchmark.md, docs/test-catalog.md, docs/adapters.md and
-// docs/how-it-works.md match the corpus, scripts and adapters they describe,
-// that docs/demo.tape states no count and writes the results file its report
-// step reads, that docs/oasb-demo.gif is the recording of that tape
-// docs/captures/demo.json records, and that the verdict methodology in
-// scripts/run-benchmark-v2.ts, benchmark-results-v6.json and
-// src/benchmark/hma-pipeline-adapter.ts does not give the server count
-// BENCHMARK-RESULTS.md withdrew.
+// docs/pinned-benchmark.md, docs/test-catalog.md, docs/adapters.md,
+// docs/how-it-works.md and docs/owasp-agentic-mapping.md match the corpus,
+// scripts, adapters and scenario files they describe, that docs/demo.tape
+// states no count and writes the results file its report step reads, that
+// docs/oasb-demo.gif is the recording of that tape docs/captures/demo.json
+// records, and that the verdict methodology in scripts/run-benchmark-v2.ts,
+// benchmark-results-v6.json and src/benchmark/hma-pipeline-adapter.ts does
+// not give the server count BENCHMARK-RESULTS.md withdrew.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -372,4 +372,39 @@ test('src/benchmark/hma-pipeline-adapter.ts gives no count of benign servers as 
   const text = read('src/benchmark/hma-pipeline-adapter.ts').replace(/\n[ \t]*\/\/[ \t]*/g, ' ');
   assert.ok(text.includes("'AST-SCOPE-001',"), 'the adapter no longer excludes AST-SCOPE-001; update this test');
   assert.ok(!WITHDRAWN_COUNT.test(text), `the adapter gives the withdrawn count: ${text.match(WITHDRAWN_COUNT)?.[0]}`);
+});
+
+// The LLM07 row of the gaps table on docs/owasp-agentic-mapping.md said there
+// was no system-prompt-extraction detection, while AT-AI-001 tests that
+// prompt-input scanning detects a request to repeat the system prompt
+// (pattern DE-001) and AT-AI-002 that prompt-output scanning detects a system
+// prompt disclosed in a response (pattern OL-003). The row names each test
+// with its pattern, each test file holds the test the row names, and no
+// scenario header cites LLM07, as the row says.
+test('the LLM07 row of docs/owasp-agentic-mapping.md names the system-prompt extraction and leak tests the scenario files hold', () => {
+  const rows = read('docs/owasp-agentic-mapping.md').split('\n').filter((line) => /^\|\s*LLM07\s*\|/.test(line));
+  assert.equal(rows.length, 1, `docs/owasp-agentic-mapping.md has ${rows.length} LLM07 rows; update this test with the table`);
+  const gap = rows[0].split('|')[3].trim();
+  assert.doesNotMatch(gap, /\bno\b[^;]*\bdetection\b|\bnot detected\b/i, `the LLM07 row says there is no detection: ${gap}`);
+  const scenarios = readScenarios(repo);
+  for (const { id, scan, pattern } of [
+    { id: 'AT-AI-001', scan: 'scanInput', pattern: 'DE-001' },
+    { id: 'AT-AI-002', scan: 'scanOutput', pattern: 'OL-003' },
+  ]) {
+    assert.ok(gap.includes(`${pattern} in ${id}`), `the LLM07 row does not name ${pattern} in ${id}; update this test with the wording: ${gap}`);
+    const file = scenarios.find((s) => s.id === id)?.file;
+    assert.ok(file, `no scenario file has the ID ${id}`);
+    // Each it() of the file, up to the next one; a skipped or todo test is
+    // left out.
+    const tests = read(file).split(/^(?=[ \t]*(?:it|test)\b[.(])/m).filter((t) => /^[ \t]*(?:it|test)\(/.test(t));
+    const detects = new RegExp(String.raw`scanner\.${scan}\([\s\S]*expect\([^;]*===\s*['"]${pattern}['"][^;]*\)\.toBe\(true\)`);
+    assert.ok(tests.some((t) => detects.test(t)), `${file} has no test that asserts scanner.${scan}() matches ${pattern}`);
+  }
+  const citing = scenarios
+    .filter(({ file }) => {
+      const text = read(file);
+      return /^\/\/ OWASP:.*\bLLM07\b/m.test(text.slice(0, text.search(/^(?!\/\/)/m)));
+    })
+    .map(({ file }) => file);
+  assert.deepEqual(citing, [], 'the LLM07 row says no scenario cites LLM07');
 });

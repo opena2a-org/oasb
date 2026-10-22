@@ -1817,6 +1817,20 @@ stay on record here with the reason they changed.
   `<b title=">">` and `</textarea>` after the `<a>`, where the `<a>` is in
   the text of the `<textarea>` that the rest of the description opens,
   exit 0, as they did.
+- The LLM07 (System Prompt Leakage) row of the gaps table in
+  `docs/owasp-agentic-mapping.md` said "No dedicated
+  system-prompt-extraction detection (future AI-layer pattern)". It now
+  names the system-prompt extraction and leak tests: AT-AI-001 tests that
+  prompt-input scanning detects a request to repeat the system prompt
+  (pattern DE-001), and AT-AI-002 that prompt-output scanning detects a
+  system prompt disclosed in a response (pattern OL-003). With the
+  versions the lockfile installs, both tests pass under the default
+  adapter, arp-guard. No scenario cites LLM07, as the row says.
+  `scripts/doc-facts.test.mjs` fails when the row says there is no
+  detection or does not name DE-001 in AT-AI-001 and OL-003 in AT-AI-002,
+  when AT-AI-001 holds no test asserting that `scanInput()` matches DE-001
+  or AT-AI-002 none asserting that `scanOutput()` matches OL-003, and when
+  a scenario's header cites LLM07.
 
 ## 0.4.1 - 2026-10-17
 
