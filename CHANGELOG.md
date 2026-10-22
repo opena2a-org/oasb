@@ -1966,7 +1966,9 @@ stay on record here with the reason they changed.
   of a definition are read as text of the paragraph, as before. So is the
   title of a definition whose label ends on a later line than it starts
   on, or whose destination holds a `&` or a backslash before its first
-  `:`, or anywhere when it holds no `:`, or of a definition after one of
+  `:`, or anywhere when it holds no `:`, or is not written in `<` and `>`
+  and holds a backslash that no backslash escapes before an ASCII control
+  character or at the end of its line, or of a definition after one of
   these, or after one whose title ends on a later line, in its paragraph:
   `[ref]: docs/guide&#46;md "<a href=docs/nowhere.md>"` and
   `[ref]: docs/guide.md?x=1&y=2 "<a href=docs/nowhere.md>"` still exit 1
