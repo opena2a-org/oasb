@@ -4793,33 +4793,36 @@ for (const { n, line, inFence, prefix } of documents.flatMap((d) => d.lines.map(
   );
 }
 
+// The exit code is set, not given to process.exit(1): on a pipe, process.exit
+// drops the part of a long list of failures that the reader has not taken.
 if (failures.length) {
   for (const f of failures) console.error('README: ' + f);
-  process.exit(1);
-}
-console.log(
-  `   README: ${readme.length} lines, Quick Start at line ${firstH2.n}, first command at line ${commandLine}, links resolve, ` +
-    `also on the ${documents.length - 1} pages that took its text and on ${linkedPages.length} other ` +
-    `page${linkedPages.length === 1 ? '' : 's'} reached by following links.`,
-);
-if (counted) {
+  process.exitCode = 1;
+} else {
   console.log(
-    `   README test counts match ${reportPath ? 'the test report' : 'the collected suite'}: ` +
-      `${counted.total[0]} tests, ${counted.passed[0]} ${reportPath ? 'passing' : 'not skipped'}, ` +
-      `${counted.skipped[0]} skipped, ${counted.scenarios[0]} attack scenarios, ` +
-      `${counted.scoringEngine[0]} scoring-engine, ${counted.pinned[0]} pinned.`,
+    `   README: ${readme.length} lines, Quick Start at line ${firstH2.n}, first command at line ${commandLine}, links resolve, ` +
+      `also on the ${documents.length - 1} pages that took its text and on ${linkedPages.length} other ` +
+      `page${linkedPages.length === 1 ? '' : 's'} reached by following links.`,
   );
-  if (inconclusive > 0) console.log(`   ${inconclusive} skipped as inconclusive, counted with the passing tests.`);
-}
-for (const { prefix, command, tests, files, full, shown } of captures) {
-  console.log(
-    `   ${prefix || 'README '}capture of \`${command}\` matches ${reportPath ? 'the test report' : 'the collected suite'}: ` +
-      `${tests} tests in ${files} test file${files === 1 ? '' : 's'}.`,
-  );
-  if (full) {
+  if (counted) {
     console.log(
-      `   Its full output ${full} shows the ${shown} test${shown === 1 ? '' : 's'} ${reportPath ? 'that passed' : 'not skipped'} ` +
-        'and holds each line of the capture.',
+      `   README test counts match ${reportPath ? 'the test report' : 'the collected suite'}: ` +
+        `${counted.total[0]} tests, ${counted.passed[0]} ${reportPath ? 'passing' : 'not skipped'}, ` +
+        `${counted.skipped[0]} skipped, ${counted.scenarios[0]} attack scenarios, ` +
+        `${counted.scoringEngine[0]} scoring-engine, ${counted.pinned[0]} pinned.`,
     );
+    if (inconclusive > 0) console.log(`   ${inconclusive} skipped as inconclusive, counted with the passing tests.`);
+  }
+  for (const { prefix, command, tests, files, full, shown } of captures) {
+    console.log(
+      `   ${prefix || 'README '}capture of \`${command}\` matches ${reportPath ? 'the test report' : 'the collected suite'}: ` +
+        `${tests} tests in ${files} test file${files === 1 ? '' : 's'}.`,
+    );
+    if (full) {
+      console.log(
+        `   Its full output ${full} shows the ${shown} test${shown === 1 ? '' : 's'} ${reportPath ? 'that passed' : 'not skipped'} ` +
+          'and holds each line of the capture.',
+      );
+    }
   }
 }
