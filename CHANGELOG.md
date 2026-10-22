@@ -215,8 +215,8 @@ stay on record here with the reason they changed.
   of `vitest.config.ts` itself, which has no name, so their lines print
   without a project label, as they did; E2E-001's lines print under
   `live-filesystem`. A run still writes one report, of the same tests:
-  `vitest list` lists 430, which with the E2E-003 test that is skipped on
-  every platform make the 431 the README states. The global setups run
+  `vitest list` lists 438, which with the E2E-003 test that is skipped on
+  every platform make the 439 the README states. The global setups run
   once, also in a run of E2E-001 alone, which printed
   `OASB: 5 of 5 attack scenarios evaluated` once. The 5-second detection
   window and the 10-second timeouts do not change. In a run of `src/e2e/`
@@ -234,8 +234,8 @@ stay on record here with the reason they changed.
   project of `vitest.config.ts`, and of no other project, so with E2E-001
   in a project of its own, as the entry above records, the option did not
   leave it out: before this change `vitest list --exclude src/e2e/` listed
-  413 tests, the 5 of E2E-001 among them, and
-  `vitest list --exclude '**/E2E-001*'` listed 430, as `vitest list` does.
+  421 tests, the 5 of E2E-001 among them, and
+  `vitest list --exclude '**/E2E-001*'` listed 438, as `vitest list` does.
   CI and the release workflow run `npm test -- --exclude src/e2e/` for the
   atomic, integration and baseline tests, and CI runs E2E-001 in a later
   step. A plugin that E2E-001's project lists in `vitest.config.ts` now
@@ -243,13 +243,13 @@ stay on record here with the reason they changed.
   wildcard also with `/**` after it: a glob that names a directory, such
   as `src/e2e/`, matches the directory and no file in it, and the search
   for E2E-001 starts inside `src/e2e/`. Now
-  `vitest list --exclude src/e2e/` lists 408 tests, none in `src/e2e/`,
-  `vitest list --exclude '**/E2E-001*'` lists 425, none in E2E-001, and
-  `vitest list` lists 430, as before. `vitest run src/e2e/ --exclude
+  `vitest list --exclude src/e2e/` lists 416 tests, none in `src/e2e/`,
+  `vitest list --exclude '**/E2E-001*'` lists 433, none in E2E-001, and
+  `vitest list` lists 438, as before. `vitest run src/e2e/ --exclude
   src/e2e/` finds no test file. The plugin adds a glob that ends in a
   wildcard with `/**` after it too: `src/e2e*` matches the directory
   `src/e2e` and no file in it, and `vitest list --exclude 'src/e2e*'`
-  listed 413 tests, the 5 of E2E-001 among them, and now lists 408, none
+  listed 421 tests, the 5 of E2E-001 among them, and now lists 416, none
   in `src/e2e/`. `scripts/e2e-001-runs-alone.test.mjs` checks the files
   `vitest list --filesOnly` lists with `--exclude src/e2e/`,
   `--exclude 'src/e2e*'`, `--exclude '**/E2E-001*'` and
