@@ -4,7 +4,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -2436,6 +2437,35 @@ test('a 1 MB line of text and then 4,000 images, each with a tag whose unquoted 
   assert.equal(r.status, 1);
   assert.equal(r.stderr.trim().split('\n').length, 4000);
   assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters`);
+});
+
+test('a list of failures longer than a pipe holds reaches a reader that waits before it reads, whole', async () => {
+  // Ended by process.exit(1), the check dropped what the pipe had not taken:
+  // 2,084 of these 4,000 lines reached such a reader on macOS.
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    mkdirSync(join(dir, 'docs'));
+    writeFileSync(join(dir, 'docs', 'guide.md'), '# Guide\n\n## Setup steps\n');
+    writeFileSync(join(dir, 'README.md'), `${HEAD}${'[x](docs/nowhere.md) '.repeat(4000)}\n`);
+    const child = spawn(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { stdio: ['ignore', 'ignore', 'pipe'] });
+    // Paused before its listener is added, the pipe is not read; with a
+    // listener, Node does not drain it when the check exits.
+    child.stderr.pause();
+    const chunks = [];
+    child.stderr.on('data', (chunk) => chunks.push(chunk));
+    let timer;
+    await Promise.race([once(child, 'exit'), new Promise((done) => (timer = setTimeout(done, 1000)))]);
+    clearTimeout(timer);
+    const closed = once(child, 'close');
+    child.stderr.resume();
+    const [status] = await closed;
+    const lines = Buffer.concat(chunks).toString('utf8').trim().split('\n');
+    assert.equal(status, 1);
+    assert.equal(lines.length, 4000);
+    assert.ok(lines.every((l) => l === 'README: line 11: link target "docs/nowhere.md" does not exist.'), lines.at(-1));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {

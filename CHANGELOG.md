@@ -1901,6 +1901,12 @@ stay on record here with the reason they changed.
   or a backslash before a line break, which commonmark.js may leave out,
   nor where it is in a value in single quotes or before a value, though
   a title of the image may end it there.
+- `npm run check:readme` writes its whole list of failures when its stderr
+  is a pipe that is read slowly. It ended with `process.exit(1)`, which
+  drops what the pipe has not yet taken: a reader that waited a second
+  before it read got 2,084 of 4,000 lines of failures on macOS, and 543
+  and 545 in two runs on Linux. It now sets `process.exitCode` and exits
+  once its output is written.
 
 ## 0.4.1 - 2026-10-17
 
