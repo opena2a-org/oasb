@@ -31,7 +31,10 @@ the claims this repository publishes:
    removes from a URL: in a paragraph a quoted value may run on to the next
    line, whose `>` markers and indentation are no part of the path, and on
    a line of an HTML block or of indented code an `href` is read when its
-   value ends on that line. It checks a `#anchor` only in links to `.md`
+   value ends on that line. It reads the path without the spaces and the
+   controls U+0001 to U+001F that a browser removes from the start and the
+   end of a URL as well: `href=" docs/guide.md "` links to `docs/guide.md`.
+   It checks a `#anchor` only in links to `.md`
    files. Other forms, such as a definition on the same line as a list
    marker (`- [label]: path`), are not checked. A linked `.md` page whose
    file name carries a date (`docs/AUDIT-2026-06-03.md`) must say "as of"

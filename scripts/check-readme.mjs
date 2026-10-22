@@ -191,11 +191,16 @@
 //      does not.
 //      The target of an href is its
 //      value without the tabs, line feeds and carriage returns that the URL
-//      parser removes from a URL, and without the > markers and indentation
-//      that start a line of a paragraph after its first, which CommonMark
-//      leaves out of the paragraph's text: x <a href="dir/ on one line of a
-//      paragraph and file.md">y</a> on the next, also in a block quote,
-//      link to dir/file.md. On a line of an HTML block or of indented code,
+//      parser removes from a URL, without the spaces and the controls
+//      U+0001 to U+001F that it removes from the start and the end of a URL,
+//      and without the > markers and indentation that start a line of a
+//      paragraph after its first, which CommonMark leaves out of the
+//      paragraph's text: x <a href="dir/ on one line of a paragraph and
+//      file.md">y</a> on the next, also in a block quote, link to
+//      dir/file.md, as does x <a href=" dir/file.md ">y</a>, and
+//      x <a href=" https://example.com/x">y</a> is not looked up as a file,
+//      as its target starts with a scheme. A NUL is kept, as hrefUrl()
+//      describes. On a line of an HTML block or of indented code,
 //      an href is read when its value ends on that line. Other forms, such
 //      as a definition on the same line as a list marker
 //      (`- [label]: target`), are not read: the target of such a
@@ -1219,21 +1224,16 @@ function inlineDestinations(line, open, spans) {
 // space or a >, as a browser's tokenizer reads one. `at` is the index of
 // the quote that opens the value, or of its first character when it is
 // unquoted, and `end` the index after the value and its closing quote. The
-// target is the value without the tabs, line feeds and carriage returns
-// that the URL parser removes from a URL, so docs/, a line break and
-// nowhere.md are docs/nowhere.md; in the lines of a paragraph that
-// paragraphCodeSpans() joins, the spaces after a line break stand for the
-// > markers and indentation that CommonMark leaves out of the paragraph's
-// text, and are removed with it. HREF matches only the first character of
-// an unquoted value: hrefTargets() tests it at each index of a line, and
-// an unquoted value may hold a no-break space, which is white space to
-// HREF, so a pattern of the whole value reads the rest of the line from
-// each no-break space before href=. On Node.js 26.12.0, with such a
-// pattern, that test took 0.9 seconds over a tag of 20,000 attributes
-// href=a, each after a no-break space, and 3.7 seconds over one of 40,000.
+// target is the value as hrefUrl() reads it. HREF matches only the first
+// character of an unquoted value: hrefTargets() tests it at each index of
+// a line, and an unquoted value may hold a no-break space, which is white
+// space to HREF, so a pattern of the whole value reads the rest of the
+// line from each no-break space before href=. On Node.js 26.12.0, with
+// such a pattern, that test took 0.9 seconds over a tag of 20,000
+// attributes href=a, each after a no-break space, and 3.7 seconds over one
+// of 40,000.
 const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|(?=[^\s"'>]))/iy;
 const UNQUOTED_VALUE = /[^\t\n\f\r >]*/y;
-const hrefUrl = (value) => value.replace(/\n */g, '').replace(/[\t\r]/g, '');
 function hrefAt(text, i) {
   const href = matchAt(HREF, text, i);
   if (!href) return null;
@@ -1241,7 +1241,33 @@ function hrefAt(text, i) {
   if (quoted !== undefined) return { target: hrefUrl(quoted), at: HREF.lastIndex - quoted.length - 2, end: HREF.lastIndex };
   const at = HREF.lastIndex;
   const [value] = matchAt(UNQUOTED_VALUE, text, at);
-  return { target: value, at, end: at + value.length };
+  return { target: hrefUrl(value), at, end: at + value.length };
+}
+
+// The target of an href whose value is `value`, as the URL parser reads
+// the value: without the tabs, line feeds and carriage returns that it
+// removes from a URL, so docs/, a line break and nowhere.md are
+// docs/nowhere.md, and without the spaces and the controls U+0001 to
+// U+001F that it removes from the start and the end of a URL, so
+// " docs/guide.md " is docs/guide.md and " https://example.com/x" is
+// https://example.com/x. It removes a NUL there too, but the HTML standard
+// has a browser's tokenizer read a NUL in an attribute's value as U+FFFD,
+// which the URL parser keeps, so a NUL is kept. In the lines of a
+// paragraph that paragraphCodeSpans() joins, the spaces after a line break
+// stand for the > markers and indentation that CommonMark leaves out of
+// the paragraph's text, and are removed with it. The characters at the
+// start and the end are read from each end in a loop: on Node.js 26.12.0
+// a search for [\x01-\x20]+$ took 3.2 seconds over docs/guide.md, 100,000
+// spaces and an x, as it went on from each space of the run to the end of
+// the run.
+const urlEnd = (code) => code > 0 && code <= 0x20;
+function hrefUrl(value) {
+  const url = value.replace(/\n */g, '').replace(/[\t\r]/g, '');
+  let from = 0;
+  let to = url.length;
+  while (from < to && urlEnd(url.charCodeAt(from))) from++;
+  while (to > from && urlEnd(url.charCodeAt(to - 1))) to--;
+  return url.slice(from, to);
 }
 
 // The targets of the HTML href attributes in `text`, one line, as hrefAt()
@@ -1334,10 +1360,9 @@ const UNQUOTED = 'unquoted';
 // first attribute named href, whatever the case of its letters, as a
 // browser drops a later one, when that attribute has a value, as
 // { target, at }: the value, in quotes, where it may hold a line break, or
-// unquoted, without the tabs, line feeds and carriage returns, and the
-// spaces after a line feed, that hrefAt() removes from a target, and `at`
-// the index in `text` of the quote that opens it, or of its first
-// character when it is unquoted. It notes none in a closing tag.
+// unquoted, as hrefUrl() reads it, and `at` the index in `text` of the
+// quote that opens it, or of its first character when it is unquoted. It
+// notes none in a closing tag.
 const newTag = (at, closing, find = !closing) => ({ at, closing, find, state: BEFORE_NAME, name: -1, named: false, value: -1, href: null });
 
 // Reads `c`, the character that text[i] to text[last] stands for, in the
@@ -1366,7 +1391,7 @@ function tagStep(tag, c, text, i, last = i) {
     return false;
   }
   if (state === IN_NAME && tag.name === 4 && (c === '>' || c === '/' || c === '=' || isHtmlSpace(c))) [tag.find, tag.named] = [false, true];
-  if (state === UNQUOTED && tag.value !== -1 && (c === '>' || isHtmlSpace(c))) [tag.href, tag.value] = [{ target: text.slice(tag.value, i), at: tag.value }, -1];
+  if (state === UNQUOTED && tag.value !== -1 && (c === '>' || isHtmlSpace(c))) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i)), at: tag.value }, -1];
   if (c === '>') return true;
   if (state === BEFORE_VALUE) {
     if (isHtmlSpace(c)) return false;
