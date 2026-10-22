@@ -1843,6 +1843,79 @@ test('an href is read without the spaces and the controls U+0001 to U+001F at th
   }
 });
 
+test('only a tab, a line feed, a form feed, a carriage return or a space is white space before href, around its = and before its value, as a browser reads a tag', () => {
+  // \s also matches a vertical tab, a no-break space, U+1680, U+2000 to
+  // U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF on Node.js
+  // 26.12.0. In what commonmark.js 0.31.2 renders of the lines below in a
+  // paragraph, a heading or an HTML block, parse5 7.3.0 reads each of them
+  // as part of a name or a value: after href=, as the first character of
+  // an unquoted value, which holds the quotes of "docs/guide.md" after it;
+  // after href, as part of the attribute's name; and after the tag's name
+  // or a quoted value, as part of the tag's name or the first character of
+  // an attribute's name, so no attribute there is named href. The URL
+  // parser keeps each of them at the start of a value but the vertical
+  // tab, one of the controls U+0001 to U+001F that it removes there: new
+  // URL('\xa0docs/guide.md', 'https://example.com/dir/README.md').pathname
+  // is /dir/%C2%A0docs/guide.md.
+  const others = Array.from({ length: 0x10000 }, (_, i) => String.fromCharCode(i)).filter((c) => /\s/.test(c) && !'\t\n\f\r '.includes(c));
+  for (const c of ['\v', '\xa0', '\u{3000}', '\u{feff}']) assert.ok(others.includes(c), JSON.stringify(c));
+  const kept = others.filter((c) => c !== '\v');
+  // Blocks whose last line holds an href to a file that does not exist,
+  // each with the target that the check names: also in single quotes, in
+  // a heading and a table cell, on a line of indented code and after a >
+  // inside <?, and after a tab, a form feed or a space, which are white
+  // space there.
+  const missing = [
+    ...kept.flatMap((c) => [
+      [`<div><a href=${c}docs/guide.md>y</a></div>`, `${c}docs/guide.md`],
+      [`p <a href=${c}docs/guide.md>y</a>`, `${c}docs/guide.md`],
+      [`<div><a href=${c}"docs/guide.md">y</a></div>`, `${c}"docs/guide.md"`],
+      [`p <a href=${c}"docs/guide.md">y</a>`, `${c}"docs/guide.md"`],
+    ]),
+    ['<div><a href=\v"docs/guide.md">y</a></div>', '"docs/guide.md"'],
+    ['p <a href=\v"docs/guide.md">y</a>', '"docs/guide.md"'],
+    ["p <a href=\xa0'docs/guide.md'>y</a>", "\xa0'docs/guide.md'"],
+    ['## <a href=\xa0docs/guide.md>y</a>', '\xa0docs/guide.md'],
+    ['| h |\n| - |\n| <a href=\xa0docs/guide.md>x</a> |', '\xa0docs/guide.md'],
+    ['p\n\n    <a href=\xa0docs/guide.md>y</a>', '\xa0docs/guide.md'],
+    ['x <? > <a href=\xa0docs/guide.md>y</a> ?>', '\xa0docs/guide.md'],
+    ...['\t', '\f', ' '].flatMap((c) => [
+      [`<div><a${c}href${c}=${c}docs/nowhere.md>y</a></div>`, 'docs/nowhere.md'],
+      [`p <a${c}href${c}=${c}docs/nowhere.md>y</a>`, 'docs/nowhere.md'],
+    ]),
+  ];
+  let n = 11;
+  const failures = missing.map(([block, target]) => {
+    n += block.split('\n').length - 1;
+    const line = n;
+    n += 2;
+    return `README: line ${line}: link target "${target}" does not exist.`;
+  });
+  const r = check(`${missing.map(([block]) => block).join('\n\n')}\n`);
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), failures.join('\n'));
+  // None of these holds an href, as a browser reads its tag, but the two
+  // after a vertical tab, which link to docs/guide.md.
+  const none = [
+    ...others.flatMap((c) => [
+      `<div><a href${c}=docs/nowhere.md>y</a></div>`,
+      `p <a href${c}=docs/nowhere.md>y</a>`,
+      `<div><a${c}href=docs/nowhere.md>y</a></div>`,
+      `p <a${c}href=docs/nowhere.md>y</a>`,
+      `<div><a b="c"${c}href=docs/nowhere.md>y</a></div>`,
+      `p <a b="c"${c}href=docs/nowhere.md>y</a>`,
+    ]),
+    '## <a\xa0href=docs/nowhere.md>y</a>',
+    '| h |\n| - |\n| <a\xa0href=docs/nowhere.md>x</a> |',
+    'p\n\n    <a\xa0href=docs/nowhere.md>y</a>',
+    'x <? > <a\xa0href=docs/nowhere.md>y</a> ?>',
+    '<div><a href=\vdocs/guide.md>y</a></div>',
+    'p <a href=\vdocs/guide.md>y</a>',
+  ];
+  const pass = check(`${none.join('\n\n')}\n`);
+  assert.equal(pass.status, 0, pass.stderr);
+});
+
 test('an href with 100,000 spaces at the start and the end of its value, or 200,000 inside it, is checked in under 2 seconds', () => {
   // The spaces at each end of the value are read in a loop: on Node.js
   // 26.12.0 a search for [\x01-\x20]+$ took 12.6 seconds over docs/guide.md,
@@ -1863,11 +1936,14 @@ test('an href with 100,000 spaces at the start and the end of its value, or 200,
 
 test('a line of a tag of 50,000 attributes href=a, each after a no-break space, is checked in under 2 seconds', () => {
   // A line of an HTML block or of indented code is tested for an href at
-  // each index, and a no-break space is white space to that test, while an
-  // unquoted value runs on past one; a test that read the whole value would
-  // read the rest of the line from each no-break space. The line is checked
-  // in an HTML block, as indented code and in a paragraph. The tag's first
-  // href is docs/guide.md, which exists.
+  // each index. An unquoted value runs on past a no-break space, so a test
+  // that read the whole value, and read a no-break space before href= as
+  // white space, as \s does, would read the rest of the line from each
+  // no-break space. The line is checked in an HTML block, as indented code
+  // and in a paragraph. The tag's first href is docs/guide.md, which
+  // exists; parse5 7.3.0 reads the first no-break space after it as the
+  // first character of an attribute's name and the others as part of that
+  // attribute's unquoted value.
   const tag = `<a href="docs/guide.md"${' href=a'.repeat(50000)}>x</a>`;
   for (const body of [`<div>\n${tag}\n</div>\n`, `    ${tag}\n`, `x ${tag}\n`]) {
     const started = process.hrtime.bigint();

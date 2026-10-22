@@ -1964,6 +1964,25 @@ stay on record here with the reason they changed.
   attribute. A title with a tab after it, which commonmark.js reads as
   text, a title that ends on a later line than it starts on, and the label
   of a definition are read as text of the paragraph, as before.
+- `npm run check:readme` reads only a tab, a line feed, a form feed, a
+  carriage return or a space as the white space before an HTML href,
+  around its `=` and before its value, as a browser reads a tag, and not a
+  no-break space or another character that `\s` matches, such as U+3000
+  or U+FEFF. With `docs/guide.md` present, and `\u00a0` standing for a
+  no-break space, the lines
+  `<div><a href=\u00a0docs/guide.md>y</a></div>`,
+  `p <a href=\u00a0docs/guide.md>y</a>` and
+  `<div><a href=\u00a0"docs/guide.md">y</a></div>` exited 0, and now
+  exit 1 with `link target "\u00a0docs/guide.md" does not exist`, or with
+  that message for `\u00a0"docs/guide.md"`: in what commonmark.js 0.31.2
+  renders of each, parse5 7.3.0 reads the no-break space as the first
+  character of an unquoted value, and the URL parser of Node.js 26.12.0
+  keeps it. The lines `<div><a href\u00a0=docs/nowhere.md>y</a></div>`
+  and `<div><a\u00a0href=docs/nowhere.md>y</a></div>` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exit 0: parse5
+  reads the first tag's attribute as named `href` and a no-break space,
+  and the second tag's name as running on over the no-break space, so
+  neither tag holds an href.
 
 ## 0.4.1 - 2026-10-17
 

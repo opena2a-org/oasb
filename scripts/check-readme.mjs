@@ -22,7 +22,16 @@
 //      a reference definition `[label]: target`, written within one line,
 //      at the start of a line (indented at most three spaces), and an HTML
 //      href attribute, its value in double or single quotes or unquoted:
-//      `href="target"`, `href='target'` or `href=target`. An inline link
+//      `href="target"`, `href='target'` or `href=target`. As a browser
+//      reads a tag, the white space before href, around its = and before
+//      its value is a tab, a line feed, a form feed, a carriage return or a
+//      space, and not a no-break space or another character that \s
+//      matches: after href= such a character starts an unquoted value, so
+//      href=, a no-break space and "target" links to the no-break space and
+//      "target" with its quotes; before the = it is part of the attribute's
+//      name; and before href it is part of a name or of an unquoted value,
+//      so neither <a href, a no-break space and =target nor <a, a no-break
+//      space and href=target holds an href. An inline link
 //      or definition on a line of indented code is not read: a line that
 //      does not go on with a
 //      paragraph and starts 4 or more columns past where the text of the
@@ -1230,21 +1239,24 @@ function inlineDestinations(line, open, spans) {
 // An href attribute, as HREF matches one: white space, href in any case,
 // =, with any white space around it, and a value in double or single
 // quotes or unquoted, which starts at a character other than white space,
-// a quote or a >. hrefAt(text, i) reads the one that starts at text[i], as
-// { target, at, end }, and gives null when none starts there. An unquoted
-// value runs to a tab, a line feed, a form feed, a carriage return, a
-// space or a >, as a browser's tokenizer reads one. `at` is the index of
-// the quote that opens the value, or of its first character when it is
-// unquoted, and `end` the index after the value and its closing quote. The
-// target is the value as hrefUrl() reads it. HREF matches only the first
-// character of an unquoted value: hrefTargets() tests it at each index of
-// a line, and an unquoted value may hold a no-break space, which is white
-// space to HREF, so a pattern of the whole value reads the rest of the
-// line from each no-break space before href=. On Node.js 26.12.0, with
-// such a pattern, that test took 0.9 seconds over a tag of 20,000
-// attributes href=a, each after a no-break space, and 3.7 seconds over one
-// of 40,000.
-const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|(?=[^\s"'>]))/iy;
+// a quote or a >. White space is a tab, a line feed, a form feed, a
+// carriage return or a space, as isHtmlSpace() reads it. A browser's
+// tokenizer reads another character that \s matches, such as a no-break
+// space, as part of a name or a value: before href, of the tag's name, of
+// an attribute's name or of an unquoted value; after href, of its name;
+// and after the =, as the first character of an unquoted value, which
+// then takes the quotes of a quoted value after it. hrefAt(text, i) reads
+// the one that starts at text[i], as { target, at, end }, and gives null
+// when none starts there. An unquoted value runs to a tab, a line feed, a
+// form feed, a carriage return, a space or a >, as a browser's tokenizer
+// reads one. `at` is the index of the quote that opens the value, or of
+// its first character when it is unquoted, and `end` the index after the
+// value and its closing quote. The target is the value as hrefUrl() reads
+// it. HREF matches only the first character of an unquoted value, and
+// hrefAt() reads the rest with UNQUOTED_VALUE, so a test of HREF at an
+// index, as hrefTargets() makes at each index of a line, reads no unquoted
+// value past its first character.
+const HREF = /[\t\n\f\r ]href[\t\n\f\r ]*=[\t\n\f\r ]*(?:"([^"]*)"|'([^']*)'|(?=[^\t\n\f\r "'>]))/iy;
 const UNQUOTED_VALUE = /[^\t\n\f\r >]*/y;
 function hrefAt(text, i) {
   const href = matchAt(HREF, text, i);
