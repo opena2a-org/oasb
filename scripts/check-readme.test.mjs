@@ -442,6 +442,23 @@ test('a full output link with a malformed %-escape is named once by the link che
   ]);
 });
 
+test('a full output link with a ?query is read as a link to the file before the ?', () => {
+  const queried = WITH_FULL.replace(`([full output](${FULL_PATH}))`, `([full output](${FULL_PATH}?x))`);
+  let r = checkCounts(queried, SUITE, namedReport(), fullSources());
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ {3}Its full output docs\/captures\/run\.txt shows the 2 tests that passed and holds each line of the capture\.$/m);
+
+  const noShell = FULL_RUN.replace(` ✓ ${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a shell 1ms\n`, '');
+  r = checkCounts(queried, SUITE, namedReport(), fullSources(noShell));
+  assert.equal(r.status, 1);
+  assert.ok(
+    errors(r).includes(
+      `README: ${FULL_PATH}: the full output of \`${CAPTURE_COMMAND}\` does not show "AT-PROC-001: Spawn > detects a shell" in ${CAPTURE_FILE}, which the test report has passed.`,
+    ),
+    r.stderr,
+  );
+});
+
 // CAPTURED and WITH_FULL as the capture of the package's oasb command on
 // AT-PROC-001: the same two tests, then the verdict line it prints.
 const OASB_COMMAND = 'npx @opena2a/oasb AT-PROC-001';
@@ -589,6 +606,13 @@ test('a skipped test listed in a page the MITRE ATLAS Coverage section links to 
   assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
   r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 (skipped) | Outbound TCP |'));
   assert.equal(r.status, 0, r.stderr);
+});
+
+test('a page the MITRE ATLAS Coverage section links with a ?query is read for skipped tests', () => {
+  const readme = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: [mapping](docs/atlas.md?x).');
+  const r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
 });
 
 test('a page linked from outside the MITRE ATLAS Coverage section is not read for skipped tests', () => {
@@ -1143,6 +1167,45 @@ test('HTML hrefs that resolve or are absolute pass', () => {
       '<a href="https://example.com/missing.md">External</a> <a href="mailto:a@example.com">Mail</a>\n',
   );
   assert.equal(r.status, 0, r.stderr);
+});
+
+test('a link target that starts with // is not looked up, and the ?query of another is not read as part of its path', () => {
+  // A browser follows //example.com/x to that host, ?x to the page that
+  // holds the link and docs/guide.md?x to docs/guide.md.
+  const lines = [
+    'p [y](//example.com/x)',
+    'p [y](?x)',
+    'p <a href="docs/guide.md?x">y</a>',
+    'p <a href="//example.com/missing.md">y</a> and ![z](//example.com/missing.png)',
+    'p [y][g]\n\n[g]: //example.com/missing.md',
+    'p [y](docs/guide.md?x#setup-steps) and [z](?x#guide)',
+    'p [y](docs/guide.md?q=100%)',
+  ];
+  for (const line of lines) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+});
+
+test('a link target with a ?query still fails when its path or anchor names nothing', () => {
+  const pages = { 'x.md/README.md': '# X\n\n## Setup\n' };
+  const cases = [
+    ['p [y](docs/nowhere.md?x)', 'link target "docs/nowhere.md?x" does not exist.'],
+    ['p <a href="docs/nowhere.md?x">y</a>', 'link target "docs/nowhere.md?x" does not exist.'],
+    ['p [y](docs/guide.md?x#no-such-heading)', 'anchor "#no-such-heading" has no matching heading in docs/guide.md.'],
+    ['p [y](?x#no-such-heading)', 'anchor "#no-such-heading" has no matching heading in README.md.'],
+    // A ? after the # is part of the anchor.
+    ['p [y](docs/guide.md#setup-steps?x)', 'anchor "#setup-steps?x" has no matching heading in docs/guide.md.'],
+    [
+      'p [y](x.md?q#setup)',
+      'link target "x.md?q#setup" is a directory, so its anchor names no heading; link the page in x.md that holds the heading.',
+    ],
+  ];
+  for (const [line, message] of cases) {
+    const r = check(`${line}\n`, pages);
+    assert.equal(r.status, 1, line);
+    assert.equal(r.stderr.trim(), `README: line 11: ${message}`, line);
+  }
 });
 
 test('links inside inline code and fenced blocks are ignored', () => {
@@ -3736,6 +3799,14 @@ test('a dated page that says "as of" its date and links to the README passes, on
     datedPage('> The counts below are as of\n> 2026-06-03 and are kept as recorded; the\n> [README](../README.md) has the current ones.\n'),
   );
   assert.equal(wrapped.status, 0, wrapped.stderr);
+});
+
+test('a dated page the README links with a ?query is read as one, and its link to the README with a ?query counts', () => {
+  const bare = check('For the audit, see [the audit](docs/AUDIT-2026-06-03.md?x).\n', datedPage('Measured from `npm test`.\n'));
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, DATED);
+  const linked = check(DATED_LINK, datedPage('> As of 2026-06-03, see the [README](../README.md?x).\n'));
+  assert.equal(linked.status, 0, linked.stderr);
 });
 
 test('a note inside a code block or inline code does not mark a dated page', () => {

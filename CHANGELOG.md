@@ -1907,6 +1907,22 @@ stay on record here with the reason they changed.
   before it read got 2,084 of 4,000 lines of failures on macOS, and 543
   and 545 in two runs on Linux. It now sets `process.exitCode` and exits
   once its output is written.
+- `npm run check:readme` does not look up a link target that starts with
+  `//` as a file, as it does not look up one that starts with a scheme
+  such as `https:`, and looks up the path of another target without its
+  `?query`, as it does without its `#anchor`. With `docs/guide.md`
+  present, the lines `p [y](//example.com/x)`, `p [y](?x)` and
+  `p <a href="docs/guide.md?x">y</a>` exited 1 with
+  `link target "//example.com/x" does not exist`, or with that message
+  for `?x` or `docs/guide.md?x`, and now exit 0; the URL parser of Node.js
+  26.12.0 reads them as links to `https://example.com/x` from an https
+  page, to the page that holds the link and to `docs/guide.md`. A link to
+  a file that does not exist fails with its query in the message, as
+  `link target "docs/nowhere.md?x" does not exist`, and a `?` after the
+  `#` is part of the anchor. A dated page, a page that the MITRE ATLAS
+  Coverage section links and the full output that a capture links are
+  read through a link with a `?query` as well, and `[README](../README.md?x)`
+  on a dated page counts as its link to the README.
 
 ## 0.4.1 - 2026-10-17
 
