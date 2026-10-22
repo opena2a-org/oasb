@@ -2218,6 +2218,68 @@ test('an image whose reference names a definition in a block quote, on the line 
   }
 });
 
+test('an image whose reference names a definition under a table, on a line that commonmark.js reads as text of the paragraph that holds the rows, is not read as one: an href in it is read', () => {
+  // commonmark.js 0.31.2 reads no tables: it reads the rows of a table as
+  // text of a paragraph, and the line of each of these definitions as text
+  // of that paragraph, so it reads no definition there and renders the <a>
+  // in the image's description as a link: parse5 7.3.0 reads a link to
+  // docs/nowhere.md in what it renders of each README. markdown-it 14.1.0
+  // reads the table, then the list item or the line, and the definition,
+  // and parse5 reads no such link in what it renders. The definition is on
+  // the line of an ordered list marker that starts at a number other than
+  // 1, which does not interrupt a paragraph, with its destination on that
+  // line or the next, under the delimiter row or a body row, in a block
+  // quote or a list item that holds the table, in a second list item, or
+  // in the list item of an empty marker; it follows such a definition; it
+  // goes on lazily, without the >, with a table in a block quote; or the
+  // image's paragraph follows it.
+  const IMAGE = "![<a href='docs/nowhere.md'>x</a>][ref]\n";
+  for (const [body, line] of [
+    ...[
+      '| h |\n| - |\n2. [ref]: docs/guide.md\n',
+      '| h |\n| - |\n10. [ref]: docs/guide.md\n',
+      '| h |\n| - |\n10) [ref]: docs/guide.md\n',
+      '| h |\n| - |\n10. [ref]:\n    docs/guide.md\n',
+      '| h |\n| - |\n| a | b |\n2. [ref]: docs/guide.md\n',
+      '> | h |\n> | - |\n> 2. [ref]: docs/guide.md\n',
+      '- | h |\n  | - |\n  2. [ref]: docs/guide.md\n',
+      '| h |\n| - |\n2. x\n3. [ref]: docs/guide.md\n',
+      '| h |\n| - |\n2.\n   [ref]: docs/guide.md\n',
+      '| h |\n| - |\n2. [a]: docs/guide.md\n[ref]: docs/guide.md\n',
+      '> | h |\n> | - |\n[ref]: docs/guide.md\n',
+      '> | h |\n> | - |\n[ref]:\ndocs/guide.md\n',
+    ].map((definition) => [`${IMAGE}\n${definition}`, 11]),
+    [`| h |\n| - |\n2. [ref]: docs/guide.md\n\n${IMAGE}`, 15],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // Both read the definition in each of these, so parse5 reads no link to
+  // docs/nowhere.md in what either renders. commonmark.js reads a list
+  // item that starts at 1 or with -, or a block quote, as a block that
+  // interrupts the paragraph; a blank line ends the paragraph; 2. on a line
+  // that leaves out the indentation of the list item that holds the table
+  // starts a list after that item; and === under the rows is the underline
+  // of a heading, which ends the paragraph, where markdown-it reads it as a
+  // row of the table.
+  for (const definition of [
+    '| h |\n| - |\n1. [ref]: docs/guide.md\n',
+    '| h |\n| - |\n- [ref]: docs/guide.md\n',
+    '| h |\n| - |\n> [ref]: docs/guide.md\n',
+    '> | h |\n> | - |\n- [ref]: docs/guide.md\n',
+    '| h |\n| - |\n\n[ref]: docs/guide.md\n',
+    '> | h |\n> | - |\n\n[ref]:\ndocs/guide.md\n',
+    '| h |\n| - |\n2. x\n\n   [ref]: docs/guide.md\n',
+    '- | h |\n  | - |\n2. [ref]: docs/guide.md\n',
+    '| h |\n| - |\n===\n2. [ref]: docs/guide.md\n',
+  ]) {
+    const body = `${IMAGE}\n${definition}`;
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
