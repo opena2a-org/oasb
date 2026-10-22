@@ -199,6 +199,15 @@ stay on record here with the reason they changed.
   `opena2a benchmark` (opena2a-cli 0.10.13) exits 0, also with `--ci`,
   `--level L2` and `--format json`. `scripts/doc-facts.test.mjs` checks
   that the README's Usage via OpenA2A CLI section says so.
+- `engines` in `package.json` allows Node.js `^20.19.0 || >=22.12.0` in
+  place of `>=18.0.0`: the versions from which `require()` loads an ES
+  module without a flag. `requireCapability` loads vitest's suite API, an
+  ES module, with `require()`. arp-guard 0.3.0, as `npm ci` installs it
+  from the lockfile, loads hackmyagent 0.23.8, whose
+  `dist/arp/crypto/hybrid-signing.js` loads `@noble/ed25519` 2.3.0, an ES
+  module, with `require()`. On Node.js 20.18.3 both fail with
+  `ERR_REQUIRE_ESM`. vite 7.3.6, which the lockfile installs for vitest
+  3.2.7, declares the same range.
 
 ### Fixed
 
@@ -1737,6 +1746,22 @@ stay on record here with the reason they changed.
   vitest's suite API inside the call, so the package entry point still
   loads without vitest. `src/harness/capabilities-core.test.ts` checks
   these cases; it passed with vitest 3.2.7 on Node 20.19.0, 20.20.0,
+  22.23.3, 24.17.0 and 26.12.0. vitest publishes that API as an ES module
+  only, which `requireCapability` loads with `require()`. Where Node.js
+  cannot `require()` an ES module, as on 20.18.3 or with
+  `--no-experimental-require-module`, a call in a vitest run for a
+  capability the adapter lacks throws an error that says vitest's suite
+  API failed, quotes the first line of that API's error, names 20.19.0
+  and 22.12.0, the Node.js versions from which `require()` loads an ES
+  module without a flag, and says to use `describeWithCapability`, which
+  skips the suite on 20.18.3 too; on 20.18.3 the test file runs no test.
+  Where the API fails another way, as when its `getCurrentSuite()`
+  throws, the error quotes the first line of what it threw and says to
+  use `describeWithCapability`. Neither error says that there is no
+  `describe()` block to skip. `scripts/library-entry.test.mjs` installs
+  the build in a project and runs vitest there, with and without
+  `--no-experimental-require-module` and with a stand-in suite API whose
+  `getCurrentSuite()` throws; it passed on Node.js 20.19.0, 20.20.0,
   22.23.3, 24.17.0 and 26.12.0.
 - `npm run check:readme` also reads a definition that names an image's
   reference in a block quote, on the line of a list marker, or with its
