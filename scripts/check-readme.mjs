@@ -123,7 +123,11 @@
 //      such a tag is read where it ends, as paragraphCodeSpans() and
 //      altHrefs() describe, so x <? > <b x=" ?> <a href="target">y</a>
 //      does not link to target, as the <a> is inside the quoted value of
-//      the <b> tag. Nor is an href inside an image
+//      the <b> tag. Such a tag that is still open at the end of the
+//      paragraph, heading or cell ends at the end tag that a renderer
+//      writes there, such as </p>, </h2> or </td>, where it is not inside a
+//      quoted value: x <? > <a href="target" x=' ?> ' links to target. Nor
+//      is an href inside an image
 //      read, as both renderers write the description of an image into the
 //      alt attribute of the <img>: an image that a destination follows, as
 //      in ![<a href="x">y</a>](target), or one whose reference a definition
@@ -149,7 +153,12 @@
 //      is in the paragraph, with altHrefs(): so
 //      ![<b title=">"><a href="target">y</a></b>](a.png) links to target,
 //      and ![<a href="target">y</a>](a.png) does not, as its href is an
-//      attribute of the <img>. Nor is an href read in the text of an
+//      attribute of the <img>. A tag still open at the end of the
+//      description is read on over the " and /> that commonmark.js writes
+//      after it, which end it where it is not inside a quoted value or
+//      before a value, as altHrefs() describes:
+//      ![<b x="y"> <? > <a href="target" x=" ?>](a.png) links to target.
+//      Nor is an href read in the text of an
 //      element whose text a browser reads as text, not as HTML:
 //      <script>, <style>, <textarea>, <title>, <xmp>, <iframe>, <noembed>,
 //      <noframes>, <noscript> or <plaintext>. That text runs from a start
@@ -770,8 +779,9 @@ const DESTINATION = 'destination';
 // after a comment or a tag that the rest leaves open, which a browser
 // reads on into what follows, as rawHrefs() reads it given what is open,
 // with textTo() reading the text between: those whose target opens on the
-// line, also those of a tag that starts on an earlier line,
-// but, inside an image, only those that altHrefs() reads: an image is one
+// line, also those of a tag that starts on an earlier line, and on the
+// last line those of a tag that the end of the block ends, as `end` gives
+// it, but, inside an image, only those that altHrefs() reads: an image is one
 // that a destination follows, from its ![ to the ) that closes its
 // destination and title, or one whose reference `defined`, a test of the
 // label that linkSyntax() gives it, finds that the page defines, from its
@@ -784,7 +794,25 @@ const DESTINATION = 'destination';
 // raw HTML in it as written, and altHrefs() reads the hrefs a browser
 // then reads in the description, given each piece of raw HTML inside the
 // image and the destination and title of each inline link linkAt() has
-// read. Without `defined`, no reference is defined.
+// read, and the end of the image's description, as altHrefs() reads it,
+// before the raw HTML after the image and once the line that holds that
+// end is read. Without `defined`, no reference is defined.
+// `end` is what a renderer writes after the text of the lines: end.at,
+// the index on the last line where that text ends, before the white space
+// that CommonMark leaves out there and, on an ATX heading, the #s that
+// close it, and end.tag, the end tag it writes there, such as </p>, </h2>
+// or </td>, or null where it writes one of several, as after a paragraph
+// that a list item holds: </p> in a loose list, and in a tight one </li>
+// or a line break and the start tag of the next block of the item. A tag
+// that is still open at the end of the text, as textTo() reads it, is read
+// on over that end tag, as over </p> where end.tag is null, and its href
+// is read where a > there ends it, so x <? > <a href="target" x=' ?> '
+// links to target, as the ' ends the value of x. An unquoted href that
+// runs on into the end tag takes the </ and its name, as a browser reads
+// them in the value, so x <? > <a x=' ?> ' href=target links to
+// target</p; where end.tag is null, the href of a tag whose value runs on
+// into it, or starts in it, is not read. Without `end`, as for the line of
+// an HTML block, nothing is read after the text.
 // The elements whose text a browser reads as text (RAW_TEXT_ENDS) are
 // followed over that raw HTML, but for raw HTML that starts inside such an
 // image, with one tracker that rawTextElements() makes of the lines, as
@@ -794,7 +822,7 @@ const DESTINATION = 'destination';
 // markdown-it writes the description as text that ends no comment. A
 // reader asks about the runs, the < and the ( it meets from left to right,
 // and asks for hrefs() once it has read the line.
-function paragraphCodeSpans(lines, texts = [], defined = () => false) {
+function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
   const htmlAt = inlineHtml(text);
@@ -850,6 +878,20 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false) {
     }
     read = to;
   };
+  // Reads the text after the raw HTML read last, up to where the text of
+  // the block ends, and the end tag that a renderer writes there into
+  // `open`, as `end` gives them, and notes the href of a tag that the end
+  // tag ends, but not one whose value runs on into an end tag that `end`
+  // does not name: an unquoted value that the text leaves unended, or a
+  // value that starts in the end tag.
+  const endOfBlock = () => {
+    const at = text.length - lines[lines.length - 1].length + end.at;
+    textTo(at);
+    if (open === null || open === IN_COMMENT) return;
+    const runs = open.value !== -1 || (open.named && open.state === BEFORE_VALUE);
+    if ((end.tag !== null || !runs) && writtenEnds(text, at, end.tag ?? '</p>', open) && open.href) hrefs.push(open.href);
+    open = null;
+  };
   let given = 0; // how many of them hrefs() has given
   let k = 0; // the line read next
   let lineAt = 0; // the index in the joined lines where that line starts
@@ -877,6 +919,7 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false) {
         past = html.end;
         const raw = html.tag || (html.unshown && html.end > at + i + 1);
         if (raw) {
+          for (const href of altAt.ends(at + i)) hrefs.push(href);
           textTo(at + i);
           read = html.end;
           const image = imageAt(at + i);
@@ -897,8 +940,11 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false) {
         return { target: link.target, end: link.end - at };
       },
       hrefs: () => {
+        for (const href of altAt.ends(at + length)) hrefs.push(href);
+        const last = k === lines.length;
+        if (last && end !== null) endOfBlock();
         const targets = [];
-        while (given < hrefs.length && hrefs[given].at < at + length) targets.push(hrefs[given++].target);
+        while (given < hrefs.length && (last || hrefs[given].at < at + length)) targets.push(hrefs[given++].target);
         return targets;
       },
     };
@@ -1375,20 +1421,27 @@ function textAt(text, i, to) {
 }
 
 // Reads the attributes of `tag`, a tag that newTag() makes, on over
-// text[from] to text[to] with tagStep(), and returns the index after the >
-// that ends the tag, or -1 when the text ends first. `raw` is whether the
-// text is raw HTML, which a renderer writes as written, or text, which it
-// writes escaped, read as textAt() reads it, so that a > or a " in it is a
-// character of a name or a value, a backslash escape in it is the
-// character it escapes, and a reference such as &#39; is the character it
-// stands for.
-function attributesEnd(text, from, to, raw, tag) {
-  for (let i = from; i < to; i++) {
-    const [c, last] = raw ? [text[i], i] : textAt(text, i, to);
-    if (tagStep(tag, c, text, i, last)) return last + 1;
-    i = last;
-  }
+// text[from] to text[to], raw HTML, which a renderer writes as written,
+// with tagStep(), and returns the index after the > that ends the tag, or
+// -1 when the text ends first. Text, which a renderer writes escaped, is
+// read in a tag as textAt() reads it instead.
+function attributesEnd(text, from, to, tag) {
+  for (let i = from; i < to; i++) if (tagStep(tag, text[i], text, i)) return i + 1;
   return -1;
+}
+
+// Whether `tag`, a tag that newTag() makes and that is open where the text
+// before text[at] leaves it, ends in `written`, raw HTML that a renderer
+// writes after that text, such as the end tag </p>, as tagStep() reads it
+// on in the tag's attributes. A value that runs on into `written` takes
+// the characters a browser reads in it there: an unquoted href that runs
+// on into </p> ends at its >, and its value takes the </p. tagStep() reads
+// such a value in a view of text[0] to text[at] that `written` follows,
+// which does not copy `text` for each tag.
+function writtenEnds(text, at, written, tag) {
+  const view = { slice: (from, to) => text.slice(from, Math.min(to, at)) + written.slice(Math.max(from - at, 0), Math.max(to - at, 0)) };
+  for (let i = 0; i < written.length; i++) if (tagStep(tag, written[i], view, at + i)) return true;
+  return false;
 }
 
 // A search of `text` for the first match of a global regular expression at
@@ -1600,7 +1653,7 @@ function rawHtmlHrefs(text, from, to, elements, open = null) {
     if (!close) return { hrefs, open };
     i = close.index + close[0].length;
   } else if (open !== null) {
-    const end = attributesEnd(text, from, to, true, open);
+    const end = attributesEnd(text, from, to, open);
     if (end === -1) return { hrefs, open };
     i = ended(open, end);
   }
@@ -1621,7 +1674,7 @@ function rawHtmlHrefs(text, from, to, elements, open = null) {
       const tag = newTag(from + i, c === '/');
       let j = i + (tag.closing ? 2 : 1);
       while (j < html.length && !isHtmlSpace(html[j]) && html[j] !== '/' && html[j] !== '>') j++;
-      const tagEnd = attributesEnd(text, from + j, to, true, tag);
+      const tagEnd = attributesEnd(text, from + j, to, tag);
       if (tagEnd === -1) return { hrefs, open: tag };
       end = ended(tag, tagEnd);
     }
@@ -1676,8 +1729,28 @@ const AFTER_IMG = 'after img';
 // of raw HTML of the description, and a tag's attributes on over the text
 // before that piece too, as commonmark.js writes no tag of its own inside
 // the description of an image, for a link, a code span, an autolink or
-// emphasis there either; what is open at the end of the description is not
-// read on. The text of the description between its raw HTML is read as
+// emphasis there either. A tag that is open at the end of the description
+// is read on over the rest of its text and over the " and the /> that
+// commonmark.js writes after it to end the alt attribute and the <img>
+// tag, and its href is read where that > ends it, so
+// ![<b x="y"> <? > <a href="target" x=" ?>](a.png)
+// links to target, as the " ends the value of x, and
+// ![<b x="y"> <? > <a x=' ?> ' href=target](a.png)
+// links to target", as the " is a character of the unquoted value. The
+// tag is not read on where textTo() finds, in the rest of the text, a
+// character that commonmark.js may leave out, so
+// ![<b x="y"> <? > <a href="target" x=' ?>' y=*'z*](a.png)
+// is read as linking to nothing, as it does: commonmark.js writes 'z
+// there, without the *, and the ' opens the value of y. Where the image
+// has a title, commonmark.js writes it between the " and the />, as
+// title="..." with its " and > escaped, which ends such a tag at the same
+// > unless the tag is in a value in single quotes or before a value there;
+// such a tag is read as one that does not end, as it does not without a
+// title, though with one it may:
+// ![<b x="y"> <? > <a href="target" x=' ?>](a.png "it's")
+// links to target, and the check reads no link there. A comment, and a tag
+// that does not end there, is not read on after the image. The text of the
+// description between its raw HTML is read as
 // commonmark.js writes it: escaped, as textAt() reads text, the text of a
 // code span or an autolink without its backticks or its < and >, as
 // written, escaped, without the space that CommonMark takes off each end
@@ -1688,7 +1761,10 @@ const AFTER_IMG = 'after img';
 // given each piece of raw HTML inside an image from left to right, from
 // text[start] to text[end], with `part`, the image's part of linkSyntax(),
 // and `tag`, whether an open tag or a closing tag starts there, and returns
-// the hrefs a browser reads in it, as rawHtmlHrefs() gives them. So in
+// the hrefs a browser reads in it, as rawHtmlHrefs() gives them;
+// reader.ends(to) returns those of a tag that the end of the description
+// of the image read last ends, as above, once, when that description ends
+// before text[to], and none otherwise. So in
 // ![<b title=">"><a href="target">y</a></b>](a.png) the href is read; in
 // ![<a href="target">y</a>](a.png) it is not, as it is an attribute of the
 // <img> there; and in ![<b x="><b x="> <a href="target">y</a>](a.png) it is
@@ -1704,14 +1780,28 @@ function altHrefs(text, marks) {
   let elements; // in AFTER_IMG, the tracker of rawTextElements() of the elements open
   let open; // in AFTER_IMG, what the raw HTML read so far leaves open, as rawHtmlHrefs() gives it
   // Reads the description from text[read] to text[start] into the
-  // attributes of `tag` when it is a tag, as commonmark.js writes it.
+  // attributes of `tag` when it is a tag, as commonmark.js writes it, its
+  // text as textAt() reads text, and returns whether that text holds, where
+  // the tag is not in a quoted value, a character that commonmark.js may
+  // leave out of what it writes there, which a browser then does not read
+  // in the tag: a [ or a ] of a link or an image, a * or a _ of emphasis,
+  // or a backslash before a line break, which it writes as a line break.
+  // One that a backslash escapes, it writes.
   const textTo = (start, tag) => {
     const reads = tag !== null && tag !== IN_COMMENT;
+    let leftOut = false;
     while (read < start) {
       while (next < marks.length && marks[next][1] <= read) next++;
       const mark = next < marks.length && marks[next][0] < start ? marks[next] : null;
       const to = mark ? mark[0] : start;
-      if (to > read && reads) attributesEnd(text, read, to, false, tag);
+      for (let i = read; reads && i < to; i++) {
+        const c = text[i];
+        const quoted = tag.state === '"' || tag.state === "'";
+        if (!quoted && !escapes(text, i) && (c === '[' || c === ']' || c === '*' || c === '_' || (c === '\\' && text[i + 1] === '\n'))) leftOut = true;
+        const [stands, last] = textAt(text, i, to);
+        tagStep(tag, stands, text, i, last);
+        i = last;
+      }
       if (mark && reads && mark[2] !== DESTINATION) {
         let [from, end] = mark;
         if (mark[2] === AUTOLINK_TAG) {
@@ -1727,8 +1817,9 @@ function altHrefs(text, marks) {
       }
       read = mark ? mark[1] : start;
     }
+    return leftOut;
   };
-  return (part, start, end, tag) => {
+  const reader = (part, start, end, tag) => {
     if (part !== image) [image, where] = [part, IN_ALT];
     if (where === IN_ALT) {
       if (quote !== -1 && quote < start) quote = text.indexOf('"', start);
@@ -1738,7 +1829,7 @@ function altHrefs(text, marks) {
     let hrefs;
     if (where === IN_IMG) {
       textTo(start, img);
-      const imgEnd = attributesEnd(text, start, end, true, img);
+      const imgEnd = attributesEnd(text, start, end, img);
       read = end;
       if (imgEnd === -1) return [];
       [where, elements] = [AFTER_IMG, rawTextElements(text, find)];
@@ -1750,6 +1841,14 @@ function altHrefs(text, marks) {
     ({ hrefs, open } = rawHrefs(text, start, end, tag, elements, open));
     return hrefs;
   };
+  reader.ends = (to) => {
+    if (image === null || image[4] >= to) return [];
+    const close = image[4];
+    image = null;
+    if (where !== AFTER_IMG || open === null || open === IN_COMMENT || textTo(close, open)) return [];
+    return writtenEnds(text, close, '" />', open) && open.href ? [open.href] : [];
+  };
+  return reader;
 }
 
 // Link targets on one prose line: inline [text](target), whose destination
@@ -1794,11 +1893,16 @@ function linkTargets(line, open, spans) {
 // is read on its own, with no link text, code span or raw HTML open before
 // it, as linkTargets reads a line; a cell holds no definition. `defined`
 // says which references the page defines, as paragraphCodeSpans() takes it.
-function rowTargets(row, count, defined) {
+// A renderer writes </th> after the text of a cell of the header row, which
+// `header` says the row is, and </td> after that of a cell of another row,
+// the text ending before the white space it leaves out at the end of the
+// cell.
+function rowTargets(row, count, defined, header = false) {
+  const tag = header ? '</th>' : '</td>';
   return rowCells(row)
     .slice(0, count)
     .flatMap((cell) => {
-      const spans = paragraphCodeSpans([cell], [], defined)();
+      const spans = paragraphCodeSpans([cell], [], defined, { at: cell.trimEnd().length, tag })();
       const targets = inlineDestinations(cell, noOpenLinkText(), spans);
       return [...targets, ...spans.hrefs()];
     });
@@ -2087,8 +2191,9 @@ function afterQuotes(line, quotes) {
 // starts a block rather than going on with the paragraph above; `html`,
 // whether the line is a line of an HTML block that the reader follows,
 // whose text is raw HTML; `j`, its index in the lines; and for a table row,
-// `row`, its text from where it starts, and `columns`, how many cells the
-// header row of its table holds. Given a set as `quotedFences`, the reader
+// `row`, its text from where it starts, `columns`, how many cells the
+// header row of its table holds, and `header`, whether it is that header
+// row. Given a set as `quotedFences`, the reader
 // adds to it the index in `lines` of each line of a fenced code block that
 // it follows, its fences included. Given a map as `htmlLines`, the reader
 // sets in it the index in `lines` of each line of an HTML block that it
@@ -2192,7 +2297,8 @@ function blockReader(lines, quotedFences, htmlLines, tables = true) {
     if (htmlBlock && (!html || (!endsAtBlank(htmlBlock.kind) && HTML_BLOCK_END[htmlBlock.kind].test(afterQuotes(line, htmlBlock.quotes))))) htmlBlock = null;
     const rest = fenceOpen || fenceClose || (html && start.rest === 'fence') ? 'block' : restOf(j, start, paragraph, table);
     // A row that no row comes before is a header row.
-    if (rest === 'row' && !table) columns = cellCount(start.row);
+    const header = rest === 'row' && !table;
+    if (header) columns = cellCount(start.row);
     table = rest === 'row';
     const starts = !(paragraph && rest === 'text' && start.opened.length === 0);
     if (starts) {
@@ -2233,7 +2339,7 @@ function blockReader(lines, quotedFences, htmlLines, tables = true) {
       fenced = start.fence;
       quotedFences?.add(j);
     }
-    return rest === 'row' ? { j, rest, starts, html, row: start.row, columns } : { j, rest, starts, html };
+    return rest === 'row' ? { j, rest, starts, html, row: start.row, columns, header } : { j, rest, starts, html };
   };
   read.start = (line) => lineStart(line, containers, paragraph, stops);
   read.inHtml = inHtml;
@@ -2574,6 +2680,38 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
     const text = afterQuotes(line, quotes);
     return line.length - text.length + text.match(/^[ \t]*/)[0].length;
   };
+  // What a renderer writes after the text of the block that starts at
+  // lines[j], as paragraphCodeSpans() takes it as `end`. After a paragraph
+  // of `count` lines, </p>, or </h1> or </h2> where the line after it is a
+  // setext underline, of = or of -, that goes on with the block quotes and
+  // list items that hold it, as the paragraph is then a heading. After a
+  // paragraph that a list item holds, which a tight list writes without
+  // <p>, the end tag is not known, and where the next line starts an HTML
+  // block of that item, nothing is read, as a tight list writes that block
+  // right after the text, where a quote in it may keep the tag open. On any
+  // other block, the end tag of an ATX heading, of the level that its #s
+  // give, its text ending before the #s that close it, after a space or a
+  // tab, and the spaces and tabs around them; and nothing on a line that
+  // holds no #, a thematic break or a setext underline, as those hold no
+  // raw HTML.
+  const blockEnd = (j, count, paragraph) => {
+    const last = lines[j + count - 1].line;
+    if (!paragraph) {
+      const level = /#+/.exec(last)?.[0].length;
+      if (level === undefined) return null;
+      const line = last.endsWith('\r') ? last.slice(0, -1) : last;
+      const close = /[ \t]+#+[ \t]*$/.exec(line);
+      return { at: line.slice(0, close ? close.index : line.length).trimEnd().length, tag: `</h${level}>` };
+    }
+    const at = last.trimEnd().length;
+    const below = lines[j + count];
+    const next = below === undefined ? null : lineStart(below.line, read.containers, true);
+    const goesOn = next !== null && next.matched === read.containers.length && next.opened.length === 0;
+    const underline = goesOn && next.rest === 'block' ? /^[ \t>]*(?:(=+)|-+)[ \t]*\r?$/.exec(below.line) : null;
+    if (underline) return { at, tag: underline[1] ? '</h1>' : '</h2>' };
+    if (read.containers.length === 0 || read.containers.at(-1).quote) return { at, tag: '</p>' };
+    return goesOn && next.html ? null : { at, tag: null };
+  };
   return (l) => {
     const block = read(l);
     if (block === null) return [];
@@ -2589,7 +2727,8 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       // block are read on its line alone.
       const texts = [0];
       if (paragraph) for (let at; j + texts.length < lines.length && (at = textStart(j + texts.length)) !== -1; ) texts.push(at);
-      open.code = paragraphCodeSpans(lines.slice(j, j + texts.length).map(({ line }) => line), texts, defined);
+      const end = paragraph || (rest === 'block' && !html) ? blockEnd(j, texts.length, paragraph) : null;
+      open.code = paragraphCodeSpans(lines.slice(j, j + texts.length).map(({ line }) => line), texts, defined, end);
     }
     // A fence holds no link, whether parse() tags it or not: what follows the
     // run of an opening fence is an info string, not text, and a line that
@@ -2602,7 +2741,7 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       return hrefTargets(html ? l.line : withoutCodeSpans(l.line));
     }
     // The cells of a table row of an HTML block are raw HTML as well.
-    if (rest === 'row') return html ? hrefTargets(l.line) : rowTargets(block.row, block.columns, defined);
+    if (rest === 'row') return html ? hrefTargets(l.line) : rowTargets(block.row, block.columns, defined, block.header);
     const spans = open.code();
     // A line of an HTML block is raw HTML, whatever lineStart() reads it
     // as: its inline links and definitions are text, link text that opens
@@ -4096,7 +4235,9 @@ function referenceLabel(text, start, close, end, holds) {
 // of a reference right after that ], with `sure` false, as a renderer
 // writes it as text only where a definition of that reference is on the
 // page, which is not read here, and with the label it is looked up under
-// as a fourth entry, as referenceLabel() gives it. The brackets are paired as
+// as a fourth entry, as referenceLabel() gives it, which is null for the
+// others. The fifth entry of each is the index of the ] that ends the text
+// of its link or the description of its image. The brackets are paired as
 // inlineDestinations() pairs them on a line, also over line breaks: a code
 // span, an autolink or raw HTML is read whole where it starts, so a [ or ]
 // inside one is text, link text that holds a link is not a link's text, and
@@ -4135,11 +4276,11 @@ function linkSyntax(text, keep = () => true) {
       if (end === -1) {
         if (image) {
           const labelEnd = referenceLabelEnd(text, i + 1);
-          parts.push([at, labelEnd, false, referenceLabel(text, at, i, labelEnd, holds)]);
+          parts.push([at, labelEnd, false, referenceLabel(text, at, i, labelEnd, holds), i]);
         }
         continue;
       }
-      parts.push([image ? at : i + 1, end, true]);
+      parts.push([image ? at : i + 1, end, true, null, i]);
       if (!image) aroundLink = brackets.length;
       i = end - 1;
     }

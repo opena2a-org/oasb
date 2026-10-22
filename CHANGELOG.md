@@ -1879,6 +1879,28 @@ stay on record here with the reason they changed.
   quote that ends it; the raw HTML after that is read with nothing open,
   so `x <? > <b x=" ?> [y] <a href="docs/nowhere.md">z</a>` exits 1, as it
   did, though neither renders that link.
+- `npm run check:readme` reads a tag that raw HTML leaves open at the end of
+  a paragraph, heading or table cell on over the end tag that a renderer
+  writes there, and one left open at the end of an image's description on
+  over the `"` and `/>` that commonmark.js writes after it, and reads the
+  tag's href where a `>` there ends it. With `docs/guide.md` present and
+  `docs/nowhere.md` absent, `x <? > <a href=docs/nowhere.md x=' ?> '`, the
+  same text after `## ` or in a table cell, and
+  `![<b x="y"> <? > <a href=docs/nowhere.md x=" ?>](docs/guide.md)` exited
+  0, and now exit 1 with `link target "docs/nowhere.md" does not exist`;
+  parse5 7.3.0 reads that href in what commonmark.js 0.31.2 renders of
+  each, and in what markdown-it 14.1.0 renders of the first three. An
+  unquoted href that runs on into the end tag takes its `</` and name, as
+  a browser reads it: `x <? > <a x=' ?> ' href=docs/guide.md` exits 1 with
+  `link target "docs/guide.md</p" does not exist`. A tag inside a quoted
+  value there does not end. After a paragraph that a list item holds,
+  which a tight list writes without `</p>`, an href whose value runs on
+  into the end tag is not read, and nothing is read where an HTML block
+  of the item follows. In an image, the tag is not read on where the text
+  after its raw HTML holds, outside a quoted value, a `[`, `]`, `*` or `_`
+  or a backslash before a line break, which commonmark.js may leave out,
+  nor where it is in a value in single quotes or before a value, though
+  a title of the image may end it there.
 
 ## 0.4.1 - 2026-10-17
 

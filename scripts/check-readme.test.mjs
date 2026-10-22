@@ -2356,6 +2356,88 @@ test('a comment or a tag that raw HTML leaves open is read on into the raw HTML 
   }
 });
 
+test('a tag that raw HTML leaves open ends at the end tag after its paragraph, heading or table cell, or at the " and /> after the description of an image, unless it is inside a quoted value there', () => {
+  // parse5 7.3.0 reads an href to docs/nowhere.md in what commonmark.js
+  // 0.31.2 or markdown-it 14.1.0 (html: true), or both, render of each of
+  // these: the </p>, </li>, </h2>, </h1> or </td> after the text, or the
+  // start tag of the list after it, ends the <a> tag; inside an image,
+  // where commonmark.js writes the raw HTML of the description as written,
+  // the " that ends the alt attribute ends the value of x, and the /> after
+  // it ends the tag, also where a title follows.
+  for (const [body, line] of [
+    ["x <? > <a href=docs/nowhere.md x=' ?> '\n", 11],
+    ["## x <? > <a href=docs/nowhere.md x=' ?> '\n", 11],
+    ["## x <? > <a href=docs/nowhere.md x=' ?> ' ##\n", 11],
+    ["| h |\n| - |\n| x <? > <a href=docs/nowhere.md x=' ?> ' |\n", 13],
+    ["> x <? > <a href=docs/nowhere.md x=' ?> '\n", 11],
+    ["- x <? > <a href=docs/nowhere.md x=' ?> '\n", 11],
+    ["- x <? > <a href=docs/nowhere.md x=' ?> '\n  - y\n", 11],
+    ["x <? > <a href=docs/nowhere.md x=' ?>\ny '\n", 12],
+    ["x <? > <a href=docs/nowhere.md x=' ?> '\n===\n", 11],
+    ['![<b x="y"> <? > <a href=docs/nowhere.md x=" ?>](docs/guide.md)\n', 11],
+    ['![<b x="y"> <? > <a href=docs/nowhere.md x=" ?>](docs/guide.md "t")\n', 11],
+    ['![<b x="y"> <? > <a href=docs/nowhere.md x=" ?> _z_](docs/guide.md)\n', 11],
+    ['![<b x="y"> <? > <a href=docs/nowhere.md x=" ?>][ref]\n\n[ref]: docs/guide.md\n', 11],
+    ['![<b x="y"> <? > <a href=docs/nowhere.md x=" ?>\nz](docs/guide.md)\n', 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "docs/nowhere.md" does not exist.`, body);
+  }
+  // An unquoted href that runs on into the end tag takes its </ and name,
+  // or the " after the description of an image, as parse5 reads it.
+  for (const [body, line, target] of [
+    ["x <? > <a x=' ?> ' href=docs/guide.md\n", 11, 'docs/guide.md</p'],
+    ["x <? > <a x=' ?> ' href=\n", 11, '</p'],
+    ["x <? > <a x=' ?> ' href=docs/guide.md\n---\n", 11, 'docs/guide.md</h2'],
+    ["### x <? > <a x=' ?> ' href=docs/guide.md ###\n", 11, 'docs/guide.md</h3'],
+    ["| x <? > <a x=' ?> ' href=docs/guide.md |\n| - |\n", 11, 'docs/guide.md</th'],
+    ["| h |\n| - |\n| x <? > <a x=' ?> ' href=docs/guide.md |\n", 13, 'docs/guide.md</td'],
+    ["![<b x=\"y\"> <? > <a x=' ?> ' href=docs/guide.md](docs/guide.md)\n", 11, 'docs/guide.md"'],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "${target}" does not exist.`, body);
+  }
+  // parse5 reads no href to a missing file in what either renders of these:
+  // the tag is inside a quoted value at the end tag or at the ", or the "
+  // opens a value; a tight list writes a line break, which ends the value
+  // of the href, or the HTML block of the item, whose quote keeps the tag
+  // open, after the text; inside an image, commonmark.js leaves out the *
+  // of emphasis, the brackets of an empty link or the backslash of a line
+  // break, so the ' after it opens the value of y; and a heading's #s after
+  // a backslash are its text.
+  for (const body of [
+    "x <? > <a href=docs/guide.md x=' ?> '\n",
+    'x <? > <a href=docs/nowhere.md x=" ?>\n',
+    '| h |\n| - |\n| x <? > <a href=docs/nowhere.md x=" ?> |\n',
+    "![<b x=\"y\"> <? > <a href=docs/nowhere.md x=' ?>](docs/guide.md)\n",
+    "![<b x=\"y\"> <? > <a href=docs/nowhere.md x=' ?> ' y=](docs/guide.md)\n",
+    "- x <? > <a x=' ?> ' href=docs/guide.md\n  - y\n",
+    "- x <? > <a href=docs/nowhere.md x=' ?> '\n  <div title='>\n",
+    "![<b x=\"y\"> <? > <a href=docs/nowhere.md x=' ?>' y=*'z*](docs/guide.md)\n",
+    "![<b x=\"y\"> <? > <a href=docs/nowhere.md x=' ?>' y=[](docs/guide.md)'z](docs/guide.md)\n",
+    "![<b x=\"y\"> <? > <a href=docs/nowhere.md x=' ?>' y=\\\n'z](docs/guide.md)\n",
+    "## x <? > <a x=' ?> ' href=docs/guide.md \\##\n",
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('a 1 MB line of text and then 4,000 images, each with a tag whose unquoted href runs on into the " after its description, is checked in under 2 seconds', () => {
+  // Read in a copy of the line up to that " for each image, the check ran
+  // out of memory on this line on Node.js 26.12.0.
+  const unit = "![<b x=\"y\"> <? > <a x=' ?> ' href=docs/guide.md](docs/guide.md) ";
+  const line = 'abc '.repeat((1 << 20) / 4) + unit.repeat(4000);
+  const started = process.hrtime.bigint();
+  const r = check(`${line}\n`);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim().split('\n').length, 4000);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters`);
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
