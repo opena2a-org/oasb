@@ -2099,6 +2099,125 @@ test('an href inside an image is read where a " in raw HTML before it in the des
   }
 });
 
+test('an image whose reference names a definition in a block quote, on the line of a list marker or with its destination on the next line is read as one: a <textarea> in it hides no href after it, and an href in it is not read', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) read each of
+  // these definitions, so both render the image as an <img> with its
+  // description in the alt attribute, and parse5 7.3.0 reads a link to
+  // docs/nowhere.md in what each renders of the READMEs of the first loop:
+  // the definition is in a block quote, on the line of a list marker, or
+  // has its destination on the line after its ]:, with each of the ten
+  // names in place of textarea; it is on the line of an ordered list
+  // marker, in a list item in a block quote, in a block quote in a list
+  // item, in a block quote in a block quote, or on the line of a list
+  // marker that ends a paragraph; it starts 4 columns in, in a list item
+  // whose text starts there; spaces follow its ]:, a tab or 4 spaces start
+  // the next line, a block quote or list item holds both lines, or the
+  // next line goes on with their paragraph lazily, also 4 columns in and
+  // without the > of two block quotes; a title follows the destination; it
+  // follows a definition in its paragraph, one written whole on one line or
+  // one with its destination on the next line, also one in a block quote
+  // whose paragraph its two lines go on with lazily; or its destination is
+  // 2. 4 columns in.
+  const NAMES = ['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext'];
+  const ISSUE = ['> [ref]: docs/guide.md\n', '- [ref]: docs/guide.md\n', '[ref]:\ndocs/guide.md\n'];
+  const READ = [
+    ...ISSUE,
+    '1. [ref]: docs/guide.md\n',
+    '> - [ref]: docs/guide.md\n',
+    '- > [ref]: docs/guide.md\n',
+    '>> [ref]: docs/guide.md\n',
+    'text\n- [ref]: docs/guide.md\n',
+    '10. x\n\n    [ref]: docs/guide.md\n',
+    '[ref]:   \ndocs/guide.md\n',
+    '[ref]:\n\tdocs/guide.md\n',
+    '[ref]:\n    docs/guide.md\n',
+    '> [ref]:\n> docs/guide.md\n',
+    '> [ref]:\ndocs/guide.md\n',
+    '- [ref]:\n  docs/guide.md\n',
+    '- [ref]:\ndocs/guide.md\n',
+    '> > [ref]:\n    docs/guide.md\n',
+    "[ref]:\n<docs/guide.md> 'Guide'\n",
+    '[a]: docs/guide.md\n[ref]:\ndocs/guide.md\n',
+    '[a]:\ndocs/guide.md\n[ref]: docs/guide.md\n',
+    '> [a]: docs/guide.md\n[ref]:\ndocs/guide.md\n',
+    '[ref]:\n    2.\n',
+  ];
+  for (const body of [
+    ...NAMES.flatMap((name) => ISSUE.map((definition) => `![x <${name}>][ref] <a href='docs/nowhere.md'>y</a>\n\n${definition}`)),
+    ...READ.slice(ISSUE.length).map((definition) => `![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n${definition}`),
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m, body);
+  }
+  // Both write an <a> in the description of such an image into the alt
+  // attribute too, so parse5 reads no link to docs/nowhere.md in what
+  // either renders of these.
+  for (const definition of READ) {
+    const body = `![<a href='docs/nowhere.md'>x</a>][ref]\n\n${definition}`;
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // Neither reads a definition in these, so the ![ opens no image: a blank
+  // line ends the paragraph before the destination, text follows it, the
+  // label follows other text of its paragraph, the label is indented code
+  // in its block quote, or a list item or a block quote starts on the next
+  // line. parse5 reads no link to docs/nowhere.md in what either renders of
+  // the first README of each pair, where the <textarea> hides the href, and
+  // one in what each renders of the second.
+  for (const definition of [
+    '[ref]:\n\ndocs/guide.md\n',
+    '[ref]:\ndocs/guide.md junk\n',
+    'text\n[ref]:\ndocs/guide.md\n',
+    '>     [ref]:\n> docs/guide.md\n',
+    '[ref]:\n- docs/guide.md\n',
+    '[ref]:\n> docs/guide.md\n',
+  ]) {
+    let body = `![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n${definition}`;
+    let r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+    body = `![<a href='docs/nowhere.md'>x</a>][ref]\n\n${definition}`;
+    r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m, body);
+  }
+  // One of the two reads the definition in each of these and the other does
+  // not, so one renders a link to docs/nowhere.md and the href is read.
+  // commonmark.js reads no definition with a tab after its ]:, and reads a
+  // heading where markdown-it reads === on the next line as the
+  // destination. markdown-it ends a definition before a list marker 3 or
+  // fewer columns in on the next line (2. or *, also in a list item or a
+  // block quote), which commonmark.js reads as the destination, and reads
+  // no definition whose destination is javascript:alert(1). After a
+  // definition, markdown-it reads a line that leaves out the > of its block
+  // quote outside the block quote, so the > on the line after it starts
+  // another block quote and the definition has no destination; reads a
+  // line 4 columns in as indented code; and reads 2. as the start of a
+  // list, where commonmark.js reads each such line as text of the
+  // paragraph. markdown-it reads a line 4 columns in that leaves out the >
+  // of two block quotes, in the inner one, as if it were not indented, so
+  // --- there ends that block quote and the definition, where commonmark.js
+  // reads --- as the destination.
+  for (const definition of [
+    '[ref]:\t\ndocs/guide.md\n',
+    '[ref]:\n===\n',
+    '[ref]:\n2.\n',
+    '[ref]:\n*\n',
+    '- [ref]:\n  2.\n',
+    '> [ref]:\n> 2.\n',
+    '[ref]:\njavascript:alert(1)\n',
+    '> [a]: docs/guide.md\n[ref]:\n> docs/guide.md\n',
+    '[a]: docs/guide.md\n    [ref]: docs/guide.md\n',
+    '[a]: docs/guide.md\n2. [ref]: docs/guide.md\n',
+    '> > [ref]:\n    ---\n',
+  ]) {
+    const body = `![<a href='docs/nowhere.md'>x</a>][ref]\n\n${definition}`;
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m, body);
+  }
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
