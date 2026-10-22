@@ -2891,6 +2891,18 @@ test('a line of ***, --- or ___ and 100,000 spaces or tabs before text is checke
   assert.ok(ms < 2000, `${ms.toFixed(0)} ms for three lines of ${lines[0].length} characters`);
 });
 
+test('an ATX heading, in a block quote or a list item too, or a fence whose info string holds a #, with 100,000 spaces or tabs before text is checked in under 2 seconds', () => {
+  // The #s that close a heading were searched for from each space or tab of
+  // a run that no #s follow, on to the end of the run: these five lines
+  // took 24.7 seconds.
+  const lines = ['## a' + ' '.repeat(100000) + 'b', '> ## a' + '\t'.repeat(100000) + 'b', '- # a' + ' '.repeat(100000) + 'b', '## a' + '\t'.repeat(100000) + 'b ##', '```js' + ' '.repeat(100000) + '#b\n```'];
+  const started = process.hrtime.bigint();
+  const r = check(`${lines.join('\n\n')}\n`);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(ms < 2000, `${ms.toFixed(0)} ms for five lines of ${lines[0].length} characters`);
+});
+
 test('a line of 50,000 list markers before text is checked in under 2 seconds', () => {
   // A thematic break was tried at each list marker and read to the end of
   // the line before it failed: these four lines took 41.5 seconds.

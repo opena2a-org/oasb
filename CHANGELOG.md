@@ -1901,6 +1901,13 @@ stay on record here with the reason they changed.
   or a backslash before a line break, which commonmark.js may leave out,
   nor where it is in a value in single quotes or before a value, though
   a title of the image may end it there.
+- `npm run check:readme` finds the `#`s that close an ATX heading, in a
+  block quote or a list item too, by reading the end of the line past its
+  spaces and tabs, instead of searching for them from each space or tab of
+  the line on to the end of the run it is in. On macOS arm64, `## a`,
+  100,000 spaces and `b` took 4.8 seconds to check and now takes 0.07
+  seconds; with 200,000 spaces, 20.1 seconds and now 0.06; with 1,000,000
+  spaces, 0.06 seconds.
 
 ## 0.4.1 - 2026-10-17
 
