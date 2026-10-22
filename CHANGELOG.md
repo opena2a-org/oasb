@@ -1858,6 +1858,27 @@ stay on record here with the reason they changed.
   `> [ref]: docs/guide.md` right under the delimiter row, or one after a
   blank line under it, is still read, and those READMEs exit 0, as they
   did.
+- `npm run check:readme` reads a comment or a tag that a piece of raw HTML
+  leaves open on into the raw HTML after it in its paragraph, heading or
+  table cell, inside an image and outside one, as a browser reads it,
+  where it read each piece on its own. With `docs/guide.md` present and
+  `docs/nowhere.md` absent, the lines
+  `![<b x="><b x="> <a href="docs/nowhere.md">y</a>](docs/guide.md)`,
+  `![<b x="><!--"> <a href="docs/nowhere.md">y</a>](docs/guide.md)`,
+  `![<b x="><!-- x --><b x="> / <a href="docs/nowhere.md">y</a>](docs/guide.md)`
+  and `x <? > <b x=" ?> <a href="docs/nowhere.md">y</a>` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, and now exit 0; parse5
+  7.3.0 reads no link to `docs/nowhere.md` in what commonmark.js 0.31.2 or
+  markdown-it 14.1.0 renders of them. The href of such a tag is read where
+  the tag ends: `x <? > <a title=' ?> ' href=docs/nowhere.md <b>y</b>`
+  exited 0 and now exits 1 with that message, and parse5 reads that href
+  in what both render. The text between is read as a renderer writes it,
+  escaped, with a reference such as `&#39;` read as the character it
+  stands for. A tag is not read on past a `[`, an autolink, a code span,
+  emphasis or a hard line break where a renderer may write a tag or a
+  quote that ends it; the raw HTML after that is read with nothing open,
+  so `x <? > <b x=" ?> [y] <a href="docs/nowhere.md">z</a>` exits 1, as it
+  did, though neither renders that link.
 
 ## 0.4.1 - 2026-10-17
 
