@@ -1960,6 +1960,60 @@ test('the MITRE ATLAS Coverage section and a dated page read no link inside an i
   assert.equal(r.status, 0, r.stderr);
 });
 
+test('raw HTML inside an image whose reference a definition on the page names opens and ends no <script>, <textarea> or other element whose text a browser reads as text, as in an image that a destination follows', () => {
+  // commonmark.js 0.31.2 writes the description of such an image into the
+  // alt attribute of the <img> as written, and markdown-it 14.1.0 (html:
+  // true) writes it there as escaped text. parse5 7.3.0 reads a link to
+  // docs/nowhere.md in what each renders of these: the <a> follows the
+  // image, also with each of the other nine names in place of textarea,
+  // with <? > <textarea> ?> as the description, with the label in other
+  // case, with [] or no label after the ] and the description as the
+  // definition's label, with the definition above the image, with the
+  // image's ] on the next line, and with the image in a block quote, a list
+  // item, a heading or a table cell.
+  const NAMES = ['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext'];
+  for (const [body, line] of [
+    ...NAMES.map((name) => [`![x <${name}>][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n`, 11]),
+    ["![<? > <textarea> ?>][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n", 11],
+    ["![x <textarea>][REF] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n", 11],
+    ["![x <textarea>][] <a href='docs/nowhere.md'>y</a>\n\n[x <textarea>]: docs/guide.md\n", 11],
+    ["![x <textarea>] <a href='docs/nowhere.md'>y</a>\n\n[x <textarea>]: docs/guide.md\n", 11],
+    ["[ref]: docs/guide.md\n\n![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>\n", 13],
+    ["![x <textarea>\n][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n", 12],
+    ["> ![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n", 11],
+    ["- ![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n", 11],
+    ["## ![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n", 11],
+    ["| h |\n| - |\n| ![x <textarea>][ref] <a href='docs/nowhere.md'>y</a> |\n\n[ref]: docs/guide.md\n", 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // An end tag in such an image ends no such element either, so the href
+  // after the image is not read in these, as in
+  // x <textarea> ![</textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>.
+  // markdown-it writes the end tag as escaped text in the alt attribute, and
+  // parse5 reads no link to docs/nowhere.md in what it renders; commonmark.js
+  // writes it there as written, which ends the element, and parse5 reads one
+  // in what it renders. No end tag ends a <plaintext>.
+  for (const body of [
+    ...NAMES.filter((name) => name !== 'plaintext').map((name) => `x <${name}> ![</${name}>][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n`),
+    "x <textarea> ![x <textarea> </textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n[ref]: docs/guide.md\n",
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // With no definition of the label on the page the ![ opens no image, so
+  // the start tag opens the <textarea> and the end tag ends it: parse5
+  // reads no link to docs/nowhere.md in what either renders of the first,
+  // and one in what each renders of the second.
+  let r = check("![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n[other]: docs/guide.md\n");
+  assert.equal(r.status, 0, r.stderr);
+  r = check("x <textarea> ![</textarea>][ref] <a href='docs/nowhere.md'>y</a>\n\n[other]: docs/guide.md\n");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m);
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a

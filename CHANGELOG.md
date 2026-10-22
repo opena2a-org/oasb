@@ -1697,7 +1697,28 @@ stay on record here with the reason they changed.
   the skipped test that page lists, and now exits 0; a dated page whose one
   link to the README is in such an image, with the definition below its
   first H2, exited 0 and now exits 1 with
-  `it must link to the README for the current figures`.
+  `it must link to the README for the current figures`. As in an image that
+  a destination follows, the check also reads no tag inside such an image
+  as the start or end of a `<script>`, `<textarea>` or other element whose
+  text a browser reads as text. With `[ref]: docs/guide.md` on the page,
+  the line `![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>`, the
+  lines with each of the other nine elements in place of `<textarea>`, and
+  `![<? > <textarea> ?>][ref] <a href='docs/nowhere.md'>y</a>` exited 0,
+  and now exit 1 with `link target "docs/nowhere.md" does not exist`, as
+  they do with the label in other case, with `[]` or no label after the
+  `]` and `[x <textarea>]: docs/guide.md` as the definition, and with the
+  image in a block quote, a list item, a heading or a table cell. parse5
+  reads a link to `docs/nowhere.md` in what both render of each of these.
+  An end tag in such an image ends no such element either:
+  `x <textarea> ![</textarea>][ref] <a href='docs/nowhere.md'>y</a>` and the
+  lines with `<script>`, `<style>`, `<title>`, `<xmp>`, `<iframe>`,
+  `<noembed>`, `<noframes>` or `<noscript>` in place of `<textarea>`
+  exited 1, and now exit 0, as
+  `x <textarea> ![</textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>`
+  does. markdown-it writes the `</textarea>` as escaped text into the alt
+  attribute, and parse5 reads no link to `docs/nowhere.md` in what it
+  renders; commonmark.js writes it there as written, which ends the
+  `<textarea>`, and parse5 reads that link in what it renders.
 
 ## 0.4.1 - 2026-10-17
 
