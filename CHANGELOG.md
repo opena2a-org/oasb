@@ -1983,6 +1983,28 @@ stay on record here with the reason they changed.
   reads the first tag's attribute as named `href` and a no-break space,
   and the second tag's name as running on over the no-break space, so
   neither tag holds an href.
+- `npm run check:readme` reads the character references in the target of
+  a link, which it read as written. With `docs/guide.md` present, the
+  lines `p [y](docs/guide&#46;md)`, `p <a href="docs/gu&#x69;de.md">y</a>`
+  and `p <a href="&#32;docs/guide.md">y</a>` exited 1 with
+  `link target "docs/guide&#46;md" does not exist`, or with that message
+  for their targets, and `p <a href="docs/guide.md#setup&#45;steps">y</a>`
+  with `anchor "#setup&" has no matching heading in docs/guide.md`; each
+  of them now exits 0. In an inline link and in a reference definition it
+  reads a reference as CommonMark reads one, with its `;`: a name of the
+  HTML standard's table, as `&period;`, or a code point, as `&#46;` or
+  `&#x2E;`. In a definition it reads backslash escapes now as well, so
+  `[g]: docs/a\_b.md` links to `docs/a_b.md`. In an `href` it reads a
+  reference as a browser reads one in an attribute's value, a numeric one
+  also without its `;`, as in `docs/guide&#46md`, and then removes what the
+  URL parser removes, so `&#32;` at the start of the value is removed as a
+  space is. A `?` or `#` that a reference stands for starts the query or
+  the anchor. A link to a file that does not exist fails with its target
+  so read, as `link target "docs/nowhere.md" does not exist` for
+  `[y](docs/nowhere&#46;md)`. A dated page, a page that the MITRE ATLAS
+  Coverage section links and the full output that a capture links are read
+  through such a link as well, and the full output also through a link
+  whose target holds a backslash escape, as `docs/captures/run\.txt`.
 
 ## 0.4.1 - 2026-10-17
 
