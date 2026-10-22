@@ -130,7 +130,11 @@
 //      (> [label]: target or - [label]: target), written whole on one line
 //      or up to its ]: on one line and from its destination on the next
 //      line of the paragraph ([label]: on one line and target on the next),
-//      as definedLabels() describes. markdown-it 14.1.0 writes the
+//      as definedLabels() describes, for each of the two renderers
+//      (commonmark.js 0.31.2 reads no tables, and the rows of a table are
+//      text of a paragraph to it, so a line under a table that goes on with
+//      that paragraph, as 2. [label]: target does, holds no definition
+//      that it reads). markdown-it 14.1.0 writes the
 //      description there as escaped text, and commonmark.js 0.31.2 writes
 //      the raw HTML in it as written, so a " in raw HTML of the description
 //      ends the attribute's value in what it renders, and a browser reads
@@ -1936,8 +1940,11 @@ function afterQuotes(line, quotes) {
 // follows to that block: one object for all the lines of the block, whose
 // `quotes` is how many block quotes hold it. The reader's `containers` and
 // `restOf` are those it reads the next line with, for a caller that reads
-// the lines after it ahead.
-function blockReader(lines, quotedFences, htmlLines) {
+// the lines after it ahead. Given false as `tables`, the reader reads no
+// table, as commonmark.js 0.31.2 reads none: a line that it would read as a
+// table row, or as a lazy line that starts a paragraph, is text, which a
+// paragraph holds.
+function blockReader(lines, quotedFences, htmlLines, tables = true) {
   // The containers open after the line above and their stops, as
   // lineStart() takes them.
   const containers = [];
@@ -1982,9 +1989,11 @@ function blockReader(lines, quotedFences, htmlLines) {
   // markdown-it 14 reads it; after a line of paragraph text, `stops` holds
   // the block quotes of `containers` and no list item, so the last of them
   // says whether the line leaves one out, without a step for each
-  // container. A 'row' is text otherwise.
+  // container. A 'row' is text otherwise, and a 'row' or 'text' is text
+  // when the reader reads no table.
   const restOf = (k, start, paragraphAbove, rowAbove) => {
     if (start.rest !== 'row' && start.rest !== 'text') return start.rest;
+    if (!tables) return 'text';
     const opensNone = start.opened.length === 0;
     if (rowAbove && opensNone && start.matched === containers.length) return 'row';
     const next = lines[k + 1];
@@ -2197,9 +2206,19 @@ function blockEnds(text) {
 
 // The keys, as labelKeys() gives them, of the labels of the reference
 // definitions on a page, `lines` being its lines as parse() tags them, as
-// [the keys commonmark.js files them under, those markdown-it does]. A
-// definition is read as definitionLabel() reads one, on a line that
-// blockReader() reads as paragraph text outside an HTML block, in the text
+// [the keys commonmark.js files them under, those markdown-it does], each
+// read with a blockReader() of its own. commonmark.js 0.31.2 reads no
+// tables, so its keys are read with a reader that reads none, which reads
+// the rows of a table as text of a paragraph: a line after them that goes
+// on with that paragraph holds no definition there. So
+// 2. [label]: target right under a table, where a list item that starts at
+// a number other than 1 does not interrupt the paragraph, and
+// [label]: target under a table in a block quote, a line that goes on with
+// the paragraph lazily, without the >, hold none for commonmark.js, where
+// markdown-it 14.1.0 reads the table, then the list item or the line, and
+// the definition. In each reader, a
+// definition is read as definitionLabel() reads one, on a line that the
+// reader reads as paragraph text outside an HTML block, in the text
 // of the line from where lineStart() finds that it starts: past the >
 // markers of the block quotes and the indentation and list markers of the
 // list items that hold the line or that it opens, which both renderers
@@ -2238,50 +2257,54 @@ function blockEnds(text) {
 // definition, before the line, where commonmark.js reads the line as the
 // destination.
 function definedLabels(lines) {
-  const keys = [new Set(), new Set()];
-  const read = blockReader(lines);
-  let defining = false; // whether each line of the paragraph read so far holds a definition
-  // The line read last, when it may start a definition that the next line
-  // ends: its text from where it starts, and how many of the reader's
-  // containers it goes on with or opens.
-  let started = null;
-  for (const l of lines) {
-    // How lineStart() reads the line, which the reader is given so that it
-    // reads the line once, and whose `row` is the text of the line from
-    // where it starts, unless the line goes on with a paragraph 4 or more
-    // columns in.
-    const start = l.inFence ? undefined : read.start(l.line);
-    const block = read(l, start);
-    const text = block !== null && !block.html && block.rest === 'text';
-    const above = started;
-    started = null;
-    let label = null;
-    if (text && !block.starts && above !== null) {
-      // Of the block quotes that hold the line or the line above: how many
-      // the line goes on with, whether one of those is one that the line
-      // above left out, and how many of the others the line leaves out.
-      let quotes = 0;
-      let back = false;
-      let left = 0;
-      for (let c = 0; c < Math.max(start.matched, above.depth); c++) {
-        if (!read.containers[c].quote) continue;
-        if (c >= start.matched) left++;
-        else {
-          quotes++;
-          if (c >= above.depth) back = true;
+  // The keys of commonmark.js, read with a reader that reads no tables, and
+  // those of markdown-it, read with one that reads them.
+  return [false, true].map((tables, k) => {
+    const keys = new Set();
+    const read = blockReader(lines, undefined, undefined, tables);
+    let defining = false; // whether each line of the paragraph read so far holds a definition
+    // The line read last, when it may start a definition that the next line
+    // ends: its text from where it starts, and how many of the reader's
+    // containers it goes on with or opens.
+    let started = null;
+    for (const l of lines) {
+      // How lineStart() reads the line, which the reader is given so that it
+      // reads the line once, and whose `row` is the text of the line from
+      // where it starts, unless the line goes on with a paragraph 4 or more
+      // columns in.
+      const start = l.inFence ? undefined : read.start(l.line);
+      const block = read(l, start);
+      const text = block !== null && !block.html && block.rest === 'text';
+      const above = started;
+      started = null;
+      let label = null;
+      if (text && !block.starts && above !== null) {
+        // Of the block quotes that hold the line or the line above: how many
+        // the line goes on with, whether one of those is one that the line
+        // above left out, and how many of the others the line leaves out.
+        let quotes = 0;
+        let back = false;
+        let left = 0;
+        for (let c = 0; c < Math.max(start.matched, above.depth); c++) {
+          if (!read.containers[c].quote) continue;
+          if (c >= start.matched) left++;
+          else {
+            quotes++;
+            if (c >= above.depth) back = true;
+          }
         }
+        const next = start.row ?? afterQuotes(l.line, quotes).replace(/^[ \t]+/, '');
+        const ends = start.row === undefined ? left > 1 && blockEnds(next) : matchAt(LIST_MARKER, start.row, 0) !== null;
+        if (!back && !ends) label = definitionLabel(above.text, next);
+      } else if (text && (block.starts || defining) && start.row !== undefined) {
+        label = definitionLabel(start.row);
+        if (label === null) started = { text: start.row, depth: block.starts ? read.containers.length : start.matched };
       }
-      const next = start.row ?? afterQuotes(l.line, quotes).replace(/^[ \t]+/, '');
-      const ends = start.row === undefined ? left > 1 && blockEnds(next) : matchAt(LIST_MARKER, start.row, 0) !== null;
-      if (!back && !ends) label = definitionLabel(above.text, next);
-    } else if (text && (block.starts || defining) && start.row !== undefined) {
-      label = definitionLabel(start.row);
-      if (label === null) started = { text: start.row, depth: block.starts ? read.containers.length : start.matched };
+      defining = label !== null;
+      if (label !== null) keys.add(labelKeys(label)[k]);
     }
-    defining = label !== null;
-    if (label !== null) labelKeys(label).forEach((key, k) => keys[k].add(key));
-  }
-  return keys;
+    return keys;
+  });
 }
 
 // Whether a page defines a reference, for paragraphCodeSpans(): a test of

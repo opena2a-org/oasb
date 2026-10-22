@@ -1831,6 +1831,33 @@ stay on record here with the reason they changed.
   when AT-AI-001 holds no test asserting that `scanInput()` matches DE-001
   or AT-AI-002 none asserting that `scanOutput()` matches OL-003, and when
   a scenario's header cites LLM07.
+- `npm run check:readme` reads the definitions that commonmark.js 0.31.2
+  files on a reading of the page with no tables, as commonmark.js reads
+  none, and those that markdown-it 14.1.0 files on one with tables, and
+  an image's reference names a definition only where both file one under
+  its label. With `docs/guide.md` present and `docs/nowhere.md` absent, a
+  README with the line `![<a href='docs/nowhere.md'>x</a>][ref]`, a blank
+  line, and the lines `| h |`, `| - |` and `2. [ref]: docs/guide.md`
+  exited 0, and now exits 1 with
+  `link target "docs/nowhere.md" does not exist`, as it did before the
+  change that read a definition on the line of a list marker or with its
+  destination on the next line. So do the READMEs with `10.` or `10)` in
+  place of `2.`, with `10. [ref]:` on one line and `docs/guide.md` 4
+  columns in on the next, with the body row `| a | b |` above the
+  definition, with `2. x` above `3. [ref]: docs/guide.md`, with the
+  image's paragraph after the definition, with `> | h |`, `> | - |` and
+  `> 2. [ref]: docs/guide.md`, and with `> | h |`, `> | - |`, `[ref]:` and
+  `docs/guide.md` on four lines. commonmark.js reads the table's rows as
+  text of a paragraph, and each of these definitions as text of that
+  paragraph, as a list item that starts at a number other than 1 does not
+  interrupt a paragraph and a line that leaves out the `>` goes on with
+  one lazily, so parse5 7.3.0 reads a link to `docs/nowhere.md` in what
+  it renders; markdown-it reads the table, then the list item or the
+  line, and the definition. A definition that both read under a table,
+  such as `1. [ref]: docs/guide.md`, `- [ref]: docs/guide.md` or
+  `> [ref]: docs/guide.md` right under the delimiter row, or one after a
+  blank line under it, is still read, and those READMEs exit 0, as they
+  did.
 
 ## 0.4.1 - 2026-10-17
 
