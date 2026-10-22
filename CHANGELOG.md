@@ -1680,9 +1680,8 @@ stay on record here with the reason they changed.
   `link target "docs/nowhere.md" does not exist`, and now exits 0, as it
   does with the definition above the image, with the label in other case
   and white space, and with the image in a block quote, a list item, link
-  text, a heading or a table cell. The check reads a definition written
-  whole on one line where a paragraph starts, or after the definitions that
-  start one, outside a block quote and not on the line of a list marker.
+  text, a heading or a table cell. The check reads a definition where a
+  paragraph starts, or after the definitions that start one.
   Both renderers read a definition in the image's paragraph, or after other
   text of its paragraph, as text, so the `![` opens no image there and the
   README exits 1, as it did, and the check still reads the href where the
@@ -1739,6 +1738,31 @@ stay on record here with the reason they changed.
   loads without vitest. `src/harness/capabilities-core.test.ts` checks
   these cases; it passed with vitest 3.2.7 on Node 20.19.0, 20.20.0,
   22.23.3, 24.17.0 and 26.12.0.
+- `npm run check:readme` also reads a definition that names an image's
+  reference in a block quote, on the line of a list marker, or with its
+  destination on the line after its `]:`, where commonmark.js 0.31.2 and
+  markdown-it 14.1.0 both read one. In the description of such an image, a
+  `<textarea>` start tag, or one of another element whose text a browser
+  reads as text, then opens no such element, and no href is read there.
+  With `docs/guide.md` present and `docs/nowhere.md` absent, the line
+  `![x <textarea>][ref] <a href='docs/nowhere.md'>y</a>` and the lines with
+  each of the other nine elements in place of `<textarea>`, each followed
+  by a blank line and `> [ref]: docs/guide.md`, `- [ref]: docs/guide.md`,
+  or `[ref]:` with `docs/guide.md` on the next line, exited 0, and now exit
+  1 with `link target "docs/nowhere.md" does not exist`. parse5 7.3.0
+  reads a link to `docs/nowhere.md` in what both render of each of these.
+  The line `![<a href='docs/nowhere.md'>x</a>][ref]` with one of those
+  three definitions exited 1 with that message, and now exits 0, as
+  neither renders that link. The check reads a definition from where the
+  text of its line starts, past block quote markers and list item
+  indentation and markers. A line that holds a label and `]:` with only
+  spaces after it is read with the destination on the next line of its
+  paragraph, but not where markdown-it reads no destination there and
+  commonmark.js does: where that line starts with a list marker 3 or fewer
+  columns in, such as `2.`, where it goes on with a block quote whose `>`
+  the line above left out, and where it leaves out the `>` of two block
+  quotes and starts 4 or more columns in with a block such as `---`. The
+  check still does not check that the target of such a definition exists.
 - `npm run check:readme` reads an href inside an image where a `"` in raw
   HTML before it in the description ends the alt attribute that
   commonmark.js 0.31.2 writes the description into: it writes the raw HTML
