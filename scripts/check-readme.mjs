@@ -2691,17 +2691,26 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   // right after the text, where a quote in it may keep the tag open. On any
   // other block, the end tag of an ATX heading, of the level that its #s
   // give, its text ending before the #s that close it, after a space or a
-  // tab, and the spaces and tabs around them; and nothing on a line that
-  // holds no #, a thematic break or a setext underline, as those hold no
-  // raw HTML.
+  // tab, and the spaces and tabs around them; nothing on a fence, as the
+  // reader reads no link on its line; and nothing on a line that holds no
+  // #, a thematic break or a setext underline, as those hold no raw HTML.
   const blockEnd = (j, count, paragraph) => {
-    const last = lines[j + count - 1].line;
+    const { line: last, fenceOpen, fenceClose } = lines[j + count - 1];
     if (!paragraph) {
+      if (fenceOpen || fenceClose) return null;
       const level = /#+/.exec(last)?.[0].length;
       if (level === undefined) return null;
       const line = last.endsWith('\r') ? last.slice(0, -1) : last;
-      const close = /[ \t]+#+[ \t]*$/.exec(line);
-      return { at: line.slice(0, close ? close.index : line.length).trimEnd().length, tag: `</h${level}>` };
+      // The #s that close the heading are read from the end of the line,
+      // past the spaces and tabs there: a search for [ \t]+#+[ \t]*$ went
+      // on from each space or tab of a run that no #s follow to the end of
+      // the run, so a heading of 100,000 spaces before text took 5 seconds.
+      let at = line.length;
+      while (at > 0 && (line[at - 1] === ' ' || line[at - 1] === '\t')) at--;
+      let hashes = at;
+      while (hashes > 0 && line[hashes - 1] === '#') hashes--;
+      if (hashes > 0 && hashes < at && (line[hashes - 1] === ' ' || line[hashes - 1] === '\t')) at = hashes;
+      return { at: line.slice(0, at).trimEnd().length, tag: `</h${level}>` };
     }
     const at = last.trimEnd().length;
     const below = lines[j + count];
