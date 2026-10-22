@@ -2014,6 +2014,91 @@ test('raw HTML inside an image whose reference a definition on the page names op
   assert.match(r.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m);
 });
 
+test('an href inside an image is read where a " in raw HTML before it in the description ends the alt attribute that commonmark.js writes the description into, and not where it is then an attribute of the <img>', () => {
+  // commonmark.js 0.31.2 writes the raw HTML in the description of an
+  // image into the alt attribute of the <img> as written, and markdown-it
+  // 14.1.0 (html: true) writes the description there as escaped text, so
+  // parse5 7.3.0 reads a link to docs/nowhere.md in what commonmark.js
+  // renders of each of these, and no link to it in what markdown-it
+  // renders: a " in a tag, a comment, a processing instruction, a CDATA
+  // section or a declaration before the <a> ends the attribute's value,
+  // and the <img> tag ends at the first > outside a quoted value after it:
+  // in the raw HTML that holds the ", also where the rest of that raw HTML
+  // holds the <a>; in a later tag, after a ' in the text closes a
+  // single-quoted value, also one that a nested link, whose destination is
+  // not written, precedes; and with the image's ] or the href on the next
+  // line, in a block quote, a list item, link text, a heading or a table
+  // cell, and in an image whose reference a definition on the page names.
+  // Both render the last of these with the link, as no definition names
+  // the reference and the ![ opens no image.
+  for (const [body, line] of [
+    ['![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)\n', 11],
+    ['![<b class="x"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)\n', 11],
+    ['![<!-- " --> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n', 11],
+    ['![<?x " ?> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n', 11],
+    ['![<![CDATA[ " ]]> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n', 11],
+    ['![<!DOCTYPE "> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n', 11],
+    ["![<b title=\">\" x=\"<a href='docs/nowhere.md'>y</a>\">](docs/guide.md)\n", 11],
+    ["![<b x=\"y='\"> <i>'</i> <a href=\"docs/nowhere.md\">y</a>](docs/guide.md)\n", 11],
+    ["![<b x=\"y='\"> [t](docs/guide.md) ' <i>x</i> <a href=\"docs/nowhere.md\">y</a>](docs/guide.md)\n", 11],
+    ['![<b title=">"><a href="docs/nowhere.md">y</a>\n](docs/guide.md)\n', 11],
+    ['![<b title=">"><a\nhref="docs/nowhere.md">y</a></b>](docs/guide.md)\n', 12],
+    ['> ![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)\n', 11],
+    ['- ![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)\n', 11],
+    ['[![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)](docs/guide.md)\n', 11],
+    ['## ![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)\n', 11],
+    ['| h |\n| - |\n| ![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md) |\n', 13],
+    ['![<b title=">"><a href="docs/nowhere.md">y</a></b>][ref]\n\n[ref]: docs/guide.md\n', 11],
+    ['![<b title=">"><a href="docs/nowhere.md">y</a></b>][ref]\n\n[other]: docs/guide.md\n', 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+  // The check names docs/nowhere.md alone in each of these. In the first,
+  // the href of the <a> that holds the " is an attribute of the <img>, and
+  // the <a> after that tag's end is a link in what commonmark.js renders.
+  // In the second, the <textarea> that the rest of the description opens
+  // is open to the end of the description, and in the third the
+  // single-quoted value that the ' opens runs on past the image: in what
+  // markdown-it renders of those two, parse5 reads the link after the
+  // image, and in what commonmark.js renders it reads none.
+  for (const body of [
+    '![<a href="docs/a.md">x</a> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n',
+    '![<b title=">"><textarea>](docs/guide.md) <a href="docs/nowhere.md">y</a>\n',
+    '![<b x="y=\'">](docs/guide.md) <a href="docs/nowhere.md">y</a>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), 'README: line 11: link target "docs/nowhere.md" does not exist.', body);
+  }
+  // parse5 reads no link to docs/nowhere.md in what either renders of
+  // these: the href is an attribute of the <img>, as the " that ends the
+  // attribute's value is in its own tag; no raw HTML of the description
+  // holds a ", as one in text, in a code span, in an autolink or as
+  // &quot; is written escaped, and a ' ends no value; the <a> is inside a
+  // single-quoted value of the <img> tag, which the ' after it closes, or
+  // which the ' in the title of a nested link, not written, does not; it
+  // is in the text of a <textarea> that the rest of the description
+  // opens; or the image is in the text of a <textarea> opened before it.
+  for (const body of [
+    '![<a href="docs/nowhere.md">y</a>](docs/guide.md)\n',
+    '![<a href="docs/nowhere.md" x="y">z</a>](docs/guide.md)\n',
+    "![<b title='>'><a href='docs/nowhere.md'>y</a></b>](docs/guide.md)\n",
+    "![\\\"<a href='docs/nowhere.md'>y</a>](docs/guide.md)\n",
+    "![&quot;<a href='docs/nowhere.md'>y</a>](docs/guide.md)\n",
+    "![`\"`<a href='docs/nowhere.md'>y</a>](docs/guide.md)\n",
+    "![<https://x/\"><a href='docs/nowhere.md'>y</a>](docs/guide.md)\n",
+    '![<b x="y=\' "> <a href="docs/nowhere.md">y</a> \'](docs/guide.md)\n',
+    '![<b x="y=\'"> [t](docs/guide.md \'q\') <i>x</i> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n',
+    '![<b title=">"><textarea><a href="docs/nowhere.md">y</a></textarea></b>](docs/guide.md)\n',
+    'x <textarea> ![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
