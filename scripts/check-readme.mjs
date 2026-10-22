@@ -211,17 +211,27 @@
 //      ![<b title=">"><textarea><a href="target">y</a></textarea>](a.png)
 //      does not.
 //      The target of an href is its
-//      value without the tabs, line feeds and carriage returns that the URL
-//      parser removes from a URL, without the spaces and the controls
+//      value with its character references read as a browser reads them in
+//      an attribute's value, as scripts/character-references.mjs describes,
+//      a numeric one also without its ; (&#46 and &#46; are a full stop),
+//      and then without the tabs, line feeds and carriage returns that the
+//      URL parser removes from a URL, without the spaces and the controls
 //      U+0001 to U+001F that it removes from the start and the end of a URL,
 //      and without the > markers and indentation that start a line of a
 //      paragraph after its first, which CommonMark leaves out of the
 //      paragraph's text: x <a href="dir/ on one line of a paragraph and
 //      file.md">y</a> on the next, also in a block quote, link to
-//      dir/file.md, as does x <a href=" dir/file.md ">y</a>, and
+//      dir/file.md, as do x <a href=" dir/file.md ">y</a> and
+//      x <a href="&#32;dir/fil&#x65;.md">y</a>, and
 //      x <a href=" https://example.com/x">y</a> is not looked up as a file,
 //      as its target starts with a scheme. A NUL is kept, as hrefUrl()
-//      describes. On a line of an HTML block or of indented code,
+//      describes. The target of an inline link or of a definition is read
+//      with its backslash escapes and character references as CommonMark
+//      reads them, a reference only with its ;: [y](docs/guide&#46;md) and
+//      [y](docs/guide&period;md) link to docs/guide.md, and in
+//      [y](docs/guide&#46md) the reference is read as written. A ? or #
+//      that a reference stands for starts the query or the anchor of the
+//      target. On a line of an HTML block or of indented code,
 //      an href is read when its value ends on that line. Other forms, such
 //      as a definition on the same line as a list marker
 //      (`- [label]: target`), are not read: the target of such a
@@ -348,6 +358,7 @@
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { attributeValue, destinationText } from './character-references.mjs';
 import { QUALIFIERS, README_PAGES, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 import { findScenario, verdictLine } from '../bin/run-scenario.mjs';
 
@@ -1131,7 +1142,6 @@ function inlineHtml(text) {
 // ASCII punctuation, which then stands for itself; before any other
 // character, such as a space, a backslash is text.
 const PUNCTUATION = /[!-/:-@[-`{-~]/;
-const ESCAPE = /\\([!-/:-@[-`{-~])/g;
 const escapes = (line, i) => line[i] === '\\' && PUNCTUATION.test(line[i + 1] ?? '');
 
 // The inline link or image whose destination opens at the ( at text[paren],
@@ -1144,9 +1154,10 @@ const escapes = (line, i) => line[i] === '\\' && PUNCTUATION.test(line[i + 1] ??
 // balanced parentheses, nested up to 32 deep as markdown-it allows. The
 // title is optional and in "", in '' or in () with no ( inside that no
 // backslash escapes, in which a backslash escapes the character after it,
-// and may hold a line break. Returns the target, with each escape read as
-// the character it escapes, and the index after the ) that closes the
-// link, or null when no ) closes it there.
+// and may hold a line break. Returns the target, its backslash escapes and
+// character references read as destinationText() reads them, so
+// [y](docs/guide&#46;md) links to docs/guide.md, and the index after the )
+// that closes the link, or null when no ) closes it there.
 const MAX_PAREN_DEPTH = 32;
 const LINK_TITLE_AND_CLOSE = /(?:[ \t\n]+(?:"(?:[^"\\]|\\[^])*"|'(?:[^'\\]|\\[^])*'|\((?:[^()\\]|\\[^])*\)))?[ \t\n]*\)/y;
 function inlineLink(text, paren) {
@@ -1179,7 +1190,7 @@ function inlineLink(text, paren) {
   }
   LINK_TITLE_AND_CLOSE.lastIndex = i;
   if (!LINK_TITLE_AND_CLOSE.test(text)) return null;
-  return { target: raw.replace(ESCAPE, '$1'), end: LINK_TITLE_AND_CLOSE.lastIndex };
+  return { target: destinationText(raw), end: LINK_TITLE_AND_CLOSE.lastIndex };
 }
 
 // The destinations of the inline links [text](target) on one line, read as
@@ -1268,25 +1279,30 @@ function hrefAt(text, i) {
   return { target: hrefUrl(value), at, end: at + value.length };
 }
 
-// The target of an href whose value is `value`, as the URL parser reads
-// the value: without the tabs, line feeds and carriage returns that it
+// The target of an href whose value is `value`, as a browser reads it: its
+// character references read as attributeValue() reads them, so
+// docs/gu&#x69;de.md is docs/guide.md and docs/guide.md#setup&#45;steps
+// links to the setup-steps heading, and the value then read as the URL
+// parser reads it: without the tabs, line feeds and carriage returns that it
 // removes from a URL, so docs/, a line break and nowhere.md are
-// docs/nowhere.md, and without the spaces and the controls U+0001 to
-// U+001F that it removes from the start and the end of a URL, so
-// " docs/guide.md " is docs/guide.md and " https://example.com/x" is
-// https://example.com/x. It removes a NUL there too, but the HTML standard
-// has a browser's tokenizer read a NUL in an attribute's value as U+FFFD,
-// which the URL parser keeps, so a NUL is kept. In the lines of a
-// paragraph that paragraphCodeSpans() joins, the spaces after a line break
-// stand for the > markers and indentation that CommonMark leaves out of
-// the paragraph's text, and are removed with it. The characters at the
-// start and the end are read from each end in a loop: on Node.js 26.12.0
-// a search for [\x01-\x20]+$ took 3.2 seconds over docs/guide.md, 100,000
-// spaces and an x, as it went on from each space of the run to the end of
-// the run.
+// docs/nowhere.md, also where a reference stands for one, and without the
+// spaces and the controls U+0001 to U+001F that it removes from the start
+// and the end of a URL, so " docs/guide.md " and &#32;docs/guide.md are
+// docs/guide.md and " https://example.com/x" is https://example.com/x. It
+// removes a NUL there too, but the HTML standard has a browser's tokenizer
+// read a NUL in an attribute's value as U+FFFD, which the URL parser keeps,
+// so a NUL is kept. In the lines of a paragraph that paragraphCodeSpans()
+// joins, the spaces after a line break stand for the > markers and
+// indentation that CommonMark leaves out of the paragraph's text, and are
+// removed first; the line break is removed after the references are read,
+// as a browser reads it in the value, so a reference without its ; ends
+// before it. The characters at the start and the end are read from each end
+// in a loop: on Node.js 26.12.0 a search for [\x01-\x20]+$ took 3.2 seconds
+// over docs/guide.md, 100,000 spaces and an x, as it went on from each space
+// of the run to the end of the run.
 const urlEnd = (code) => code > 0 && code <= 0x20;
 function hrefUrl(value) {
-  const url = value.replace(/\n */g, '').replace(/[\t\r]/g, '');
+  const url = attributeValue(value.replace(/\n */g, '\n')).replace(/[\t\n\r]/g, '');
   let from = 0;
   let to = url.length;
   while (from < to && urlEnd(url.charCodeAt(from))) from++;
@@ -1903,7 +1919,10 @@ function altHrefs(text, marks) {
 // Link targets on one prose line: inline [text](target), whose destination
 // inlineDestinations reads, with spaces inside the parentheses, a
 // reference definition [label]: target (footnotes [^1]: are not links),
-// whose label may hold a code span or \], and the hrefs on the line that
+// whose label may hold a code span or \], and whose target, written
+// <target> or bare, is read as destinationText() reads it, as an inline
+// link's is, so [g]: docs/guide&#46;md links to docs/guide.md, and the
+// hrefs on the line that
 // spans.hrefs() gives, those of the open tags that inlineDestinations reads
 // as raw HTML and of those that a browser reads inside the comments,
 // processing instructions, CDATA sections and declarations it reads so,
@@ -1928,7 +1947,7 @@ function altHrefs(text, marks) {
 function linkTargets(line, open, spans) {
   const targets = [];
   const def = spans.start === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
-  if (def) targets.push(def[1] || def[2]);
+  if (def) targets.push(destinationText(def[1] || def[2]));
   // One at a time: given as the arguments of one push(), the targets of a
   // line of 200,000 tags with an href threw a RangeError (Maximum call
   // stack size exceeded) on Node.js 26.12.0.
@@ -2906,17 +2925,20 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
 // https.
 const ABSOLUTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 
-// The path of a link target that ABSOLUTE does not match, as written: the
-// text before its first ? or #. The URL parser reads the ?query and the
-// #fragment after the path, so docs/guide.md?x#setup-steps leads to the
-// setup-steps heading of docs/guide.md, and ?x, like #x, to the page that
-// holds the link. A ? after the # is part of the anchor.
+// The path of a link target that ABSOLUTE does not match, with its
+// %-escapes as written: the text before its first ? or #. The URL parser
+// reads the ?query and the #fragment after the path, so
+// docs/guide.md?x#setup-steps leads to the setup-steps heading of
+// docs/guide.md, and ?x, like #x, to the page that holds the link. A ? after
+// the # is part of the anchor. The target is read with its character
+// references, so a ? or # that one stands for starts the query or the
+// anchor: docs/guide.md&#35;setup-steps leads to that heading as well.
 const linkPath = (target) => /^[^?#]*/.exec(target)[0];
 
 // Check 4 on the prose lines of one page. For each link that resolves to a
 // .md page, linked(file, at, shown) is called with that page, the page and
-// line that hold the link as a message names them, and the link's path as
-// written.
+// line that hold the link as a message names them, and the link's path, as
+// linkPath() gives it.
 function checkLinks({ file: doc, prefix, lines }, linked) {
   const read = linkReader(lines);
   for (const l of lines) {
@@ -3280,8 +3302,10 @@ const PASSED_TEST = /^\s*✓\s+(\S+)\s+>\s+(.+?)(?:\s+\d+(?:\.\d+)?m?s)?\s*$/;
 const RESULT_STATES = ['passed', 'failed', 'skipped'];
 // The full output the line above a capture may link, as in
 // What `<command>` prints, trimmed ([full output](docs/captures/quick-start.txt)):
+// The target holds no # but after an &, where it starts a numeric character
+// reference, as in docs/captures/quick-start&#46;txt.
 // A line that is only "..." marks lines left out.
-const FULL_OUTPUT = /\[full output\]\(([^)\s#]+)\)/;
+const FULL_OUTPUT = /\[full output\]\(((?:&#|[^)\s#])+)\)/;
 const ELISION = /^\s*\.\.\.\s*$/;
 const SUMMARY_KINDS = ['Test Files', 'Tests'];
 
@@ -3461,12 +3485,16 @@ function checkCaptures(tests) {
       // summary lines, and the oasb command's verdict line, holds each line
       // of the capture other than "...", and has a .json file of the same
       // name beside it that names the command and the full output. The
-      // file is the link's path before a ?, as check 4 reads it. A link
+      // file is the path before a ? or # of the link's target, its escapes
+      // and character references read as destinationText() reads them, as
+      // check 4 reads it, so [full output](docs/run&#46;txt) names
+      // docs/run.txt. A link
       // to a file that does not exist, or with a malformed %-escape, names
       // no file here and is reported by check 4; one that ABSOLUTE matches,
       // or whose path is empty, names no file here either.
       const link = lines[j].line.replace(/`[^`]*`/g, '').match(FULL_OUTPUT);
-      const path = link && !ABSOLUTE.test(link[1]) ? linkPath(link[1]) : '';
+      const target = link ? destinationText(link[1]) : '';
+      const path = target && !ABSOLUTE.test(target) ? linkPath(target) : '';
       const linked = path ? decoded(path) : null;
       const fullFile = linked !== null ? resolve(dirname(doc), linked) : null;
       let full = null;

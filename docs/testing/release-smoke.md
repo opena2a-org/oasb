@@ -34,6 +34,9 @@ the claims this repository publishes:
    value ends on that line. It reads the path without the spaces and the
    controls U+0001 to U+001F that a browser removes from the start and the
    end of a URL as well: `href=" docs/guide.md "` links to `docs/guide.md`.
+   It reads the character references in a path as a renderer and a browser
+   read them: `[y](docs/guide&#46;md)` and `href="docs/gu&#x69;de.md"` link
+   to `docs/guide.md`.
    It checks a `#anchor` only in links to `.md`
    files. Other forms, such as a definition on the same line as a list
    marker (`- [label]: path`), are not checked. A linked `.md` page whose

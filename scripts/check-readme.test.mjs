@@ -10,6 +10,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { NAMED_REFERENCES, attributeValue, destinationText } from './character-references.mjs';
 import { compareCounts } from './check-test-counts.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'check-readme.mjs');
@@ -459,6 +460,29 @@ test('a full output link with a ?query is read as a link to the file before the 
   );
 });
 
+test('a full output link with a character reference or a backslash escape in its target is read as a link to the file it names', () => {
+  // The check looked docs/captures/run&#46;txt up as written, so it failed
+  // as a link to no file; and docs/captures/run\.txt, which check 4 reads
+  // as docs/captures/run.txt, named no full output, so the check passed
+  // without reading the full output.
+  for (const target of ['docs/captures/run&#46;txt', 'docs/captures/run\\.txt']) {
+    const linked = WITH_FULL.replace(`([full output](${FULL_PATH}))`, `([full output](${target}))`);
+    let r = checkCounts(linked, SUITE, namedReport(), fullSources());
+    assert.equal(r.status, 0, `${target}\n${r.stderr}`);
+    assert.match(r.stdout, /^ {3}Its full output docs\/captures\/run\.txt shows the 2 tests that passed and holds each line of the capture\.$/m, target);
+
+    const noShell = FULL_RUN.replace(` ✓ ${CAPTURE_FILE} > AT-PROC-001: Spawn > detects a shell 1ms\n`, '');
+    r = checkCounts(linked, SUITE, namedReport(), fullSources(noShell));
+    assert.equal(r.status, 1, target);
+    assert.ok(
+      errors(r).includes(
+        `README: ${FULL_PATH}: the full output of \`${CAPTURE_COMMAND}\` does not show "AT-PROC-001: Spawn > detects a shell" in ${CAPTURE_FILE}, which the test report has passed.`,
+      ),
+      `${target}\n${r.stderr}`,
+    );
+  }
+});
+
 // CAPTURED and WITH_FULL as the capture of the package's oasb command on
 // AT-PROC-001: the same two tests, then the verdict line it prints.
 const OASB_COMMAND = 'npx @opena2a/oasb AT-PROC-001';
@@ -622,6 +646,15 @@ test('a page the MITRE ATLAS Coverage section links with an href whose value has
   assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
 });
 
+test('a page the MITRE ATLAS Coverage section links with a character reference in its target is read for skipped tests', () => {
+  for (const link of [' Detail: [mapping](docs/atlas&#46;md).', ' Detail: <a href="docs/atl&#x61;s.md">mapping</a>.']) {
+    const readme = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', link);
+    const r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+    assert.equal(r.status, 1, link);
+    assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`, link);
+  }
+});
+
 test('a page linked from outside the MITRE ATLAS Coverage section is not read for skipped tests', () => {
   const readme = COUNTED.replace(
     'run the same 10 attack scenarios.',
@@ -771,13 +804,18 @@ test('a tag with a no-break space after it, or in place of a space or tab in it,
 for (const key of ['nosuchkey', 'constructor', 'toString']) {
   test(`a STATEMENTS key that names no count ("${key}") fails with the key instead of a TypeError`, () => {
     // A copy of the check beside a readme-counts.mjs whose STATEMENTS has one
-    // more entry, with the oasb command module it imports from ../bin.
+    // more entry, with the character reference module it imports from
+    // scripts/ and the oasb command module it imports from ../bin.
     const dir = mkdtempSync(join(tmpdir(), 'check-readme-keys-'));
     try {
       const counts = pathToFileURL(join(repo, 'scripts', 'readme-counts.mjs')).href;
       mkdirSync(join(dir, 'scripts'));
       mkdirSync(join(dir, 'bin'));
       writeFileSync(join(dir, 'scripts', 'check-readme.mjs'), readFileSync(script));
+      writeFileSync(
+        join(dir, 'scripts', 'character-references.mjs'),
+        `export * from '${pathToFileURL(join(repo, 'scripts', 'character-references.mjs')).href}';\n`,
+      );
       writeFileSync(join(dir, 'bin', 'run-scenario.mjs'), `export * from '${pathToFileURL(join(repo, 'bin', 'run-scenario.mjs')).href}';\n`);
       writeFileSync(
         join(dir, 'scripts', 'readme-counts.mjs'),
@@ -1914,6 +1952,132 @@ test('only a tab, a line feed, a form feed, a carriage return or a space is whit
   ];
   const pass = check(`${none.join('\n\n')}\n`);
   assert.equal(pass.status, 0, pass.stderr);
+});
+
+test('a link target is read with its character references, as a renderer reads them in a destination and a browser in an href', () => {
+  // Each of these links to docs/guide.md, or to its Setup steps heading.
+  // The check looked each target up as written, so the first three exited
+  // 1 with link target "..." does not exist, and the last with
+  // anchor "#setup&" has no matching heading in docs/guide.md.
+  for (const line of [
+    'p [y](docs/guide&#46;md)',
+    'p <a href="docs/gu&#x69;de.md">y</a>',
+    'p <a href="&#32;docs/guide.md">y</a>',
+    'p <a href="docs/guide.md#setup&#45;steps">y</a>',
+  ]) {
+    const r = check(`${line}\n`);
+    assert.equal(r.status, 0, `${line}\n${r.stderr}`);
+  }
+});
+
+test('character references are read in each form of link the check reads, and where it reads one', () => {
+  const pages = { 'docs/a_b.md': '# A\n', 'docs/a&b.md': '# A\n', 'docs/a&.md': '# A\n' };
+  for (const body of [
+    // An inline link, its target bare or in <>, with a named reference, or a
+    // decimal or hexadecimal one, with x or X, in a paragraph, a heading and
+    // a table cell.
+    'p [y](docs/guide&period;md) and [z](<docs/gu&#x69;de.md>)\n',
+    'p [y](docs/guide&#x2E;md) and [z](docs/guide&#X2e;md)\n',
+    'p [y](docs/a&amp;b.md)\n',
+    '## [y](docs/guide&#46;md)\n',
+    '| h |\n| - |\n| [y](docs/guide&#46;md) |\n',
+    // A reference that stands for the # of an anchor, the ? of a query or
+    // the : of a scheme.
+    'p [y](docs/guide.md&#35;setup&#45;steps) and [z](docs/guide.md&#63;x)\n',
+    'p <a href="docs/guide.md&#35;setup-steps">y</a> and <a href="docs/guide.md&#63;x">z</a>\n',
+    'p [y](https&#58;//example.com/x)\n',
+    // A definition, its target bare or in <>, whose backslash escapes are
+    // read too.
+    'p [y][g]\n\n[g]: docs/guide&#46;md\n',
+    'p [y][g]\n\n[g]: <docs/gu&#x69;de.md>\n',
+    'p [y][g]\n\n[g]: docs/a\\_b.md\n',
+    // An href in single quotes or unquoted, a numeric reference without its
+    // ;, a name a browser reads without its ; before a full stop, and a line
+    // feed that a reference stands for, which the URL parser removes.
+    "p <a href='docs/guide&#46;md'>y</a> and <a href=docs/guide&period;md>z</a>\n",
+    'p <a href="docs/guide&#46md">y</a>\n',
+    'p <a href="docs/a&amp.md">y</a>\n',
+    'p <a href="docs/guide.md&#10;">y</a>\n',
+    // An href on a line of an HTML block or of indented code, and one after
+    // a > inside <?, where a browser ends it.
+    '<div><a href="docs/gu&#x69;de.md">y</a></div>\n',
+    'p\n\n    <a href="docs/gu&#x69;de.md">y</a>\n',
+    'x <? > <a href="docs/gu&#x69;de.md">y</a> ?>\n',
+  ]) {
+    const r = check(body, pages);
+    assert.equal(r.status, 0, `${JSON.stringify(body)}\n${r.stderr}`);
+  }
+});
+
+test('a link target that names no file fails with its character references read, and a reference that a renderer or a browser reads as written is read so', () => {
+  const pages = { 'docs/a&b.md': '# A\n' };
+  const cases = [
+    ['p [y](docs/nowhere&#46;md)', 'link target "docs/nowhere.md" does not exist.'],
+    ['p <a href="docs/nowhere&#x2E;md">y</a>', 'link target "docs/nowhere.md" does not exist.'],
+    ['p <a href="docs/guide.md#no&#45;such">y</a>', 'anchor "#no-such" has no matching heading in docs/guide.md.'],
+    // In a destination, a reference without its ;, one whose & a backslash
+    // escapes, and one whose name the table does not have are text.
+    ['p [y](docs/guide&#46md)', 'link target "docs/guide&#46md" does not exist.'],
+    ['p [y](docs/guide\\&#46;md)', 'link target "docs/guide&#46;md" does not exist.'],
+    ['p [y](docs/guide&nosuchname;md)', 'link target "docs/guide&nosuchname;md" does not exist.'],
+    // In an attribute's value, a name that a browser reads without its ;
+    // is text before a letter, a digit or an =.
+    ['p <a href="docs/a&ampb.md">y</a>', 'link target "docs/a&ampb.md" does not exist.'],
+  ];
+  for (const [line, message] of cases) {
+    const r = check(`${line}\n`, pages);
+    assert.equal(r.status, 1, line);
+    assert.equal(r.stderr.trim(), `README: line 11: ${message}`, line);
+  }
+});
+
+test('destinationText() reads the backslash escapes and the character references of a link destination as CommonMark reads them', () => {
+  const cases = [
+    ['docs/guide&#46;md', 'docs/guide.md'],
+    ['&#x2E;&#X2e;&#0046;', '...'],
+    ['&period;&amp;&AMP;&ThickSpace;&CounterClockwiseContourIntegral;', String.fromCodePoint(0x2e, 0x26, 0x26, 0x205f, 0x200a, 0x2233)],
+    // 0, a surrogate and a code point past U+10FFFF are U+FFFD.
+    ['&#0;&#xD800;&#xDFFF;&#x110000;&#9999999;', String.fromCodePoint(0xfffd).repeat(5)],
+    ['&#x10FFFF;&#1114111;', String.fromCodePoint(0x10ffff, 0x10ffff)],
+    // No ;, 8 decimal or 7 hexadecimal digits, no digit, a name the table
+    // does not have, or has in other capitals, and an & that a backslash
+    // escapes are text.
+    ['&#46 &amp &#12345678; &#x1234567; &#; &#x; &nosuchname; &Amp; \\&amp;', '&#46 &amp &#12345678; &#x1234567; &#; &#x; &nosuchname; &Amp; &amp;'],
+    // A backslash escapes ASCII punctuation only.
+    ['a\\_b\\(c\\)\\d\\\\', 'a_b(c)\\d\\'],
+  ];
+  for (const [raw, text] of cases) assert.equal(destinationText(raw), text, raw);
+});
+
+test('attributeValue() reads the character references of an attribute value as a browser reads them', () => {
+  const cases = [
+    ['docs/gu&#x69;de.md', 'docs/guide.md'],
+    ['&#32;docs/guide.md', ' docs/guide.md'],
+    // A numeric reference without its ;.
+    ['docs/guide&#46md&#x2E', 'docs/guide.md.'],
+    // 0, a surrogate, a code point past U+10FFFF and a long run of digits
+    // are U+FFFD; 0x80 to 0x9F are what windows-1252 reads them as, where
+    // it reads one.
+    ['&#0;&#xD800;&#x110000;&#99999999999999999999;', String.fromCodePoint(0xfffd).repeat(4)],
+    ['&#128;&#x9F;&#x81;', String.fromCodePoint(0x20ac, 0x178, 0x81)],
+    // The longest name the text starts with, and a name read without its ;
+    // before other text than a letter, a digit or an =.
+    ['&period;&notin;&amp.&amp;&lt ', `.${String.fromCodePoint(0x2209)}&.&< `],
+    // A name read without its ; before a letter, a digit or an =, a name
+    // the table does not have, and an & that starts no reference are text.
+    ['&ampx &amp1 &amp= &notit; &nosuchname; &# &#x &;', '&ampx &amp1 &amp= &notit; &nosuchname; &# &#x &;'],
+  ];
+  for (const [raw, text] of cases) assert.equal(attributeValue(raw), text, raw);
+});
+
+test('NAMED_REFERENCES holds 2,231 names, 106 of them without their ;', () => {
+  const names = [...NAMED_REFERENCES.keys()];
+  assert.equal(names.length, 2231);
+  assert.equal(names.filter((name) => !name.endsWith(';')).length, 106);
+  for (const [name, text] of [['amp;', '&'], ['amp', '&'], ['period;', '.'], ['NewLine;', '\n'], ['fjlig;', 'fj'], ['zwnj;', String.fromCodePoint(0x200c)]]) {
+    assert.equal(NAMED_REFERENCES.get(name), text, name);
+  }
+  assert.equal(NAMED_REFERENCES.has('period'), false);
 });
 
 test('an href with 100,000 spaces at the start and the end of its value, or 200,000 inside it, is checked in under 2 seconds', () => {
@@ -4047,6 +4211,16 @@ test('a dated page the README links with an href whose value has spaces at its s
   assert.match(bare.stderr, DATED);
   const linked = check(DATED_LINK, datedPage('> As of 2026-06-03, see the <a href=" ../README.md ">README</a>.\n'));
   assert.equal(linked.status, 0, linked.stderr);
+});
+
+test('a dated page the README links with a character reference in its target is read as one, and its link to the README so written counts', () => {
+  const bare = check('For the audit, see [the audit](docs/AUDIT-2026-06-03&#46;md).\n', datedPage('Measured from `npm test`.\n'));
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, DATED);
+  for (const link of ['[README](../README&#46;md)', '<a href="../READM&#x45;.md">README</a>']) {
+    const linked = check(DATED_LINK, datedPage(`> As of 2026-06-03, see the ${link}.\n`));
+    assert.equal(linked.status, 0, `${link}\n${linked.stderr}`);
+  }
 });
 
 test('a note inside a code block or inline code does not mark a dated page', () => {
