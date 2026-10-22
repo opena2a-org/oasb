@@ -2766,7 +2766,19 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   };
 }
 
-const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i; // http:, https:, mailto:
+// A link target that the checks do not look up as a file: one that starts
+// with a scheme (http:, https:, mailto:), or with //, which the URL parser
+// reads as a host and a path on the scheme of the page that holds the link,
+// so //example.com/x leads to https://example.com/x from a page served over
+// https.
+const ABSOLUTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+
+// The path of a link target that ABSOLUTE does not match, as written: the
+// text before its first ? or #. The URL parser reads the ?query and the
+// #fragment after the path, so docs/guide.md?x#setup-steps leads to the
+// setup-steps heading of docs/guide.md, and ?x, like #x, to the page that
+// holds the link. A ? after the # is part of the anchor.
+const linkPath = (target) => /^[^?#]*/.exec(target)[0];
 
 // Check 4 on the prose lines of one page. For each link that resolves to a
 // .md page, linked(file, at, shown) is called with that page, the page and
@@ -2779,7 +2791,8 @@ function checkLinks({ file: doc, prefix, lines }, linked) {
     for (const target of read(l)) {
       if (!target) continue;
       if (ABSOLUTE.test(target)) continue;
-      const [pathPart, anchor] = target.split('#');
+      const pathPart = linkPath(target);
+      const anchor = target.split('#')[1];
       const path = pathPart ? decoded(pathPart) : '';
       if (path === null) {
         fail(`${prefix}line ${n}: link target "${target}" has a malformed %-escape; write a literal % as %25.`);
@@ -3095,8 +3108,8 @@ function checkSkippedCoverage(tests) {
   const read = linkReader(section, undefined, undefined, undefined, readme);
   for (const l of section) {
     for (const target of read(l)) {
-      if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
-      const pathPart = target.split('#')[0];
+      if (!target || ABSOLUTE.test(target)) continue;
+      const pathPart = linkPath(target);
       if (!pathPart || !/\.md$/i.test(pathPart)) continue;
       const path = decoded(pathPart);
       if (path === null) continue; // a malformed %-escape is reported by the link check
@@ -3314,11 +3327,14 @@ function checkCaptures(tests) {
       // as the capture is, it shows every test the run passes and both
       // summary lines, and the oasb command's verdict line, holds each line
       // of the capture other than "...", and has a .json file of the same
-      // name beside it that names the command and the full output. A link
+      // name beside it that names the command and the full output. The
+      // file is the link's path before a ?, as check 4 reads it. A link
       // to a file that does not exist, or with a malformed %-escape, names
-      // no file here and is reported by check 4.
+      // no file here and is reported by check 4; one that ABSOLUTE matches,
+      // or whose path is empty, names no file here either.
       const link = lines[j].line.replace(/`[^`]*`/g, '').match(FULL_OUTPUT);
-      const linked = link ? decoded(link[1]) : null;
+      const path = link && !ABSOLUTE.test(link[1]) ? linkPath(link[1]) : '';
+      const linked = path ? decoded(path) : null;
       const fullFile = linked !== null ? resolve(dirname(doc), linked) : null;
       let full = null;
       if (fullFile && existsSync(fullFile)) {
@@ -4542,7 +4558,7 @@ for (const [file, { at, shown }] of datedPages) {
   const h2 = page.findIndex(isH2);
   const above = h2 === -1 ? page : page.slice(0, h2);
   const toReadme = (target) => {
-    const pathPart = target.split('#')[0];
+    const pathPart = linkPath(target);
     if (!pathPart || ABSOLUTE.test(target)) return false;
     const path = decoded(pathPart);
     return path !== null && resolve(dirname(file), path) === readmePath;
