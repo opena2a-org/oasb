@@ -202,9 +202,12 @@ README's test counts do not include them.
   F1, FPR and flag rate named as withdrawn with no value.
 - `scripts/library-entry.test.mjs`: the package entry point as a library
   install sees it, built where arp-guard cannot be resolved, as after
-  `npm install @opena2a/oasb --omit=optional`, and the version each
+  `npm install @opena2a/oasb --omit=optional`, the version each
   adapter's capability matrix reports for the package a test installs
-  beside it.
+  beside it, and `requireCapability` in a vitest run of a project that
+  installed the build: the block it skips, and its error where Node.js
+  cannot `require()` an ES module, as with
+  `--no-experimental-require-module`, and where vitest's suite API throws.
 - `scripts/runner-loads-no-sibling-module.test.mjs`: `runBenchmark`, built
   and copied into a library install and into a clone, loads no module from
   a `hackmyagent` directory beside the package.

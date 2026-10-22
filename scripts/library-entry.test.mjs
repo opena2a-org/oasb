@@ -2,15 +2,19 @@
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 //
-// Each test builds src/ with tsc into a temporary directory and requires the
-// built index.js from there. No node_modules sits above that directory, so
-// arp-guard, an optional dependency installed here for the suite, cannot be
-// resolved: the same state as `npm install @opena2a/oasb --omit=optional`.
+// The tests build src/ with tsc into a temporary directory once, and each
+// requires the built index.js from a copy of that build. No node_modules
+// sits above that directory, so arp-guard, an optional dependency installed
+// here for the suite, cannot be resolved: the same state as
+// `npm install @opena2a/oasb --omit=optional`. The requireCapability tests
+// instead install the build as node_modules/@opena2a/oasb of a project,
+// beside vitest linked from this checkout or a stand-in for its suite API,
+// and run this checkout's vitest there.
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -121,4 +125,107 @@ test('a module arp-guard itself cannot load is reported as it is', () => {
     assert.match(err.message, /^Cannot find module 'oasb-missing-dependency'/);
     return true;
   });
+});
+
+// A vitest run of a project that installed the build, under an adapter that
+// declares prompt-input-scanning only. The project's test file calls
+// requireCapability('mcp-scanning') at the top of one describe() callback
+// and requireCapability('prompt-input-scanning') at the top of another.
+// `nodeOptions` is added to NODE_OPTIONS for the run. Where `suiteSource` is
+// given, the project's node_modules/vitest is a package whose `vitest/suite`
+// is that CommonJS source, in place of the vitest that runs the file. Returns
+// the result of the test file in the run's JSON report and the adapter's path.
+function runRequireCapability(name, { nodeOptions, suiteSource } = {}) {
+  const dir = join(base, name);
+  const pkg = join(dir, 'node_modules', '@opena2a', 'oasb');
+  mkdirSync(pkg, { recursive: true });
+  cpSync(join(base, 'build'), join(pkg, 'dist'), { recursive: true });
+  writeFileSync(join(pkg, 'package.json'), '{"name":"@opena2a/oasb","main":"dist/index.js"}\n');
+  if (suiteSource === undefined) {
+    symlinkSync(join(repo, 'node_modules', 'vitest'), join(dir, 'node_modules', 'vitest'), 'dir');
+  } else {
+    mkdirSync(join(dir, 'node_modules', 'vitest'));
+    writeFileSync(join(dir, 'node_modules', 'vitest', 'package.json'), '{"name":"vitest","exports":{"./suite":"./suite.cjs"}}\n');
+    writeFileSync(join(dir, 'node_modules', 'vitest', 'suite.cjs'), suiteSource);
+  }
+  const adapter = join(dir, 'adapter.cjs');
+  writeFileSync(
+    adapter,
+    'module.exports = class OneCapabilityAdapter {\n' +
+      '  getCapabilities() {\n' +
+      "    return { product: 'one-capability-adapter', version: '0.0.0', capabilities: new Set(['prompt-input-scanning']) };\n" +
+      '  }\n' +
+      '};\n',
+  );
+  writeFileSync(join(dir, 'vitest.config.mjs'), "export default { test: { include: ['*.test.mjs'], globals: true } };\n");
+  writeFileSync(
+    join(dir, 'capability.test.mjs'),
+    "import { requireCapability } from '@opena2a/oasb';\n" +
+      "describe('needs mcp', () => { requireCapability('mcp-scanning'); it('t1', () => {}); });\n" +
+      "describe('has prompt', () => { requireCapability('prompt-input-scanning'); it('t2', () => {}); });\n",
+  );
+  const env = { ...process.env, OASB_ADAPTER: adapter };
+  if (nodeOptions) env.NODE_OPTIONS = [env.NODE_OPTIONS, nodeOptions].filter(Boolean).join(' ');
+  const out = join(dir, 'report.json');
+  const vitest = join(repo, 'node_modules', 'vitest', 'vitest.mjs');
+  const r = spawnSync(
+    process.execPath,
+    [vitest, 'run', '--root', dir, '--config', join(dir, 'vitest.config.mjs'), '--reporter=json', `--outputFile=${out}`],
+    { cwd: dir, encoding: 'utf8', env },
+  );
+  assert.ok(existsSync(out), `vitest wrote no report (exit ${r.status}):\n${r.stderr.slice(-2000)}`);
+  return { file: JSON.parse(readFileSync(out, 'utf8')).testResults[0], adapter };
+}
+
+test('in a vitest run of a project that installed the package, requireCapability skips the block whose capability the adapter lacks', () => {
+  const { file } = runRequireCapability('require-capability');
+  assert.deepEqual(
+    file.assertionResults.map(t => [t.ancestorTitles[0], t.title, t.status]),
+    [
+      ['needs mcp [requires: mcp-scanning]', 't1', 'skipped'],
+      ['has prompt', 't2', 'passed'],
+    ],
+    file.message,
+  );
+});
+
+test('where Node.js cannot require() an ES module, requireCapability says vitest\'s suite API failed, not that there is no describe() block', () => {
+  // --no-experimental-require-module turns off require() of an ES module,
+  // which Node.js does without a flag from 20.19.0 in 20.x and from
+  // 22.12.0, so the run require()s vitest's suite API as one before those
+  // versions does.
+  const { file, adapter } = runRequireCapability('require-capability-no-require-module', {
+    nodeOptions: '--no-experimental-require-module',
+  });
+  assert.equal(file.status, 'failed');
+  assert.deepEqual(file.assertionResults, []);
+  for (const part of [
+    `requireCapability('mcp-scanning'): the adapter under test, one-capability-adapter (OASB_ADAPTER=${adapter}), lacks mcp-scanning, and `,
+    "vitest's suite API, which requireCapability needs to skip a describe() block, failed: require() of ES Module ",
+    `Node.js ${process.version} cannot require() an ES module here: run the suite on Node.js 20.19.0 or a later 20.x release, or on 22.12.0 or later, without --no-experimental-require-module, `,
+    "or use describeWithCapability('mcp-scanning', name, fn) from src/harness/capabilities to report the suite N/A.",
+  ]) {
+    assert.ok(file.message.includes(part), `the message does not hold "${part}":\n${file.message}`);
+  }
+  assert.ok(!file.message.includes('no describe() block'), file.message);
+  // package.json allows the Node.js versions the message names, and no other.
+  const { engines } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  assert.equal(engines.node, '^20.19.0 || >=22.12.0');
+});
+
+test('where vitest\'s suite API fails another way, requireCapability quotes the first line of its error, not that there is no describe() block', () => {
+  // getCurrentSuite() throws the error vitest's throws where it finds no
+  // current suite, and a second line.
+  const thrown = 'Vitest failed to find the current suite. This is a bug in Vitest. Please, open an issue with reproduction.';
+  const { file } = runRequireCapability('require-capability-suite-api-throws', {
+    suiteSource: `exports.getCurrentSuite = () => { throw new Error(${JSON.stringify(`${thrown}\nsecond line`)}); };\n`,
+  });
+  assert.equal(file.status, 'failed');
+  assert.deepEqual(file.assertionResults, []);
+  const part =
+    "lacks mcp-scanning, and vitest's suite API, which requireCapability needs to skip a describe() block, failed: " +
+    `${thrown} Instead, use describeWithCapability('mcp-scanning', name, fn) from src/harness/capabilities to report the suite N/A.`;
+  assert.ok(file.message.includes(part), `the message does not hold "${part}":\n${file.message}`);
+  assert.ok(!file.message.includes('no describe() block'), file.message);
+  assert.ok(!file.message.includes('second line'), file.message);
 });
