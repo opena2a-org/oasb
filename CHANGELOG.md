@@ -1942,10 +1942,11 @@ stay on record here with the reason they changed.
   through such an href as well, and `<a href=" ../README.md ">README</a>`
   on a dated page counts as its link to the README.
 - `npm run check:readme` reads no link in the title of a reference
-  definition that commonmark.js 0.31.2 and markdown-it 14.1.0 both read
-  where a paragraph starts: neither renders a definition, and each writes
-  its title only into the title attribute of the links that use it. With
-  `docs/guide.md` present and `docs/nowhere.md` absent,
+  definition in the forms below that now exit 0, which commonmark.js
+  0.31.2 and markdown-it 14.1.0 both read where a paragraph starts:
+  neither renders a definition, and each writes its title only into the
+  title attribute of the links that use it. With `docs/guide.md` present
+  and `docs/nowhere.md` absent,
   `[ref]: docs/guide.md "<a href=docs/nowhere.md>"` exited 1 with
   `link target "docs/nowhere.md" does not exist`, as did the same title in
   parentheses or alone on the next line, and the definition in a block
@@ -1963,13 +1964,14 @@ stay on record here with the reason they changed.
   exited 1 and now exits 0, as both write that description into the alt
   attribute. A title with a tab after it, which commonmark.js reads as
   text, a title that ends on a later line than it starts on, and the label
-  of a definition are read as text of the paragraph, as before. So is the
-  title of a definition whose label ends on a later line than it starts
-  on, or whose destination holds a `&` or a backslash before its first
-  `:`, or anywhere when it holds no `:`, or is not written in `<` and `>`
-  and holds a backslash that no backslash escapes before an ASCII control
-  character or at the end of its line, or of a definition after one of
-  these, or after one whose title ends on a later line, in its paragraph:
+  of a definition are read as text of the paragraph, as before. So are the
+  titles of some other definitions that both read, among them one whose
+  label ends on a later line than it starts on, one whose destination
+  holds a `&` or a backslash before its first `:`, or anywhere when it
+  holds no `:`, one whose destination is not written in `<` and `>` and
+  holds a backslash that no backslash escapes before an ASCII control
+  character or at the end of its line, and one after any of these, or
+  after one whose title ends on a later line, in its paragraph:
   `[ref]: docs/guide&#46;md "<a href=docs/nowhere.md>"` and
   `[ref]: docs/guide.md?x=1&y=2 "<a href=docs/nowhere.md>"` still exit 1
   with `link target "docs/nowhere.md" does not exist`.
