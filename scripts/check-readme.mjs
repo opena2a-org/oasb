@@ -126,8 +126,18 @@
 //      the <b> tag. Such a tag that is still open at the end of the
 //      paragraph, heading or cell ends at the end tag that a renderer
 //      writes there, such as </p>, </h2> or </td>, where it is not inside a
-//      quoted value: x <? > <a href="target" x=' ?> ' links to target. Nor
-//      is an href inside an image
+//      quoted value: x <? > <a href="target" x=' ?> ' links to target. No
+//      link is read in the title of a reference definition that both
+//      renderers read where a paragraph starts, as definedLabels() reads
+//      one, also a title alone on the line after the destination: both
+//      render nothing for the definition and write its title only into the
+//      title attribute of the links that use it. So
+//      [label]: target "<a href="x">", and [label]: target with
+//      "<a href="x">" on the next line, do not link to x, in a block quote
+//      or a list item too, and no code span or raw HTML that opens in such a
+//      title runs on to the text after it. A title that ends on a later line
+//      than it starts on is read as text of the paragraph, as is the label
+//      of a definition. Nor is an href inside an image
 //      read, as both renderers write the description of an image into the
 //      alt attribute of the <img>: an image that a destination follows, as
 //      in ![<a href="x">y</a>](target), or one whose reference a definition
@@ -136,9 +146,11 @@
 //      look the reference up under and definedLabels() reads the
 //      definition: where a paragraph starts or after the definitions that
 //      start one, also in a block quote or on the line of a list marker
-//      (> [label]: target or - [label]: target), written whole on one line
-//      or up to its ]: on one line and from its destination on the next
-//      line of the paragraph ([label]: on one line and target on the next),
+//      (> [label]: target or - [label]: target), written up to its
+//      destination on one line, or up to its ]: on one line and from its
+//      destination on the next line of the paragraph ([label]: on one line
+//      and target on the next), with a title, if any, on the line of the
+//      destination or alone on the line after it,
 //      as definedLabels() describes, for each of the two renderers
 //      (commonmark.js 0.31.2 reads no tables, and the rows of a table are
 //      text of a paragraph to it, so a line under a table that goes on with
@@ -2383,13 +2395,15 @@ const labelKeys = (label) => {
   return [/[ \t\r\n]+/g, /\s+/g].map((space) => trimmed.replace(space, ' ').toLowerCase().toUpperCase());
 };
 
-// The label of the reference definition that `line`, the text of a line of
-// a page from where a paragraph's text on it starts, holds whole, where
-// both renderers read one, or null: up to three spaces, [, a label of at
-// most 999 characters that is not only white space, holds no other [ or ]
+// The reference definition that `line`, the text of a line of a page from
+// where a paragraph's text on it starts, holds whole, where both renderers
+// read one, as { label, title }, or null: up to three spaces, [, a label of
+// at most 999 characters that is not only white space, holds no other [ or ]
 // and in which a backslash takes the character after it, ]:, spaces, a
 // destination, and then spaces and the end of the line, or one or more
-// spaces, a title, spaces and the end of the line. commonmark.js 0.31.2
+// spaces, a title, spaces and the end of the line; `title` is the index of
+// that title in the text of the line that holds the destination, or -1
+// where it has none. commonmark.js 0.31.2
 // reads only spaces there, where markdown-it 14.1.0 reads tabs as well, and
 // reads no longer label. Given `next`, the text of the line after it from
 // where that text starts, a definition that `line` holds up to its ]: and
@@ -2397,7 +2411,8 @@ const labelKeys = (label) => {
 // then holds the destination and the rest of the definition, as both read
 // a destination on the line after the ]:. A definition that runs on past
 // that, such as one whose title ends on a later line, or whose label does,
-// is not read. The destination is
+// is not read here; definedLabels() reads a title that the next line holds
+// alone, as titleLine() reads one. The destination is
 // <target>, with no < in it that no backslash escapes, or a bare target,
 // which ends at a space or the end of the line, holds no control character,
 // holds parentheses that no backslash escapes only where they are balanced,
@@ -2411,9 +2426,8 @@ const labelKeys = (label) => {
 // whose destination starts so after white space is read here, nor one
 // whose destination holds a & or a backslash before its first colon, or
 // anywhere when it holds none, as markdown-it reads the entities and
-// escapes in it before it looks at that start. The title is in "", '' or
-// (), a backslash taking the character after it, and in () holds no ( that
-// no backslash escapes.
+// escapes in it before it looks at that start. The title is one that
+// titleEnd() reads.
 const BAD_SCHEME = /^(?:vbscript|javascript|file|data):/;
 const IMAGE_DATA = /^data:image\/(?:gif|png|jpeg|webp);/;
 function definitionLabel(line, next) {
@@ -2467,17 +2481,42 @@ function definitionLabel(line, next) {
   if (/[&\\]/.test(colon === -1 ? target : target.slice(0, colon)) || (BAD_SCHEME.test(url) && !IMAGE_DATA.test(url))) return null;
   const targetEnd = i;
   while (text[i] === ' ') i++;
-  if (i === text.length) return label;
+  if (i === text.length) return { label, title: -1 };
+  if (i === targetEnd) return null;
+  const title = i;
+  i = titleEnd(text, i);
+  if (i === -1) return null;
+  while (text[i] === ' ') i++;
+  return i === text.length ? { label, title } : null;
+}
+
+// The index after the title of a reference definition that starts at
+// text[i], or -1 when none starts there or it does not end on the line: in
+// "", '' or (), a backslash taking the character after it, and in () with
+// no ( inside that no backslash escapes, as both renderers read a title.
+function titleEnd(text, i) {
   const open = text[i];
-  if (i === targetEnd || (open !== '"' && open !== "'" && open !== '(')) return null;
+  if (open !== '"' && open !== "'" && open !== '(') return -1;
   const close = open === '(' ? ')' : open;
   for (i++; i < text.length && text[i] !== close; i++) {
-    if (open === '(' && text[i] === '(') return null;
+    if (open === '(' && text[i] === '(') return -1;
     if (text[i] === '\\') i++;
   }
-  if (i >= text.length) return null;
-  for (i++; text[i] === ' '; i++);
-  return i === text.length ? label : null;
+  return i < text.length ? i + 1 : -1;
+}
+
+// Whether `line`, the text of a line from where it starts, holds a title,
+// as titleEnd() reads one, and only spaces after it: both renderers read
+// such a line, after a definition whose destination ends the line above
+// with no title after it, as the title of that definition. commonmark.js
+// 0.31.2 reads no title with a tab after it there, and reads the line as
+// text, where markdown-it 14.1.0 reads tabs as well.
+function titleLine(line) {
+  const text = line.endsWith('\r') ? line.slice(0, -1) : line;
+  let i = titleEnd(text, 0);
+  if (i === -1) return false;
+  while (text[i] === ' ') i++;
+  return i === text.length;
 }
 
 // Whether `text`, the text of a line from where it starts, starts a block
@@ -2490,10 +2529,13 @@ function blockEnds(text) {
   return start.opened.length > 0 || start.rest === 'fence' || (start.rest === 'block' && start.html !== 7);
 }
 
-// The keys, as labelKeys() gives them, of the labels of the reference
-// definitions on a page, `lines` being its lines as parse() tags them, as
-// [the keys commonmark.js files them under, those markdown-it does], each
-// read with a blockReader() of its own. commonmark.js 0.31.2 reads no
+// The reference definitions on a page, `lines` being its lines as parse()
+// tags them, as { keys, titles }: `keys`, the keys, as labelKeys() gives
+// them, of their labels, as [the keys commonmark.js files them under, those
+// markdown-it does], each read with a blockReader() of its own, and
+// `titles`, a map from each line that holds the title of a definition that
+// both read there to the index in the line where that title starts.
+// commonmark.js 0.31.2 reads no
 // tables, so its keys are read with a reader that reads none, which reads
 // the rows of a table as text of a paragraph: a line after them that goes
 // on with that paragraph holds no definition there. So
@@ -2513,10 +2555,19 @@ function blockEnds(text) {
 // lines of it that each hold one, as a definition starts a paragraph or
 // follows the definitions at its start: both renderers read one after other
 // text of the paragraph as text. None is read after a line of the paragraph
-// that holds none, whole or with the line after it as below, such as the
-// title of a definition on the line above, nor on a line indented 4 or more
-// columns past where the text of those block quotes and list items starts,
-// which markdown-it reads as indented code after a definition. A line that
+// that holds none, whole or with the line after it as below, nor on a line
+// indented 4 or more columns past where the text of those block quotes and
+// list items starts, which markdown-it reads as indented code after a
+// definition. A definition whose destination ends its line, with no title
+// after it, takes the next line too when that line goes on with the
+// paragraph and its text, from where it starts as below, is a title alone,
+// as titleLine() reads it: both renderers read that title as the
+// definition's, also on a line indented 4 or more columns, so a definition
+// may follow the line. Not when that line goes on with a block quote whose
+// > marker the line that holds the definition's label left out, as below:
+// in > [a]: x, [label]: target and > "title" on three lines, markdown-it
+// reads the second line outside the block quote, and the > on the third
+// starts a block quote that holds the title as text. A line that
 // holds a label, ]: and only spaces after it starts a definition that the
 // next line ends when that line goes on with the paragraph:
 // definitionLabel() reads the line with the text of the next one from
@@ -2543,15 +2594,18 @@ function blockEnds(text) {
 // definition, before the line, where commonmark.js reads the line as the
 // destination.
 function definedLabels(lines) {
-  // The keys of commonmark.js, read with a reader that reads no tables, and
-  // those of markdown-it, read with one that reads them.
-  return [false, true].map((tables, k) => {
+  // The keys and titles of commonmark.js, read with a reader that reads no
+  // tables, and those of markdown-it, read with one that reads them.
+  const [cm, mi] = [false, true].map((tables, k) => {
     const keys = new Set();
+    const titles = new Map();
     const read = blockReader(lines, undefined, undefined, tables);
-    let defining = false; // whether each line of the paragraph read so far holds a definition
+    let defining = false; // whether each line of the paragraph read so far holds a definition or a part of one
     // The line read last, when it may start a definition that the next line
-    // ends: its text from where it starts, and how many of the reader's
-    // containers it goes on with or opens.
+    // ends, or ends one at its destination with no title, so that the next
+    // line may hold its title: in the first case its text from where it
+    // starts, and in both how many of the reader's containers the line that
+    // holds the label goes on with or opens.
     let started = null;
     for (const l of lines) {
       // How lineStart() reads the line, which the reader is given so that it
@@ -2563,11 +2617,13 @@ function definedLabels(lines) {
       const text = block !== null && !block.html && block.rest === 'text';
       const above = started;
       started = null;
-      let label = null;
+      let definition = null;
+      let title = false; // whether the line holds the title of the definition above it
       if (text && !block.starts && above !== null) {
         // Of the block quotes that hold the line or the line above: how many
         // the line goes on with, whether one of those is one that the line
-        // above left out, and how many of the others the line leaves out.
+        // that holds the label above left out, and how many of the others
+        // the line leaves out.
         let quotes = 0;
         let back = false;
         let left = 0;
@@ -2581,29 +2637,51 @@ function definedLabels(lines) {
         }
         const next = start.row ?? afterQuotes(l.line, quotes).replace(/^[ \t]+/, '');
         const ends = start.row === undefined ? left > 1 && blockEnds(next) : matchAt(LIST_MARKER, start.row, 0) !== null;
-        if (!back && !ends) label = definitionLabel(above.text, next);
-      } else if (text && (block.starts || defining) && start.row !== undefined) {
-        label = definitionLabel(start.row);
-        if (label === null) started = { text: start.row, depth: block.starts ? read.containers.length : start.matched };
+        if (!back && !ends) {
+          if (above.text === undefined) title = titleLine(next);
+          else definition = definitionLabel(above.text, next);
+        }
+        if (title) titles.set(l, textIndex(l.line, next));
+        else if (definition?.title === -1) started = { depth: above.depth };
+        else if (definition !== null) titles.set(l, textIndex(l.line, next) + definition.title);
       }
-      defining = label !== null;
-      if (label !== null) keys.add(labelKeys(label)[k]);
+      // A line that holds no title of the definition above it may hold a
+      // definition of its own when it starts its paragraph or follows lines
+      // of it that each hold a definition or a part of one.
+      if (!title && definition === null && text && (block.starts || defining) && start.row !== undefined) {
+        const depth = block.starts ? read.containers.length : start.matched;
+        definition = definitionLabel(start.row);
+        if (definition === null) started = { text: start.row, depth };
+        else if (definition.title === -1) started = { depth };
+        else titles.set(l, textIndex(l.line, start.row) + definition.title);
+      }
+      defining = definition !== null || title;
+      if (definition !== null) keys.add(labelKeys(definition.label)[k]);
     }
-    return keys;
+    return { keys, titles };
   });
+  return { keys: [cm.keys, mi.keys], titles: new Map([...cm.titles].filter(([l, at]) => mi.titles.get(l) === at)) };
 }
+
+// The index in `line` where `text`, the text of the line from where it
+// starts, starts: `text` runs to the end of the line, or to the \r there.
+const textIndex = (line, text) => (line.endsWith('\r') && !text.endsWith('\r') ? line.length - 1 : line.length) - text.length;
 
 // Whether a page defines a reference, for paragraphCodeSpans(): a test of
 // a label, as linkSyntax() gives one, that says whether definedLabels()
 // reads, on `lines`, the lines of the page, a definition under each key of
-// that label, so that both renderers find one. The page is read the first
-// time the test is asked.
+// that label, so that both renderers find one. Its title(line) gives the
+// index in a line of the page where the title of a definition that both
+// read starts, as definedLabels() reads them, or -1 where the line holds
+// none. The page is read the first time either is asked.
 function referencesOf(lines) {
-  let keys;
-  return (label) => {
-    keys ??= definedLabels(lines);
-    return labelKeys(label).every((key, k) => keys[k].has(key));
+  let definitions;
+  const defines = (label) => {
+    definitions ??= definedLabels(lines);
+    return labelKeys(label).every((key, k) => definitions.keys[k].has(key));
   };
+  defines.title = (line) => (definitions ??= definedLabels(lines)).titles.get(line) ?? -1;
+  return defines;
 }
 
 // Reads the link targets on the lines of one page, as linkTargets reads
@@ -2688,6 +2766,7 @@ const noOpenLinkText = () => ({ brackets: [], aroundLink: 0 });
 function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   let open = noOpenLinkText();
   let first = 0; // the index in `lines` of the line that starts the block read last
+  let blockLines = []; // the text of each line of that block as it is read, as below
   const read = blockReader(lines, codeLines, htmlLines);
   const defined = referencesOf(page);
   // Where the text of lines[k] starts when it is text that goes on with the
@@ -2761,8 +2840,25 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       // block are read on its line alone.
       const texts = [0];
       if (paragraph) for (let at; j + texts.length < lines.length && (at = textStart(j + texts.length)) !== -1; ) texts.push(at);
+      // The title of a reference definition that both renderers read where
+      // a paragraph starts, from where defined.title() says it starts on its
+      // line, is none of the paragraph's text: a renderer writes nothing for
+      // a definition, and its title only into the title attribute of the
+      // links that use it. It is read as spaces to the end of its line, so
+      // no link, code span or raw HTML in it is read, and none that opens
+      // there runs on to the text after it. The first line of a paragraph
+      // that holds such a title holds the ]: after a label, so a page none
+      // of whose paragraphs starts with a line that holds one is not read
+      // for definitions.
+      blockLines = lines.slice(j, j + texts.length).map(({ line }) => line);
+      if (paragraph && l.line.includes(']:')) {
+        blockLines = blockLines.map((line, k) => {
+          const at = defined.title(lines[j + k]);
+          return at === -1 ? line : line.slice(0, at) + ' '.repeat(line.length - at);
+        });
+      }
       const end = paragraph || (rest === 'block' && !html) ? blockEnd(j, texts.length, paragraph) : null;
-      open.code = paragraphCodeSpans(lines.slice(j, j + texts.length).map(({ line }) => line), texts, defined, end);
+      open.code = paragraphCodeSpans(blockLines, texts, defined, end);
     }
     // A fence holds no link, whether parse() tags it or not: what follows the
     // run of an opening fence is an info string, not text, and a line that
@@ -2783,7 +2879,7 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
     // backtick in it is text, so they are read on the whole line. It is no
     // paragraph text, and the line after it starts a block, so no code span
     // or raw HTML runs on from it to the lines after the block.
-    const targets = linkTargets(l.line, html ? noOpenLinkText() : open, spans);
+    const targets = linkTargets(html ? l.line : blockLines[j - first], html ? noOpenLinkText() : open, spans);
     outside?.set(j, [spans.from, spans.to, first]);
     if (html) return hrefTargets(l.line);
     if (!paragraph) open = noOpenLinkText();

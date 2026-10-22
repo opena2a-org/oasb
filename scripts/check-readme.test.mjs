@@ -2575,6 +2575,76 @@ test('a tag that raw HTML leaves open ends at the end tag after its paragraph, h
   }
 });
 
+test('no link is read in the title of a reference definition, also a title alone on the next line or a definition in a block quote or a list item, and nothing in a title runs on to the text after it', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) read a
+  // reference definition in each of these, render nothing for it, and write
+  // its title only into the title attribute of the links that use it, so
+  // parse5 7.3.0 reads no link to docs/nowhere.md in what either renders: a
+  // title in "", '' or () holds the tag, on the line of the destination or
+  // alone on the next line of the paragraph, also 4 columns in or after a
+  // destination on the line after the ]:, in a block quote or a list item,
+  // also where the title's line goes on with the paragraph lazily; the
+  // title holds an inline link; a definition follows a title on a line of
+  // its own, so the description of the image whose reference it names is
+  // alt text; or a backtick in a title opens no code span, so the code span
+  // after the definition holds the tag.
+  for (const body of [
+    '[ref]: docs/guide.md "<a href=docs/nowhere.md>"\n',
+    "[ref]: docs/guide.md \"x <? > <a href=docs/nowhere.md x=' ?> '\"\n",
+    "[ref]: docs/guide.md '<a href=docs/nowhere.md>'\n",
+    '[ref]: docs/guide.md (<a href=docs/nowhere.md>)\n',
+    "[ref]: docs/guide.md (x <? > <a href=docs/nowhere.md x=' ?> ')\n",
+    '[ref]: docs/guide.md\n"<a href=docs/nowhere.md>"\n',
+    "[ref]: docs/guide.md\n\"x <? > <a href=docs/nowhere.md x=' ?> '\"\n",
+    "[ref]: docs/guide.md\n(x <? > <a href=docs/nowhere.md x=' ?> ')\n",
+    '[ref]: docs/guide.md\n    "<a href=docs/nowhere.md>"\n',
+    '[ref]:\ndocs/guide.md\n"<a href=docs/nowhere.md>"\n',
+    '> [ref]: docs/guide.md "<a href=docs/nowhere.md>"\n',
+    "> [ref]: docs/guide.md \"x <? > <a href=docs/nowhere.md x=' ?> '\"\n",
+    '> [ref]: docs/guide.md\n> "<a href=docs/nowhere.md>"\n',
+    '> [ref]: docs/guide.md\n"<a href=docs/nowhere.md>"\n',
+    '> [ref]:\ndocs/guide.md\n> "<a href=docs/nowhere.md>"\n',
+    '- [ref]: docs/guide.md "<a href=docs/nowhere.md>"\n',
+    "- [ref]: docs/guide.md \"x <? > <a href=docs/nowhere.md x=' ?> '\"\n",
+    '- [ref]: docs/guide.md\n  "<a href=docs/nowhere.md>"\n',
+    '- [ref]: docs/guide.md\n"<a href=docs/nowhere.md>"\n',
+    '[ref]: docs/guide.md "[x](docs/nowhere.md)"\n',
+    '[a]: docs/guide.md\n"<a href=docs/nowhere.md>"\n[b]: docs/guide.md "<a href=docs/nowhere.md>"\n',
+    "![<a href='docs/nowhere.md'>x</a>][b]\n\n[a]: docs/guide.md\n\"t\"\n[b]: docs/guide.md\n",
+    '[ref]: docs/guide.md "`"\nx `<a href=docs/nowhere.md>`\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // parse5 reads a link to docs/nowhere.md in what one or both render of
+  // each of these, and the check reads it: text follows the title on its
+  // line, or a tab, and commonmark.js reads no title that a tab follows; a
+  // title follows a definition that has one; the definition follows text
+  // of its paragraph; the text after the definition holds a tag left open
+  // at the end of the paragraph, or one after a backtick that would close
+  // a code span the title's backtick opened; markdown-it reads no
+  // definition whose destination is javascript:x; or markdown-it reads
+  // [b]: on a line that leaves out the > of the block quote above outside
+  // it, and the > on the next line starts a block quote that holds the
+  // title as text.
+  for (const [body, line] of [
+    ['[ref]: docs/guide.md "<a href=docs/nowhere.md>" junk\n', 11],
+    ['[ref]: docs/guide.md\n"<a href=docs/nowhere.md>" junk\n', 12],
+    ['[ref]: docs/guide.md "<a href=docs/nowhere.md>"\t\n', 11],
+    ['[ref]: docs/guide.md\n"<a href=docs/nowhere.md>"\t\n', 12],
+    ['[ref]: docs/guide.md "t"\n"<a href=docs/nowhere.md>"\n', 12],
+    ['text\n[ref]: docs/guide.md "<a href=docs/nowhere.md>"\n', 12],
+    ["[ref]: docs/guide.md \"t\"\nx <? > <a href=docs/nowhere.md x=' ?> '\n", 12],
+    ['[ref]: docs/guide.md "`"\n<a href=docs/nowhere.md>y</a> `\n', 12],
+    ['[ref]: javascript:x "<a href=docs/nowhere.md>"\n', 11],
+    ['> [a]: docs/guide.md\n[b]: docs/guide.md\n> "<a href=docs/nowhere.md>"\n', 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "docs/nowhere.md" does not exist.`, body);
+  }
+});
+
 test('a 1 MB line of text and then 4,000 images, each with a tag whose unquoted href runs on into the " after its description, is checked in under 2 seconds', () => {
   // Read in a copy of the line up to that " for each image, the check ran
   // out of memory on this line on Node.js 26.12.0.
