@@ -2280,6 +2280,82 @@ test('an image whose reference names a definition under a table, on a line that 
   }
 });
 
+test('a comment or a tag that raw HTML leaves open is read on into the raw HTML after it, as a browser reads it, inside an image and outside one', () => {
+  // parse5 7.3.0 reads no link to docs/nowhere.md in what commonmark.js
+  // 0.31.2 or markdown-it 14.1.0 (html: true) renders of these: the <a> is
+  // inside the quoted value of a tag or inside a comment that raw HTML
+  // before it leaves open, inside an image, where commonmark.js writes the
+  // raw HTML of the description as written, and outside one, also where
+  // the text between holds emphasis, a code span, an autolink, a link
+  // whose <a> holds the raw HTML, or a line break, and in a block quote, a
+  // list item, a heading or a table cell.
+  for (const body of [
+    '![<b x="><b x="> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n',
+    '![<b x="><!--"> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n',
+    '![<b x="><!-- x --><b x="> / <a href="docs/nowhere.md">y</a>](docs/guide.md)\n',
+    'x <? > <b x=" ?> <a href="docs/nowhere.md">y</a>\n',
+    "![<b x=\"'><b y='\"> <a href=\"docs/nowhere.md\">z</a>](docs/guide.md)\n",
+    '![<b x=\'"><b y="\'> [t](docs/guide.md) <a href="docs/nowhere.md">z</a>](docs/guide.md)\n',
+    '![<b x=\'"><b y="\'> *t* `u` <a href="docs/nowhere.md">z</a>](docs/guide.md)\n',
+    "![<b x=\"'><b y='\"> `&#39;` <a href=\"docs/nowhere.md\">z</a>](docs/guide.md)\n",
+    '![<b x="><textarea x="> <a href="docs/nowhere.md">y</a>](docs/guide.md)\n',
+    'x <? > <!-- ?> <a href="docs/nowhere.md">y</a>\n',
+    'x <!-- --!> <b x=" --> <a href="docs/nowhere.md">y</a>\n',
+    'x <![CDATA[ > <b x=" ]]> <a href="docs/nowhere.md">y</a>\n',
+    'x <? > </b x=" ?> <a href="docs/nowhere.md">y</a>\n',
+    "x <? > <b x=' ?> <a href=\"docs/nowhere.md\" title='t'>z</a>\n",
+    'x <? > <b x=" ?> *y* <a href="docs/nowhere.md">z</a>\n',
+    'x <? > <b x=" ?> `"` <a href="docs/nowhere.md">y</a>\n',
+    "x <? > <b x=' ?> _y_ <a href=\"docs/nowhere.md\">z</a>\n",
+    "x <? > <b x=' ?> <https://x.y/> <a href=\"docs/nowhere.md\">z</a>\n",
+    "x <? > <b x=' ?> `&#39;` <a href=\"docs/nowhere.md\">z</a>\n",
+    'x <? > <textarea x=" ?> <a href="docs/nowhere.md">y</a>\n',
+    '[x <? > <b x=" ?> y](docs/guide.md) <a href="docs/nowhere.md">z</a>\n',
+    'x <? > <b x=" ?>\n<a href="docs/nowhere.md">y</a>\n',
+    '> x <? > <b x=" ?>\n> <a href="docs/nowhere.md">y</a>\n',
+    '- x <? > <b x=" ?> <a href="docs/nowhere.md">y</a>\n',
+    '## x <? > <b x=" ?> <a href="docs/nowhere.md">y</a>\n',
+    '| h |\n| - |\n| x <? > <b x=" ?> <a href="docs/nowhere.md">y</a> |\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // parse5 reads an href to docs/nowhere.md in what one or both render of
+  // each of these: after a --> that ends the comment; on the tag that is
+  // open, after a ' in the text, also one that &#39; stands for, ends its
+  // value, or after the value its raw HTML opened before the href ends; in
+  // a <textarea> start tag that ends there, after the </textarea>; and
+  // where a link, an autolink, an image, a code span that holds the ' that
+  // ends the value, emphasis or a hard line break writes a tag or a quote
+  // that ends the value or the tag, where the check reads the raw HTML after
+  // it with nothing open.
+  for (const [body, line] of [
+    ['x <? > <!-- ?> <a href="docs/nowhere.md">y</a> <!-- --> <a href="docs/nowhere.md">z</a>\n', 11],
+    ['![<b x="><!--"> <a href="docs/nowhere.md">y</a> <!-- --> <a href="docs/nowhere.md">z</a>](docs/guide.md)\n', 11],
+    ["x <? > <b x=' ?> ' <a href=\"docs/nowhere.md\">z</a>\n", 11],
+    ["x <? > <b x=' ?> &#39; <a href=\"docs/nowhere.md\">z</a>\n", 11],
+    ["x <? > <a title=' ?> ' href=docs/nowhere.md <b>y</b>\n", 11],
+    ["x <? > <a x=' ?> 'href&#61;docs/nowhere.md <b>y</b>\n", 11],
+    ['x <? > <b href="docs/nowhere.md" x=" ?> y <i x="">z</i>\n', 11],
+    ["![<b x=\"'><b y='\"> ' <a href=\"docs/nowhere.md\">z</a>](docs/guide.md)\n", 11],
+    ["![<b x=\"'><b y='\"> &#39; <a href=\"docs/nowhere.md\">z</a>](docs/guide.md)\n", 11],
+    ["![<b x=\"y='\"> &#39;<i>z</i><a href=\"docs/nowhere.md\">y</a>](docs/guide.md)\n", 11],
+    ['![<b x="><textarea x="> <a href="docs/nowhere.md">y</a> z</textarea> <a href="docs/nowhere.md">w</a>](docs/guide.md)\n', 11],
+    ['x <? > <textarea x=" ?> <a href="docs/nowhere.md">y</a> z</textarea> <a href="docs/nowhere.md">w</a>\n', 11],
+    ['x <? > <b x=" ?> [l](docs/guide.md) <a href="docs/nowhere.md">y</a>\n', 11],
+    ['x <? > <b x=" ?> <https://example.com> <a href="docs/nowhere.md">y</a>\n', 11],
+    ['x <? > <b x=" ?> ![i](docs/guide.md) <a href="docs/nowhere.md">y</a>\n', 11],
+    ["x <? > <b x=' ?> `'` <a href=\"docs/nowhere.md\">z</a>\n", 11],
+    ["x <? > <b x=' ?> ' *y* <a href=\"docs/nowhere.md\">z</a>\n", 11],
+    ["x <? > <b x=' ?> '  \n<a href=\"docs/nowhere.md\">y</a>\n", 12],
+    ["x <? > <b x=' ?> '\\\n<a href=\"docs/nowhere.md\">y</a>\n", 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "docs/nowhere.md" does not exist.`, body);
+  }
+});
+
 test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds', () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
