@@ -1941,6 +1941,29 @@ stay on record here with the reason they changed.
   page and a page that the MITRE ATLAS Coverage section links are read
   through such an href as well, and `<a href=" ../README.md ">README</a>`
   on a dated page counts as its link to the README.
+- `npm run check:readme` reads no link in the title of a reference
+  definition that commonmark.js 0.31.2 and markdown-it 14.1.0 both read
+  where a paragraph starts: neither renders a definition, and each writes
+  its title only into the title attribute of the links that use it. With
+  `docs/guide.md` present and `docs/nowhere.md` absent,
+  `[ref]: docs/guide.md "<a href=docs/nowhere.md>"` exited 1 with
+  `link target "docs/nowhere.md" does not exist`, as did the same title in
+  parentheses or alone on the next line, and the definition in a block
+  quote or a list item, and each now exits 0; parse5 7.3.0 reads no link
+  to `docs/nowhere.md` in what either renders of them.
+  `[ref]: docs/guide.md "x <? > <a href=docs/nowhere.md x=' ?> '"` exited
+  0 before the fix above for a tag left open at the end of a paragraph, 1
+  after it, and now exits 0. A backtick in such a title opens no code
+  span: ``[ref]: docs/guide.md "`"`` above the line
+  ``<a href=docs/nowhere.md>y</a> ` `` exited 0, as the backtick on that
+  line closed a span over the tag, and now exits 1; both render that link.
+  A definition after a title on a line of its own is read, so
+  `![<a href='docs/nowhere.md'>x</a>][b]`, a blank line, and
+  `[a]: docs/guide.md`, `"t"` and `[b]: docs/guide.md` on three lines
+  exited 1 and now exits 0, as both write that description into the alt
+  attribute. A title with a tab after it, which commonmark.js reads as
+  text, a title that ends on a later line than it starts on, and the label
+  of a definition are read as text of the paragraph, as before.
 
 ## 0.4.1 - 2026-10-17
 
