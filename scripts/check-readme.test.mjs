@@ -615,6 +615,13 @@ test('a page the MITRE ATLAS Coverage section links with a ?query is read for sk
   assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
 });
 
+test('a page the MITRE ATLAS Coverage section links with an href whose value has spaces at its start and its end is read for skipped tests', () => {
+  const readme = withAtlas('| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001 |', ' Detail: <a href=" docs/atlas.md ">mapping</a>.');
+  const r = checkCounts(readme, SUITE, report(SUITE), withPage('| E2E-003 | Outbound TCP |'));
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), `README: docs/atlas.md line 6: ${SKIPPED_E2E_003}`);
+});
+
 test('a page linked from outside the MITRE ATLAS Coverage section is not read for skipped tests', () => {
   const readme = COUNTED.replace(
     'run the same 10 attack scenarios.',
@@ -1772,6 +1779,85 @@ test('an href whose value is unquoted, or in quotes and holds a line break, is r
   ]) {
     const r = check(body);
     assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('an href is read without the spaces and the controls U+0001 to U+001F at the start and the end of its value, which the URL parser removes from a URL', () => {
+  // On Node.js 26.12.0, new URL(' https://example.com/x', base) is
+  // https://example.com/x, and new URL(' docs/guide.md ', base) is the URL
+  // of docs/guide.md beside base, as is one with any of U+0000 to U+001F at
+  // the start and the end in place of the spaces. Each of these links to
+  // docs/guide.md, which exists, or to the page that holds it, or is
+  // absolute, as does the inline link [y]( docs/guide.md ): in a paragraph,
+  // also over its lines and in a block quote or in a tag that starts on an
+  // earlier line; in a heading and a table cell; after a > inside <?, where
+  // a browser ends it, also unquoted; in an image's description that a
+  // browser reads as HTML; and on a line of an HTML block, also unquoted,
+  // or of indented code.
+  for (const body of [
+    'p [y]( docs/guide.md )\n',
+    'p <a href=" https://example.com/x">y</a>\n',
+    'p <a href=" docs/guide.md">y</a>\n',
+    'p <a href="docs/guide.md ">y</a>\n',
+    "p <a href='  docs/guide.md#setup-steps  '>y</a>\n",
+    'p <a href=" //example.com/missing.md">y</a>\n',
+    'p <a href="   ">y</a>\n',
+    'p <a href="\n docs/guide.md \n">y</a>\n',
+    '> x <a href="\n>  docs/guide.md ">y</a>\n',
+    'x <a\nhref=" docs/guide.md ">y</a>\n',
+    '## <a href=" docs/guide.md ">y</a>\n',
+    '| h |\n| - |\n| <a href=" docs/guide.md ">y</a> |\n',
+    'x <? > <a href=" docs/guide.md ">y</a> ?>\n',
+    'x <? > <a href=\x01docs/guide.md\x1f>y</a> ?>\n',
+    '![<b title=">"><a href=" docs/guide.md ">y</a></b>](docs/guide.md)\n',
+    '<div><a href=" docs/guide.md ">y</a></div>\n',
+    '<div><a href=\x01docs/guide.md\x1f>y</a></div>\n',
+    'p\n\n    <a href=" docs/guide.md ">y</a>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${JSON.stringify(body)}\n${r.stderr}`);
+  }
+  // A paragraph for each character from U+0001 to U+0020, whose href has
+  // that character at the start and the end of its value.
+  const ends = Array.from({ length: 0x20 }, (_, i) => String.fromCharCode(i + 1));
+  const each = check(ends.map((c) => `p <a href="${c}docs/guide.md${c}">y</a>\n`).join('\n'));
+  assert.equal(each.status, 0, each.stderr);
+  // A link to a file that does not exist, or to a heading that docs/guide.md
+  // does not have, still fails, and the message names its target without
+  // the spaces.
+  const missing = check('p <a href=" docs/nowhere.md ">y</a>\n');
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /^README: line 11: link target "docs\/nowhere\.md" does not exist\.$/m);
+  const anchor = check('p <a href=" docs/guide.md#nope ">y</a>\n');
+  assert.equal(anchor.status, 1);
+  assert.match(anchor.stderr, /^README: line 11: anchor "#nope" has no matching heading in docs\/guide\.md\.$/m);
+  // The URL parser keeps a no-break space or a DEL at the start or the end
+  // of a URL, and a space inside it, and keeps the U+FFFD that a browser's
+  // tokenizer reads a NUL in an attribute's value as, so none of these
+  // links to docs/guide.md.
+  const kept = ['\xa0', '\x7f', '\0'].flatMap((c) => [`${c}docs/guide.md`, `docs/guide.md${c}`]);
+  for (const value of [...kept, 'docs/ guide.md']) {
+    const r = check(`p <a href="${value}">y</a>\n`);
+    assert.equal(r.status, 1, JSON.stringify(value));
+    assert.match(r.stderr, /^README: line 11: link target ".*" does not exist\.$/m, JSON.stringify(value));
+  }
+});
+
+test('an href with 100,000 spaces at the start and the end of its value, or 200,000 inside it, is checked in under 2 seconds', () => {
+  // The spaces at each end of the value are read in a loop: on Node.js
+  // 26.12.0 a search for [\x01-\x20]+$ took 12.6 seconds over docs/guide.md,
+  // 200,000 spaces and an x, as it went on from each space of the run to
+  // the end of the run. Each value is read in a paragraph and on a line of
+  // an HTML block; the first links to docs/guide.md, which exists.
+  const ends = ' '.repeat(100000);
+  for (const [value, status] of [[`${ends}docs/guide.md${ends}`, 0], [`docs/guide.md${' '.repeat(200000)}x`, 1]]) {
+    for (const body of [`x <a href="${value}">y</a>\n`, `<div><a href="${value}">y</a></div>\n`]) {
+      const started = process.hrtime.bigint();
+      const r = check(body);
+      const ms = Number(process.hrtime.bigint() - started) / 1e6;
+      assert.equal(r.status, status, r.stderr.slice(0, 500));
+      assert.ok(ms < 2000, `${ms.toFixed(0)} ms for an href of ${value.length} characters after ${JSON.stringify(body.slice(0, 5))}`);
+    }
   }
 });
 
@@ -3806,6 +3892,14 @@ test('a dated page the README links with a ?query is read as one, and its link t
   assert.equal(bare.status, 1);
   assert.match(bare.stderr, DATED);
   const linked = check(DATED_LINK, datedPage('> As of 2026-06-03, see the [README](../README.md?x).\n'));
+  assert.equal(linked.status, 0, linked.stderr);
+});
+
+test('a dated page the README links with an href whose value has spaces at its start and its end is read as one, and its link to the README so written counts', () => {
+  const bare = check('For the audit, see <a href=" docs/AUDIT-2026-06-03.md ">the audit</a>.\n', datedPage('Measured from `npm test`.\n'));
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, DATED);
+  const linked = check(DATED_LINK, datedPage('> As of 2026-06-03, see the <a href=" ../README.md ">README</a>.\n'));
   assert.equal(linked.status, 0, linked.stderr);
 });
 

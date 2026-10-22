@@ -1923,6 +1923,24 @@ stay on record here with the reason they changed.
   Coverage section links and the full output that a capture links are
   read through a link with a `?query` as well, and `[README](../README.md?x)`
   on a dated page counts as its link to the README.
+- `npm run check:readme` reads the target of an HTML href without the
+  spaces and the controls U+0001 to U+001F at the start and the end of
+  its value, which the URL parser removes from a URL. With
+  `docs/guide.md` present, the lines
+  `p <a href=" https://example.com/x">y</a>`,
+  `p <a href=" docs/guide.md">y</a>` and `p <a href="docs/guide.md ">y</a>`
+  exited 1 with `link target " https://example.com/x" does not exist`, or
+  with that message for `" docs/guide.md"` or `"docs/guide.md "`, and now
+  exit 0; the URL parser of Node.js 26.12.0 reads them as links to
+  `https://example.com/x` and to `docs/guide.md`. A link to a file that
+  does not exist fails with its target without the spaces, as
+  `link target "docs/nowhere.md" does not exist`. A NUL, a no-break space
+  or a DEL at the start or the end of a value is kept, as the URL parser
+  keeps a no-break space and a DEL there, and the U+FFFD that the HTML
+  standard has a browser read a NUL in an attribute's value as. A dated
+  page and a page that the MITRE ATLAS Coverage section links are read
+  through such an href as well, and `<a href=" ../README.md ">README</a>`
+  on a dated page counts as its link to the README.
 
 ## 0.4.1 - 2026-10-17
 
