@@ -1739,6 +1739,35 @@ stay on record here with the reason they changed.
   loads without vitest. `src/harness/capabilities-core.test.ts` checks
   these cases; it passed with vitest 3.2.7 on Node 20.19.0, 20.20.0,
   22.23.3, 24.17.0 and 26.12.0.
+- `npm run check:readme` reads an href inside an image where a `"` in raw
+  HTML before it in the description ends the alt attribute that
+  commonmark.js 0.31.2 writes the description into: it writes the raw HTML
+  there as written, so the `"` ends the attribute's value, and a browser
+  reads what follows as the rest of the `<img>` tag, to the first `>`
+  outside a quoted value, and the rest of the description as HTML.
+  markdown-it 14.1.0 writes the description there as escaped text. With
+  `docs/guide.md` present and `docs/nowhere.md` absent, the line
+  `![<b title=">"><a href="docs/nowhere.md">y</a></b>](docs/guide.md)`
+  exited 0, and now exits 1 with
+  `link target "docs/nowhere.md" does not exist`, as do the lines with
+  `<b class="x">`, `<!-- " -->`, `<?x " ?>`, `<![CDATA[ " ]]>` or
+  `<!DOCTYPE ">` in place of `<b title=">">`, the line with `][ref]` in
+  place of `(docs/guide.md)` and `[ref]: docs/guide.md` on the page, and
+  the image in a block quote, a list item, link text, a heading or a table
+  cell. parse5 7.3.0 reads a link to `docs/nowhere.md` in what
+  commonmark.js renders of each of these, and no link to it in what
+  markdown-it renders.
+  `![<a href="docs/a.md">x</a> <a href="docs/nowhere.md">y</a>](docs/guide.md)`
+  exited 0 and now exits 1 naming `docs/nowhere.md` alone, as the first
+  `<a>` holds the `"` and its href is an attribute of the `<img>`. An href
+  is still not read where neither renderer makes a link of it:
+  `![<a href="docs/nowhere.md">y</a>](docs/guide.md)`, whose href is such
+  an attribute,
+  `![<b title='>'><a href='docs/nowhere.md'>y</a></b>](docs/guide.md)`,
+  with no `"` in the description, and the line with `<textarea>` after
+  `<b title=">">` and `</textarea>` after the `<a>`, where the `<a>` is in
+  the text of the `<textarea>` that the rest of the description opens,
+  exit 0, as they did.
 
 ## 0.4.1 - 2026-10-17
 

@@ -127,7 +127,17 @@
 //      look the reference up under and definedLabels() reads the
 //      definition: written whole on one line, where a paragraph starts or
 //      after the definitions that start one, outside a block quote and not
-//      on the line of a list marker. Nor is an href read in the text of an
+//      on the line of a list marker. markdown-it 14.1.0 writes the
+//      description there as escaped text, and commonmark.js 0.31.2 writes
+//      the raw HTML in it as written, so a " in raw HTML of the description
+//      ends the attribute's value in what it renders, and a browser reads
+//      what follows as the rest of the <img> tag, as attributesEnd() reads
+//      it, to the first > outside a quoted value, and the rest of the
+//      description as HTML, in which an href in an open tag is read, as it
+//      is in the paragraph, with altHrefs(): so
+//      ![<b title=">"><a href="target">y</a></b>](a.png) links to target,
+//      and ![<a href="target">y</a>](a.png) does not, as its href is an
+//      attribute of the <img>. Nor is an href read in the text of an
 //      element whose text a browser reads as text, not as HTML:
 //      <script>, <style>, <textarea>, <title>, <xmp>, <iframe>, <noembed>,
 //      <noframes>, <noscript> or <plaintext>. That text runs from a start
@@ -146,11 +156,18 @@
 //      its ![ to the ) that closes its destination and title, and in one
 //      whose reference a definition on the page names, as above, from its
 //      ![ to its ] and on over the label after that ], raw HTML is text, as
-//      a renderer writes the description of an image as alt text of the
-//      <img>: no href there is read, and no tag there opens or ends such an
-//      element. So
-//      ![<textarea>](a.png) <a href="target">y</a> links to target, and
-//      x <textarea> ![</textarea>](a.png) <a href="target">y</a> does not.
+//      markdown-it writes the description of an image as escaped alt text
+//      of the <img>: no tag there opens or ends such an element, and no
+//      href there is read but for one that commonmark.js makes a link of,
+//      as above. In the rest of the description that a browser reads as
+//      HTML in what commonmark.js renders, a start tag of such an element
+//      opens one that is followed to the end of the description, as
+//      markdown-it makes the links after the image. So
+//      ![<textarea>](a.png) <a href="target">y</a> links to target,
+//      x <textarea> ![</textarea>](a.png) <a href="target">y</a> does not,
+//      ![<b title=">"><textarea>](a.png) <a href="target">y</a> does, and
+//      ![<b title=">"><textarea><a href="target">y</a></textarea>](a.png)
+//      does not.
 //      The target of an href is its
 //      value without the tabs, line feeds and carriage returns that the URL
 //      parser removes from a URL, and without the > markers and indentation
@@ -730,25 +747,27 @@ function codeSpans(text) {
 // htmlAt() has read, as a browser may end one before the end at which
 // CommonMark ends it and read the rest as raw HTML: those whose target
 // opens on the line, also those of a tag that starts on an earlier line,
-// but none inside an image: one that a destination follows, from its ![ to
-// the ) that closes its destination and title, and one whose reference
-// `defined`, a test of the label that linkSyntax() gives it, finds that
-// the page defines, from its ![ to its ] and on over the label after that
-// ], as linkSyntax() finds the images in the lines joined, so an image
-// whose ] is on a later line holds the hrefs before it on its earlier
-// lines too. markdown-it 14.1.0 writes the description of an image, a tag
-// in it as well, as escaped text in the alt attribute of the <img>, so the
-// tag makes no link, and opens and ends no element. Without `defined`, no
-// reference is defined.
+// but, inside an image, only those that altHrefs() reads: an image is one
+// that a destination follows, from its ![ to the ) that closes its
+// destination and title, or one whose reference `defined`, a test of the
+// label that linkSyntax() gives it, finds that the page defines, from its
+// ![ to its ] and on over the label after that ], as linkSyntax() finds
+// the images in the lines joined, so an image whose ] is on a later line
+// holds the raw HTML before it on its earlier lines too. markdown-it
+// 14.1.0 writes the description of an image, a tag in it as well, as
+// escaped text in the alt attribute of the <img>, so the tag makes no
+// link, and opens and ends no element; commonmark.js 0.31.2 writes the
+// raw HTML in it as written, and altHrefs() reads the hrefs a browser
+// then reads in the description, given each piece of raw HTML inside the
+// image and the destination and title of each inline link linkAt() has
+// read. Without `defined`, no reference is defined.
 // The elements whose text a browser reads as text (RAW_TEXT_ENDS) are
 // followed over that raw HTML, but for raw HTML that starts inside such an
-// image, with one tracker that rawTextElements() makes of the lines: an
-// open tag read while none of them is open is read with tagHref() and then
-// opens the one it starts, if any, and a tag read while one is open is
-// read with rawHtmlHrefs(), as raw HTML is, which reads no href in it
-// before the end tag that ends that element. A reader asks about the runs,
-// the < and the ( it meets from left to right, and asks for hrefs() once
-// it has read the line.
+// image, with one tracker that rawTextElements() makes of the lines, as
+// rawHrefs() reads the raw HTML with it; while one of them is open, the
+// raw HTML inside an image is its text, and altHrefs() is not given it. A
+// reader asks about the runs, the < and the ( it meets from left to right,
+// and asks for hrefs() once it has read the line.
 function paragraphCodeSpans(lines, texts = [], defined = () => false) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
@@ -759,8 +778,10 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false) {
   // meets raw HTML.
   let images;
   const isImage = ([start, , sure, label]) => text[start] === '!' && (sure || (label !== null && defined(label)));
-  const inImage = (at) => partHolding((images ??= linkSyntax(text, isImage)), at) !== undefined;
+  const imageAt = (at) => partHolding((images ??= linkSyntax(text, isImage)), at);
   const elements = rawTextElements(text);
+  const links = []; // the destination and title of each inline link linkAt() has read, as [from, to) in the joined lines, in order
+  const altAt = altHrefs(text, links);
   const hrefs = []; // the hrefs of the tags read, as tagHref() gives them, in order
   let given = 0; // how many of them hrefs() has given
   let k = 0; // the line read next
@@ -785,14 +806,12 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false) {
         const html = htmlAt(at + i);
         past = html.end;
         const raw = html.tag || (html.unshown && html.end > at + i + 1);
-        if (raw && !inImage(at + i)) {
-          if (html.tag && !elements.open()) {
-            const href = tagHref(text, at + i, html.end);
-            if (href) hrefs.push(href);
-            elements.start(at + i);
-          } else {
-            for (const href of rawHtmlHrefs(text, at + i, html.end, elements)) hrefs.push(href);
-          }
+        if (raw) {
+          const image = imageAt(at + i);
+          let read = [];
+          if (image === undefined) read = rawHrefs(text, at + i, html.end, html.tag, elements);
+          else if (!elements.open()) read = altAt(image, at + i, html.end, html.tag);
+          for (const href of read) hrefs.push(href);
         }
         return { ...html, end: html.end - at };
       },
@@ -800,6 +819,7 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false) {
         const link = inlineLink(text, at + i);
         if (!link) return null;
         past = link.end;
+        links.push([at + i, link.end]);
         return { target: link.target, end: link.end - at };
       },
       hrefs: () => {
@@ -1344,10 +1364,10 @@ function readScript(find, from, to, state) {
 // of RAW_TEXT_ENDS finds that start, and ends it there, or -1 when none
 // ends it there. The state of the tokenizer in the text of a <script> is
 // kept from one call to the next, as readScript() takes it. The text is
-// searched with one searcher(), so a line of many tags inside an element
-// that no end tag ends is not read again from each one.
-function rawTextElements(text) {
-  const find = searcher(text);
+// searched with one searcher(), `find` when one is given, so a line of
+// many tags inside an element that no end tag ends is not read again from
+// each one, nor from each image that altHrefs() makes a tracker for.
+function rawTextElements(text, find = searcher(text)) {
   let open = null; // the name of the element open, or null
   let escape = 0; // the state of the tokenizer in the text of a <script>
   return {
@@ -1428,6 +1448,144 @@ function rawHtmlHrefs(text, from, to, elements) {
     i = end;
   }
   return hrefs;
+}
+
+// The hrefs that a browser reads in the raw HTML from text[start] to
+// text[end], as paragraphCodeSpans() reads a piece of it outside an image:
+// `tag` is whether an open tag or a closing tag starts there, and
+// `elements` a tracker that rawTextElements() makes of `text`. An open tag
+// read while no element of RAW_TEXT_ENDS is open is read with tagHref()
+// and then opens the one it starts, if any; any other raw HTML is read
+// with rawHtmlHrefs(), which reads no href in it before the end tag that
+// ends the element open, when one is.
+function rawHrefs(text, start, end, tag, elements) {
+  if (tag && !elements.open()) {
+    const href = tagHref(text, start, end);
+    elements.start(start);
+    return href ? [href] : [];
+  }
+  return rawHtmlHrefs(text, start, end, elements);
+}
+
+// The states in which attributesEnd() reads the attributes of a tag, as a
+// browser's tokenizer reads them: before an attribute's name, also after a
+// quoted value (BEFORE_NAME); in a name (IN_NAME); after a name, before an
+// = that may follow it (AFTER_NAME); after that = and the white space after
+// it (BEFORE_VALUE); in an unquoted value (UNQUOTED); and in a value in
+// double or in single quotes, '"' or "'", where a > is part of the value.
+const BEFORE_NAME = 'before name';
+const IN_NAME = 'name';
+const AFTER_NAME = 'after name';
+const BEFORE_VALUE = 'before value';
+const UNQUOTED = 'unquoted';
+
+// Where the open tag whose attributes go on at text[from] in `state`, one
+// of the states above, ends, read in text[from] to text[to] as a browser's
+// tokenizer reads attributes, as readTag() reads them from a tag's <: a
+// name runs to white space, a /, a > or an =, and may start with an =; a /
+// that no > follows is read as white space; after a name, an = and any
+// white space open a value, in double or single quotes, which runs to the
+// next quote of its kind, or unquoted, which runs to white space or a >;
+// and the tag ends at the first > outside a quoted value. `raw` is whether
+// the text is raw HTML, which a renderer writes as written, or text, which
+// it writes escaped, so that a > or a " in it is a character of a name or
+// a value, and a backslash escape in it is the character it escapes.
+// Returns the index after the > that ends the tag as `end`, or -1 when the
+// text ends first, and the state at that > or at `to` as `state`.
+function attributesEnd(text, from, to, raw, state) {
+  for (let i = from; i < to; i++) {
+    let c = text[i];
+    if (!raw) {
+      if (escapes(text, i) && i + 1 < to) c = text[++i];
+      if (c === '>' || c === '"') c = 'x';
+    }
+    if (state === '"' || state === "'") {
+      if (c === state) state = BEFORE_NAME;
+    } else if (c === '>') {
+      return { end: i + 1, state: null };
+    } else if (state === BEFORE_VALUE) {
+      if (c === '"' || c === "'") state = c;
+      else if (!isHtmlSpace(c)) state = UNQUOTED;
+    } else if (state === UNQUOTED) {
+      if (isHtmlSpace(c)) state = BEFORE_NAME;
+    } else if (isHtmlSpace(c)) {
+      if (state === IN_NAME) state = AFTER_NAME;
+    } else if (c === '/') {
+      state = BEFORE_NAME;
+    } else if (c === '=' && state !== BEFORE_NAME) {
+      state = BEFORE_VALUE;
+    } else {
+      state = IN_NAME;
+    }
+  }
+  return { end: -1, state };
+}
+
+// Where a browser is in what commonmark.js 0.31.2 renders of the
+// description of an image, as altHrefs() follows it: in the value of the
+// alt attribute of the <img> (IN_ALT), in the rest of the <img> tag after
+// the " that ended that value (IN_IMG), or in the HTML after the > that
+// ended the tag (AFTER_IMG).
+const IN_ALT = 'alt';
+const IN_IMG = 'img';
+const AFTER_IMG = 'after img';
+
+// A reader of the hrefs that a browser reads inside the images of `text`,
+// one line, a table cell or the lines of a paragraph joined by line breaks,
+// in what commonmark.js 0.31.2 renders: it writes the description of an
+// image into the alt attribute of the <img>, its text escaped and its raw
+// HTML as written, so a browser ends the attribute's value at the first "
+// in raw HTML of the description, reads what follows as the rest of the
+// <img> tag, as attributesEnd() reads it from before a name, to the first
+// > outside a quoted value, and reads the rest of the description as HTML,
+// as rawHrefs() reads raw HTML, with a tracker of the elements of
+// RAW_TEXT_ENDS of its own, as markdown-it 14.1.0, which writes the
+// description as escaped text, reads no tag there, and the links after the
+// image are read as it makes them. The text of the description between its
+// raw HTML is read as written, escaped, but for the destination and title
+// of each inline link in it, which a renderer leaves out: `links` lists
+// those read so far, as [from, to) in `text`, in order. The reader is given
+// each piece of raw HTML inside an image from left to right, from
+// text[start] to text[end], with `part`, the image's part of linkSyntax(),
+// and `tag`, whether an open tag or a closing tag starts there, and returns
+// the hrefs a browser reads in it, as readTag() gives them but with `at` an
+// index in `text`. So in ![<b title=">"><a href="target">y</a></b>](a.png)
+// the href is read, and in ![<a href="target">y</a>](a.png) it is not, as
+// it is an attribute of the <img> there.
+function altHrefs(text, links) {
+  const find = searcher(text);
+  let quote = 0; // the index of the first " at or after the raw HTML the last search started at, or -1 when there is none
+  let image = null; // the part of the image read last
+  let where; // where a browser is in the render of its description, one of the states above
+  let state; // in IN_IMG, the state attributesEnd() reads the rest of the <img> tag in
+  let read; // in IN_IMG, the index in `text` up to which the description has been read
+  let next = 0; // the index in `links` of the first link that may end after `read`
+  let elements; // in AFTER_IMG, the tracker of rawTextElements() of the elements open
+  return (part, start, end, tag) => {
+    if (part !== image) [image, where] = [part, IN_ALT];
+    if (where === IN_ALT) {
+      if (quote !== -1 && quote < start) quote = text.indexOf('"', start);
+      if (quote === -1 || quote >= end) return [];
+      [where, state, read, start] = [IN_IMG, BEFORE_NAME, quote + 1, quote + 1];
+    }
+    if (where === IN_IMG) {
+      // The text before the raw HTML, without the links' destinations and
+      // titles.
+      while (read < start) {
+        while (next < links.length && links[next][1] <= read) next++;
+        const link = next < links.length && links[next][0] < start ? links[next] : null;
+        const to = link ? link[0] : start;
+        if (to > read) ({ state } = attributesEnd(text, read, to, false, state));
+        read = link ? link[1] : start;
+      }
+      const img = attributesEnd(text, start, end, true, state);
+      [state, read] = [img.state, end];
+      if (img.end === -1) return [];
+      [where, elements] = [AFTER_IMG, rawTextElements(text, find)];
+      return rawHtmlHrefs(text, img.end, end, elements);
+    }
+    return rawHrefs(text, start, end, tag, elements);
+  };
 }
 
 // Link targets on one prose line: inline [text](target), whose destination
