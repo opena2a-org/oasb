@@ -1,6 +1,7 @@
 // The oasb command (bin/oasb.mjs): runs one scenario file of the suite, such
 // as AT-AI-001, against the adapter OASB_ADAPTER selects, and prints its
-// verdict.
+// verdict. Given `checklist` in place of an ID, bin/oasb.mjs runs
+// bin/checklist.mjs instead.
 //
 //   npx @opena2a/oasb AT-AI-001
 //
@@ -109,6 +110,11 @@ export function helpText(scenarios) {
     '  NOT MEASURED  no test passed or failed: each was skipped, as     exit 2',
     '                the tests of a surface the adapter does not',
     '                declare are',
+    '',
+    'npx @opena2a/oasb checklist prints the OASB-1 checklist instead: the controls',
+    'by level, each with a question to ask a vendor, the steps that verify it and,',
+    'where HackMyAgent maps a check to it, the command that checks it.',
+    'npx @opena2a/oasb checklist --help lists its options.',
     '',
     'Scenario IDs:',
     wrapIds(scenarios.map((s) => s.id)),

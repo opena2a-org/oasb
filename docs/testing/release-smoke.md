@@ -336,6 +336,18 @@ README's test counts do not include them.
   test file under `src/`. vitest adds the globs
   of `--exclude` to the root project only; a plugin that E2E-001's project
   lists in `vitest.config.ts` adds them to that project.
+- `scripts/oasb-1-checklist.test.mjs`: the OASB-1 checklist, the page
+  `docs/oasb-1-checklist.md` and the command `npx @opena2a/oasb checklist`
+  (`bin/checklist.mjs`, with the controls in `bin/oasb-1-checklist.json`),
+  run as `node bin/oasb.mjs checklist` from an empty temporary directory.
+  Fails when the page and the command's JSON or text output do not list
+  the same controls in the same order, or give a control's name, level,
+  category, verification, requirement, question, steps or command
+  differently; when `--level` does not print the controls of that level
+  and of the levels below it; when a count the page states is not that of
+  the controls it lists; when an argument the command does not take does
+  not exit 1 with the usage; when a scenario file has the ID `checklist`;
+  or when the README does not link the page and name the command.
 
 ## The README checks on every pull request
 

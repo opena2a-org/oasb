@@ -112,13 +112,15 @@ function oasb(args, { adapter = null, name = 'full', omit = [], files = {} } = {
 const lastLine = (text) => text.trimEnd().split('\n').at(-1);
 const installedVersion = (name) => JSON.parse(readFileSync(join(repo, 'node_modules', name, 'package.json'), 'utf8')).version;
 
-test('package.json names bin/oasb.mjs as the oasb command, and npm pack ships it with the module it loads', () => {
+test('package.json names bin/oasb.mjs as the oasb command, and npm pack ships it with the modules it loads', () => {
   assert.deepEqual(pkg.bin, { oasb: 'bin/oasb.mjs' });
   assert.equal(readFileSync(join(repo, 'bin', 'oasb.mjs'), 'utf8').split('\n')[0], '#!/usr/bin/env node');
   const r = spawnSync('npm', ['pack', '--dry-run', '--json'], { cwd: repo, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   const files = JSON.parse(r.stdout)[0].files.map((f) => f.path);
-  for (const file of ['bin/oasb.mjs', 'bin/run-scenario.mjs']) assert.ok(files.includes(file), `npm pack does not ship ${file}`);
+  for (const file of ['bin/oasb.mjs', 'bin/run-scenario.mjs', 'bin/checklist.mjs', 'bin/oasb-1-checklist.json']) {
+    assert.ok(files.includes(file), `npm pack does not ship ${file}`);
+  }
 });
 
 test('npx installs what the command loads: vitest, and arp-guard for the default adapter', () => {
