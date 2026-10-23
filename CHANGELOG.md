@@ -1651,12 +1651,12 @@ stay on record here with the reason they changed.
   runs to a space, a tab, a form feed, a line break or a `>`. The check
   reads these in a paragraph, a heading or a table cell, after a `>`
   inside `<?` or `<![CDATA[` or a `--!>` inside a comment, and on a line of
-  an HTML block or of indented code, where a quoted value that runs on to
-  the next line is still not read. The `>` markers and indentation of the
-  line that a quoted value in a block quote or list item runs on to are no
-  part of its path, so `> x <a href="docs/` and `> guide.md">y</a>` link to
-  `docs/guide.md`. The first `href` of a tag is read also when it is
-  unquoted, as a browser drops a later one:
+  an HTML block or of indented code; in indented code a quoted value that
+  runs on to the next line is still not read. The `>` markers and
+  indentation of the line that a quoted value in a block quote or list
+  item runs on to are no part of its path, so `> x <a href="docs/` and
+  `> guide.md">y</a>` link to `docs/guide.md`. The first `href` of a tag
+  is read also when it is unquoted, as a browser drops a later one:
   `x <a href=docs/guide.md href="docs/nowhere.md">y</a>` exited 1 and now
   exits 0. With a tab between `docs/gu` and `ide.md` in a quoted `href`,
   the check exited 1 and now reads `docs/guide.md`.
