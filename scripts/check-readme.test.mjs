@@ -2885,6 +2885,142 @@ test('no link is read in the title of a reference definition, also a title alone
   }
 });
 
+test('no link is read in the title of a definition whose destination holds a & or a backslash, a NUL or a carriage return, or whose label or title runs over two lines', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) read each of
+  // these as a reference definition: a link to its label takes its
+  // destination and its title, and neither writes anything for the
+  // definition itself, so parse5 7.3.0 reads no link to docs/nowhere.md in
+  // what either renders. The destination holds a character reference, a &
+  // or a backslash escape, also with the title alone on the next line; the
+  // label or the title runs over two lines; the definition follows one
+  // whose destination holds a & or ends its line with a backslash; the
+  // destination holds a backslash before U+0001, or a NUL, which both write
+  // as %EF%BF%BD; or a carriage return with no line feed after it ends the
+  // line after the ]:, after the destination or after the title, where both
+  // read the x after it as a paragraph. The check exited 1 on each.
+  const title = '"<a href=docs/nowhere.md>"';
+  for (const [body, pages] of [
+    [`[ref]: docs/guide&#46;md ${title}\n`],
+    [`[ref]: docs/guide.md?x=1&y=2 ${title}\n`],
+    [`[g]: docs/a\\_b.md ${title}\n`, { 'docs/a_b.md': '# A b\n' }],
+    [`[ref]: docs/guide&#46;md\n${title}\n`],
+    [`[ref\nlabel]: docs/guide.md ${title}\n`],
+    ['[ref]: docs/guide.md "<a href=docs/nowhere.md>\nt"\n'],
+    [`[l]: docs/guide.md?x=1&y=2\n[m]: docs/guide.md ${title}\n`],
+    [`[a]: https://example.com/a\\\n[ref]: docs/guide.md ${title}\n`],
+    [`[ref]: https://example.com/a\\\u0001b ${title}\n`],
+    [`[ref]: https://example.com/a\u0000b ${title}\n`],
+    [`[ref]:\rdocs/guide.md ${title}\n`],
+    [`[ref]: docs/guide.md\r${title}\n`],
+    [`[ref]: docs/guide.md ${title}\rx\n`],
+  ]) {
+    const r = check(body, pages);
+    assert.equal(r.status, 0, `${JSON.stringify(body)}\n${r.stderr}`);
+  }
+});
+
+test('a backtick in the title of a definition whose destination holds a & or a NUL, or whose label runs over two lines, opens no code span', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) read the
+  // definition in each, and parse5 7.3.0 reads a link to docs/nowhere.md in
+  // what each writes for the line after it. The check exited 0 on each.
+  for (const [body, line] of [
+    ['[ref]: docs/guide&#46;md "`"\n<a href=docs/nowhere.md>y</a> `\n', 12],
+    ['[ref]: https://example.com/a\u0000b "`"\n<a href=docs/nowhere.md>y</a> `\n', 12],
+    ['[ref\nlabel]: docs/guide.md "`"\n<a href=docs/nowhere.md>y</a> `\n', 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, JSON.stringify(body));
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "docs/nowhere.md" does not exist.`, JSON.stringify(body));
+  }
+});
+
+test('the destination of a definition in < and > may be empty, or hold a space or a > that a backslash escapes', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) write [x][ref]
+  // with href="", href="docs/a%20b.md" and href="docs/x%3Ey.md" for the
+  // first three, and with href="docs/c%20d.md" and href="docs/x%3Ez.md",
+  // pages that do not exist, for the other two. The check read the targets
+  // "<>", "<docs/a", "docs/x\", "<docs/c" and "docs/x\".
+  for (const [destination, pages] of [
+    ['<>', {}],
+    ['<docs/a b.md>', { 'docs/a b.md': '# A b\n' }],
+    ['<docs/x\\>y.md>', { 'docs/x>y.md': '# X y\n' }],
+  ]) {
+    const r = check(`p [x][ref]\n\n[ref]: ${destination}\n`, pages);
+    assert.equal(r.status, 0, `${destination}\n${r.stderr}`);
+  }
+  for (const [destination, target] of [
+    ['<docs/c d.md>', 'docs/c d.md'],
+    ['<docs/x\\>z.md>', 'docs/x>z.md'],
+  ]) {
+    const r = check(`p [x][ref]\n\n[ref]: ${destination}\n`);
+    assert.equal(r.status, 1, destination);
+    assert.equal(r.stderr.trim(), `README: line 13: link target "${target}" does not exist.`, destination);
+  }
+});
+
+test('no link is read in the title of a definition on a line indented 4 columns after a definition, which markdown-it reads as indented code', () => {
+  // commonmark.js 0.31.2 reads the second line as a definition and writes
+  // nothing for it, and markdown-it 14.1.0 (html: true) writes it inside
+  // <pre><code>, so parse5 7.3.0 reads no link to docs/nowhere.md in what
+  // either writes. The check exited 1.
+  const r = check('[a]: docs/guide.md\n    [ref]: docs/guide.md "<a href=docs/nowhere.md>"\n');
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('an href on a later line of its tag than the tag\'s start in an HTML block is read', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) pass each HTML
+  // block through, also in a block quote or a list item, and parse5 7.3.0
+  // reads a link to docs/nowhere.md in what each writes: the href, the =
+  // after it or a quoted value before it runs on to the next line of the
+  // tag, or the href's value runs on to the next line, which the URL parser
+  // reads without its line break. The check exited 0 on each.
+  for (const [body, line] of [
+    ['<div><a\nhref=docs/nowhere.md>y</a></div>\n', 12],
+    ['> <div><a\n> href=docs/nowhere.md>y</a></div>\n', 12],
+    ['- <div><a\n  href=docs/nowhere.md>y</a></div>\n', 12],
+    ['<div><a href\n=docs/nowhere.md>y</a></div>\n', 12],
+    ['<div><a title="x\ny" href=docs/nowhere.md>y</a></div>\n', 12],
+    ['<div><a href="docs/\nnowhere.md">y</a></div>\n', 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "docs/nowhere.md" does not exist.`, body);
+  }
+  // With an href to a page that exists the tag passes, and after a blank
+  // line, which ends the HTML block, both write the href=docs/nowhere.md>
+  // after it as text of a paragraph, where parse5 reads no link.
+  for (const body of ['<div><a\nhref=docs/guide.md>y</a></div>\n', '<div><a\n\nhref=docs/nowhere.md>y</a></div>\n']) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('a carriage return with no line feed after it ends a line', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) read the
+  // ## Quick Start heading, the bash code block and the link of this README
+  // with each of these line endings. With carriage returns alone the check
+  // read no H2 heading and no shell code block.
+  const lines = ['# Title', '', '## Quick Start', '', '```bash', 'npm test', '```', '', '## Guide', '', 'Some text.'];
+  const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
+  try {
+    mkdirSync(join(dir, 'docs'));
+    writeFileSync(join(dir, 'docs', 'guide.md'), '# Guide\n\n## Setup steps\n');
+    for (const ending of ['\n', '\r\n', '\r']) {
+      for (const [link, status, stderr] of [
+        [[], 0, ''],
+        [['[y](docs/nowhere.md)'], 1, 'README: line 12: link target "docs/nowhere.md" does not exist.'],
+      ]) {
+        writeFileSync(join(dir, 'README.md'), [...lines, ...link, ''].join(ending));
+        const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
+        assert.equal(r.status, status, `${JSON.stringify(ending)}\n${r.stderr}`);
+        assert.equal(r.stderr.trim(), stderr, JSON.stringify(ending));
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a 1 MB line of text and then 4,000 images, each with a tag whose unquoted href runs on into the " after its description, is checked in under 2 seconds', () => {
   // Read in a copy of the line up to that " for each image, the check ran
   // out of memory on this line on Node.js 26.12.0.

@@ -25,15 +25,19 @@ the claims this repository publishes:
    `()`, and a path written `<path>` or holding balanced parentheses,
    `[text](docs/a(b).md)`), whose path and title may start on the next line
    of their paragraph, reference definitions at the start of a line
-   (`[label]: path`), written within one line, and HTML `href` attributes,
-   quoted or not (`href="path"`, `href='path'` or `href=path`). It reads
-   the path of an `href` without the tabs and line breaks that a browser
-   removes from a URL: in a paragraph a quoted value may run on to the next
-   line, whose `>` markers and indentation are no part of the path, and on
-   a line of an HTML block or of indented code an `href` is read when its
-   value ends on that line. It reads the path without the spaces and the
-   controls U+0001 to U+001F that a browser removes from the start and the
-   end of a URL as well: `href=" docs/guide.md "` links to `docs/guide.md`.
+   (`[label]: path`), written within one line, whose path written `<path>`
+   may be empty or hold spaces, and HTML `href` attributes, quoted or not
+   (`href="path"`, `href='path'` or `href=path`). It reads the path of an
+   `href` without the tabs and line breaks that a browser removes from a
+   URL: in a paragraph and in an HTML block a quoted value may run on to
+   the next line, whose `>` markers and indentation are no part of the
+   path, and on a line of indented code an `href` is read when its value
+   ends on that line. In an HTML block a tag may run on over its lines:
+   `<div><a` above `href=docs/nowhere.md>y</a></div>` fails with
+   `link target "docs/nowhere.md" does not exist`. It reads the path
+   without the spaces and the controls U+0001 to U+001F that a browser
+   removes from the start and the end of a URL as well:
+   `href=" docs/guide.md "` links to `docs/guide.md`.
    It reads the character references in a path as a renderer and a browser
    read them: `[y](docs/guide&#46;md)` and `href="docs/gu&#x69;de.md"` link
    to `docs/guide.md`.

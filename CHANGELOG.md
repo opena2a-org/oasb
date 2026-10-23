@@ -1963,18 +1963,9 @@ stay on record here with the reason they changed.
   `[a]: docs/guide.md`, `"t"` and `[b]: docs/guide.md` on three lines
   exited 1 and now exits 0, as both write that description into the alt
   attribute. A title with a tab after it, which commonmark.js reads as
-  text, a title that ends on a later line than it starts on, and the label
-  of a definition are read as text of the paragraph, as before. So are the
-  titles of some other definitions that both read, among them one whose
-  label ends on a later line than it starts on, one whose destination
-  holds a `&` or a backslash before its first `:`, or anywhere when it
-  holds no `:`, one whose destination is not written in `<` and `>` and
-  holds a backslash that no backslash escapes before an ASCII control
-  character or at the end of its line, and one after any of these, or
-  after one whose title ends on a later line, in its paragraph:
-  `[ref]: docs/guide&#46;md "<a href=docs/nowhere.md>"` and
-  `[ref]: docs/guide.md?x=1&y=2 "<a href=docs/nowhere.md>"` still exit 1
-  with `link target "docs/nowhere.md" does not exist`.
+  text, and the label of a definition are read as text of the paragraph,
+  as before. The entry below on the titles of more reference definitions
+  names further forms that now exit 0.
 - `npm run check:readme` reads only a tab, a line feed, a form feed, a
   carriage return or a space as the white space before an HTML href,
   around its `=` and before its value, as a browser reads a tag, and not a
@@ -2016,6 +2007,64 @@ stay on record here with the reason they changed.
   Coverage section links and the full output that a capture links are read
   through such a link as well, and the full output also through a link
   whose target holds a backslash escape, as `docs/captures/run\.txt`.
+- `npm run check:readme` reads no link in the titles of more reference
+  definitions that commonmark.js 0.31.2 and markdown-it 14.1.0 both read:
+  for each of these, a link to its label takes its destination and its
+  title, neither renders the definition, and parse5 7.3.0 reads no link
+  to `docs/nowhere.md` in what either renders. With `docs/guide.md` and
+  `docs/a_b.md` present, `docs/nowhere.md` absent and `T` standing for
+  `"<a href=docs/nowhere.md>"`, these exited 1 with
+  `link target "docs/nowhere.md" does not exist` and now exit 0:
+  `[ref]: docs/guide&#46;md T`, `[ref]: docs/guide.md?x=1&y=2 T` and
+  `[g]: docs/a\_b.md T`; `[ref]: docs/guide&#46;md` above `T`; `[ref`
+  above `label]: docs/guide.md T`; `[ref]: docs/guide.md`, a space and
+  `"<a href=docs/nowhere.md>` above `t"`; `[l]: docs/guide.md?x=1&y=2`
+  above `[m]: docs/guide.md T`; `[a]: https://example.com/a\` above
+  `[ref]: docs/guide.md T`; `[ref]: https://example.com/a\`, U+0001 and
+  `b T` on one line, and `[ref]: https://example.com/a`, a NUL and `b T`
+  on one line; and `[ref]: docs/guide.md T` with a carriage return that
+  no line feed follows in place of the space after its `]:` or after its
+  destination, or after its title and before `x`. A backtick in the title
+  of such a definition opens no code span: ``[ref]: docs/guide&#46;md "`"``,
+  `[ref]: https://example.com/a`, a NUL and ``b "`"`` on one line, or
+  `[ref` above ``label]: docs/guide.md "`"``, each above the line
+  ``<a href=docs/nowhere.md>y</a> ` ``, exited 0 and now exits 1; both
+  render that link. `[a]: docs/guide.md` above four spaces and
+  `[ref]: docs/guide.md T`, which commonmark.js reads as two definitions
+  and markdown-it as a definition and a line of indented code, exited 1
+  and now exits 0.
+- `npm run check:readme` reads the destination of a reference definition
+  written in `<` and `>` that is empty, or holds a space or a `>` that a
+  backslash escapes, as commonmark.js 0.31.2 and markdown-it 14.1.0 read
+  it. Below `p [x][ref]` and a blank line, `[ref]: <>` exited 1 with
+  `link target "<>" does not exist`, `[ref]: <docs/a b.md>` with
+  `link target "<docs/a" does not exist` and `[ref]: <docs/x\>y.md>` with
+  `link target "docs/x\" does not exist`, with `docs/a b.md` and
+  `docs/x>y.md` present; each now exits 0, as both write `[x][ref]` with
+  `href=""`, the page itself, `href="docs/a%20b.md"` and
+  `href="docs/x%3Ey.md"`. `[ref]: <docs/c d.md>`, a page that does not
+  exist, now fails with `link target "docs/c d.md" does not exist`.
+- `npm run check:readme` reads an `href` on a later line of its tag than
+  the tag's start in an HTML block, where it read the hrefs of each line
+  of the block on that line alone. With `docs/nowhere.md` absent,
+  `<div><a` above `href=docs/nowhere.md>y</a></div>` exited 0 and now
+  exits 1 with `link target "docs/nowhere.md" does not exist`, as do the
+  same two lines in a block quote or a list item, a tag whose `href` has
+  its `=` on the next line, one whose quoted `title` value runs on to the
+  line of its `href`, and one whose quoted `href` value runs on to the
+  next line, also in a block quote or a list item; parse5 7.3.0 reads
+  that `href` in what commonmark.js 0.31.2 and markdown-it 14.1.0 write
+  for each.
+- `npm run check:readme` reads a carriage return that no line feed
+  follows as a line ending, as commonmark.js 0.31.2 and markdown-it 14.1.0
+  do. With `docs/guide.md` present, a README of `# Title`,
+  `## Quick Start`, a bash code block of `npm test`, `## Guide` and
+  `Some text.`, with blank lines between them, exited 1, reading no H2
+  heading and no shell code block, when each of its lines ended with a
+  carriage return alone, and now exits 0, as it does with line feeds or
+  with carriage returns and line feeds. With `[y](docs/nowhere.md)` on its
+  12th line it exits 1 with
+  `README: line 12: link target "docs/nowhere.md" does not exist`.
 
 ## 0.4.1 - 2026-10-17
 
