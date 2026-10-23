@@ -6,7 +6,7 @@
 
 > **[OpenA2A](https://github.com/opena2a-org/opena2a)**: [CLI](https://github.com/opena2a-org/opena2a) · [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [Browser Guard](https://github.com/opena2a-org/AI-BrowserGuard) · [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)
 
-[OASB Website](https://oasb.ai) | [MITRE ATLAS Coverage](#mitre-atlas-coverage) | [Contributing](CONTRIBUTING.md)
+[OASB Website](https://oasb.ai) | [OASB-1 Checklist](docs/oasb-1-checklist.md) | [MITRE ATLAS Coverage](#mitre-atlas-coverage) | [Contributing](CONTRIBUTING.md)
 
 Standardized attack scenarios that evaluate whether a runtime security tool can detect and respond to threats against AI agents. Each scenario is mapped to the [OWASP Top 10 for Agentic Applications (2026)](docs/owasp-agentic-mapping.md), and most also to the OWASP Top 10 for LLM Applications (2025). Plug in your tool, run the suite, get a detection coverage scorecard.
 
@@ -116,6 +116,8 @@ The [test harness](docs/test-harness.md) page lists what the package exports.
 
 The [OpenA2A CLI](https://github.com/opena2a-org/opena2a) and [HackMyAgent](https://github.com/opena2a-org/hackmyagent) check an agent directory against the OASB-1 controls: how the agent is configured, not how a security tool detects attacks.
 
+The [OASB-1 checklist](docs/oasb-1-checklist.md) lists those controls by level, each with a question to ask a vendor, the steps that verify it and, where HackMyAgent maps a check to it, the command that checks it; `npx @opena2a/oasb checklist` prints it.
+
 Neither runs the attack scenarios in this repository: `npx @opena2a/oasb <ID>` runs one scenario file of them, and `npm test` in a checkout runs them all (see [Quick Start](#quick-start)).
 
 ```bash
@@ -139,6 +141,7 @@ Each scenario that simulates an adversary maps to a [MITRE ATLAS](https://atlas.
 ## Documentation
 
 - [How OASB works](docs/how-it-works.md): what OASB evaluates, how it differs from HackMyAgent, how each CLI computes its OASB-1 percentage, related tools.
+- [OASB-1 checklist](docs/oasb-1-checklist.md): the OASB-1 controls by level, each with a question to ask a vendor, the steps that verify it and, where HackMyAgent maps a check to it, the command that checks it.
 - [Test catalog](docs/test-catalog.md): what each category tests, the test totals, a command for each group, what the scorecard holds, and per-test detail.
 - [Adapters](docs/adapters.md): the reference adapter, the worked examples, the surfaces each declares and the tests that fail under llm-guard and rebuff.
 - [Test harness](docs/test-harness.md) and [release smoke test](docs/testing/release-smoke.md): harness files, package exports, build and type-check, and checks on documented counts and commands.

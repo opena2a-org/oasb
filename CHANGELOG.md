@@ -87,6 +87,22 @@ stay on record here with the reason they changed.
   `npx @opena2a/oasb AT-AI-001`, and the clone moves below it, for running
   the whole suite. `scripts/oasb-bin.test.mjs` runs the command through the
   `node_modules/.bin` link of an install layout.
+- `npx @opena2a/oasb checklist` prints the OASB-1 checklist: the 46
+  controls of OASB-1 1.0.0 by level, 26 at L1, 18 at L2 and 2 at L3, each
+  with its requirement, a question to ask the vendor of an agent, the steps
+  that verify it and, for the 26 controls HackMyAgent maps a check to, the
+  command that prints the control with its status from a
+  `hackmyagent secure -b oasb-1` run at its level. `--level L1` prints the
+  26 controls a run at L1 checks, `--level L2` the 44 of L1 and L2, and
+  `--json` prints the list as JSON. An argument the command does not take,
+  or a level other than L1, L2 and L3, exits 1 with the usage. The
+  controls, levels, categories, requirements and mapped checks are those of
+  the OASB-1 catalogue in hackmyagent 0.33.2, the questions are written for
+  the checklist, and `bin/oasb-1-checklist.json` holds them.
+  `docs/oasb-1-checklist.md` is the same checklist as a page, which the
+  README links, and `scripts/oasb-1-checklist.test.mjs` fails when the page
+  and the command's output list different controls or give a control's
+  text differently. `npx @opena2a/oasb --help` names the command.
 
 ### Changed
 
