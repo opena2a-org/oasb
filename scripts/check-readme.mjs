@@ -480,6 +480,11 @@ const DELIMITER_CHARACTERS = /^[ \t>|:-]*\r?$/;
 // moves on to the next multiple of 4.
 const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 
+// A line ending as CommonMark reads one: a line feed, or a carriage return
+// that no line feed follows. A line that ends with a carriage return and a
+// line feed keeps the carriage return at its end.
+const LINE_ENDING = /\n|\r(?!\n)/;
+
 // Split a markdown file into lines, tagging each with whether it sits inside a
 // fenced code block, so headings and links are only read from prose, and
 // whether it is a line of an HTML block that blockReader() follows (`html`),
@@ -510,7 +515,7 @@ const nextColumn = (c, col) => (c === '\t' ? col + 4 - (col % 4) : col + 1);
 // No such block opens on a line of the HTML block that the line above is
 // in, as blockReader() follows it: the line is raw HTML.
 function parse(text) {
-  const lines = text.split('\n');
+  const lines = text.split(LINE_ENDING);
   if (lines[lines.length - 1] === '') lines.pop();
   const parsed = lines.map((line, i) => ({ n: i + 1, line, inFence: false }));
   const read = blockReader(parsed);
@@ -1265,7 +1270,7 @@ function inlineDestinations(line, open, spans) {
 // value and its closing quote. The target is the value as hrefUrl() reads
 // it. HREF matches only the first character of an unquoted value, and
 // hrefAt() reads the rest with UNQUOTED_VALUE, so a test of HREF at an
-// index, as hrefTargets() makes at each index of a line, reads no unquoted
+// index, as hrefsIn() makes at each index of its text, reads no unquoted
 // value past its first character.
 const HREF = /[\t\n\f\r ]href[\t\n\f\r ]*=[\t\n\f\r ]*(?:"([^"]*)"|'([^']*)'|(?=[^\t\n\f\r "'>]))/iy;
 const UNQUOTED_VALUE = /[^\t\n\f\r >]*/y;
@@ -1310,10 +1315,10 @@ function hrefUrl(value) {
   return url.slice(from, to);
 }
 
-// The targets of the HTML href attributes in `text`, one line, as hrefAt()
-// reads them, after attribute values that may hold >, read on the text as
-// it is given: whole on a line of raw HTML, such as a line of an HTML
-// block, where a backtick is text and opens no code span, and without its
+// The HTML href attributes in `text`, each as hrefAt() reads it, after
+// attribute values that may hold >, read on the text as it is given: whole
+// on raw HTML, such as the lines of HTML blocks that htmlBlockHrefs() joins,
+// where a backtick is text and opens no code span, and without its
 // code spans on a line of indented code. A tag that starts at a < and a
 // letter is read on to the first > outside its quoted values, or to a
 // quote that no later quote of its kind closes, and its first href there
@@ -1325,7 +1330,7 @@ function hrefUrl(value) {
 // the text, so a line of many < that no > follows is not read again from
 // each one. The hrefs of a paragraph, a heading or a table cell are read
 // with tagHref() and rawHtmlHrefs() instead.
-function hrefTargets(text) {
+function hrefsIn(text) {
   // reach[i] is the index of the first href a tag meets from text[i] on, or
   // -1 when it meets none; next[q] is the index of the next quote q after
   // text[i], or -1 when there is none.
@@ -1339,13 +1344,62 @@ function hrefTargets(text) {
     else if (c !== '>') reach[i] = reach[i + 1];
     if (c === '"' || c === "'") next[c] = i;
   }
-  const targets = [];
+  const hrefs = [];
   for (let i = 0; i + 1 < text.length; i++) {
     if (text[i] !== '<' || !/[a-z]/i.test(text[i + 1]) || reach[i + 2] === -1) continue;
     const href = hrefAt(text, reach[i + 2]);
-    targets.push(href.target);
+    hrefs.push(href);
     i = href.end - 1;
   }
+  return hrefs;
+}
+
+// The targets of the hrefs in `text`, one line, that hrefsIn() reads.
+function hrefTargets(text) {
+  return hrefsIn(text).map((href) => href.target);
+}
+
+// The targets of the hrefs on the lines of the HTML blocks of `lines`, the
+// lines of a page or of a part of it as parse() tags them, as a map from
+// the index in `lines` of a line that blockReader() reads as a line of an
+// HTML block, reading `lines` from the first, to the targets of the hrefs
+// whose values start on that line. They are read as hrefsIn() reads them in
+// the text of each run of such lines that follow one another, joined by
+// line feeds, as a renderer writes the HTML blocks of the run one after
+// another, and each line after the first of its run without the > markers
+// of the block quotes that hold its block, which a renderer leaves out. So
+// a tag that starts on one line and holds its href on the next, as
+// <div><a on one line and href=docs/nowhere.md>y</a></div> on the next,
+// holds that href, as a browser reads it in what the renderers write.
+function htmlBlockHrefs(lines) {
+  const blocks = new Map();
+  const read = blockReader(lines, undefined, blocks);
+  for (const l of lines) read(l);
+  const targets = new Map();
+  let run = []; // the lines of the run read last, as { j, from }, `from` being where the line starts in `text`
+  let text = '';
+  const close = () => {
+    let k = 0;
+    for (const { target, at } of hrefsIn(text)) {
+      while (k + 1 < run.length && run[k + 1].from <= at) k++;
+      const { j } = run[k];
+      if (!targets.has(j)) targets.set(j, []);
+      targets.get(j).push(target);
+    }
+    run = [];
+    text = '';
+  };
+  for (let j = 0; j < lines.length; j++) {
+    const block = blocks.get(j);
+    if (block === undefined) {
+      if (run.length > 0) close();
+      continue;
+    }
+    if (run.length > 0) text += '\n';
+    run.push({ j, from: text.length });
+    text += run.length === 1 ? lines[j].line : afterQuotes(lines[j].line, block.quotes);
+  }
+  if (run.length > 0) close();
   return targets;
 }
 
@@ -1921,7 +1975,11 @@ function altHrefs(text, marks) {
 // reference definition [label]: target (footnotes [^1]: are not links),
 // whose label may hold a code span or \], and whose target, written
 // <target> or bare, is read as destinationText() reads it, as an inline
-// link's is, so [g]: docs/guide&#46;md links to docs/guide.md, and the
+// link's is, so [g]: docs/guide&#46;md links to docs/guide.md: in < and >
+// as CommonMark reads it there, empty or holding spaces, a backslash
+// taking the character after it, so [g]: <> links to the page itself,
+// [g]: <docs/a b.md> to docs/a b.md and [g]: <docs/x\>y.md> to
+// docs/x>y.md, and bare up to the first white space. And the
 // hrefs on the line that
 // spans.hrefs() gives, those of the open tags that inlineDestinations reads
 // as raw HTML and of those that a browser reads inside the comments,
@@ -1946,8 +2004,8 @@ function altHrefs(text, marks) {
 // size exceeded).
 function linkTargets(line, open, spans) {
   const targets = [];
-  const def = spans.start === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\s]+)>|(\S+))/);
-  if (def) targets.push(destinationText(def[1] || def[2]));
+  const def = spans.start === 0 && line.match(/^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<((?:[^<>\r\n\\]|\\.)*)>|(\S+))/);
+  if (def) targets.push(destinationText(def[1] ?? def[2]));
   // One at a time: given as the arguments of one push(), the targets of a
   // line of 200,000 tags with an href threw a RangeError (Maximum call
   // stack size exceeded) on Node.js 26.12.0.
@@ -3018,8 +3076,10 @@ function referencesOf(lines) {
 // whatever lineStart() reads it as, as its inline links, definitions and
 // table cells are raw HTML too, and link text that opens on it holds no
 // link on a later line. A backtick in raw HTML is text, so those hrefs are
-// read on the whole line, and the line holds no paragraph text, so no code
-// span runs on from it to a later line. Given a set as `codeLines`, the
+// read on the whole line, as htmlBlockHrefs() reads them, with a tag that
+// the line above leaves open when that line is a line of an HTML block
+// too, and the line holds no paragraph text, so no code span runs on from
+// it to a later line. Given a set as `codeLines`, the
 // reader adds to it the index in `lines` of each line of a fenced code block
 // inside a block quote, its fences included, and of each line of indented
 // code on which it reads no inline link or definition, unless blockReader()
@@ -3042,6 +3102,11 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   let blockLines = []; // the text of each line of that block as it is read, as below
   const read = blockReader(lines, codeLines, htmlLines);
   const defined = referencesOf(page);
+  // The targets of the hrefs on lines[j], a line of an HTML block, as
+  // htmlBlockHrefs() reads those of `lines`, the first time a line of an
+  // HTML block is read.
+  let blockHrefs = null;
+  const htmlTargets = (j) => (blockHrefs ??= htmlBlockHrefs(lines)).get(j) ?? [];
   // Where the text of lines[k] starts when it is text that goes on with the
   // paragraph that the reader's `containers` hold, as the reader reads it
   // below, and -1 when it is not: past the > markers of the block quotes of
@@ -3140,10 +3205,10 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
     if (rest === 'fence' || l.fenceOpen || l.fenceClose) return [];
     if (rest === 'code') {
       if (!html) codeLines?.add(j);
-      return hrefTargets(html ? l.line : withoutCodeSpans(l.line));
+      return html ? htmlTargets(j) : hrefTargets(withoutCodeSpans(l.line));
     }
     // The cells of a table row of an HTML block are raw HTML as well.
-    if (rest === 'row') return html ? hrefTargets(l.line) : rowTargets(block.row, block.columns, defined, block.header);
+    if (rest === 'row') return html ? htmlTargets(j) : rowTargets(block.row, block.columns, defined, block.header);
     const spans = open.code();
     // A line of an HTML block is raw HTML, whatever lineStart() reads it
     // as: its inline links and definitions are text, link text that opens
@@ -3153,7 +3218,7 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
     // or raw HTML runs on from it to the lines after the block.
     const targets = linkTargets(html ? l.line : blockLines[j - first], html ? noOpenLinkText() : open, spans);
     outside?.set(j, [spans.from, spans.to, first]);
-    if (html) return hrefTargets(l.line);
+    if (html) return htmlTargets(j);
     if (!paragraph) open = noOpenLinkText();
     return targets;
   };
@@ -3305,8 +3370,10 @@ async function suiteTests() {
   }
 }
 
+// The number of the line of `text` that holds text[index], its lines
+// ending as parse() ends them.
 function lineOf(text, index) {
-  return text.slice(0, index).split('\n').length;
+  return text.slice(0, index).split(LINE_ENDING).length;
 }
 
 function checkCounts(tests) {
