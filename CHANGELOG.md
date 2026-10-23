@@ -1110,17 +1110,16 @@ stay on record here with the reason they changed.
   the rest of the line, so
   `Hello <textarea><!-- </textarea><script> --> As of 2026-06-03. world.`
   exited 0 and now exits 1.
-- `npm run check:readme` finds the hrefs on a line in one pass from the end
-  of the line, which notes for each character the first href that a tag
-  read on from there meets, instead of reading the rest of the line again
-  from each `<` and letter. On macOS arm64, with a README that links
+- `npm run check:readme` finds the hrefs on a line of an HTML block or of
+  indented code without reading the rest of the line again from each `<`
+  and letter. On macOS arm64, with a README that links
   `docs/AUDIT-2026-06-03.md`, and that page holding `As of 2026-06-03.`, a
   blank line, `<div>`, a line of `<a` repeated 50,000 times, `</div>`, a
   blank line and `See the [README](../README.md) for the current figures.`
   above its first H2, `node scripts/check-readme.mjs --no-counts README.md`
   took 17.9 seconds; with `<a b="` or `<textarea ` repeated 50,000 times
-  on that line instead it took 62.5 and 82.3 seconds. Each now takes 0.07
-  to 0.42 seconds, and 0.18 to 0.82 seconds with the line ten times as
+  on that line instead it took 62.5 and 82.3 seconds. Each now takes 0.08
+  to 0.12 seconds, and 0.16 to 0.34 seconds with the line ten times as
   long, over four runs of each.
 - `npm run check:readme` starts the "What Gets Tested" section only at a
   `## What Gets Tested` line that is an H2 as the check reads the H2 that
@@ -2081,6 +2080,69 @@ stay on record here with the reason they changed.
   with carriage returns and line feeds. With `[y](docs/nowhere.md)` on its
   12th line it exits 1 with
   `README: line 12: link target "docs/nowhere.md" does not exist`.
+- `npm run check:readme` reads the spaces at the start of a line that a
+  quoted `href` value in an HTML block runs on to as part of its target,
+  as commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) write the
+  line: without the `>` of each block quote that holds the block and the
+  space after it, and without the indentation of each list item. It
+  removed those spaces, as it removes them on a line of a paragraph. With
+  `docs/guide.md` present, `<div><a href="docs/` above three spaces and
+  `guide.md">y</a></div>` exited 0, and now exits 1 with
+  `link target "docs/   guide.md" does not exist`: parse5 7.3.0 reads the
+  value `docs/`, a line feed, three spaces and `guide.md` in what both
+  write, and the URL parser of Node.js 26.12.0 resolves it to
+  `docs/%20%20%20guide.md`. In a block quote, `> <div><a href="docs/`
+  above `>   guide.md">y</a></div>` now fails with
+  `link target "docs/  guide.md" does not exist`, and in a list item,
+  `- <div><a href="docs/` above five spaces and `guide.md">y</a></div>`
+  fails with that message for `docs/   guide.md`; with two spaces, the
+  indentation of the item, it exits 0, as before. Where the two write a
+  line otherwise, the check reads the target that each writes.
+  commonmark.js writes a tab after a `>` that is wider than one column as
+  the spaces of its other columns, and markdown-it as the tab, which the
+  URL parser removes, so `>`, a tab and `<div><a href="docs/` above `>`, a
+  tab and `guide.md">y</a></div>` fails with
+  `link target "docs/  guide.md" does not exist`. In an HTML block that
+  `<pre>` opens in a list item, commonmark.js writes a line of spaces as
+  an empty line, and markdown-it the spaces past the item's indentation,
+  so `- <pre><a href="docs/`, a line of five spaces, and two spaces and
+  `guide.md">y</a></pre>`, on three lines, fails with
+  `link target "docs/   guide.md" does not exist`.
+- `npm run check:readme` reads the tags of an HTML block, and of a line of
+  indented code, as a browser's tokenizer reads them, where it read a
+  quote anywhere in a tag as the start of a quoted value. With
+  `docs/nowhere.md` absent, `<div><a y" href=docs/nowhere.md>y</a></div>`
+  exited 0, as did the same line with `y'`, and each now exits 1 with
+  `link target "docs/nowhere.md" does not exist`: commonmark.js 0.31.2 and
+  markdown-it 14.1.0 (html: true) pass the block through, and parse5 7.3.0
+  reads the quote as part of an attribute's name and an `a` element with
+  that `href` in what each writes. So does
+  `<div><a b="c"href="docs/nowhere.md">y</a></div>`, whose `href` follows
+  a quoted value with no white space between them, which exited 0. A tag
+  is read on to the `>` that ends it, and no tag is read inside it, so
+  `<div title="<a href=docs/nowhere.md>">y</div>`, the line
+  `<div><a b="<a href=docs/nowhere.md>`, whose quoted value runs on to the
+  end of the page, and
+  `<div><a href=docs/guide.md <b href=docs/nowhere.md>y</a></div>`, whose
+  tag holds a second `href`, which a browser drops, each exited 1 and now
+  exits 0; parse5 reads no `href` of `docs/nowhere.md` in what either
+  writes.
+- `npm run check:readme` reads the reference definitions of a page as
+  markdown-it 14.1.0 reads them in time that grows with the number of
+  lines that a title or a label runs on over, where it grew with the
+  square of that number: it added each line to one string and read that
+  string by index, which copied it whole after each line, and it put the
+  lines that a definition gave back before a copy of the lines after
+  them. On macOS arm64 with Node.js 26.12.0, with `docs/guide.md` present,
+  a README that links `docs/big.md`, a page of `# Big`, a blank line,
+  `[a]: guide.md`, `"t` and 60,000 lines of `xxxxxxxxxxxxxxxxxx`, took 4.1
+  seconds to check, and now takes 0.18 seconds, against 0.17 seconds
+  before the check read definitions as markdown-it reads them. With four
+  spaces before the `"t` and 40,000 lines of `[b]: guide.md` after it, the
+  page took 6.8 seconds and now takes 0.38, against 0.23; with `[a`,
+  60,000 lines of `xxxxxxxxxxxxxxxxxx` and `]: guide.md`, it took 4.7
+  seconds and now takes 0.21, against 0.12. Each exits 0. These are one
+  run of each.
 
 ## 0.4.1 - 2026-10-17
 
