@@ -10,6 +10,8 @@
 // CommonMark and the HTML standard read them differently, so each has a
 // function here: destinationText() for the destination of an inline link
 // or of a reference definition, and attributeValue() for an href's value.
+// markdownItDestination() reads a destination as markdown-it 14.1.0 reads
+// it where it tests the start of a reference definition's destination.
 
 // A backslash escape, a backslash and the ASCII punctuation character after
 // it (group 1), or a character reference as CommonMark reads one, with the
@@ -37,6 +39,86 @@ export function destinationText(raw) {
     const code = decimal !== undefined ? parseInt(decimal, 10) : parseInt(hex, 16);
     return String.fromCodePoint(code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff) ? 0xfffd : code);
   });
+}
+
+// A backslash escape, as ESCAPE_OR_REFERENCE reads one (group 1), or & and
+// a name of 2 to 32 letters, digits and #, of which only the first may be
+// #, and a ; (group 2), as markdown-it 14.1.0 finds a character reference
+// in a destination. MARKDOWN_IT_NUMERIC matches the name of a numeric
+// reference that markdown-it reads itself: # and 1 to 8 decimal digits
+// (group 2), or #x or #X and 1 to 8 hexadecimal digits (group 1).
+const MARKDOWN_IT_ESCAPE_OR_REFERENCE = /\\([!-/:-@[-`{-~])|&([A-Za-z#][A-Za-z0-9]{1,31});/g;
+const MARKDOWN_IT_NUMERIC = /^#(?:[xX]([0-9a-fA-F]{1,8})|([0-9]{1,8}))$/;
+
+// Whether markdown-it 14.1.0 reads the code point of a numeric reference
+// that MARKDOWN_IT_NUMERIC matches as a character: not U+0000 to U+0008,
+// U+000B, U+000E to U+001F, U+007F to U+009F, a surrogate, U+FDD0 to
+// U+FDEF, one whose last four hexadecimal digits are FFFE or FFFF, or one
+// past U+10FFFF (isValidEntityCode() in its lib/common/utils.mjs).
+const markdownItCharacter = (code) =>
+  !(
+    code <= 0x08 ||
+    code === 0x0b ||
+    (code >= 0x0e && code <= 0x1f) ||
+    (code >= 0x7f && code <= 0x9f) ||
+    (code >= 0xd800 && code <= 0xdfff) ||
+    (code >= 0xfdd0 && code <= 0xfdef) ||
+    (code & 0xfffe) === 0xfffe ||
+    code > 0x10ffff
+  );
+
+// The text of a link destination, `raw` as a page writes it, as markdown-it
+// 14.1.0 reads its backslash escapes and character references
+// (unescapeAll() in its lib/common/utils.mjs), both in one pass from left
+// to right, as MARKDOWN_IT_ESCAPE_OR_REFERENCE finds them: a backslash
+// escape is the character it escapes; a numeric reference whose name
+// MARKDOWN_IT_NUMERIC matches is the character of its code point, or is
+// text where markdownItCharacter() says that code point is none; and any
+// other reference is read as textReference() reads it. So
+// &#106;avascript: and &#000000106;avascript: are javascript:, where
+// destinationText() reads the second as written, and &#11;javascript: is
+// as written, where destinationText() reads a vertical tab.
+export function markdownItDestination(raw) {
+  return raw.replace(MARKDOWN_IT_ESCAPE_OR_REFERENCE, (match, escaped, name) => {
+    if (escaped !== undefined) return escaped;
+    const numeric = MARKDOWN_IT_NUMERIC.exec(name);
+    if (numeric === null) return textReference(name);
+    const code = numeric[1] !== undefined ? parseInt(numeric[1], 16) : parseInt(numeric[2], 10);
+    return markdownItCharacter(code) ? String.fromCodePoint(code) : match;
+  });
+}
+
+// What & and `name` and a ; stand for in text, as the decodeHTML() of
+// entities 4.5.0, which markdown-it 14.1.0 reads them with, reads them. A
+// numeric reference, # and decimal digits or #x or #X and hexadecimal
+// digits, stands for the character of its code point, read as
+// referenceAt() reads one, and then the rest of the name and the ; as
+// written where the digits do not run to the ;, so &#00000000a; is U+FFFD
+// and a;. A named one is the characters NAMED_REFERENCES gives for the name
+// with its ;, or else for the longest start of the name that the table
+// lists without its ;, then the rest of the name and the ; as written, so
+// &notit; is U+00AC and it;. Any other is as written.
+function textReference(name) {
+  const written = `&${name};`;
+  if (name[0] === '#') {
+    const hex = name[1] === 'x' || name[1] === 'X';
+    const digit = hex ? isHexDigit : isDigit;
+    const start = hex ? 2 : 1;
+    let end = start;
+    let code = 0;
+    for (; end < name.length && digit(name[end]); end++) code = Math.min(code * (hex ? 16 : 10) + parseInt(name[end], 16), 0x110000);
+    if (end === start) return written;
+    if (code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) code = 0xfffd;
+    const text = String.fromCodePoint(NUMERIC_REPLACEMENTS.get(code) ?? code);
+    return end === name.length ? text : `${text}${name.slice(end)};`;
+  }
+  const text = NAMED_REFERENCES.get(`${name};`);
+  if (text !== undefined) return text;
+  for (let end = Math.min(name.length, LONGEST_BARE_NAME); end > 0; end--) {
+    const bare = NAMED_REFERENCES.get(name.slice(0, end));
+    if (bare !== undefined) return `${bare}${name.slice(end)};`;
+  }
+  return written;
 }
 
 const isDigit = (c) => c >= '0' && c <= '9';
