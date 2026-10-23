@@ -137,30 +137,33 @@
 //      writes there, such as </p>, </h2> or </td>, where it is not inside a
 //      quoted value: x <? > <a href="target" x=' ?> ' links to target. No
 //      link is read in the title of a reference definition that both
-//      renderers read where a paragraph starts, as definedLabels() reads
-//      one, also a title alone on the line after the destination: both
-//      render nothing for the definition and write its title only into the
-//      title attribute of the links that use it. So
-//      [label]: target "<a href="x">", and [label]: target with
-//      "<a href="x">" on the next line, do not link to x, in a block quote
-//      or a list item too, and no code span or raw HTML that opens in such a
-//      title runs on to the text after it. A title that ends on a later line
-//      than it starts on is read as text of the paragraph, as is the label
-//      of a definition. Nor is an href inside an image
+//      renderers read where a paragraph starts or after the definitions
+//      that start one, as definedLabels() reads one, also a title alone on
+//      the line after the destination or one that runs on over the lines
+//      after it: both render nothing for the definition and write its title
+//      only into the title attribute of the links that use it. So
+//      [label]: target "<a href="x">", [label]: target with "<a href="x">"
+//      on the next line, and [label]: target "<a href="x"> with t" on the
+//      next line, do not link to x, in a block quote or a list item too,
+//      and no code span or raw HTML that opens in such a title runs on to
+//      the text after it. The label of a definition is read as text of the
+//      paragraph, so [<a href="x">]: target links to x. Nor is an href
+//      inside an image
 //      read, as both renderers write the description of an image into the
 //      alt attribute of the <img>: an image that a destination follows, as
 //      in ![<a href="x">y</a>](target), or one whose reference a definition
 //      on the page names, as in ![<a href="x">y</a>][label] with
 //      [label]: target, where referenceLabel() gives the label that both
 //      look the reference up under and definedLabels() reads the
-//      definition: where a paragraph starts or after the definitions that
-//      start one, also in a block quote or on the line of a list marker
-//      (> [label]: target or - [label]: target), written up to its
-//      destination on one line, or up to its ]: on one line and from its
-//      destination on the next line of the paragraph ([label]: on one line
-//      and target on the next), with a title, if any, on the line of the
-//      destination or alone on the line after it,
-//      as definedLabels() describes, for each of the two renderers
+//      definition as each of the two renderers reads one: where a paragraph
+//      starts or after the definitions that start one, also in a block
+//      quote or on the line of a list marker (> [label]: target or
+//      - [label]: target), a definition whose label and title may run on
+//      over the lines of the paragraph, and whose destination and title may
+//      each start on the line where what comes before it ends or on the
+//      next line ([ref on one line and label]: target on the next,
+//      [label]: on one line and target on the next, or [label]: target "a
+//      on one line and b" on the next), as definedLabels() describes
 //      (commonmark.js 0.31.2 reads no tables, and the rows of a table are
 //      text of a paragraph to it, so a line under a table that goes on with
 //      that paragraph, as 2. [label]: target does, holds no definition
@@ -224,15 +227,30 @@
 //      dir/file.md, as do x <a href=" dir/file.md ">y</a> and
 //      x <a href="&#32;dir/fil&#x65;.md">y</a>, and
 //      x <a href=" https://example.com/x">y</a> is not looked up as a file,
-//      as its target starts with a scheme. A NUL is kept, as hrefUrl()
-//      describes. The target of an inline link or of a definition is read
+//      as its target starts with a scheme. In an HTML block the spaces at
+//      the start of a line that a quoted value runs on to are part of the
+//      target, after the markers of the block quotes and list items that
+//      hold the block, which the renderers leave out, as htmlBlockLine()
+//      describes: <div><a href="docs/ on one line and three spaces and
+//      guide.md">y</a></div> on the next link to docs/   guide.md. A NUL is
+//      kept, as hrefUrl() describes. The target of an inline link or of a
+//      definition is read
 //      with its backslash escapes and character references as CommonMark
 //      reads them, a reference only with its ;: [y](docs/guide&#46;md) and
 //      [y](docs/guide&period;md) link to docs/guide.md, and in
 //      [y](docs/guide&#46md) the reference is read as written. A ? or #
 //      that a reference stands for starts the query or the anchor of the
-//      target. On a line of an HTML block or of indented code,
-//      an href is read when its value ends on that line. Other forms, such
+//      target. On a line of indented code an href is read when its value
+//      ends on that line. In an HTML block a tag may run on over the lines
+//      of the block, which are read as htmlBlockHrefs() reads them, and its
+//      attributes are read as a browser's tokenizer reads them, as hrefsIn()
+//      describes: the two lines <div><a href="docs/ and
+//      nowhere.md">y</a></div>, the two lines <div><a and
+//      href=docs/nowhere.md>y</a></div>, and the line
+//      <div><a y" href=docs/nowhere.md>y</a></div>, whose quote is part of
+//      an attribute's name, each link to docs/nowhere.md, and
+//      <div><b title="<a href=docs/nowhere.md>">y</b></div>, whose <a> is
+//      inside a quoted value, links to none. Other forms, such
 //      as a definition on the same line as a list marker
 //      (`- [label]: target`), are not read: the target of such a
 //      definition is not checked, though its label names an image as
@@ -1270,7 +1288,7 @@ function inlineDestinations(line, open, spans) {
 // value and its closing quote. The target is the value as hrefUrl() reads
 // it. HREF matches only the first character of an unquoted value, and
 // hrefAt() reads the rest with UNQUOTED_VALUE, so a test of HREF at an
-// index, as hrefsIn() makes at each index of its text, reads no unquoted
+// index, as tagHref() makes at the indexes of a tag, reads no unquoted
 // value past its first character.
 const HREF = /[\t\n\f\r ]href[\t\n\f\r ]*=[\t\n\f\r ]*(?:"([^"]*)"|'([^']*)'|(?=[^\t\n\f\r "'>]))/iy;
 const UNQUOTED_VALUE = /[^\t\n\f\r >]*/y;
@@ -1296,18 +1314,22 @@ function hrefAt(text, i) {
 // docs/guide.md and " https://example.com/x" is https://example.com/x. It
 // removes a NUL there too, but the HTML standard has a browser's tokenizer
 // read a NUL in an attribute's value as U+FFFD, which the URL parser keeps,
-// so a NUL is kept. In the lines of a paragraph that paragraphCodeSpans()
-// joins, the spaces after a line break stand for the > markers and
-// indentation that CommonMark leaves out of the paragraph's text, and are
-// removed first; the line break is removed after the references are read,
-// as a browser reads it in the value, so a reference without its ; ends
-// before it. The characters at the start and the end are read from each end
-// in a loop: on Node.js 26.12.0 a search for [\x01-\x20]+$ took 3.2 seconds
-// over docs/guide.md, 100,000 spaces and an x, as it went on from each space
-// of the run to the end of the run.
+// so a NUL is kept. Where `paragraph` is true, the value is in the lines of
+// a paragraph that paragraphCodeSpans() joins, where the spaces after a line
+// break stand for the > markers and indentation that CommonMark leaves out
+// of the paragraph's text, and they are removed first. Where it is false,
+// the value is in text as a renderer writes it, such as that of an HTML
+// block that htmlBlockHrefs() reads, and they are kept, as a browser keeps
+// them in the value and the URL parser in the URL: docs/, a line break,
+// three spaces and guide.md are docs/   guide.md. The line break is removed
+// after the references are read, as a browser reads it in the value, so a
+// reference without its ; ends before it. The characters at the start and
+// the end are read from each end in a loop: on Node.js 26.12.0 a search for
+// [\x01-\x20]+$ took 3.2 seconds over docs/guide.md, 100,000 spaces and an
+// x, as it went on from each space of the run to the end of the run.
 const urlEnd = (code) => code > 0 && code <= 0x20;
-function hrefUrl(value) {
-  const url = attributeValue(value.replace(/\n */g, '\n')).replace(/[\t\n\r]/g, '');
+function hrefUrl(value, paragraph = true) {
+  const url = attributeValue(paragraph ? value.replace(/\n */g, '\n') : value).replace(/[\t\n\r]/g, '');
   let from = 0;
   let to = url.length;
   while (from < to && urlEnd(url.charCodeAt(from))) from++;
@@ -1315,41 +1337,40 @@ function hrefUrl(value) {
   return url.slice(from, to);
 }
 
-// The HTML href attributes in `text`, each as hrefAt() reads it, after
-// attribute values that may hold >, read on the text as it is given: whole
-// on raw HTML, such as the lines of HTML blocks that htmlBlockHrefs() joins,
-// where a backtick is text and opens no code span, and without its
-// code spans on a line of indented code. A tag that starts at a < and a
-// letter is read on to the first > outside its quoted values, or to a
-// quote that no later quote of its kind closes, and its first href there
-// is a target; the text is read on after that href, or from the character
-// after the < when the tag holds none. From each index a tag meets an href
-// that starts there, or else the first href it meets from the next
-// character, or from after the quoted value that starts there, and none at
-// a >: that first href is noted for each index in one pass from the end of
-// the text, so a line of many < that no > follows is not read again from
-// each one. The hrefs of a paragraph, a heading or a table cell are read
-// with tagHref() and rawHtmlHrefs() instead.
+// The HTML href attributes in `text`, each as { target, at } as newTag()
+// describes it, its target read as hrefUrl() reads a value in text as a
+// renderer writes it, in the open tags of the text as a browser's tokenizer
+// reads them. The text is read as it is given: whole on raw HTML, such as
+// the text of the HTML blocks that htmlBlockHrefs() reads, where a backtick
+// is text and opens no code span, and without its code spans on a line of
+// indented code. A tag starts at a < and a letter, its name runs to white
+// space, a / or a >, and tagStep() reads its attributes from there to the
+// > that ends it, so a quote opens a quoted value only where a value starts
+// after an = and is part of an attribute's name or of an unquoted value
+// anywhere else: <a y" href=target>, <a y' href=target> and
+// <a b="c"href=target> each hold an href, and <b title="<a href=target>">
+// holds none, as the <a> is inside the quoted value. The text is read on
+// after that >, where a closing tag, a comment or other markup is read as
+// text, in which a tag may start, and is read once, from its start, as no
+// tag starts inside another. A tag that the text leaves open holds the
+// href read in it up to the end of the text, where an unquoted value ends.
+// The hrefs of a paragraph, a heading or a table cell are read with
+// tagHref() and rawHtmlHrefs() instead.
 function hrefsIn(text) {
-  // reach[i] is the index of the first href a tag meets from text[i] on, or
-  // -1 when it meets none; next[q] is the index of the next quote q after
-  // text[i], or -1 when there is none.
-  const reach = new Int32Array(text.length + 1).fill(-1);
-  const next = { '"': -1, "'": -1 };
-  for (let i = text.length - 1; i >= 0; i--) {
-    const c = text[i];
-    HREF.lastIndex = i;
-    if (HREF.test(text)) reach[i] = i;
-    else if (c === '"' || c === "'") reach[i] = next[c] === -1 ? -1 : reach[next[c] + 1];
-    else if (c !== '>') reach[i] = reach[i + 1];
-    if (c === '"' || c === "'") next[c] = i;
-  }
   const hrefs = [];
-  for (let i = 0; i + 1 < text.length; i++) {
-    if (text[i] !== '<' || !/[a-z]/i.test(text[i + 1]) || reach[i + 2] === -1) continue;
-    const href = hrefAt(text, reach[i + 2]);
-    hrefs.push(href);
-    i = href.end - 1;
+  for (let i = text.indexOf('<'); i !== -1; i = text.indexOf('<', i + 1)) {
+    if (!isLetter(text[i + 1])) continue;
+    let j = i + 2;
+    while (j < text.length && !isHtmlSpace(text[j]) && text[j] !== '/' && text[j] !== '>') j++;
+    const tag = newTag(i, false, true, false);
+    const end = attributesEnd(text, j, text.length, tag);
+    if (end === -1) {
+      tagStep(tag, '\n', text, text.length);
+      if (tag.href) hrefs.push(tag.href);
+      break;
+    }
+    if (tag.href) hrefs.push(tag.href);
+    i = end - 1;
   }
   return hrefs;
 }
@@ -1359,6 +1380,74 @@ function hrefTargets(text) {
   return hrefsIn(text).map((href) => href.target);
 }
 
+// The text that commonmark.js 0.31.2 and markdown-it 14.1.0 write of
+// `line`, a line of an HTML block after the first line of the run of such
+// lines that htmlBlockHrefs() reads it in, `holders` being the block
+// quotes and list items that hold the block, as blockReader() gives them,
+// as [commonmark.js, markdown-it]. Both leave out the markers of those
+// block quotes and list items, in columns as nextColumn() counts them: of
+// a block quote, the spaces and tabs before its >, the > and one column of
+// a space or a tab after it; of a list item, as many columns as its text
+// starts past the text of the block quotes and list items outside it,
+// which on the line that opens the item hold its list marker. Each writes
+// the rest of the line as it stands, so the spaces and tabs at the start
+// of a line that a quoted value runs on to are part of the value. Where
+// those markers end inside a tab, commonmark.js writes the columns of the
+// tab past them as spaces, and so does markdown-it, but for a tab after
+// the > of the block quote that holds the block, where it writes the tab:
+// commonmark.js writes >, a tab and guide.md as two spaces and guide.md,
+// and markdown-it as a tab and guide.md. Where the line holds only spaces
+// and tabs from where the indentation of a list item starts, as a line of
+// an HTML block that <pre> opens may, commonmark.js writes none of them,
+// and markdown-it those past the indentation. A \r at the end of the line
+// is kept.
+function htmlBlockLine(line, holders) {
+  const cr = line.endsWith('\r') ? '\r' : '';
+  const text = cr ? line.slice(0, -1) : line;
+  // The index after the last character of the line that is not a space or a tab.
+  let filled = text.length;
+  while (filled > 0 && (text[filled - 1] === ' ' || text[filled - 1] === '\t')) filled--;
+  let i = 0; // the index of the first character that the markers read so far do not take whole
+  let col = 0; // the column where they end
+  let at = 0; // the column where text[i] starts, which is before `col` where they end inside a tab
+  let quoteTab = false; // whether they end inside a tab after the > of a block quote
+  let blank = false; // whether the line holds only spaces and tabs from the indentation of a list item on
+  const space = () => text[i] === ' ' || text[i] === '\t';
+  // Moves on by n columns, past whole characters and into a tab that is wider.
+  const advance = (n) => {
+    const to = col + n;
+    while (col < to && i < text.length) {
+      const next = nextColumn(text[i], col);
+      if (next > to) {
+        col = to;
+      } else {
+        col = at = next;
+        i++;
+      }
+    }
+  };
+  for (const holder of holders) {
+    if (holder.quote) {
+      while (space()) {
+        col = at = nextColumn(text[i], col);
+        i++;
+      }
+      if (text[i] === '>') {
+        i++;
+        col = at = col + 1;
+        if (space()) advance(1);
+      }
+      quoteTab = col > at;
+    } else {
+      if (i >= filled) blank = true;
+      advance(holder.width);
+      quoteTab = false;
+    }
+  }
+  const rest = col > at ? ' '.repeat(nextColumn('\t', at) - col) + text.slice(i + 1) : text.slice(i);
+  return [(blank ? '' : rest) + cr, (quoteTab ? text.slice(i) : rest) + cr];
+}
+
 // The targets of the hrefs on the lines of the HTML blocks of `lines`, the
 // lines of a page or of a part of it as parse() tags them, as a map from
 // the index in `lines` of a line that blockReader() reads as a line of an
@@ -1366,28 +1455,56 @@ function hrefTargets(text) {
 // whose values start on that line. They are read as hrefsIn() reads them in
 // the text of each run of such lines that follow one another, joined by
 // line feeds, as a renderer writes the HTML blocks of the run one after
-// another, and each line after the first of its run without the > markers
-// of the block quotes that hold its block, which a renderer leaves out. So
-// a tag that starts on one line and holds its href on the next, as
-// <div><a on one line and href=docs/nowhere.md>y</a></div> on the next,
-// holds that href, as a browser reads it in what the renderers write.
+// another, and each line after the first of its run as htmlBlockLine()
+// reads it, without the markers of the block quotes and list items that
+// hold its block, which a renderer leaves out. So a tag that starts on one
+// line and holds its href on the next, as <div><a on one line and
+// href=docs/nowhere.md>y</a></div> on the next, holds that href, as a
+// browser reads it in what the renderers write, and the spaces at the start
+// of a line that a quoted value runs on to are part of its target:
+// <div><a href="docs/ on one line, and three spaces and guide.md">y</a></div>
+// on the next, link to docs/   guide.md, and in a block quote, the line
+// > <div><a href="docs/ and the line of a >, three spaces and
+// guide.md">y</a></div>, to docs/  guide.md, as both renderers write the
+// second line without the > and the space after it. Where commonmark.js
+// 0.31.2 and markdown-it 14.1.0 write a run otherwise, as htmlBlockLine()
+// describes, its hrefs are read in what each writes, and the target of
+// each href as each reads it, once where the two read it alike.
 function htmlBlockHrefs(lines) {
   const blocks = new Map();
   const read = blockReader(lines, undefined, blocks);
   for (const l of lines) read(l);
   const targets = new Map();
-  let run = []; // the lines of the run read last, as { j, from }, `from` being where the line starts in `text`
-  let text = '';
-  const close = () => {
+  let run = []; // the lines of the run read last, as { j, from }, from[r] being where the line starts in texts[r]
+  let texts = ['', '']; // the text of that run as commonmark.js and as markdown-it write it
+  // The targets of the hrefs in texts[r], as a map from the index in
+  // `lines` of a line of the run to the targets of the hrefs whose values
+  // start on that line.
+  const byLine = (r) => {
+    const found = new Map();
     let k = 0;
-    for (const { target, at } of hrefsIn(text)) {
-      while (k + 1 < run.length && run[k + 1].from <= at) k++;
+    for (const { target, at } of hrefsIn(texts[r])) {
+      while (k + 1 < run.length && run[k + 1].from[r] <= at) k++;
       const { j } = run[k];
-      if (!targets.has(j)) targets.set(j, []);
-      targets.get(j).push(target);
+      if (!found.has(j)) found.set(j, []);
+      found.get(j).push(target);
+    }
+    return found;
+  };
+  const close = () => {
+    const commonmark = byLine(0);
+    const markdownIt = texts[1] === texts[0] ? commonmark : byLine(1);
+    for (const { j } of run) {
+      const [one, other] = [commonmark.get(j) ?? [], markdownIt.get(j) ?? []];
+      const both = [];
+      for (let n = 0; n < Math.max(one.length, other.length); n++) {
+        if (n < one.length) both.push(one[n]);
+        if (n < other.length && other[n] !== one[n]) both.push(other[n]);
+      }
+      if (both.length > 0) targets.set(j, both);
     }
     run = [];
-    text = '';
+    texts = ['', ''];
   };
   for (let j = 0; j < lines.length; j++) {
     const block = blocks.get(j);
@@ -1395,9 +1512,10 @@ function htmlBlockHrefs(lines) {
       if (run.length > 0) close();
       continue;
     }
-    if (run.length > 0) text += '\n';
-    run.push({ j, from: text.length });
-    text += run.length === 1 ? lines[j].line : afterQuotes(lines[j].line, block.quotes);
+    const written = run.length === 0 ? [lines[j].line, lines[j].line] : htmlBlockLine(lines[j].line, block.holders);
+    if (run.length > 0) texts = texts.map((text) => `${text}\n`);
+    run.push({ j, from: texts.map((text) => text.length) });
+    texts = texts.map((text, r) => text + written[r]);
   }
   if (run.length > 0) close();
   return targets;
@@ -1454,10 +1572,10 @@ const UNQUOTED = 'unquoted';
 // first attribute named href, whatever the case of its letters, as a
 // browser drops a later one, when that attribute has a value, as
 // { target, at }: the value, in quotes, where it may hold a line break, or
-// unquoted, as hrefUrl() reads it, and `at` the index in `text` of the
-// quote that opens it, or of its first character when it is unquoted. It
-// notes none in a closing tag.
-const newTag = (at, closing, find = !closing) => ({ at, closing, find, state: BEFORE_NAME, name: -1, named: false, value: -1, href: null });
+// unquoted, as hrefUrl() reads it, given `paragraph`, and `at` the index in
+// `text` of the quote that opens it, or of its first character when it is
+// unquoted. It notes none in a closing tag.
+const newTag = (at, closing, find = !closing, paragraph = true) => ({ at, closing, find, paragraph, state: BEFORE_NAME, name: -1, named: false, value: -1, href: null });
 
 // Reads `c`, the character that text[i] to text[last] stands for, in the
 // attributes of `tag`, a tag that newTag() makes, as a browser's tokenizer
@@ -1481,11 +1599,11 @@ function tagStep(tag, c, text, i, last = i) {
   if (state === '"' || state === "'") {
     if (c !== state) return false;
     tag.state = BEFORE_NAME;
-    if (tag.value !== -1) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i)), at: tag.value - 1 }, -1];
+    if (tag.value !== -1) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i), tag.paragraph), at: tag.value - 1 }, -1];
     return false;
   }
   if (state === IN_NAME && tag.name === 4 && (c === '>' || c === '/' || c === '=' || isHtmlSpace(c))) [tag.find, tag.named] = [false, true];
-  if (state === UNQUOTED && tag.value !== -1 && (c === '>' || isHtmlSpace(c))) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i)), at: tag.value }, -1];
+  if (state === UNQUOTED && tag.value !== -1 && (c === '>' || isHtmlSpace(c))) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i), tag.paragraph), at: tag.value }, -1];
   if (c === '>') return true;
   if (state === BEFORE_VALUE) {
     if (isHtmlSpace(c)) return false;
@@ -2324,7 +2442,9 @@ function afterQuotes(line, quotes) {
 // it follows, its fences included. Given a map as `htmlLines`, the reader
 // sets in it the index in `lines` of each line of an HTML block that it
 // follows to that block: one object for all the lines of the block, whose
-// `quotes` is how many block quotes hold it. The reader's `containers` and
+// `quotes` is how many block quotes hold it and `holders` the block quotes
+// and list items that hold it, outermost first, as lineStart() takes them
+// in `containers`. The reader's `containers` and
 // `restOf` are those it reads the next line with, for a caller that reads
 // the lines after it ahead. Given false as `tables`, the reader reads no
 // table, as commonmark.js 0.31.2 reads none: a line that it would read as a
@@ -2456,7 +2576,7 @@ function blockReader(lines, quotedFences, htmlLines, tables = true) {
     // block opens one, which the containers that hold the line hold. A block
     // of kind 1 to 5 whose end that line holds is that line alone.
     if (!html && start.html) {
-      htmlBlock = { kind: start.html, depth: containers.length, quotes: containers.filter((c) => c.quote).length };
+      htmlBlock = { kind: start.html, depth: containers.length, quotes: containers.filter((c) => c.quote).length, holders: containers.slice() };
       html = true;
       htmlLines?.set(j, htmlBlock);
       if (!endsAtBlank(htmlBlock.kind) && HTML_BLOCK_END[htmlBlock.kind].test(afterQuotes(line, htmlBlock.quotes))) htmlBlock = null;
@@ -2633,58 +2753,83 @@ function commonmarkDefinitions(texts) {
 // index in their text of the title's opening quote and the index after its
 // closing one; and `starts` gives the index in that text where each line
 // given starts. A NUL, which markdown-it reads as U+FFFD, is read as any
-// other character.
+// other character. The text is read in the text of each line given, which
+// is not added to one string: read by index after each line added to it,
+// such a string was copied whole each time, so the time to read a title or
+// a label that runs on over the lines grew with the square of their number.
 function* markdownItDefinition(first) {
-  let str = `${first}\n`;
+  const texts = [`${first}\n`]; // the text of each line given and the line feed after it
   const starts = [0];
-  // Asks for the next line, adds its text to `str` where it goes on with
-  // the definition, and returns whether it does.
+  let length = texts[0].length; // the length of their text
+  // Asks for the next line, adds its text where it goes on with the
+  // definition, and returns whether it does.
   function* more() {
     const line = yield;
     if (line === null) return false;
-    starts.push(str.length);
-    str += `${line}\n`;
+    starts.push(length);
+    texts.push(`${line}\n`);
+    length += line.length + 1;
     return true;
   }
+  // The index in `texts` of the line that holds the character at index p of
+  // their text, or of the last line where p is past their end, looked for
+  // from the line found last, as the text is read on from its start but for
+  // one read back to the end of the destination and one to the end of the
+  // label.
+  let found = 0;
+  const lineAt = (p) => {
+    while (found + 1 < starts.length && starts[found + 1] <= p) found++;
+    while (found > 0 && starts[found] > p) found--;
+    return found;
+  };
+  const at = (p) => {
+    const k = lineAt(p);
+    return texts[k][p - starts[k]];
+  };
   const blank = (c) => c === ' ' || c === '\t';
   let labelEnd = -1;
-  for (let i = 1; i < str.length && labelEnd === -1; i++) {
-    const c = str[i];
+  for (let i = 1; i < length && labelEnd === -1; i++) {
+    const c = at(i);
     if (c === '[') return null;
     if (c === ']') labelEnd = i;
     else if (c === '\n') yield* more();
-    else if (c === '\\' && str[++i] === '\n') yield* more();
+    else if (c === '\\' && at(++i) === '\n') yield* more();
   }
-  if (labelEnd === -1 || str[labelEnd + 1] !== ':') return null;
+  if (labelEnd === -1 || at(labelEnd + 1) !== ':') return null;
   let pos = labelEnd + 2;
-  for (; pos < str.length; pos++) {
-    if (str[pos] === '\n') yield* more();
-    else if (!blank(str[pos])) break;
+  for (; pos < length; pos++) {
+    if (at(pos) === '\n') yield* more();
+    else if (!blank(at(pos))) break;
   }
-  const destination = markdownItDestinationAt(str, pos);
+  // The destination, which holds no line feed, is read in the text of its
+  // line, and the title in that of each line it runs on to.
+  let k = lineAt(pos);
+  const destination = markdownItDestinationAt(texts[k], pos - starts[k]);
   if (destination === null || !referenceTarget(markdownItDestination(destination.raw))) return null;
-  const destinationEnd = destination.end;
+  const destinationEnd = starts[k] + destination.end;
   const destinationLines = starts.length;
-  for (pos = destinationEnd; pos < str.length; pos++) {
-    if (str[pos] === '\n') yield* more();
-    else if (!blank(str[pos])) break;
+  for (pos = destinationEnd; pos < length; pos++) {
+    if (at(pos) === '\n') yield* more();
+    else if (!blank(at(pos))) break;
   }
-  let title = pos > destinationEnd ? markdownItTitle(str, pos, null) : null;
+  k = lineAt(pos);
+  let title = pos > destinationEnd ? markdownItTitle(texts[k], pos - starts[k], null) : null;
   while (title?.marker !== undefined) {
-    const from = str.length;
+    k = texts.length;
     if (!(yield* more())) title = null;
-    else title = markdownItTitle(str, from, title.marker);
+    else title = markdownItTitle(texts[k], 0, title.marker);
   }
-  let range = title === null ? null : [pos, title.end];
+  const titleEnd = title === null ? -1 : starts[k] + title.end;
+  let range = title === null ? null : [pos, titleEnd];
   let lines = range === null ? destinationLines : starts.length;
-  pos = range === null ? destinationEnd : title.end;
-  while (blank(str[pos])) pos++;
-  if (pos < str.length && str[pos] !== '\n' && range !== null && range[1] - range[0] > 2) {
+  pos = range === null ? destinationEnd : titleEnd;
+  while (blank(at(pos))) pos++;
+  if (pos < length && at(pos) !== '\n' && range !== null && range[1] - range[0] > 2) {
     [range, lines, pos] = [null, destinationLines, destinationEnd];
-    while (blank(str[pos])) pos++;
+    while (blank(at(pos))) pos++;
   }
-  const label = str.slice(1, labelEnd);
-  return (pos < str.length && str[pos] !== '\n') || label.trim() === '' ? null : { label, lines, title: range, starts };
+  const label = texts.slice(0, lineAt(labelEnd) + 1).join('').slice(1, labelEnd);
+  return (pos < length && at(pos) !== '\n') || label.trim() === '' ? null : { label, lines, title: range, starts };
 }
 
 // The destination of a reference definition that starts at str[pos], as
@@ -2721,14 +2866,15 @@ function markdownItDestinationAt(str, pos) {
   return i === pos || depth !== 0 ? null : { raw: str.slice(pos, i), end: i };
 }
 
-// The title of a reference definition in `str`, read on from str[pos] as
-// markdown-it 14.1.0 reads one (parseLinkTitle() in its
-// lib/helpers/parse_link_title.mjs): where `marker` is null, from the ", '
-// or ( that opens it at str[pos], and otherwise from the start of a line
-// that the title runs on to, `marker` being the quote that closes it. It
-// is { end }, the index after that closing quote; { marker } when `str`
-// ends first, as the title may run on to the next line; or null where none
-// starts at str[pos], or a ( that no backslash escapes is inside ().
+// The title of a reference definition in `str`, the text of one line and
+// the line feed after it, read on from str[pos] as markdown-it 14.1.0 reads
+// one (parseLinkTitle() in its lib/helpers/parse_link_title.mjs): where
+// `marker` is null, from the ", ' or ( that opens it at str[pos], and
+// otherwise from the start of a line that the title runs on to, `marker`
+// being the quote that closes it. It is { end }, the index in `str` after
+// that closing quote; { marker } when `str` ends first, as the title may
+// run on to the next line; or null where none starts at str[pos], or a (
+// that no backslash escapes is inside ().
 function markdownItTitle(str, pos, marker) {
   if (marker === null) {
     const open = str[pos];
@@ -2967,10 +3113,14 @@ function markdownItReading(lines) {
   for (let k = 0; k <= lines.length; k++) {
     const l = lines[k] ?? null;
     const start = l === null || l.inFence ? null : read.start(l.line);
-    let queue = [{ l, start, block: l === null ? null : read(l, start ?? undefined) }];
-    for (let q = 0; q < queue.length; q++) {
-      const again = step(queue[q]);
-      if (again.length > 0) [queue, q] = [[...again, ...queue.slice(q + 1)], -1];
+    // The lines to read, the next one last, so that the lines that step()
+    // gives back, which are read before the others, are added after them:
+    // put before them in a copy of the others, they took time that grew
+    // with the square of the number of lines given back one at a time.
+    const stack = [{ l, start, block: l === null ? null : read(l, start ?? undefined) }];
+    while (stack.length > 0) {
+      const again = step(stack.pop());
+      for (let a = again.length - 1; a >= 0; a--) stack.push(again[a]);
     }
   }
   return { keys, hidden };

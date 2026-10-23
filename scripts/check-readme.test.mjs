@@ -2099,8 +2099,9 @@ test('an href with 100,000 spaces at the start and the end of its value, or 200,
 });
 
 test('a line of a tag of 50,000 attributes href=a, each after a no-break space, is checked in under 2 seconds', () => {
-  // A line of an HTML block or of indented code is tested for an href at
-  // each index. An unquoted value runs on past a no-break space, so a test
+  // A tag in a paragraph is tested for an href at each index that an h or
+  // an H follows, as a line of an HTML block or of indented code was tested
+  // at each index. An unquoted value runs on past a no-break space, so a test
   // that read the whole value, and read a no-break space before href= as
   // white space, as \s does, would read the rest of the line from each
   // no-break space. The line is checked in an HTML block, as indented code
@@ -2992,6 +2993,124 @@ test('an href on a later line of its tag than the tag\'s start in an HTML block 
   for (const body of ['<div><a\nhref=docs/guide.md>y</a></div>\n', '<div><a\n\nhref=docs/nowhere.md>y</a></div>\n']) {
     const r = check(body);
     assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('the spaces at the start of a line that a quoted href value runs on to in an HTML block are part of its target', () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) write a line of
+  // an HTML block after its first without the > and the space after it of
+  // each block quote that holds the block and without the indentation of
+  // each list item, and keep the other spaces at its start. parse5 7.3.0
+  // reads them in the href's value in what each writes, and the URL parser
+  // of Node.js 26.12.0 keeps them: it resolves docs/, a line feed, three
+  // spaces and guide.md to docs/%20%20%20guide.md. Here they are in a block
+  // quote, a list item or both, after a tab, which the URL parser removes,
+  // after the tab that a list item's indentation takes, in the value of an
+  // href on the second line of its tag, and on a line of spaces in an HTML
+  // block that <pre> opens. The check exited 0 on each, as it removed the
+  // spaces as it removes them in a paragraph.
+  for (const [body, target, line] of [
+    ['<div><a href="docs/\n   guide.md">y</a></div>\n', 'docs/   guide.md', 11],
+    ['> <div><a href="docs/\n>   guide.md">y</a></div>\n', 'docs/  guide.md', 11],
+    ['- <div><a href="docs/\n     guide.md">y</a></div>\n', 'docs/   guide.md', 11],
+    ['> - <div><a href="docs/\n>    guide.md">y</a></div>\n', 'docs/ guide.md', 11],
+    ['<div><a href="docs/\n\t guide.md">y</a></div>\n', 'docs/ guide.md', 11],
+    ['-\t<div><a href="docs/\n\t  guide.md">y</a></div>\n', 'docs/  guide.md', 11],
+    ['<div><a\n   href="docs/\n   guide.md">y</a></div>\n', 'docs/   guide.md', 12],
+    ['<pre><a href="docs/\n   \nguide.md">y</a></pre>\n', 'docs/   guide.md', 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "${target}" does not exist.`, body);
+  }
+  // Both write each of these with docs/, a line feed and guide.md as the
+  // value, which links to docs/guide.md: the spaces are the indentation of
+  // the list item, or the > and the space after it, and a tab after a >
+  // that is one column wide, as here after a > two columns in, is that space.
+  for (const body of [
+    '- <div><a href="docs/\n  guide.md">y</a></div>\n',
+    '1. <div><a href="docs/\n   guide.md">y</a></div>\n',
+    '> <div><a href="docs/\n> guide.md">y</a></div>\n',
+    '  > <div><a href="docs/\n  >\tguide.md">y</a></div>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // The two write these lines otherwise. commonmark.js writes the columns
+  // of a tab after a > that the > does not take as spaces, and markdown-it
+  // writes the tab, which the URL parser removes; and in an HTML block that
+  // <pre> opens in a list item, commonmark.js writes a line of spaces as an
+  // empty line, and markdown-it the spaces past the item's indentation. The
+  // check reads the target that each writes, and names each that does not
+  // exist.
+  for (const [body, targets] of [
+    ['>\t<div><a href="docs/\n>\tguide.md">y</a></div>\n', ['docs/  guide.md']],
+    ['> <div><a href="docs/\n>\tguide.md">y</a></div>\n', ['docs/  guide.md']],
+    ['- <pre><a href="docs/\n     \n  guide.md">y</a></pre>\n', ['docs/   guide.md']],
+    ['>\t<div><a href="docs/\n>\tnowhere.md">y</a></div>\n', ['docs/  nowhere.md', 'docs/nowhere.md']],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(
+      r.stderr.trim().split('\n'),
+      targets.map((target) => `README: line 11: link target "${target}" does not exist.`),
+      body,
+    );
+  }
+});
+
+test("a quote in an attribute's name in an HTML block opens no quoted value, and no tag is read inside another", () => {
+  // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) pass each of
+  // these blocks through, and parse5 7.3.0, which reads a tag as the HTML
+  // standard has a browser's tokenizer read it, reads an a element with an
+  // href of docs/nowhere.md in what each writes: a quote in an attribute's
+  // name is part of the name, and a name may follow a quoted value with no
+  // white space before it. The check read the quote as the start of a
+  // quoted value, and so read no href after it, and exited 0 on each.
+  for (const body of [
+    '<div><a y" href=docs/nowhere.md>y</a></div>\n',
+    "<div><a y' href=docs/nowhere.md>y</a></div>\n",
+    '<div><a b="c"href="docs/nowhere.md">y</a></div>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), 'README: line 11: link target "docs/nowhere.md" does not exist.', body);
+  }
+  // parse5 reads no href of docs/nowhere.md in what they write of these:
+  // the <a> is inside a quoted value, also one that runs on to the end of
+  // the page, or the href is the second of its tag, which a browser drops.
+  // The check read the tag inside the value, or the second href, and
+  // exited 1 on each.
+  for (const body of [
+    '<div title="<a href=docs/nowhere.md>">y</div>\n',
+    '<div><a b="<a href=docs/nowhere.md>\n',
+    '<div><a href=docs/guide.md <b href=docs/nowhere.md>y</a></div>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+});
+
+test('a page with a reference definition whose title or label runs on over 40,000 or 60,000 lines is checked in under 2 seconds', () => {
+  // markdown-it 14.1.0 reads a title, and a label, on over the lines after
+  // it, up to the quote or the ] that closes it or to the end of its
+  // paragraph, and the check reads them so.
+  // It added each line to one string and read that string by index, which
+  // copied it whole after each line added, and it put the lines that a
+  // definition gave back before a copy of the lines after them. On Node.js
+  // 26.12.0 these pages took 4.1, 6.8 and 4.7 seconds to check, and 0.17,
+  // 0.23 and 0.12 seconds before the check read definitions as markdown-it
+  // does.
+  for (const big of [
+    `# Big\n\n[a]: guide.md\n"t\n${'xxxxxxxxxxxxxxxxxx\n'.repeat(60000)}`,
+    `# Big\n\n[a]: guide.md\n    "t\n${'[b]: guide.md\n'.repeat(40000)}`,
+    `# Big\n\n[a\n${'xxxxxxxxxxxxxxxxxx\n'.repeat(60000)}]: guide.md\n`,
+  ]) {
+    const started = process.hrtime.bigint();
+    const r = check('See [the big page](docs/big.md).\n', { 'docs/big.md': big });
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(r.status, 0, r.stderr.slice(0, 500));
+    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a page that starts ${JSON.stringify(big.slice(0, 24))}`);
   }
 });
 

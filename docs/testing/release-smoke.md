@@ -30,10 +30,18 @@ the claims this repository publishes:
    (`href="path"`, `href='path'` or `href=path`). It reads the path of an
    `href` without the tabs and line breaks that a browser removes from a
    URL: in a paragraph and in an HTML block a quoted value may run on to
-   the next line, whose `>` markers and indentation are no part of the
-   path, and on a line of indented code an `href` is read when its value
-   ends on that line. In an HTML block a tag may run on over its lines:
-   `<div><a` above `href=docs/nowhere.md>y</a></div>` fails with
+   the next line. In a paragraph that line's `>` markers and indentation
+   are no part of the path. In an HTML block the renderers leave out only
+   the `>` of each block quote and a space after it and the indentation of
+   each list item, so the other spaces at the start of the line are part
+   of the path: `<div><a href="docs/` above three spaces and
+   `guide.md">y</a></div>` fails with
+   `link target "docs/   guide.md" does not exist`. On a line of indented
+   code an `href` is read when its value ends on that line. In an HTML
+   block a tag may run on over its lines, and a quote in an attribute's
+   name opens no quoted value, as a browser reads the tag: `<div><a` above
+   `href=docs/nowhere.md>y</a></div>`, and
+   `<div><a y" href=docs/nowhere.md>y</a></div>`, fail with
    `link target "docs/nowhere.md" does not exist`. It reads the path
    without the spaces and the controls U+0001 to U+001F that a browser
    removes from the start and the end of a URL as well:
