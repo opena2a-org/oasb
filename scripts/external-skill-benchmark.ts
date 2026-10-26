@@ -358,6 +358,11 @@ function manifestOf(root: string, dirs: string[]): { sha256: string; files: numb
       lines.push(`${sha256(`symlink:${readlinkSync(path)}`)}  ${rel}`);
       continue;
     }
+    if (!stat.isFile()) {
+      // A FIFO, socket or device is named, never read: reading a FIFO would block.
+      lines.push(`${sha256('special')}  ${rel}`);
+      continue;
+    }
     const data = readFileSync(path);
     bytes += data.length;
     lines.push(`${sha256(data)}  ${rel}`);
@@ -378,7 +383,8 @@ function cloneTree(from: string, to: string, skip: (name: string) => boolean = (
     }
     if (entry.isDirectory()) skipped += cloneTree(src, dst, skip);
     else if (entry.isSymbolicLink()) cpSync(src, dst, { verbatimSymlinks: true });
-    else copyFileSync(src, dst, fsConstants.COPYFILE_FICLONE);
+    else if (entry.isFile()) copyFileSync(src, dst, fsConstants.COPYFILE_FICLONE);
+    // A FIFO, socket or device is not copied: copying a FIFO would block.
   }
   return skipped;
 }
@@ -465,6 +471,7 @@ export function resolveScanner(
   if (existsSync(pkgPath) && JSON.parse(readFileSync(pkgPath, 'utf8')).name === name) {
     const state = gitState(dir);
     if (!state.commit) throw new UsageError(`${dir} is a checkout of ${name} but not a git checkout; its commit cannot be recorded`);
+    if (state.dirty !== 0) throw new UsageError(`${dir} has ${state.dirty} modified or untracked paths; build the scanner from a clean checkout`);
     const entryPath = join(dir, adapter.entry);
     if (!existsSync(entryPath)) throw new UsageError(`${entryPath} does not exist; build the checkout first`);
     return {
@@ -563,6 +570,15 @@ function runChild(argv: string[], cwd: string, env: Record<string, string>, time
       if (child.stdout?.closed || !child.stdout) finish({ exitCode: code, signal, spawnError: false });
     });
   });
+}
+
+/** Removes a scratch tree; what a stray process still holds is left to the operating system's temporary-file cleanup. */
+function removeQuietly(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 2 });
+  } catch {
+    // left in place
+  }
 }
 
 async function pool<T, R>(items: T[], workers: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -806,13 +822,19 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
 
   // Selection.
   const split = opts.split ?? 'all';
+  const references = [opts.determinismOf, opts.compareTo, opts.samplesFrom].filter(r => r !== undefined);
+  if (references.length > 1) throw new UsageError('take one of --determinism-of, --compare-to and --samples-from');
+  if (references.length === 1 && (opts.sample !== undefined || split !== 'all')) {
+    throw new UsageError('a run that repeats the samples of another run takes no --sample and no --split');
+  }
   let pool0 = allSamples.filter(s => split === 'all' || s.split === split);
   const reference = opts.determinismOf ?? opts.compareTo ?? opts.samplesFrom;
   const ref = reference ? referenceRun(reference) : null;
   let keys: string[];
+  const seed = opts.determinismOf ? (opts.seed ?? 'determinism') : opts.seed;
   if (ref) {
     keys = ref.rows.map(r => r.sample);
-    if (opts.determinismOf) keys = selectSeeded(keys, Math.min(opts.determinismN ?? DETERMINISM_N, keys.length), opts.seed ?? 'determinism');
+    if (opts.determinismOf) keys = selectSeeded(keys, Math.min(opts.determinismN ?? DETERMINISM_N, keys.length), seed!);
   } else if (opts.sample !== undefined) {
     if (opts.seed === undefined) throw new UsageError('--sample needs --seed');
     keys = selectSeeded(pool0.map(s => s.key), opts.sample, opts.seed);
@@ -858,6 +880,7 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
   log(`hashing the corpus (${allSamples.length} samples)`);
   const manifest = manifestOf(classRoot, LABELS.map(l => classDirs[l]));
   const harness = gitState(REPO_ROOT);
+  const harnessFiles = HARNESS_FILES.map(path => ({ path, sha256: sha256(readFileSync(join(REPO_ROOT, path))) }));
   const modelFiles: Array<{ path: string; sha256: string }> = [];
   if (opts.model) {
     const files: string[] = [];
@@ -928,7 +951,7 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
         if (opts.neutral) row.neutralId = neutralId(s.key);
         return row;
       } finally {
-        rmSync(box, { recursive: true, force: true });
+        removeQuietly(box);
         done += 1;
         if (done % 100 === 0 || done === pool0.length) {
           log(`scanned ${done}/${pool0.length} in ${Math.round((Date.now() - t0) / 1000)}s`);
@@ -969,7 +992,7 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
         name: 'scripts/run-external-skill-benchmark.ts',
         commit: harness.commit,
         dirty: harness.dirty !== 0,
-        files: HARNESS_FILES.map(path => ({ path, sha256: sha256(readFileSync(join(REPO_ROOT, path))) })),
+        files: harnessFiles,
       },
       scanner: {
         name: scanner.name,
@@ -1016,7 +1039,7 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
       selection: {
         split,
         sample: opts.sample ?? null,
-        seed: opts.seed ?? null,
+        seed: seed ?? null,
         from: ref ? ref.record.runId : null,
         n: rows.length,
         keysSha256: keysSha256(rows.map(r => r.sample)),
@@ -1041,7 +1064,7 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
     renameSync(partial, out);
     return { status: 'complete', ok, out, record, summary };
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    removeQuietly(scratch);
   }
 }
 
