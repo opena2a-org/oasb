@@ -356,6 +356,23 @@ README's test counts do not include them.
   the controls it lists; when an argument the command does not take does
   not exit 1 with the usage; when a scenario file has the ID `checklist`;
   or when the README does not link the page and name the command.
+- `scripts/external-skill-benchmark.test.mjs`: the external skill-scanner
+  benchmark runner (`scripts/run-external-skill-benchmark.ts`), run on a
+  synthetic corpus and fixture scanners written into a temporary directory.
+  Fails when the verdict rule does not leave out exactly the imported
+  `HARDENING_CHECK_IDS`, or does not flag a failed high or critical finding
+  of any other check; when an unparsed or timed-out sample is dropped
+  instead of counted as excluded; when a scanner process receives a
+  variable beyond PATH, HOME, TMPDIR, LANG and OPENA2A_TELEMETRY, or a
+  HOME that is not fresh and empty; when a run directory's verdicts,
+  summary or pins are not the ones its own rows give, or a tampered copy
+  of it passes; when a committed run under `results/` with the external
+  schema fails that check; when a determinism re-run passes for a scanner
+  that changed between runs, or the neutralised arm passes for a scanner
+  that reads `_meta.json`; when a second sample selection or a modified
+  scanner checkout is not refused; or when the CLI does not exit 2 on a
+  missing corpus or an unknown scanner. On macOS a connect attempt inside
+  the offline arm's sandbox must be refused.
 
 ## The README checks on every pull request
 
