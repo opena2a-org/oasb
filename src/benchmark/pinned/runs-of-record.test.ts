@@ -51,10 +51,29 @@ function sumUse(rows: Array<{ nanomind?: NanomindUse }>, key: string) {
   return { ...total, [key]: uses.filter(u => u.wordListScorings > 0).length };
 }
 
+/**
+ * The record schema of a run the external skill-scanner benchmark writes
+ * (RUN_SCHEMA in scripts/external-skill-benchmark.ts). Those runs sit under
+ * results/ too, and scripts/external-skill-benchmark.test.mjs checks each of
+ * them; every other directory under results/ is checked here.
+ */
+const EXTERNAL_RUN_SCHEMA = 'oasb-external-skill-run/v1';
+
+function isExternalRun(dir: string): boolean {
+  const record = join(dir, 'record.json');
+  if (!existsSync(record)) return false;
+  try {
+    return JSON.parse(readFileSync(record, 'utf-8')).schema === EXTERNAL_RUN_SCHEMA;
+  } catch {
+    return false;
+  }
+}
+
 function runDirectories(): string[] {
   if (!existsSync(RESULTS_ROOT)) return [];
   return readdirSync(RESULTS_ROOT)
     .filter(name => statSync(join(RESULTS_ROOT, name)).isDirectory())
+    .filter(name => !isExternalRun(join(RESULTS_ROOT, name)))
     .sort();
 }
 
