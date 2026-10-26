@@ -215,7 +215,7 @@ test('the adapter parses the check report (details[]) and the secure report (fin
 });
 
 test('the dev and held-out halves are the first hex digit of sha256 of the directory name, 0-7 and 8-f', () => {
-  for (const name of ['exfil-helper__CI_B3', 'weather-lookup', 'a', 'b', 'c', 'd', 'e', 'f', 'g']) {
+  for (const name of ['exfil-helper', 'weather-lookup', 'a', 'b', 'c', 'd', 'e', 'f', 'g']) {
     const digit = parseInt(sha256(name)[0], 16);
     assert.equal(lib.splitOf(name), digit < 8 ? 'dev' : 'held-out', name);
   }
