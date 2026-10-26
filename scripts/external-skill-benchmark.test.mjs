@@ -437,6 +437,23 @@ test('a scanner that reads the label file fails the neutralised-arm check', asyn
   assert.equal(record.comparison.pass, false);
 });
 
+test('the model-present arm copies the model directory into each fresh HOME and records its files', async () => {
+  const model = join(root, 'model');
+  mkdirSync(model, { recursive: true });
+  writeFileSync(join(model, 'tokenizer.json'), '{"fixture":true}');
+  writeFileSync(join(model, 'weights.bin'), 'fixture-weights');
+  const { out } = await run('model-present', { scannerName: 'fixture-label-reader', run: { model } });
+  const rows = predictions(out);
+  assert.equal(rows.length, SAMPLES.length);
+  assert.ok(rows.every(r => r.modelPresentBefore && r.modelPresentAfter));
+  const record = JSON.parse(readFileSync(join(out, 'record.json'), 'utf8'));
+  assert.equal(record.model.seeded, true);
+  assert.deepEqual(record.model.files.map(f => f.path), ['tokenizer.json', 'weights.bin']);
+  assert.equal(record.model.files[0].sha256, sha256('{"fixture":true}'));
+  assert.match(record.model.manifestSha256, /^[0-9a-f]{64}$/);
+  assert.ok(existsSync(join(model, 'tokenizer.json')), 'the source model directory is left in place');
+});
+
 test('a run takes one sample selection: a second reference, or a sample or split beside a reference, is refused', async () => {
   const { out } = await run('selection-base');
   await assert.rejects(() => run('selection-two-references', { run: { determinismOf: out, compareTo: out } }), lib.UsageError);

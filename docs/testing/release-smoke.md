@@ -369,10 +369,11 @@ README's test counts do not include them.
   of it passes; when a committed run under `results/` with the external
   schema fails that check; when a determinism re-run passes for a scanner
   that changed between runs, or the neutralised arm passes for a scanner
-  that reads `_meta.json`; when a second sample selection or a modified
-  scanner checkout is not refused; or when the CLI does not exit 2 on a
-  missing corpus or an unknown scanner. On macOS a connect attempt inside
-  the offline arm's sandbox must be refused.
+  that reads `_meta.json`; when the model-present arm does not copy the
+  model directory into each fresh HOME; when a second sample selection or
+  a modified scanner checkout is not refused; or when the CLI does not
+  exit 2 on a missing corpus or an unknown scanner. On macOS a connect
+  attempt inside the offline arm's sandbox must be refused.
 
 ## The README checks on every pull request
 
