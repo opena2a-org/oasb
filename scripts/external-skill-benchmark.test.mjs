@@ -389,6 +389,11 @@ test('determinism: a re-run of the same samples must agree on every verdict and 
   assert.equal(record.determinism.verdictAgree, 12);
   assert.equal(record.determinism.identicalCheckSet, 12);
   assert.equal(record.determinism.pass, true);
+  const five = await run('determinism-five', { run: { determinismOf: out, determinismN: 5 } });
+  const fiveRecord = JSON.parse(readFileSync(join(five.out, 'record.json'), 'utf8'));
+  assert.equal(fiveRecord.determinism.requested, 5);
+  assert.equal(fiveRecord.determinism.pass, true);
+  assert.equal(fiveRecord.selection.seed, 'determinism', 'the record names the seed the re-run selection used');
   writeFileSync(flipFile, '1');
   try {
     const flipped = await run('determinism-flipped', { run: { determinismOf: out } });
@@ -430,6 +435,31 @@ test('a scanner that reads the label file fails the neutralised-arm check', asyn
   const record = JSON.parse(readFileSync(join(neutral.out, 'record.json'), 'utf8'));
   assert.ok(record.comparison.gap > lib.NEUTRAL_GAP_LIMIT, String(record.comparison.gap));
   assert.equal(record.comparison.pass, false);
+});
+
+test('a run takes one sample selection: a second reference, or a sample or split beside a reference, is refused', async () => {
+  const { out } = await run('selection-base');
+  await assert.rejects(() => run('selection-two-references', { run: { determinismOf: out, compareTo: out } }), lib.UsageError);
+  await assert.rejects(() => run('selection-sample-and-reference', { run: { samplesFrom: out, sample: 3, seed: 's' } }), lib.UsageError);
+  await assert.rejects(() => run('selection-split-and-reference', { run: { compareTo: out, split: 'dev' } }), lib.UsageError);
+});
+
+test('a scanner checkout is pinned by its commit, and a checkout with modified or untracked files is refused', () => {
+  const dir = join(root, 'checkout');
+  mkdirSync(join(dir, 'dist'), { recursive: true });
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'fixture-scanner', version: '2.0.0' }));
+  writeFileSync(join(dir, 'dist', 'cli.js'), LABEL_READER);
+  git(dir, 'init', '-q');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'fixture checkout');
+  const resolved = lib.resolveScanner(adapter('fixture-scanner'), 'fixture-scanner@main', dir);
+  assert.equal(resolved.source, 'checkout');
+  assert.match(resolved.gitCommit, /^[0-9a-f]{40}$/);
+  assert.equal(resolved.gitDirty, 0);
+  assert.equal(resolved.entryRel, 'dist/cli.js');
+  assert.equal(resolved.version, '2.0.0');
+  writeFileSync(join(dir, 'dist', 'patched.js'), '// not in the commit\n');
+  assert.throws(() => lib.resolveScanner(adapter('fixture-scanner'), 'fixture-scanner@main', dir), lib.UsageError);
 });
 
 test('the CLI prints its usage, and refuses a run with no corpus or no scanner', () => {
