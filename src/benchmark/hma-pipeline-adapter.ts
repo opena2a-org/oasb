@@ -202,7 +202,7 @@ function routeFilename(sampleId: string, artifactType?: string): string {
 // supply-chain attacks (excluding it collapses those categories' recall from
 // ~63%/47% to ~37%/33% for a marginal aggregate-F1 gain). It stays a verdict
 // driver despite some false positives.
-const HARDENING_CHECK_IDS = new Set([
+export const HARDENING_CHECK_IDS = new Set([
   'AST-PROMPT-001', // Jailbreak susceptibility (missing defense)
   'AST-PROMPT-003', // Missing injection resistance
   'AST-PROMPT-004', // No trust hierarchy
