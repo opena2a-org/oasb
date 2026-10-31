@@ -4,10 +4,306 @@ Full history of the benchmark, its methodology changes, and its releases.
 Metric revisions are never silently replaced: superseded or withdrawn figures
 stay on record here with the reason they changed.
 
-## 0.4.2 (unreleased)
+## 0.4.1 - 2026-10-31
+
+0.4.1 - 2026-10-17 (cut at 3ed25cf; never released)
+
+### Scenario, criterion and mapping changes since 0.4.0
+
+Every commit since 0.4.0 that changes a scenario test (a `*.test.ts` file under
+`src/atomic`, `src/integration`, `src/baseline` or `src/e2e`),
+`docs/test-catalog.md`, `docs/mitre-atlas-mapping.md` or
+`docs/owasp-agentic-mapping.md`, newest first. Each names its effect on the
+benchmark: an added case; a changed criterion, which changes what decides pass,
+fail or N/A; a mapping row, which maps scenarios to MITRE ATLAS or OWASP in a
+table row or a scenario file's header; or other, which says what it changes.
+
+- `4dd1be4` The LLM07 row of docs/owasp-agentic-mapping.md names the
+  system-prompt extraction and leak tests, AT-AI-001 and AT-AI-002, where it
+  said there was no such detection (#90)
+  - Mapping row: the LLM07 row of the OWASP LLM Top 10 table.
+- `f0f6ef0` docs/test-catalog.md and the unreleased CHANGELOG entries state the
+  suite as 439 tests (438 pass, 1 skip), 64 of them in src/harness, and the
+  vitest list totals as 438, 433 and 416
+  - Other: the catalog's test totals (adapter tests 56 to 64, `npm test` 431 to
+    439); the scenario count stays 223.
+- `ed2ee7b` E2E-001 runs in a vitest project of its own, after every other test
+  file of the run has finished, so no other test file runs beside its live
+  filesystem detection cases (#124)
+  - Other: the catalog says that E2E-001 runs in a vitest project of its own,
+    after every other test file of the run.
+- `3250bf6` AT-NET-003, INT-006 and an INT-003 test check the reference
+  product's connection-burst detection, cross-monitor correlation and raw HTTP
+  response-body scanning, and the known gaps drop those three (#90)
+  - Changed criterion: AT-NET-003 flags a minute with ten times the connections
+    of the minutes before it, INT-006 raises a critical correlation event when a
+    second and then a third monitor report, and one INT-003 test detects a
+    system prompt leak in a raw HTTP response body through the proxy; each is
+    N/A for a product without the capability it needs. Mapping row: the LLM05
+    row of the OWASP LLM Top 10 table.
+- `0910e82` REPORT.generated.md names the @opena2a/oasb version that wrote it,
+  and pg is a devDependency (#189)
+  - Other: the catalog's description of `REPORT.generated.md` names its
+    Benchmark line.
+- `f906439` README: title first, long reference paragraphs moved to docs/
+  - Other: the catalog takes, from the README, the paragraphs on what `npm test`
+    runs and on what `REPORT.generated.md` holds.
+- `bc6bd75` docs/adapters.md says a missing rebuff package fails each scenario
+  file at collection, and a missing typescript each scan (#180)
+  - Other: the catalog's test totals (adapter tests 53 to 56, `npm test` 428 to
+    431).
+- `f74d52e` The dev runner prints recall and names the withdrawn metrics, npm
+  run report lists the scenarios under each OWASP Agentic ID and labels ARP's
+  gaps, and the counts note is split (#175)
+  - Other: the catalog's counts note is split, with the E2E-001 skip conditions
+    in a note of their own.
+- `76f2a57` The README and the test catalog name npm run report, the command
+  that writes the scorecard
+  - Other: the catalog gives the commands that write the scorecard.
+- `e88ee2e` An OASB_ADAPTER value that selects no adapter stops the run with one
+  line that names the accepted values, and module.exports = Class loads
+  - Other: the catalog's test totals (adapter tests 49 to 53, `npm test` 424 to
+    428) and its description of the adapter tests.
+- `d73020a` Type-check the scenario test files on every npm test and fix the 259
+  errors it reported (#106)
+  - Changed criterion: where AT-NET-001, AT-NET-003 and AT-NET-004 injected and
+    checked severity `warning`, and AT-NET-001 and AT-NET-004 category
+    `connection`, they use `medium` and `normal`, values the adapter interface
+    defines; AT-FS-002 and AT-FS-005 inject category `normal` the same way. The
+    other edits change types only.
+- `c3c1622` Refuse pinned runs whose installed scanner dependencies differ from
+  the tarballs their lockfile names (#48)
+  - Other: the catalog's test totals (pinned benchmark harness tests 99 to 118,
+    `npm test` 405 to 424).
+- `7733084` The README header shows the CI status badge instead of two badges
+  with typed counts, and the counts in its description moved to the test catalog
+  - Other: the catalog takes the suite description and its counts from the
+    README.
+- `b4a41b3` The README shows a first run with its output and links the reference
+  text, which moved to docs pages that the count checks read
+  - Mapping row: the ATLAS page takes the coverage table of its 15 techniques
+    from the README, rows unchanged, and the catalog takes the category totals
+    table the same way.
+- `6c254ce` E2E-001's detection, skip and mark rules move into the harness with
+  unit tests, no test file marks a case detected itself, endWatchCase passes on
+  the stop() rejection when close() also throws, and the README states the load
+  only where the platform measures one (#138)
+  - Other: E2E-001's detection predicates and its skip and mark calls move,
+    unchanged, into `src/harness/filesystem-watch.ts`.
+- `eecc754` The release smoke's drift guard takes a file with an inconclusive
+  case as measured only when a case passed with the product's own event,
+  check-readme --tests counts such a case as the guard does, and the clone
+  README test reads $'...' strings, braces in words and continued lines as the
+  shell does (#136)
+  - Other: E2E-001 marks a detection case that got the product's own event,
+    which the release smoke's drift guard reads; no verdict changes.
+- `e71d1b1` Where Node.js has no recursive fs.watch every E2E-001 case is
+  skipped as inconclusive instead of failing, and a filesystem event without
+  data no longer fails a case; E2E-001 names an error of its control watcher and
+  closes it when stop() rejects, the pinned tests' git commands time out, and
+  npm run typecheck:tests type-checks test files (#128)
+  - Changed criterion: on a Node.js with no recursive `fs.watch`, each E2E-001
+    case is skipped as inconclusive where it failed, and a filesystem event
+    without `data` no longer fails a case.
+- `bcff9a5` The release smoke's drift guard counts an E2E-001 case skipped as
+  inconclusive with the passing tests (#130)
+  - Other: E2E-001 records why a case was skipped as inconclusive, which the
+    release smoke's drift guard reads; no verdict changes.
+- `a69b424` E2E-001 skips a case as inconclusive only when the harness's own
+  fs.watch saw no probe file before the write, or no event for the case's file
+  by the end of its 5000 ms window (#124)
+  - Changed criterion: an E2E-001 case whose product reported no probe file
+    still runs when the harness's own watcher saw one, and is skipped as
+    inconclusive only when that watcher saw none.
+- `4e6b37f` E2E-001 reads a product miss against the harness's own fs.watch: a
+  failure when the host delivered the event, an inconclusive skip when it
+  delivered none (#124)
+  - Changed criterion: an E2E-001 case the product reports nothing for fails
+    when the harness's own watcher saw the file event and is skipped as
+    inconclusive when it saw none, and a case is skipped when the product
+    reports no probe file before it.
+- `2901023` E2E-001 writes probe files until the live watcher reports one before
+  each case, within the time its hook has left; under full-suite load its
+  detection cases still time out (#124)
+  - Changed criterion: each E2E-001 case waits until the product reports a probe
+    file, where it waited 200 ms, and probe events do not count as a detection.
+- `05f23e6` Name inherited keys in check:readme, stop the key-shape test
+  matching hyphenated words, retitle AT-AI-002's AWS test and write npm run
+  report to REPORT.generated.md (#113)
+  - Changed criterion: AT-AI-002's AWS test, retitled for the access key ID,
+    also requires a match of pattern OL-001.
+- `bdabf82` Align the report's Known Gaps with the README, name unknown count
+  keys in check:readme and mark AT-AI-002's keys FAKE (#109)
+  - Other: AT-AI-002's inputs hold placeholder keys in the shapes OL-001
+    matches, in place of sample keys; its assertions do not change.
+- `c00cfbe` Check that every pattern the scanner exposes has a known payload,
+  and cover JB-003 and MCP-004 (#97)
+  - Changed criterion: AT-AI-005 fails when a pattern the scanner exposes has no
+    known payload, where it required at least 18 patterns, and gains payloads
+    for JB-003 and MCP-004.
+- `00e7cbf` Map every scenario to the OWASP Top 10 for Agentic Applications and
+  check the mapping (#93)
+  - Mapping row: each of the 47 scenario files names its OWASP Top 10 for
+    Agentic Applications risk in its header, and the OWASP page maps the
+    scenarios by that risk; its LLM Top 10 (2025) mapping stays.
+- `25e8a7b` Correct the ATLAS dates, uncategorized corpus samples, hand-authored
+  benign sources and allowedTools line in the README and benchmark results
+  (#104)
+  - Other: the ATLAS page dates the techniques it maps that MITRE ATLAS added
+    since 2025.
+- `2b72367` Mark E2E-003 as skipped in the MITRE ATLAS coverage tables and check
+  that skipped tests are marked (#101)
+  - Mapping row: E2E-003 is marked skipped in the ATLAS page's table.
+- `2b13057` Mark both tokens of the AT-AI-005 credential-leak payload as
+  placeholders
+  - Other: AT-AI-005's OL-001 payload holds placeholder keys in place of sample
+    keys; its assertions do not change.
+- `9546f1b` Read the ATLAS mapping in npm run report from the scenario headers
+  and mark REPORT.md as the 2026-03-23 snapshot (#96)
+  - Mapping row: the headers of AT-INT-002 and AT-INT-004 name their ATLAS
+    techniques, AML.T0015 and AML.T0034.002.
+- `42821ea` Check in INT-005 that the anomaly scorer flags a burst after an hour
+  of timed baseline traffic (#98)
+  - Added case: INT-005 checks that the anomaly scorer flags a burst of 20
+    events in one minute after 60 minutes of timed baseline traffic, which takes
+    the scenario tests from 222 to 223.
+- `a7211f6` Say that 165 of the 222 tests map to MITRE ATLAS and check that
+  count against the scenario files (#94)
+  - Other: the ATLAS page says it maps each scenario that simulates an
+    adversary, where it said every attack scenario.
+- `aab9c6e` Check in BL-003 that a product keeps its anomaly baselines across a
+  restart, and report N/A without persistence (#91)
+  - Changed criterion: BL-003 requires the baselines saved before a restart to
+    load unchanged into the restarted scorer, where it required them to be lost,
+    and is N/A for a product without `baseline-persistence`.
+- `82ffe63` Run every scenario test on the adapter OASB_ADAPTER selects, and
+  report it N/A when that adapter lacks a surface the test needs (#85)
+  - Changed criterion: every scenario test runs on the adapter `OASB_ADAPTER`
+    selects and is N/A when that adapter lacks a capability the test needs;
+    AT-PROC-001's monitor status test runs only on the reference adapter.
+- `72a12f5` Open the README with Quick Start and keep it under 400 lines
+  - Other: creates `docs/test-catalog.md` from the README's per-test tables,
+    rows unchanged.
 
 ### Added
 
+- `scripts/run-pinned-benchmark.ts` runs the corpus and DVAA benchmarks on
+  pinned inputs: hackmyagent by npm version and tarball integrity, the DVAA
+  checkout by commit and the NanoMind model directory by manifest sha256. It
+  exits 2 before scanning anything when an input is unpinned, does not match
+  its pin or is dirty: an installed hackmyagent file that differs from the
+  tarball, a DVAA checkout with local changes or a file the scenario loader
+  reads that is not committed, a changed model file, a model or tokenizer file
+  that the scanner's classifier would load from outside the verified model
+  directory, an OASB checkout with uncommitted changes or with tracked files
+  marked skip-worktree or assume-unchanged, a corpus file whose bytes are not
+  the committed file, a DVAA commit without `scenarios/` or with an
+  `expected-checks.json` that is not valid JSON, or one of the scanner's
+  unpinned model sources present (`nanomind-tme.bin` and `tokenizer.json` in
+  `~/.opena2a/nanomind/models` or in `models-tme-v3`, `models-tme-v2` or
+  `models-tme` under `node_modules/nanomind/training` in the `--hma`
+  directory, or anything accepting a connection at `127.0.0.1:47200`). It
+  also exits 2 when `package-lock.json` is missing from the `--hma` directory,
+  or when a file under its `node_modules` is not the file in the tarball
+  whose integrity that lockfile names (read from the npm cache) or is in none
+  of those tarballs. Each
+  run writes a
+  new `results/<date>-<runid>/` holding
+  per-sample predictions, a summary of detection over the malicious class and
+  a run record naming the versions and hashes of the inputs it checked, and
+  never writes to an existing file. A run writes nothing and exits 3 when the
+  hackmyagent install, the model directory, the DVAA checkout, the other
+  model sources or the installed dependencies check fails again after the
+  scan. `--observe` prints the pin
+  values of a set of inputs on stdout and, on stderr, the `npm view` command
+  whose output must equal the printed integrity; it reports a tarball whose
+  name does not carry an exact version (`hackmyagent-<x.y.z>.tgz`) as a
+  problem (exit 2) and prints no command for it, and it reports an installed
+  dependency file that differs from its tarball as a problem.
+  `docs/pinned-benchmark.md` lists what a run checks and what it does not.
+- `results/2026-10-10-d8306ef8/` is the first pinned run of record:
+  hackmyagent 0.33.2, the npm release current on 2026-10-10, on the v2 corpus
+  and DVAA commit `57918267d8d5`, with the classifier files that release
+  expects. It is a first pinned measurement. Earlier figures came from
+  unpinned runs, so it does not revise them and a difference from them is not
+  a regression. `src/benchmark/pinned/runs-of-record.test.ts` checks that
+  every committed run names its pinned inputs and that its summary is the one
+  its per-sample predictions give.
+- A pinned run records what scored each sample. hackmyagent scores a sample
+  with a word list instead of its classifier model when the model did not load
+  or an inference failed, and sends a sample it is unsure about to a NanoMind
+  daemon, so a recorded model manifest did not show that the model produced
+  the verdicts. Each prediction line now counts the classifier inferences that
+  ran the model, the word-list scorings, the neural classifier inferences and
+  the requests sent to the daemon address; `summary.json` sums them per adapter
+  and for DVAA, and `record.json` holds the run totals (record schema
+  `oasb-pinned-run/v2`). A run exits 2 before scanning when the classifier
+  model does not load, and exits 3, writing nothing, when the daemon address
+  answers a request during the scan, including a daemon that came up after the
+  checks before the scan and was gone before the checks after it. On 0.33.2
+  with the run of record's inputs, the verdicts are unchanged and one sample
+  was scored by the word list in each of the two adapters that use NanoMind.
+- `results/2026-10-10-2a89ce5d/` is a pinned run of record that says what
+  scored each sample (record schema `oasb-pinned-run/v2`): hackmyagent 0.33.2,
+  DVAA commit `57918267d8d5` and the classifier files that release expects,
+  the inputs of `results/2026-10-10-d8306ef8/`. Every verdict is the one the
+  earlier run gave. In each of the two corpus adapters that use NanoMind, the
+  classifier model scored 4244 of the 4245 samples and the word list scored
+  one benign sample; the model scored every DVAA scenario that has a file to
+  scan (84 of 86). No daemon answered any of the 56 requests the scanner sent
+  to the daemon address.
+  `src/benchmark/pinned/runs-of-record.test.ts` now fails when no committed
+  run says what scored its samples.
+- Each of the 47 scenario files now names its OWASP Top 10 for Agentic
+  Applications (2026) risk in an `// OWASP Agentic:` header line, and
+  `docs/owasp-agentic-mapping.md` lists the scenarios under each ID. The
+  package description and the README said each scenario was mapped to the
+  OWASP Agentic Top 10, but the headers named only OWASP Top 10 for LLM
+  Applications (2025) IDs, ten files named no OWASP ID, and the mapping page
+  covered only the LLM list. Seven of the ten Agentic risks have scenarios;
+  the page lists ASI04, ASI06 and ASI09 as gaps. The LLM Top 10 IDs are
+  unchanged, and the package description names both lists.
+  `scripts/check-owasp-mapping.mjs`, run by `npm run test:scripts`, fails when
+  a scenario file names no published Agentic ID or when the page disagrees
+  with the headers. The report `npm run report` writes listed four IDs (A01,
+  A04, A06, A07) under "OWASP Agentic Top 10 Coverage" that are on neither
+  list; it now lists the Agentic IDs the scenarios name, from the map in
+  `scripts/scenario-report.mjs`, which `scripts/generate-report.ts` builds
+  the report through.
+- `npm run smoke` runs three of the commands the README documents, with
+  `scripts/check-documented-commands.mjs`: `OASB_ADAPTER=llm-guard` on a
+  scenario file gated by capability and on an OS-level one, which must both
+  report N/A (skipped); `OASB_ADAPTER` set to a relative path, run from the
+  checkout, with an adapter that declares no capabilities; and the "Use as a
+  library" example in a new project, after running the section's `npm install`
+  lines there with `@opena2a/oasb` replaced by the packed tarball.
+  In 0.4.0 the smoke ran none of these commands, and all three failed: the
+  OS-level file ran its 4 tests under llm-guard, a relative path was not
+  found, and the library example stopped on `Cannot find module 'arp-guard'`.
+  The entries under Changed below correct them, and the smoke now fails if
+  any of them fails again. Its tests run with `npm run test:scripts`.
+- `docs/adapters.md` lists the tests that fail with `OASB_ADAPTER=llm-guard`
+  and with `OASB_ADAPTER=rebuff`, each with the assertion it fails on: 9 in
+  AT-AI-001 and 3 in AT-AI-005, the two scenario suites those adapters run.
+  Both suites assert the reference adapter's pattern catalog: under each
+  adapter, 6 of the AT-AI-001 tests detect the input and fail on its
+  reference pattern id, and 3 do not detect the input. INT-007 reports N/A
+  under both adapters. `scripts/adapter-gating.test.mjs` fails when the tests
+  that fail under either adapter are not the ones the page lists, or when one
+  fails on an assertion that does not hold the code its row quotes.
+- The README's Evaluating Other Products section and `docs/test-catalog.md`
+  name the commands that write the scorecard: `npx vitest run
+  --reporter=json --outputFile=test-results.json`, then `npm run report --
+  test-results.json`, which writes `REPORT.generated.md`.
+  `docs/test-catalog.md` says what that file holds, under Run the suite; the
+  README says that `REPORT.md` is a recorded run, not its output, and links
+  to that section. Before, the README promised a scorecard and only the
+  header of `scripts/generate-report.ts` named the command.
+  `scripts/doc-facts.test.mjs` fails when either page no longer runs the two
+  Usage lines of that header in one code block, and when either of the two
+  0.4.1 entries that name the page describing `REPORT.generated.md` does
+  not name it exactly once in the wording the test matches, or names a
+  page with no paragraph that starts with `REPORT.generated.md`.
 - `node scripts/bait-edition.mjs <record.json | directory>...` reads the
   records of lab runs against named agents, one `oasb-bait-run/v1` JSON
   file per run, and prints a grid of the agents by bait type, with a
@@ -104,8 +400,1058 @@ stay on record here with the reason they changed.
   and the command's output list different controls or give a control's
   text differently. `npx @opena2a/oasb --help` names the command.
 
+### Removed
+
+- `hackmyagent` is removed from `dependencies`. It was pinned at 0.23.8 (now
+  deprecated, and inside two published critical advisories,
+  GHSA-jmq8-2mfr-49mh and GHSA-44f3-xgp9-pvp2), but nothing in the shipped
+  package ever imported it by name: the real-adapter and telemetry-bridge load
+  the scanner from a monorepo sibling path (`../../../hackmyagent/dist/...`),
+  which resolves only inside this repo's development checkout and never in a
+  consumer install. Removing the pin drops that whole advisory-affected
+  subtree from every consumer's install closure and changes no behavior. If
+  you were relying on `@opena2a/oasb` to pull `hackmyagent` transitively,
+  install it directly at 0.32.0 or later.
+- The benchmark runner no longer carries `telemetry-bridge`, an unused module
+  that `runBenchmark` called after each submission and that tried to load a
+  module which does not exist. The library's exports are unchanged.
+
 ### Changed
 
+- `OASB_ADAPTER` selects the product for all 222 scenario tests, the count
+  at the time of this change (223 since the INT-005 entry below). 37 atomic,
+  integration, baseline and E2E test files (159 tests) built the reference
+  adapter directly, and 5 more (23 tests) ran on the selected adapter without
+  a capability gate, so a scorecard for llm-guard, rebuff or your own adapter
+  counted the reference adapter's passes, and stub results, as that
+  product's own. Each scenario file now builds its adapter with
+  `createAdapter()`, reads events and enforcements through the
+  `SecurityProductAdapter` contract and wraps its suite in
+  `describeWithCapability`, which now also takes a list: a suite that spans
+  several surfaces runs only when the adapter declares every one. With
+  llm-guard or rebuff selected, 16 tests run (AT-AI-001 and AT-AI-005) and
+  206 are N/A, where 197 ran and 25 were skipped before; with the reference
+  adapter every result is unchanged. Two checks read reference-adapter state
+  that the contract does not expose and run only on the reference adapter:
+  the process monitor's status in AT-PROC-001 (N/A on any other adapter) and
+  the instance's running state in INT-008. AT-AI-005 builds its pattern
+  scanner before its tests run instead of while the suite is collected, so
+  it no longer calls an adapter that lacks pattern scanning.
+  `scripts/adapter-gating.test.mjs`, run by `npm run test:scripts`, runs the
+  scenario tests against an adapter that declares no capabilities and
+  against llm-guard and rebuff, and fails when a suite runs without every
+  capability it needs.
+
+- The README offers the Scanner Benchmark as a recall-only comparison across
+  products. It recommended the benchmark "for an apples-to-apples detection
+  comparison across products", but HackMyAgent labeled 3,704 of the 3,881
+  benign samples, so false-positive rate, precision, F1, flag rate and tier on
+  the corpus favor that scanner by construction; only recall on the 270
+  malicious samples is comparable. `npm run check:readme` now fails when a
+  paragraph, table row or heading of the README offers the Scanner Benchmark
+  for comparing products without calling it a recall-only comparison.
+- The MITRE ATLAS coverage tables mark E2E-003 as skipped. Its one test is
+  skipped on every platform, but the README's MITRE ATLAS Coverage table and
+  `docs/mitre-atlas-mapping.md` listed it under AML.T0025 as if it ran.
+  `npm run check:readme` now fails when a scenario test whose tests are all
+  skipped is listed, without "(skipped)" after its ID, in a table of the
+  README's MITRE ATLAS Coverage section or of a page that section links to.
+- INT-005 checks anomaly detection, as `docs/test-catalog.md` said it did. It
+  injected 30 normal events back to back and then 5 events already labelled
+  violation/high, and checked the rule alert, the event buffer and the
+  severities; no anomaly scorer was called. A new test spreads normal process
+  events over 60 simulated minutes, 1 to 5 a minute, then sends a burst of 20
+  events labelled normal in one minute. It checks that the scorer learns one
+  baseline bucket per minute, scores no baseline event above a z-score of 2
+  and scores the burst above 2. The catalog said "5 minutes normal traffic";
+  5 minutes was only the window of an event buffer query, and the entry now
+  describes the 60-minute baseline. The suite has 223 attack scenarios, 166
+  of them mapped to MITRE ATLAS.
+- The README no longer says that every scenario maps to MITRE ATLAS. At the
+  time of this change, 165 of the 222 tests, in 33 of the 47 scenario files,
+  cited one of 15 ATLAS techniques (166 of 223 since the INT-005 entry
+  above); the other 57, in 14 files, test the product's defensive response
+  and its own detection machinery and cite none. The introduction,
+  the MITRE ATLAS Coverage section, `docs/mitre-atlas-mapping.md` and the
+  package description now say so. `npm run check:readme` and the release
+  smoke's drift guard compare each of these README counts with the scenario
+  files, where a file maps to ATLAS when it cites a technique ID such as
+  `AML.T0050`.
+- BL-003 checks that a product keeps its anomaly baselines across a restart.
+  It passed only when the baselines were lost, so a product that persists
+  them failed it. The `AnomalyScorer` contract gains optional `save(dataDir)`
+  and `load(dataDir)`, and an adapter whose scorer has them declares the new
+  `baseline-persistence` capability; BL-003 reports N/A for a product without
+  it. The ARP adapter declares it when the installed hackmyagent's
+  `AnomalyDetector` has `save` and `load`, and passes BL-003. The llm-guard
+  and rebuff adapters keep baselines in memory only and now report BL-003 as
+  N/A where they passed it.
+- A pinned run's `summary.json` names the NanoMind model of the two adapters
+  that use it by the `version` in `nanomind-version.json` of the verified
+  model directory, or by the directory's manifest sha256 when it has no
+  version. It read the version from `~/.nanomind/models` whichever directory
+  was verified, and wrote `vunknown` and `"version": "unknown"` when there was
+  no version file; `results/2026-10-10-d8306ef8/` and
+  `results/2026-10-10-2a89ce5d/`, both written before this change, keep the
+  labels they were written with. The same change renames the two adapters in
+  `scripts/run-benchmark-v2.ts`, which verifies no model directory and still
+  reads `~/.nanomind/models`: without a version file there they are now
+  `NanoMind TME (model only)` and `HMA Full Pipeline (AST + NanoMind)`, where
+  they were `NanoMind TME vunknown (model only)` and
+  `HMA Full Pipeline (AST + NanoMind vunknown)`; the model-only adapter's
+  version is still `unknown` (`src/benchmark/hma-pipeline-adapter.test.ts`
+  checks these names). The package exports the same classes as
+  `benchmark.HMATMEOnlyAdapter` and `benchmark.HMAPipelineAdapter`, and they
+  also read `~/.nanomind/models` there, so code that constructs them from
+  `@opena2a/oasb` gets the same new names.
+  `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a checkout
+  with full history, that each run's `oasb.commit` is an ancestor of
+  `HEAD`. `docs/pinned-benchmark.md` and `--help` describe two more refusals:
+  a scanner whose classifier the harness cannot trace (exit 2), and a
+  classifier whose model session after the scan is not the one it loaded
+  (exit 3). The docs also say that the recorded lockfile sha256 depends on the
+  name of the `--hma` directory, which npm writes into the lockfile.
+- `scripts/run-benchmark-v2.ts` and `scripts/run-dvaa-benchmark.ts` load the
+  sibling hackmyagent and DVAA checkouts unpinned, so they now refuse to run
+  (exit 2) without `--unpinned`. They no longer overwrite
+  `benchmark-results-v6.json` or `dvaa-benchmark-results.json`: they print
+  their results and write a file only to a new path given with
+  `--out=<file>`. The deprecated `scripts/run-benchmark.ts` now points to the
+  pinned harness and to `run-benchmark-v2.ts --unpinned`; it printed a
+  `run-benchmark-v2.ts` command without `--unpinned`, which is refused.
+- `npm run check:readme` compares every test count the README states with
+  the suite, each for equality: the badge, the Quick Start comment, the Counts
+  note, the `npm run test:*` comments, the scenario counts, including the one
+  in the `opena2a benchmark run` comment, and each row of the
+  "What Gets Tested" table, per source directory. It read none of them, so a
+  README with stale counts passed it. It collects the suite with vitest
+  (no test runs), so it needs `npm ci` and compares each passing count with
+  the tests that are not skipped; `--tests <report.json>` compares with a
+  vitest JSON report instead, and `--no-counts` skips the comparison, which
+  the first step of `npm run smoke` uses before it installs. A report written
+  in another checkout is read by each file's path from its `src/` directory,
+  as the drift guard reads it; it was read relative to the checkout running
+  the check, so every count taken from a test file's directory mismatched
+  (the total, passing and skipped counts did not). In both README checks, a
+  report without `testResults`, a `testResults` entry without a `name` or an
+  `assertionResults` list, and a test result that is not an object with a
+  string `status` are each reported by that field or entry instead of a
+  JavaScript error, a README path that does not exist is reported by its path
+  instead of a stack trace, and `--help` prints the usage on stdout and exits
+  0. A README or test report that cannot be read is named once, followed by
+  the reason (`ENOENT: no such file or directory`); the line repeated the path
+  in Node's error message after it. An error whose message does not end with
+  the path keeps its whole message instead of only its code. The statements
+  both checks compare are one list, `STATEMENTS` in
+  `scripts/readme-counts.mjs`; each check kept its own copy before, and a
+  reworded sentence had to be updated in both. The tests of both checks run
+  after `npm ci` in `npm run smoke`, and include one that changes each count
+  of a README in turn, one that runs `npm run check:readme` on this README,
+  and one that collects the suite with the llm-guard and rebuff adapters; the
+  last two fail when collecting leaves an adapter data directory.
+- Constructing an adapter no longer creates its data directory: the ARP
+  adapter creates its ARP instance and the directory on first use, and the
+  llm-guard and rebuff adapters create the directory when `dataDir` is first
+  read. Collecting the suite (`npm run check:readme`, `vitest list`) left ten
+  empty `arp-lab-*` directories in the temp directory on every run, and
+  `npm test` left one for each adapter it constructed and never stopped.
+- The README's Skills Security Benchmark section now matches the scoring code:
+  the nine attack categories in `src/benchmark/types.ts`, controls SS-01 to
+  SS-10 and SEC-021 with their compliance levels in
+  `src/benchmark/controls.ts`, and tiers assigned from F1, false-positive
+  rate, category coverage and kappa in `src/benchmark/scoring.ts`. The
+  previous tables listed categories, level requirements and tier criteria the
+  code does not use. No tier is published for the v2 corpus, because its F1
+  and false-positive rate are withdrawn.
+- The README no longer repeats two claims corrected elsewhere: that over 2,900
+  benign registry MCP servers declare wildcard tool access (corrected in
+  BENCHMARK-RESULTS.md § 3 on 2026-08-27), and the "lines 9-11" location of
+  the corpus labeling rule, which now points at the rule's code. The DVAA
+  runner comment names its sibling-checkout prerequisite instead of a stale
+  "70 scenarios" count.
+- The release smoke's drift guard (`scripts/check-test-counts.mjs`, run by
+  `npm run smoke`) compares every test count the README states with the
+  suite: the badge, the Quick Start comment, the Counts note, the per-group
+  comments, the scenario counts in the prose, the scenario-file count and
+  every row of the What Gets Tested table. It read three of them before, and
+  passed a badge lower than the passing count. Its tests run with
+  `npm run test:scripts`.
+- `npm test` runs the tests in `scripts/` (`npm run test:scripts`) before the
+  suite, so the pull request CI job and the release workflow, which run
+  `npm test`, run them too: the tests of both README checks, and
+  `scripts/changelog-width.test.mjs`, which fails when a line of this file is
+  wider than 80 characters. The README check tests ran only in
+  `npm run smoke` before, so a pull request could change a README check, or
+  add a test without updating the README's counts, and pass CI. They are not
+  vitest tests and do not change the totals the README states.
+  `npx vitest run` and the `npm run test:*` groups run the suite without
+  them.
+- The changelog width test does not count the carriage return of a CRLF line
+  ending, so an 80-character line passes in a checkout that converts line
+  endings; it was reported as 81 wide. The test exempts one line, the
+  2026-08-27 correction recorded as a single paragraph, and now matches that
+  line whole: any line that starts the same way was exempt before, at any
+  width.
+- `npm run smoke` runs `npm run test:scripts` instead of a list of its own,
+  which named two of the three test files in `scripts/` and left the
+  changelog width test out.
+- The drift guard in `npm run smoke` compares the test counts of the README in
+  the fresh clone, the committed one. It read the README of the working tree
+  the smoke was started from, so an uncommitted edit to it was what the smoke
+  measured. The test of this in `scripts/check-test-counts.test.mjs` fails
+  when the last line before the drift guard that changes directory is not
+  `cd "$TMP/oasb"`, so a `cd "$ROOT"` between the clone and the guard no
+  longer passes it, and it accepts `./README.md` as the README's path. It
+  counts a line that is not a comment as a change of directory when one of
+  its commands is `cd`, `pushd` or `popd`, also written `\cd`. A line that
+  ends in a backslash is read as one line with the next, unless the
+  backslash is escaped or in a comment. A command starts the line or follows
+  `;`, `&`, `|`, a `(` left open on the line or the `)` of a `case` pattern,
+  and its name comes after any `NAME=value` or `NAME+=value` assignments, any
+  `function NAME` and any of `!`, `{`, `if`, `elif`, `while`, `until`,
+  `then`, `do`, `else`, `eval`, `time`, `builtin` and `command`; a `{` inside
+  a word, as in `x{cd`, or after the command's name starts no command. Text
+  in a quoted string, a `$'...'` string (in which `\'` does not end the
+  string), a `${...}` expansion, a command substitution, a comment or a
+  `(...)` subshell that closes on the line is not a command of the script's
+  shell and is not counted. Some lines count that leave the script's shell
+  where it is: a `cd` in a pipeline, in a background job or in the body of a
+  shell function, called or not, and, as each line is read on its own unless
+  a backslash joins it to the next, a `cd` on a line of a subshell, string or
+  here-document that spans lines. A change of directory written another way
+  (`"cd"`, `eval "cd ..."`, a variable or an alias), or made by a sourced
+  file or by a call of a shell function defined before the clone, is not
+  detected.
+- The drift guard in `npm run smoke` counts an E2E-001 case skipped as
+  inconclusive with the passing tests, not with the skipped ones, and lists
+  each such case in its output. A case is skipped so only when the host
+  delivered no file event to the harness's own watcher, which is not a change
+  to the suite, but the guard read the passing and skipped counts of the run
+  as they were, so on a loaded host the smoke failed with the README's
+  passing and skipped counts reported as drift. E2E-001 now skips such a case
+  with `skipInconclusive` (`src/harness/filesystem-watch.ts`), which records
+  the reason as `inconclusive` in the test's meta, where vitest's JSON
+  reporter writes it. A test skipped without it, such as a new `it.skip`,
+  still changes the skipped count the guard compares. A file in which a test
+  was skipped so and no test passed with the product's own event fails the
+  guard as `NOT MEASURED`, whatever the counts say: when the host delivers no
+  file event for them, the E2E-001 detection cases are skipped and the run
+  says nothing about the file, although its case that expects no violation
+  for a normal file still passes. A detection case that gets the product's
+  event records `detected` in its meta (`markDetected` in
+  `src/harness/filesystem-watch.ts`), and the guard takes a file with a case
+  skipped as inconclusive as measured only when a test that passed carries
+  that mark. The same holds where Node.js has no recursive `fs.watch`, since
+  the entry below that starts "Two E2E-001 verdicts change": every case is
+  skipped so there, and the guard fails the file that way on every run.
+  `node scripts/check-readme.mjs --tests <report>` counts a case
+  skipped as inconclusive with the passing tests too and prints how many
+  there were: it compared the README's passing counts with the tests that
+  passed only, so it failed on a report the guard accepted.
+  `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
+  `src/` calls `skip(`, written so, on anything but `it`, `test` or
+  `describe`, so a test that skips at run time has to call
+  `skipInconclusive`. It reads the text of those files: a skip written
+  another way (`ctx.skip (...)`, `ctx['skip'](...)`) or made by a helper
+  outside those files is not detected. It runs its skip fixture with vitest's
+  cache off and fails when the run adds or removes an entry of the fixture
+  directory, so the run writes nothing under `scripts/`; an entry that was
+  there before the run, such as a `.DS_Store`, does not fail it.
+- `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
+  inside a fixed set of eight tests, so committing a run no longer changes the
+  `npm test` total. Its check that at least one
+  committed run says what scored its samples no longer needs a run of the
+  current record schema: a run of any schema but v1 that records what scored
+  its samples is enough, so raising the schema does not fail that check
+  before a run of the new schema exists.
+- `npm test` on Node 24 under load on macOS no longer fails now and then with
+  an unhandled `setTypeOfService EINVAL` error while every test passes.
+  Node 24's `fetch` sets the type-of-service option on a new connection just
+  before it writes the request and lets the error escape when the connection
+  was reset first, which the stand-in NanoMind daemons in
+  `src/benchmark/pinned/pinned.test.ts` do on purpose. That file now treats
+  the option as best effort, as Node 26's `fetch` does, so a reset connection
+  fails only its own request, and a new test resets a connection at that
+  point.
+- `src/benchmark/pinned/pinned.test.ts` now ignores every error the
+  type-of-service option raises, as Node 26's `fetch` does, instead of only
+  EINVAL. A platform that reports another errno for a torn-down socket no
+  longer fails `npm test` with an unhandled error, and a new test checks the
+  option for EINVAL, ECONNRESET, ENOTCONN, EBADF, ENOPROTOOPT and an error
+  with no errno. Two more tests check that the option is called once, with
+  its return value passed through, when it succeeds, and that the file
+  installs the wrapper; on Node 26.7.0, no test failed before when the
+  wrapper, or its call to the original option, was removed.
+- The pinned harness tests check at the end of every test that the
+  type-of-service option is still the wrapper the file installed, so a test
+  that replaces the option and leaves the replacement in place fails; the
+  check was made once before, when one test ran. That test now also calls
+  the option through `Socket.prototype` on a socket that is not connected:
+  the value it sets reads back, and a value the original option refuses
+  raises no error. On Node 26.7.0 every test passed before when the
+  installed wrapper was a function that never calls the original option, or
+  when a later test replaced the wrapper with one.
+- The README's What Gets Tested table calls the one skipped test "skipped on
+  every platform", as its Counts note does. The table said
+  "environment-skipped", but the test is skipped unconditionally.
+- A relative `OASB_ADAPTER` path, such as `OASB_ADAPTER=./my-adapter.js npm
+  test` from the README, resolves from the directory the command runs in. It
+  resolved from `src/harness/`, so the module was not found; an absolute path
+  or a package name loads as before. Three tests in
+  `src/harness/create-adapter.test.ts` load an adapter from a temporary
+  directory by a `./` path, a `../` path and an absolute path, and the README
+  counts them in a new Adapter loading row of What Gets Tested.
+- An `OASB_ADAPTER` value that is not `arp`, `llm-guard`, `rebuff`, a path
+  or a module that resolves stops the run with one line that names those
+  values and the class shapes a module may export, with no stack. It died
+  with Node's `Cannot find module` and its require stack. A case variant of
+  a built-in name, such as `ARP` or `Llm-Guard`, gets the same line with the
+  name it differs from (`did you mean "llm-guard"?`) and is never loaded as
+  a package: on a case-insensitive filesystem `Llm-Guard` loaded the
+  llm-guard npm package as a custom module, and the run failed with
+  `adapter.getCapabilities is not a function`.
+- A custom adapter module that assigns its class to `module.exports` loads.
+  It was refused as "does not export an adapter class", while the same class
+  as a default or named export loaded. A module that exports no class now
+  gets the accepted shapes in its message: the default export, a named
+  export `Adapter`, or `module.exports = Class`, which `docs/adapters.md`
+  states under The adapters. `scripts/doc-facts.test.mjs` reads each page
+  this entry names after `module.exports = Class` and fails when it does not
+  state all three shapes. Four tests in `src/harness/create-adapter.test.ts`
+  hold both entries, and `npm test` runs 428 tests (427 passing, 1 skipped).
+- `OASB_ADAPTER=rebuff` now runs the heuristic detection of the rebuff npm
+  package, as the README says. rebuff was not a dev dependency, so `npm ci`
+  did not install it, and its published package holds TypeScript sources
+  only, which Node cannot require: the adapter caught the failed load, scored
+  every input 0 and scanned with its own `RBUF-*` patterns alone, with no
+  message. rebuff 0.1.0 is now a dev dependency, and
+  `src/harness/rebuff-loader.ts` compiles the sources the heuristic needs in
+  memory with the `typescript` dev dependency. An input that only the
+  heuristic catches ("Pay no attention to prior messages") is reported as
+  `RBUF-HEUR-001`; it was not detected before. When rebuff or typescript is
+  not installed, each scan throws an error that names the package and how to
+  install it, instead of returning a result; when the install does not hold
+  the heuristic, the error names the source file and the reason. Constructing
+  the adapter still needs neither package. Five tests in
+  `src/harness/rebuff-wrapper.test.ts` cover the loading, a missing or
+  incomplete rebuff install and the failed scan; none covers a missing
+  typescript. The rebuff figures in `REPORT.md` were measured before this
+  change and have not been re-measured.
+- The README's Usage via OpenA2A CLI section shows the commands the CLIs
+  have: `opena2a benchmark <dir>` (with `--level` and `--format json`) and
+  `hackmyagent secure <dir> -b oasb-1` (with `--fail-below`), which check an
+  agent directory against the OASB-1 controls. It showed
+  `opena2a benchmark run` running all 222 scenarios, a `--technique` filter
+  and per-technique detection rates in the JSON output; the OpenA2A CLI has
+  no `benchmark run` subcommand or `--technique` option, and runs none of
+  the scenarios, which still run with `npm test`. `npm run check:readme`
+  fails when a README line shows `opena2a benchmark run` or an `opena2a`
+  command with `--technique`, and no longer looks for the
+  `# all <n> scenarios` comment.
+- The README and BENCHMARK-RESULTS.md report the pinned run of record in
+  `results/2026-10-10-2a89ce5d/` beside the 2026-06-05 figures:
+  hackmyagent 0.33.2 detects 192/270 (71.1%) with the full pipeline,
+  138/270 (51.1%) with static patterns and 251/270 (93.0%) with the model
+  alone, and 17 of 86 DVAA scenarios (19.8%). Both pages said the 2026-06-05
+  figures of hackmyagent 0.23.8 had not been re-measured and led with them,
+  82.6% (223/270) and 25 of 86, although two pinned runs of record were
+  committed. The inputs of the 2026-06-05 run were not recorded, so it is not
+  a baseline for the pinned run and the difference is not traced to a cause.
+  `src/benchmark/pinned/runs-of-record.test.ts` now fails when either page
+  does not name the newest run of record or does not state its count for
+  each corpus adapter and for the DVAA scenarios.
+- `npm run report` (`scripts/generate-report.ts`) reads the MITRE ATLAS
+  mapping from the `// ATLAS:` header of each scenario file and reports 15
+  techniques. It printed a fixed table of the mapping withdrawn on
+  2026-06-03, 10 techniques, with AT-PROC-001 under AML.T0046 (now
+  "Spamming AI System with Chaff Data") and INT-002 under AML.T0056 (now
+  "Extract LLM System Prompt"), and it left out the E2E scenarios. Given a
+  vitest JSON report it takes each file's status from its tests, so a file
+  whose tests were all skipped shows SKIP where vitest marks the file passed,
+  and it exits 1 on a file that is not a vitest JSON report.
+  AT-INT-002 and AT-INT-004 gain the `// ATLAS:` header their mapping in
+  `docs/mitre-atlas-mapping.md` already gave them, and
+  `scripts/scenario-report.test.mjs` fails when the headers and that page's
+  Coverage Summary disagree. REPORT.md is marked as the 2026-03-23 snapshot it
+  is: its mapping, its integration and E2E counts, its "all 16 capability
+  categories" for arp-guard and its llm-guard results no longer hold. The
+  demo GIF in the README still shows the 222-test run and is not re-recorded.
+- When arp-guard is not installed, `getCapabilityMatrix()` and the default
+  adapter's methods throw an error that names `npm install arp-guard` and the
+  `OASB_ADAPTER` alternative. They threw `Cannot find module 'arp-guard'`,
+  which is what the README's library example did after
+  `npm install @opena2a/oasb`: arp-guard is an optional peer dependency and
+  npm does not install it. The example now installs arp-guard too.
+  `scripts/library-entry.test.mjs` builds the package and loads it where
+  arp-guard cannot be resolved.
+- `docs/AUDIT-2026-06-03.md` is marked as of 2026-06-03 and sends the reader
+  to the README for the current test counts. Its table gives 23
+  scoring-engine tests and an `npm test` total of 245, the counts of that
+  day, under a first paragraph that said every count is measured from
+  `npm test`. Two statements that did not hold when it was written are
+  corrected and dated. The one skipped E2E test is disabled on every
+  platform; the page said it is skipped when `lsof` or `ss` is unavailable.
+  On 2026-06-03, under `OASB_ADAPTER=llm-guard`, the process, network,
+  filesystem and enforcement suites passed, because they then constructed
+  the arp-guard adapter directly whichever adapter was selected; follow-up 1
+  said they report failures. They are gated now and report N/A (see the
+  first entry under Changed, on `OASB_ADAPTER` selecting the product for
+  every scenario test). `npm run check:readme` now fails when a page
+  the README links under a dated file name does not say "as of" that date
+  and link to the README above its first H2.
+- Four statements in the README and `BENCHMARK-RESULTS.md` are corrected to
+  match the data. The ATLAS sentence said the AI-agent technique family was
+  added in 2025; of the agent techniques mapped here, AML.T0081 and
+  AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and
+  AML.T0034.002 on 2026-03-30 (also corrected in
+  `docs/mitre-atlas-mapping.md`). The README said `corpus/v2.json` has since
+  grown uncategorized malicious samples; the file last changed on 2026-03-27
+  and already held its 225 when both published runs excluded them. Of the
+  177 hand-authored benign samples, 107 declare `source: 'registry'` and 70
+  declare `source: 'enterprise'`; all 177 were said to declare `registry`.
+  The `allowedTools: ['*']` line in `scripts/export-registry-corpus.mjs` is
+  243, not 233. `scripts/doc-facts.test.mjs` reads the corpus and the script
+  and fails when the last three statements no longer match them.
+- AT-AI-005 now fails when a pattern the scanner exposes has no known
+  payload, and it has payloads for JB-003 (hypothetical bypass) and MCP-004
+  (runtime MCP tool registration or override), the two of the reference
+  build's 20 patterns it never exercised. Its first test checked only that
+  there were at least 18 patterns. The test count is unchanged.
+  `docs/test-catalog.md` and REPORT.md's AT-AI-005 row no longer say the test
+  covers 19 patterns. REPORT.md's scan throughput row says it was measured on
+  2026-03-23 on the 19-pattern build and not re-measured on the 20-pattern
+  one.
+- `docs/shield-maturity-extension.md` no longer maps its eight SM categories
+  to MITRE ATLAS techniques, and says that it is a proposal. Its mapping
+  table gave eight technique IDs names that `docs/mitre-atlas-mapping.md`,
+  the page whose IDs and names are verified against MITRE's `ATLAS.yaml`,
+  does not give them: AML.T0015 is Evade AI Model there, not "Automated
+  Triage", AML.T0025 is Exfiltration via Cyber Means, not "Credential Theft",
+  and the other six IDs are not on that page. The SM categories check the
+  security product's own machinery, not an attack, so the page leaves them
+  unmapped, as the mapping page leaves the defensive-response and capability
+  tests. The page also said that 48 of its 52 SM tests "pass today", but no
+  SM test exists in this repository and there is no `src/maturity/`. It now
+  opens with a proposal status, states each category's Shield coverage as
+  expected and not measured, and drops the 92% figure.
+  `scripts/check-maturity-page.mjs`, run by `npm run test:scripts`, fails
+  when the page writes an ATLAS technique ID that the mapping page does not
+  list or lists under another name, and, while `src/maturity` has no test
+  file, when the page is not marked as a proposal or states Shield coverage
+  without "not measured".
+- The Known Gaps table of `npm run report` words each gap and its severity
+  as the README's Known Detection Gaps table does. It said that anomaly
+  baselines are not persisted across restarts while the same report listed
+  BL-003, which checks that they are saved and loaded, as passing; the gap
+  is that the runtime does not reload them when it restarts.
+  `scripts/scenario-report.test.mjs` fails when the two tables differ.
+- `npm run check:readme` names a key of `STATEMENTS` in
+  `scripts/readme-counts.mjs` that is not one of its counts. It threw a
+  TypeError instead.
+- The OpenAI-shaped and AWS-shaped keys in AT-AI-002's output-leak payloads
+  spell FAKE and are joined at run time, so a credential scan of a push that
+  touches them does not refuse it; OL-001 still matches both.
+  `scripts/placeholder-credentials.test.mjs` fails when an API-key-shaped
+  value in `src/` does not spell FAKE.
+- STATUS.md says that no agent trust certificate work is planned in this
+  repository. The planning memo that recorded it, `briefs/`, is removed.
+- `npm run check:readme` also names a key of `STATEMENTS` that every object
+  inherits, such as `constructor` or `toString`. It threw a TypeError for
+  those.
+- `scripts/placeholder-credentials.test.mjs` no longer reports a hyphenated
+  word that has "sk" before a hyphen, such as a `risk-` compound with twenty
+  or more letters and hyphens after the hyphen, as an OpenAI-shaped key.
+- AT-AI-002's AWS output-leak test is named for the access key ID, the part
+  of the payload OL-001 matches, and checks that OL-001 is the pattern that
+  matched. It was named for a secret key, which OL-001 does not detect.
+- `npm run report` writes `REPORT.generated.md`, which git ignores. It wrote
+  `REPORT.md` and so replaced the 2026-03-23 run kept there as recorded.
+- The Summary of `npm run report` counts the attack scenarios only, the
+  tests under `src/atomic`, `src/integration`, `src/baseline` and `src/e2e`.
+  It counted every test of the run: the scoring-engine, pinned benchmark
+  harness and adapter tests were in "Passed" and the skipped scenarios in
+  the denominator of the pass rate, so a run of AT-AI-001 and
+  `src/benchmark/scoring.test.ts` with an adapter that declares no
+  capabilities read 17 passed and a 60.7% pass rate with every scenario
+  skipped. The table now gives the scenarios, the passed, the failed, the
+  not applicable (in a suite skipped by the product's capability
+  declaration) and the skipped for another reason, and a pass rate over the
+  passed and failed scenarios; with none of those it reads "not measured (0
+  scenarios evaluated)". The other tests are on a "Harness self-tests" line
+  outside the pass rate. A scenario file that vitest marks failed with no
+  failed test, such as one whose adapter threw while it was collected, is
+  FAIL instead of SKIP and is counted in the table. "Unique ATLAS techniques
+  covered" gave the 15 techniques the scenario headers map, whatever the
+  status of their files; that count is now "techniques mapped", and a report
+  with results also gives the techniques covered by a passing scenario.
+- The report `npm run report` writes names the product under test. A vitest
+  run with a JSON report file writes `<report>.adapter.json` beside it
+  (`scripts/record-adapter.mjs`, a global setup in `vitest.config.ts`): the
+  `OASB_ADAPTER` value, `arp` when it is unset, and the product, version and
+  capabilities the adapter's `getCapabilities()` declares. The record holds
+  the SHA-256 of the report it was written for, so a record left beside a
+  report from another run is not read. Without a record the report reads
+  "Product under test: not recorded" and names the command that writes both.
+- The secret scan in the security workflow reads every commit a push to
+  `main` adds, from the push's previous head to its new head; it read only
+  the head commit, so a push of several commits left all but the last
+  unscanned. A push with no previous head in the history, such as a force
+  push, is read in full. The weekly scheduled run reads the full history,
+  not only the last commit. gitleaks is pinned to 8.30.1 and its archive is
+  checked against the release's sha256 before it is unpacked; it was the
+  latest release, unchecked. The job's token can only read the repository.
+  `scripts/secret-scan-workflow.test.mjs` checks these: the workflow's
+  triggers, that the job has no condition of its own and fails when
+  gitleaks reports a leak, the read-only token, the pinned version, the
+  checksum's value and the step that checks it, the download host, the pull
+  request range, the push range and its fallback, and the scheduled run's
+  full history. Its last test weakens a copy of the workflow in each of
+  those ways and fails when no other test fails on the copy; the change to
+  the step that checks the checksum is made only where `sha256sum` is
+  installed, as the test that catches it runs only there. It does not check
+  the workflow's concurrency settings, under which a later run can cancel
+  one before its scan finishes, or which version of the checkout action the
+  job uses.
+- `scripts/placeholder-credentials.test.mjs` reports an OpenAI-shaped key
+  written right after an escape sequence, such as `\n` or `\x3D`, or after a
+  percent-encoded byte, such as `%3D`. A key after the letter or digit that
+  ends one was read as the middle of a word, so the test passed such a value.
+- `scripts/scenario-report.test.mjs` reads `.gitignore` to check that it
+  ignores `REPORT.generated.md`. It asked git, and so failed in a source
+  archive without git metadata or where git is not installed. It decides as
+  git does: the last line that matches the file decides, a glob such as
+  `REPORT.*.md` or `!*.md` included. It read only lines that name the file,
+  so a later `!*.md` passed the test although git then does not ignore it.
+- `npm run report` exits 1, writing no report, when the results file named
+  as its argument does not exist, and names the `npx vitest run` command
+  that writes it. It wrote a report with every status N/A and exited 0, as
+  it still does when no argument is given and `test-results.json` does not
+  exist.
+- `npm run report` runs tsx 4.23.15, pinned as a devDependency. It ran
+  `npx tsx`, which downloaded the registry's current tsx when none was
+  installed.
+- `docs/demo.tape` states no test or scenario count. It said 222 tests and
+  222 attack scenarios; the README states the counts.
+- `docs/demo.tape` runs from the root of any clone. Its hidden setup changed
+  into one checkout path under the home directory.
+- Before each case, the E2E-001 live filesystem tests write files named
+  `oasb-watch-probe-N` into the watched directory, one every 250 ms, until
+  the product reports one. They paused a fixed 200 ms after starting the
+  product. The wait is at most 5 seconds, and it ends 1 second before the
+  10-second timeout of the hook it runs in, so a product that is slow to
+  start gets the time the fixed pause left it: the wait lasts at least
+  200 ms. The `.env` case and the normal-file case leave the probe events
+  out. Each detection still waits 5 seconds, and `vitest.config.ts` is not
+  changed. A `waitForEvent` that throws, or that does not settle when its
+  timeout passes, counts as no report. The 8 tests in
+  `src/harness/filesystem-watch.test.ts` cover the wait and its budget.
+- Of six test adapters written for the comparison, not in this
+  repository, the E2E-001 result changed for one: an adapter whose watcher
+  misses the writes made in the first second after `start()` went from
+  4 failed and 1 passed to 5 passed. Adapters that report each write
+  7 seconds late (4 failed, 1 passed), that report only sensitive paths
+  with a `start()` of 5.2, 6 or 9 seconds (5 passed), whose `waitForEvent`
+  never settles (5 passed) or throws (4 failed, 1 passed), and that report
+  every write as a violation (1 failed, 4 passed) kept their results.
+  `llm-guard` and `rebuff` skip E2E-001 with and without the change.
+- With the probe wait alone, E2E-001 detection cases still reached their
+  5-second timeout under full-suite load: in one
+  `npx vitest run --maxWorkers=4` on a 16-core macOS host at a 1-minute
+  load of 7.9 to 8.1, the `.bashrc` and `.npmrc` cases timed out. The file
+  run alone, with four workers, passed at a load of 9.1 and had one such
+  timeout at a load of 10.4 while other test runs shared the host. The
+  entry below reads such a case against the harness's own watcher.
+- An E2E-001 detection case the product reported nothing for within its
+  5-second window is read against a control: the harness's own `fs.watch`
+  of the watched directory, opened before the product starts and closed
+  after it stops, which records every file event the host delivers to the
+  process. The control is read when the window has ended, also when the
+  product's wait fails sooner. When it saw the path within the window, the
+  case fails as before, with the control's time added to the message; when
+  it saw nothing, the case is skipped from inside the test as inconclusive,
+  naming the path, the window, the measured load and the product's own
+  error. A case whose product reported no probe file within the readiness
+  wait goes on to its write, as before, when the control saw one of the
+  probe files; when the control saw none, the case is skipped as
+  inconclusive without its write, naming the wait, how many of the probe
+  files the control saw and the measured load. A case is skipped only when
+  the control saw no file event for what decides it: none for the case's
+  file within its 5-second window, or none for any probe file during the
+  readiness wait of a product that reported none. A case that is not
+  skipped passes or fails as it did before, so the adapters compared above
+  keep their results in every case that is not skipped. The window, the
+  single write per case, the five cases and their assertions do not
+  change. No detection case passes without the product's own event. The
+  entry below that starts "Two E2E-001 verdicts change" changes two of
+  these verdicts: it adds a skip where the control cannot be opened, and a
+  filesystem event without `data` no longer fails a case. On a
+  16-core macOS host at a 1-minute load of 14.8 to 28.3, with `fseventsd`
+  at 85% to 106% of a core, the file run alone five times gave 0 failed and
+  4 or 5 skipped per run; each readiness skip stated that the control saw
+  0 of the 20 probe files written. One `npx vitest run --maxWorkers=4` of
+  the whole suite, at a load of 21.4 with `fseventsd` at 112%, gave 370
+  passed, 3 skipped (2 E2E-001 cases and E2E-003) and 0 failed. Against a
+  scratch adapter outside the repository that polls the directory, each
+  mode run once with the file alone: reporting only sensitive paths, 5
+  passed; the same with a `waitForEvent` that never times out, 3 passed and
+  2 skipped before their write; reporting nothing, with a `waitForEvent`
+  that throws, or reporting each write 7 seconds late, it failed each case
+  whose write the control saw (3, 3 and 2 of the 4) and skipped the others;
+  with a `waitForEvent` that fails at once for the case's file, it failed
+  the 1 case whose write the control saw, 2939 ms after the write, and
+  skipped the 3 others. The normal-file case passed in each of those runs.
+  With the control replaced by a watcher that delivers nothing, reporting
+  only files that are not sensitive skipped all 4 detection cases and
+  passed none, and reporting nothing skipped all 5 before their write.
+  `src/harness/filesystem-watch.test.ts` has 11 more tests, 19 in the file,
+  for the control and the rules; the suite was then 373 tests, 372 not
+  skipped. `docs/test-catalog.md` states the 5000 ms window for E2E-001
+  instead of a latency of about 200 ms, which no measurement supported.
+- `scripts/changelog-width.test.mjs` also fails when a line of
+  `docs/testing/release-smoke.md` is wider than 80 characters. Two lines of
+  the guide's drift guard step were wider, 104 and 84 characters; they are
+  rewrapped at 78 or less, with the text unchanged.
+- Two E2E-001 verdicts change. First, where Node.js has no recursive
+  `fs.watch`, every E2E-001 case is skipped as inconclusive; each one
+  failed there. The control is a recursive `fs.watch`, which Node.js has
+  on Linux from 19.1.0, while `package.json` allows Node.js 18. Before
+  19.1.0 on Linux, opening it throws `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`
+  in the hook that runs before each case, so all five cases, the
+  normal-file case among them, failed with that error whatever the product
+  did. Now each case is skipped there, before the product is created or
+  any file is written, with a message that says the case was not measured
+  and names the Node.js version, the platform and the error; any other
+  error on opening the control still fails the case. The skip is made
+  with `skipInconclusive`, as every run-time skip of a test under `src/`
+  is, so the release smoke's drift guard counts these cases with the
+  passing tests and, as no test of the file passed, fails the file as
+  `NOT MEASURED` on every run on such a Node.js;
+  `docs/testing/release-smoke.md` says so. Not run on Node.js 18: with
+  `fs.watch` replaced by one that throws that error for a recursive watch,
+  the file gave 5 failed before this change and 5 skipped with it, each
+  recorded as inconclusive, and the drift guard read the report of that
+  run as the file not measured; a unit test replaces the watch function
+  the same way. Second, a filesystem
+  event that has no `data`, which the adapter interface allows, no longer
+  fails a detection case. The four detection predicates read `data`
+  without a check and threw a `TypeError` on such an event; they now read
+  it with `?.` and pass over the event. With such an event collected
+  before a case's wait, the wait failed at once, so the case failed when
+  the control saw the path and was skipped as inconclusive when it saw
+  nothing, also when the product then reported the write; now the case
+  waits for that report and is read by it. With such an event arriving
+  during the wait, the `TypeError` was thrown into the adapter's call of
+  its event handler; now nothing is thrown. A product whose only report of
+  the write has no `data` is read as a miss, as before. Measured with the
+  harness's event collector, a stubbed control and the predicates as
+  written before and after. The reference adapter's filesystem monitor
+  puts `data` on every event it reports (hackmyagent 0.23.8, the locked
+  version), so its results do not change. Nothing else in this entry
+  changes a verdict. An error the control's watcher reports was ignored, so
+  its silence afterwards read as the host delivering nothing. The first
+  such error is kept and named in the inconclusive message of a case the
+  control recorded no event for, in the 5-second window or in the readiness
+  wait; a case whose path the control recorded before the error still
+  fails as a product miss. The inconclusive messages gave `loadavg 0.00` on
+  Windows, where Node.js measures no load; there they say `loadavg
+  unavailable on Windows`. After a case, the control is closed and the
+  watched directory removed also when the product's `stop()` rejects; both
+  were left behind. The rules a case is read by stay where they were:
+  `awaitDetection` and `readinessSkip` decide in
+  `src/harness/filesystem-watch.ts`, and the test file fails the case or
+  skips it with `skipInconclusive`, where
+  `scripts/check-test-counts.test.mjs` checks each skip.
+  `src/harness/filesystem-watch.test.ts` has 12 more tests, 31 in the
+  file: for the message where Node.js has no recursive `fs.watch`, the
+  control's error, the load on Windows, the end of a case, a case the
+  control saw only other files for, and an upper bound on the wait that
+  follows a product miss. The README states a limit of the readiness
+  wait: a product whose `start()` returns 8.8 seconds or more into the hook
+  leaves that wait at its 200 ms minimum, so when it also reports no probe
+  file, its cases are measured only if the control saw a probe file within
+  those 200 ms. On a 16-core macOS host at a 1-minute load of 16.3 to
+  24.3, the file run alone three times gave 0 failed in each run: 4
+  skipped and the normal-file case passed; 5 skipped; 5 skipped. Each skip
+  named a wait in which the control saw no event, so no detection case was
+  measured in those runs.
+- The git commands of `src/benchmark/pinned/pinned.test.ts` are stopped
+  after 8 seconds and fail with a message that names the command. They had
+  no time limit, and the calls are synchronous: a stalled git blocked the
+  test worker, so the 10-second test timeout could not fire. One more test
+  covers it, 99 in `src/benchmark/pinned`; the suite is 386 tests, 385 not
+  skipped.
+- `npm run typecheck:tests` type-checks `src/` with its test files
+  (`tsconfig.test.json`, no output). `npm run build` excludes the test
+  files and vitest does not check types, so a type error in a test was
+  never reported. The 8 in E2E-001 are fixed, each by reading an event's
+  optional `data` with `?.`. The assertions do not change; one verdict
+  does, as the E2E-001 entry above states: a filesystem event without
+  `data` no longer fails a detection case. On 2026-10-12 the command
+  reports 259 errors in 34 other scenario test files, which this entry
+  does not fix, and `npm test` does not run it.
+- Those 259 errors are fixed, and `npm test` runs the check: its
+  `pretest` script runs `scripts/typecheck-tests.test.mjs`, which fails
+  when `npm run typecheck:tests` reports a type error or when
+  `tsconfig.test.json` takes in no scenario test file. The adapter
+  interface gains, as optional additions, what the reference adapter
+  implements and the tests use: the `anomaly` event category,
+  `requireLlmConfirmation` on `AlertRule`, `threshold` on `AlertCondition`,
+  and `targetPid` as a third argument of `EnforcementEngine.execute()` and
+  as a field of `EnforcementResult`; `activity` stays. The tests read an
+  event's optional `data` with `!`, which leaves what they run unchanged.
+  Events the tests inject with the `connection` category or the `warning`
+  severity, which neither the interface nor the reference adapter defines,
+  now use `normal`, the category the reference adapter gives a connection
+  to an allowed host and a file write it does not flag, and `medium`, the
+  severity it gives a connection to a host that is not allowed. With the
+  reference adapter, the 148 tests in those 34 files have the same results
+  before and after: 147 pass, 1 is skipped.
+- The code that reads an E2E-001 case moves from the test file to
+  `src/harness/filesystem-watch.ts`, where unit tests cover it:
+  `detectWrite` awaits the product's event for a write, fails the case on
+  a product miss, skips it as inconclusive when the host delivered no
+  event and marks it detected only when the product reported the write;
+  `openControlWatchOrSkip` opens the control and skips the case as
+  inconclusive where Node.js has no recursive `fs.watch`; and
+  `isSensitiveFileEvent` and `fileEventFor` are the four detection
+  predicates. In the test file, deleting the mark, that skip or the
+  rethrow of any other error on opening the control, or reading an
+  event's `data` without `?.`, left `npm test` and `npm run test:scripts`
+  passing. The code is the same, so no verdict changes.
+  `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
+  `src/` names `markDetected` or writes a property named `detected`, which
+  on a task's meta only `markDetected` writes, and when E2E-001 stops
+  calling `detectWrite` or `openControlWatchOrSkip`, or passes a detection
+  case a predicate other than `isSensitiveFileEvent` or `fileEventFor` of
+  the name the case writes. It reads the text of those files: a mark
+  written another way, such as with a key built at run time
+  (`meta[key] = true`), with an object whose `detected` key is on another
+  line than `meta`, with an object whose `detected` key follows a matcher
+  (`.toBe(`) on its line or with an object whose `detected` key follows
+  another `.toXxx(` call (`.toString(`) after `expect` on its line, or made
+  by a helper outside those files, is not detected. From a matcher call
+  after `expect` on its line, such as `.toEqual(`, to the end of the line
+  the check takes only an assignment as a write, so an assertion that reads
+  the mark there (`.toEqual({ detected: true })`,
+  `.toHaveProperty('detected', true)`) does not fail it. A call such as
+  `.toString(` before `expect`, or on a line without `expect`, is not a
+  matcher call; the check took one as a matcher, so a line such as
+  `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
+  did not fail it. A matcher call on a later line than its `expect`, as in a
+  chained assertion that continues with `.toHaveProperty('detected', true)`
+  on the next line, is not taken as a matcher call either, so that read of
+  the mark fails the check: write the matcher call on the line of its
+  `expect`. After `expect` on a line the check takes every `.toXxx(` call
+  as a matcher call, chained to that `expect` or not, so after
+  `expect.assertions(0);` on the same line the write in
+  `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
+  still does not fail it. No file under `src/` has either form. The check
+  finds the first `expect` on a line once and looks for a matcher call
+  after it, and finds the first `meta` word once and looks for a
+  `detected` key after it, so its time grows with the length of the line.
+  Its patterns took time that grew with the square of that length: the
+  matcher pattern looked back for `expect` from every `.`, over 3 seconds
+  on a line of 80,000 `.` characters, and the key pattern ran on from every
+  `meta` word to the end of the line, over 1 second on a line of 120,000
+  characters of `meta` words, and tried every split of a run of spaces
+  after `detected` between the spaces it allows before and after a `]`,
+  over 7 seconds on a run of 120,000 spaces.
+  `fileEventFor` read an event without a path as the text
+  `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
+  matched such an event; it now matches only an event whose path contains
+  the name. E2E-001's names (`.ssh`, `.bashrc`, `.npmrc`) are not part of
+  that text, so no verdict changes. After a
+  case whose product's `stop()` rejects and whose control's `close()`
+  throws, `endWatchCase` passes on the rejection of `stop()`, as its
+  description says; it passed on the error of `close()`. The README says
+  an inconclusive E2E-001 skip prints the measured load where the
+  platform measures one: on Windows the message says `loadavg unavailable
+  on Windows`. `src/harness/filesystem-watch.test.ts` has 10 more tests,
+  41 in the file; the suite is 396 tests, 395 not skipped.
+- The deprecated AST adapter (`HMARealASTAdapter` in
+  `src/benchmark/hma-real-adapter.ts`) now calls `analyzeCredentials`,
+  `analyzeGovernance`, `analyzeScope` and `analyzePrompt` with the sample
+  content, like the pipeline adapter. It called them with the AST alone, a
+  route the shipped scanner never takes. No committed result changes: this
+  adapter produced none, and its only runner, `scripts/run-benchmark.ts`,
+  stays deprecated. The adapter now loads hackmyagent from the root
+  `configureHmaRoot()` names, as the pipeline adapters do; without that
+  call it is the sibling checkout, as before. Three more tests cover the
+  calls and the root, 28 in `src/benchmark` outside
+  `src/benchmark/pinned`; the suite is 399 tests, 398 not skipped.
+- An AST adapter that has scanned once now compiles on the
+  `SemanticCompiler` of the root `configureHmaRoot()` names next. It kept
+  the compiler of the first root, so a second scan built its AST on that
+  build and ran the analyzers of the new one. One more test scans twice
+  on one adapter across a root change, 29 in `src/benchmark` outside
+  `src/benchmark/pinned`; the suite is 400 tests, 399 not skipped.
+- The deprecated AST adapter (`HMARealASTAdapter`) and the full adapter
+  built on it (`HMARealFullAdapter`) report as their version the version in
+  the package.json of the hackmyagent root they load, as the pipeline
+  adapters do. Both reported the fixed string `0.12.3` whichever build
+  `configureHmaRoot()` named. The static adapter (`HMARealStaticAdapter`)
+  loads no build and keeps its fixed version. No committed result changes:
+  these adapters produced none. One more test covers the version, 30 in
+  `src/benchmark` outside `src/benchmark/pinned`; the suite is 401 tests,
+  400 not skipped.
+- A benchmark adapter that has scanned reports the version of the
+  hackmyagent root configured at its last scan. `HMARealASTAdapter`,
+  `HMARealFullAdapter`, `HMAPipelineAdapter` and `HMAPipelineStaticAdapter`
+  read the version when they are created and again at each scan. They read
+  it only when they were created, so an adapter that scanned again after
+  `configureHmaRoot()` named another root still reported the version of the
+  first root, while the AST, full and pipeline adapters loaded the new one
+  for that scan. Until its first scan an adapter reports the version of the
+  root configured when it was created.
+  `HMAPipelineAdapter` and `HMATMEOnlyAdapter` now scan on the
+  `SemanticCompiler` or the classifier of the root `configureHmaRoot()`
+  names next, as `HMARealASTAdapter` does. Each kept the one of the first
+  root it scanned with: after a root change the pipeline adapter built its
+  AST on that build and ran the analyzers of the new one, and the
+  model-only adapter classified on that build. No committed result changes:
+  only the pinned harness calls `configureHmaRoot()`, once, before it
+  creates its adapters, and the other runners scan on the sibling checkout
+  throughout. Four more tests cover the version after a root change, the
+  root the pipeline and model-only adapters scan on after one, and that an
+  adapter builds one `SemanticCompiler` for its scans on one root, 34 in
+  `src/benchmark` outside `src/benchmark/pinned`; the suite is 405 tests,
+  404 not skipped.
+- The README is shorter. Its first screen runs one scenario file and shows
+  what that prints, and its reference text moved, as written, to the pages
+  it links: what OASB is and is not to `docs/how-it-works.md`; the What Gets
+  Tested table, the Counts note and the command for each group to
+  `docs/test-catalog.md`; the MITRE ATLAS Coverage table to
+  `docs/mitre-atlas-mapping.md`; the harness files to
+  `docs/test-harness.md`; the adapter details and the note on cross-product
+  numbers to `docs/adapters.md`; the Skills Security Benchmark, its corpus,
+  runners and latest results to `docs/pinned-benchmark.md`; the Known
+  Detection Gaps to `docs/known-gaps.md`; and the Updates table to
+  `docs/updates.md`. `npm run check:readme` and the release smoke's drift
+  guard read the test counts, the What Gets Tested table and the links on
+  those pages as they read the README's (`README_PAGES` in
+  `scripts/readme-counts.mjs`), and a message about a page names it. The
+  per-test tables moved to `docs/test-catalog.md` as well, and the
+  Contributing section became a line of the Documentation list.
+  `npm run check:readme` fails when the README has 400 lines or more, when
+  its first H2 heading is not `## Quick Start` or is at line 25 or later,
+  when no shell code block with a command starts before line 30, and when a
+  relative link it reads does not resolve; `npm run smoke` runs these layout
+  and link checks. It reads three link forms, each written within one line:
+  inline links (`[text](path)`, with an optional double-quoted title),
+  reference definitions at the start of a line (`[label]: path`) and quoted
+  HTML `href` attributes. It checks a `#anchor` only in links to `.md`
+  files. Other forms, such as an unquoted `href` or a definition on the
+  same line as a list marker (`- [label]: path`), are not checked.
+- `src/benchmark/pinned/runs-of-record.test.ts` looks for the newest run's
+  counts on `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md` outside
+  code spans and code blocks. The page's description of that test writes
+  the form of a count as code, `192/270`, which is the full-pipeline count
+  of `results/2026-10-10-2a89ce5d/`, so with the HMA Full Pipeline row
+  deleted from the page's Latest Results table the test still passed (8 of
+  8); it now fails on that edit. The page says a count written only as code
+  does not count. The file still holds 8 tests.
+- `npm run check:readme` reports a link whose path, or whose anchor in a
+  link to a `.md` file, has a malformed %-escape, such as
+  `[the plan](100%.md)`, by its page and line and says to write a literal %
+  as `%25`; on such a link it ended with an uncaught `URIError` and a stack
+  trace. This holds in the README, on the pages that took its text and, with
+  the counts checked, in the README's MITRE ATLAS Coverage section.
+- `src/benchmark/pinned/runs-of-record.test.ts` also leaves out indented code
+  blocks when it looks for the newest run's counts on
+  `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md`: text that starts
+  four or more columns past the margin, or past the content of the list item
+  or block quote it is in, and does not continue paragraph text. With the HMA
+  Full Pipeline row deleted from the page's Latest Results table and
+  `hma-pipeline 192/270` added at the end of the page as an indented code
+  block, the test passed (8 of 8); it now fails on that edit. The page says a
+  count written only in a code block does not count. The file still holds 8
+  tests.
+- `src/benchmark/pinned/runs-of-record.test.ts` checks that a count in a
+  fenced code block holding a blank line, a `text` block of `hma-pipeline`,
+  a blank line and `192/270`, is not a stated count. Its one fenced-block
+  case had no blank line, so the code-span pattern of `outsideCode` removed
+  that block too, and with the fenced-block pattern deleted the file still
+  passed (8 of 8). The code-span pattern does not cross a blank line, so
+  the new case fails on that edit (1 failed, 7 passed). The file still
+  holds 8 tests.
+- For an anchor with a malformed %-escape, `npm run check:readme` now says
+  to drop the %, since a heading's anchor has none, and names the anchor to
+  write when dropping it matches a heading: `[x](#100%-coverage)` under the
+  heading `## 100% coverage` is told to write `#100-coverage`, which passes.
+  It said to write the % as `%25`, and `[x](#100%25-coverage)` then failed
+  with `anchor "#100%25-coverage" has no matching heading in README.md`. A
+  link path with a malformed %-escape is still told to write `%25`.
+- The README header shows the CI status badge in place of the tests badge
+  and the MITRE ATLAS badge, whose counts were typed into their URLs. The
+  two sentences of the description that stated the scenario and MITRE ATLAS
+  counts moved, as written, to the What Gets Tested section of
+  `docs/test-catalog.md`, a page both count checks read; the README keeps
+  the first of them without its count. The line
+  "MITRE ATT&CK Evaluations, but for AI agent security products." moved to
+  `docs/how-it-works.md`. The count list both checks read
+  (`scripts/readme-counts.mjs`) has no tests badge entry, and
+  `npm run check:readme` fails on a static shields.io badge in the README's
+  prose whose message starts with a digit, such as `tests-404%20passing`.
+- `npm run check:readme` reports a link with an anchor to a directory whose
+  name ends in `.md`, such as `[a](x.md#setup)` or `[a](x.md#100%)`, by its
+  line and says to link the page in that directory that holds the heading;
+  on such a link it ended with `Error: EISDIR` and a stack trace. It ended
+  with the same error on a link without an anchor to such a directory whose
+  name carries a date (`docs/AUDIT-2026-06-03.md`) and, with the counts
+  checked, on one in the README's MITRE ATLAS Coverage section; it does not
+  read such a directory as a page.
+- `src/benchmark/pinned/runs-of-record.test.ts` leaves out a fenced code
+  block inside a list item or block quote when it looks for the newest run's
+  counts. It found fences with a pattern that matched only a fence starting
+  a line after at most three spaces, so with the HMA Full Pipeline row
+  deleted from the Latest Results table of `docs/pinned-benchmark.md` and a
+  numbered list item appended whose fenced block, indented four spaces,
+  holds `hma-pipeline`, a blank line and `192/270`, the test passed (8 of
+  8); it now fails on that edit (1 failed, 7 passed). It now finds fenced
+  blocks while it follows block quotes and list items, as it does for
+  indented code, and a fenced block ends with the list item or block quote
+  that holds it. A line that starts with three backticks and holds another
+  backtick is read as text with a code span; it opened a fenced block that
+  ran to a closing fence or to the end of the page. The file still holds 8
+  tests.
+- `npm run check:readme` holds the README's first-run capture to the suite.
+  The capture under Quick Start, of
+  `npx vitest run AT-AI-001 --reporter=verbose`, states 11 tests in 1 file
+  and names tests by their full names, and no check read it, so a renamed
+  test or a changed count left it stale. The check now fails when the
+  command the capture names is not a `vitest run` that a code block above it
+  shows, when a `✓` line names a test that the command does not select or
+  that is skipped, or when a `Test Files` or `Tests` line states a passed,
+  failed, skipped or total count other than that of the files and tests the
+  command selects. On this README it prints
+  "capture of `npx vitest run AT-AI-001 --reporter=verbose` matches the
+  collected suite: 11 tests in 1 test file".
+- The README's OpenA2A CLI example said that
+  `opena2a benchmark ./my-agent --level L2` checks levels L1, L2 and L3.
+  opena2a-cli 0.10.13 checks the OASB-1 controls of levels L1 and L2 for
+  `--level L2`: it reads them with hackmyagent's `getCheckIdsForLevel`, which
+  takes the controls of the level given and of the levels below it. The
+  comment now says "OASB-1 controls of levels L1 and L2". hackmyagent 0.33.2
+  `secure -b oasb-1` selects levels the same way: on a directory holding a
+  `package.json` and an `index.js` it reports 26 controls, verified and
+  unverified, at L1, 44 at L2 and 46 at L3. `npm run check:readme` now fails
+  when a shell comment in a code block, on an `opena2a benchmark` line or on
+  a `hackmyagent secure` line with `-b oasb-1`, names OASB-1 levels other
+  than those up to the level the line gives with `--level` (or `-l` for
+  hackmyagent), or than L1 when it gives none.
+- The README's capture under Quick Start links its full output,
+  `docs/captures/quick-start.txt`, and `docs/captures/quick-start.json`
+  beside it records the command, the environment (`CI=true`, `NO_COLOR=1`),
+  the exit code, the vitest and Node.js versions and the date of the run.
+  The full output is what that run printed, with the RUN banner, which names
+  the vitest version and the absolute path of the checkout, replaced by
+  `...` and without the trailing blank line. The two timings in the
+  README's capture that differed from it were re-taken from that run.
+  `npm run check:readme` now holds a full output that the line above a
+  capture links as `[full output](<file>)` to the suite as it holds the
+  capture, and fails when the full output leaves out a test the command
+  selects that is not skipped (with `--tests`: that passed) or a
+  `Test Files` or `Tests` line, when the capture shows a line, other than a
+  blank or `...` line, that the full output does not have, or when the
+  `.json` file beside it is missing or names another command or another
+  full output. On this README it prints "Its full output
+  docs/captures/quick-start.txt shows the 11 tests not skipped and holds
+  each line of the capture".
+- With the counts checked, `npm run check:readme` reports a
+  `[full output](<file>)` link above a capture whose path has a malformed
+  %-escape, such as `[full output](docs/captures/100%.txt)`, by its line
+  and says to write a literal % as `%25`, and reads the capture as linking
+  no full output; on such a link it ended with an uncaught `URIError` and a
+  stack trace.
+- `getCapabilityMatrix()` and the `getCapabilities()` of the reference,
+  llm-guard and rebuff adapters report as `version` the `version` field of
+  the installed package's own `package.json`. The reference adapter
+  reported the `VERSION` export of arp-guard, which arp-guard 0.3.0
+  re-exports from `hackmyagent/arp`: a constant of the installed
+  hackmyagent, not arp-guard's version (`0.2.0` with the arp-guard 0.3.0
+  and hackmyagent 0.23.8 that this checkout's lockfile installs), or
+  `0.3.0` when that export was missing. The llm-guard and rebuff adapters
+  reported `0.1.8` and `0.1.0` whichever version was installed. When an
+  `exports` map hides `package.json`, the reference and llm-guard adapters
+  report the `VERSION` export followed by
+  ` (VERSION export; package.json not resolvable)`. When the package is
+  not installed, `getCapabilities()` throws the error a scan with that
+  adapter throws; for arp-guard that is the message naming
+  `npm install arp-guard` and `OASB_ADAPTER`, as before.
+  `scripts/library-entry.test.mjs` holds each case.
+- The README's "Use as a library" example scores a two-sample submission
+  with `benchmark.scoreSubmission` and prints its recall, and says that F1,
+  precision, false-positive rate and tier on the bundled corpus are
+  withdrawn. It ended on `benchmark.determineTier(/* aggregate metrics */)`.
+  Run as written, that line threw
+  `TypeError: Cannot read properties of undefined (reading 'f1')`, and given
+  metrics, `determineTier` assigns a tier from the withdrawn F1 and
+  false-positive rate. It stays exported, and `docs/pinned-benchmark.md`
+  describes it. The documented-command check in `npm run smoke` runs the
+  block as written. It read a call whose argument list is only a comment as
+  a placeholder and checked only that the call named a function, so it
+  passed on that block. `scripts/check-documented-commands.test.mjs` fails
+  when the block has such a call.
+- The README's Usage via OpenA2A CLI section no longer says that
+  `hackmyagent secure -b oasb-1` checks "the same controls" as
+  `opena2a benchmark`. The two report different figures: opena2a-cli 0.10.13
+  scores the check IDs of the level's controls, passing over evaluated, and
+  at L1 counts 39 of them, from the catalogue of the hackmyagent 0.25.2 it
+  installs; hackmyagent 0.33.2 scores controls, passed over verified, with
+  unverified and not applicable controls left out, and at L1 counts 26. On
+  the same agent directory the first printed
+  `L1:         13% (8 of 39 controls evaluated)` and the second
+  `Compliance: 5% (1/19 verified controls)`. The section now says the two
+  percentages are not comparable with each other, only each with its own
+  earlier runs, and that neither tool's help text states how its percentage
+  is computed.
+  `scripts/doc-facts.test.mjs` fails when the section says
+  "the same controls".
+- The development runner `scripts/run-benchmark-v2.ts` prints, for each
+  adapter, its recall and the malicious samples it detected and missed, and
+  a comparison summary of recall whose `%` signs share one column. It names
+  precision, F1, FPR and flag rate as withdrawn instead of printing their
+  values: each reads the benign class, which its own warning says makes them
+  circular. It printed them in each adapter's block and in summary rows such
+  as `67.5  % | 99.3  % | 51.1  % | 0.03  % | 3.6%`. The results file it
+  writes with `--out` is unchanged.
+- `npm run report` lists, in each row of its OWASP Agentic table, the
+  scenarios whose `// OWASP Agentic:` header names that ID, each with its
+  status in the results file (N/A without one), and names the IDs no
+  scenario covers, ASI04, ASI06 and ASI09 on this tree; each row read "See
+  mapping docs". Its Known Gaps table, headed "Known Gaps (Documented)", is
+  now headed as the reference adapter's (ARP) and says that in a report on
+  another product those gaps describe ARP.
+- `docs/test-catalog.md` gives the test counts in one paragraph and the
+  E2E-001 skips in a note of their own; the first sentence of the counts
+  held the whole E2E-001 skip rule in a parenthetical.
+- `docs/test-catalog.md` describes the Summary `npm run report` writes, in
+  the paragraph under Run the suite that the README's Evaluating Other
+  Products section links: the Product under test line, the attack-scenario
+  rows (Scenarios, Passed, Failed, Not applicable, Skipped for another
+  reason, and a Pass rate over the scenarios that passed or failed), the
+  separate Harness self-tests line and the Known Gaps of the Reference
+  Adapter (ARP). The README said the file held "a summary of the run (total,
+  passed, failed and skipped tests, and the pass rate)", but the Summary
+  counts the attack scenarios only. `scripts/doc-facts.test.mjs` generates a
+  report from a sample run and fails when the test catalog paragraph does
+  not name the product line, the scenario directories, a Summary row, what
+  the pass rate is over, the harness line or the known gaps heading as the
+  report words them.
+- `docs/adapters.md` says that a missing rebuff package fails each scenario
+  file while vitest collects it, before any of its tests runs, with the
+  error that names the package, and that a missing `typescript` fails each
+  scan. It said each scan fails when either package is missing.
+  `getCapabilities()` of the rebuff adapter reads rebuff's version from its
+  `package.json`, and each scenario file calls it while it is collected:
+  with rebuff moved out of `node_modules`,
+  `OASB_ADAPTER=rebuff npx vitest run src/atomic/ai-layer/AT-AI-001`
+  reported the file failed and no tests; with `typescript` moved out, its
+  11 tests failed with the error that names `typescript`.
+  `scripts/doc-facts.test.mjs` fails when the paragraph says "when either
+  package is missing" or does not state the two cases, and
+  `src/harness/rebuff-wrapper.test.ts` checks both cases against the
+  capability check and the scans, with the loader replaced by a stub.
 - `pg` moved from `dependencies` to `devDependencies`, so `@opena2a/oasb`
   has no `dependencies`. Only `scripts/export-registry-corpus.mjs` imports
   it, and `scripts/` is not in the published package. `npm install` of the
@@ -227,6 +1573,23 @@ stay on record here with the reason they changed.
 
 ### Fixed
 
+- A vitest run that selects attack scenarios now ends with one line on
+  stderr: `OASB: <evaluated> of <selected> attack scenarios evaluated`,
+  counting the scenario tests that passed or failed. When it evaluated none,
+  as under an adapter that declares no capabilities, the line is
+  `OASB: not measured (0 of <selected> attack scenarios evaluated)` and the
+  run exits 2; it exited 0 with every scenario skipped and said nothing.
+  When the run's results cannot be read, the line is
+  `OASB: not measured (the run's test results could not be read)` and the
+  run exits 2. A run that selects no scenario, such as
+  `npx vitest run src/benchmark/`, and collecting the suite without running
+  it print no line and keep their exit. The JSON report of
+  `--reporter=json --outputFile` is still written. No variable or flag
+  lowers the floor. `scripts/check-documented-commands.mjs` now expects
+  exit 2 from its two runs whose every test must be skipped.
+- `LICENSE` holds the full canonical Apache License 2.0 text, 202 lines, in
+  place of the 98-line abridgement that 0.4.0 shipped, which shortened or
+  dropped clauses.
 - E2E-001, the live filesystem detection tests, has a vitest project of
   its own, `live-filesystem`, which `vitest.config.ts` puts in
   `sequence.groupOrder` 1, after group 0 of every other test file. vitest
@@ -2143,1201 +3506,6 @@ stay on record here with the reason they changed.
   60,000 lines of `xxxxxxxxxxxxxxxxxx` and `]: guide.md`, it took 4.7
   seconds and now takes 0.21, against 0.12. Each exits 0. These are one
   run of each.
-
-## 0.4.1 - 2026-10-17
-
-### Added
-
-- `scripts/run-pinned-benchmark.ts` runs the corpus and DVAA benchmarks on
-  pinned inputs: hackmyagent by npm version and tarball integrity, the DVAA
-  checkout by commit and the NanoMind model directory by manifest sha256. It
-  exits 2 before scanning anything when an input is unpinned, does not match
-  its pin or is dirty: an installed hackmyagent file that differs from the
-  tarball, a DVAA checkout with local changes or a file the scenario loader
-  reads that is not committed, a changed model file, a model or tokenizer file
-  that the scanner's classifier would load from outside the verified model
-  directory, an OASB checkout with uncommitted changes or with tracked files
-  marked skip-worktree or assume-unchanged, a corpus file whose bytes are not
-  the committed file, a DVAA commit without `scenarios/` or with an
-  `expected-checks.json` that is not valid JSON, or one of the scanner's
-  unpinned model sources present (`nanomind-tme.bin` and `tokenizer.json` in
-  `~/.opena2a/nanomind/models` or in `models-tme-v3`, `models-tme-v2` or
-  `models-tme` under `node_modules/nanomind/training` in the `--hma`
-  directory, or anything accepting a connection at `127.0.0.1:47200`). It
-  also exits 2 when `package-lock.json` is missing from the `--hma` directory,
-  or when a file under its `node_modules` is not the file in the tarball
-  whose integrity that lockfile names (read from the npm cache) or is in none
-  of those tarballs. Each
-  run writes a
-  new `results/<date>-<runid>/` holding
-  per-sample predictions, a summary of detection over the malicious class and
-  a run record naming the versions and hashes of the inputs it checked, and
-  never writes to an existing file. A run writes nothing and exits 3 when the
-  hackmyagent install, the model directory, the DVAA checkout, the other
-  model sources or the installed dependencies check fails again after the
-  scan. `--observe` prints the pin
-  values of a set of inputs on stdout and, on stderr, the `npm view` command
-  whose output must equal the printed integrity; it reports a tarball whose
-  name does not carry an exact version (`hackmyagent-<x.y.z>.tgz`) as a
-  problem (exit 2) and prints no command for it, and it reports an installed
-  dependency file that differs from its tarball as a problem.
-  `docs/pinned-benchmark.md` lists what a run checks and what it does not.
-- `results/2026-10-10-d8306ef8/` is the first pinned run of record:
-  hackmyagent 0.33.2, the npm release current on 2026-10-10, on the v2 corpus
-  and DVAA commit `57918267d8d5`, with the classifier files that release
-  expects. It is a first pinned measurement. Earlier figures came from
-  unpinned runs, so it does not revise them and a difference from them is not
-  a regression. `src/benchmark/pinned/runs-of-record.test.ts` checks that
-  every committed run names its pinned inputs and that its summary is the one
-  its per-sample predictions give.
-- A pinned run records what scored each sample. hackmyagent scores a sample
-  with a word list instead of its classifier model when the model did not load
-  or an inference failed, and sends a sample it is unsure about to a NanoMind
-  daemon, so a recorded model manifest did not show that the model produced
-  the verdicts. Each prediction line now counts the classifier inferences that
-  ran the model, the word-list scorings, the neural classifier inferences and
-  the requests sent to the daemon address; `summary.json` sums them per adapter
-  and for DVAA, and `record.json` holds the run totals (record schema
-  `oasb-pinned-run/v2`). A run exits 2 before scanning when the classifier
-  model does not load, and exits 3, writing nothing, when the daemon address
-  answers a request during the scan, including a daemon that came up after the
-  checks before the scan and was gone before the checks after it. On 0.33.2
-  with the run of record's inputs, the verdicts are unchanged and one sample
-  was scored by the word list in each of the two adapters that use NanoMind.
-- `results/2026-10-10-2a89ce5d/` is a pinned run of record that says what
-  scored each sample (record schema `oasb-pinned-run/v2`): hackmyagent 0.33.2,
-  DVAA commit `57918267d8d5` and the classifier files that release expects,
-  the inputs of `results/2026-10-10-d8306ef8/`. Every verdict is the one the
-  earlier run gave. In each of the two corpus adapters that use NanoMind, the
-  classifier model scored 4244 of the 4245 samples and the word list scored
-  one benign sample; the model scored every DVAA scenario that has a file to
-  scan (84 of 86). No daemon answered any of the 56 requests the scanner sent
-  to the daemon address.
-  `src/benchmark/pinned/runs-of-record.test.ts` now fails when no committed
-  run says what scored its samples.
-- Each of the 47 scenario files now names its OWASP Top 10 for Agentic
-  Applications (2026) risk in an `// OWASP Agentic:` header line, and
-  `docs/owasp-agentic-mapping.md` lists the scenarios under each ID. The
-  package description and the README said each scenario was mapped to the
-  OWASP Agentic Top 10, but the headers named only OWASP Top 10 for LLM
-  Applications (2025) IDs, ten files named no OWASP ID, and the mapping page
-  covered only the LLM list. Seven of the ten Agentic risks have scenarios;
-  the page lists ASI04, ASI06 and ASI09 as gaps. The LLM Top 10 IDs are
-  unchanged, and the package description names both lists.
-  `scripts/check-owasp-mapping.mjs`, run by `npm run test:scripts`, fails when
-  a scenario file names no published Agentic ID or when the page disagrees
-  with the headers. The report `npm run report` writes listed four IDs (A01,
-  A04, A06, A07) under "OWASP Agentic Top 10 Coverage" that are on neither
-  list; it now lists the Agentic IDs the scenarios name, from the map in
-  `scripts/scenario-report.mjs`, which `scripts/generate-report.ts` builds
-  the report through.
-- `npm run smoke` runs three of the commands the README documents, with
-  `scripts/check-documented-commands.mjs`: `OASB_ADAPTER=llm-guard` on a
-  scenario file gated by capability and on an OS-level one, which must both
-  report N/A (skipped); `OASB_ADAPTER` set to a relative path, run from the
-  checkout, with an adapter that declares no capabilities; and the "Use as a
-  library" example in a new project, after running the section's `npm install`
-  lines there with `@opena2a/oasb` replaced by the packed tarball.
-  In 0.4.0 the smoke ran none of these commands, and all three failed: the
-  OS-level file ran its 4 tests under llm-guard, a relative path was not
-  found, and the library example stopped on `Cannot find module 'arp-guard'`.
-  The entries under Changed below correct them, and the smoke now fails if
-  any of them fails again. Its tests run with `npm run test:scripts`.
-- `docs/adapters.md` lists the tests that fail with `OASB_ADAPTER=llm-guard`
-  and with `OASB_ADAPTER=rebuff`, each with the assertion it fails on: 9 in
-  AT-AI-001 and 3 in AT-AI-005, the two scenario suites those adapters run.
-  Both suites assert the reference adapter's pattern catalog: under each
-  adapter, 6 of the AT-AI-001 tests detect the input and fail on its
-  reference pattern id, and 3 do not detect the input. INT-007 reports N/A
-  under both adapters. `scripts/adapter-gating.test.mjs` fails when the tests
-  that fail under either adapter are not the ones the page lists, or when one
-  fails on an assertion that does not hold the code its row quotes.
-- The README's Evaluating Other Products section and `docs/test-catalog.md`
-  name the commands that write the scorecard: `npx vitest run
-  --reporter=json --outputFile=test-results.json`, then `npm run report --
-  test-results.json`, which writes `REPORT.generated.md`.
-  `docs/test-catalog.md` says what that file holds, under Run the suite; the
-  README says that `REPORT.md` is a recorded run, not its output, and links
-  to that section. Before, the README promised a scorecard and only the
-  header of `scripts/generate-report.ts` named the command.
-  `scripts/doc-facts.test.mjs` fails when either page no longer runs the two
-  Usage lines of that header in one code block, and when either of the two
-  0.4.1 entries that name the page describing `REPORT.generated.md` does
-  not name it exactly once in the wording the test matches, or names a
-  page with no paragraph that starts with `REPORT.generated.md`.
-
-### Removed
-
-- `hackmyagent` is removed from `dependencies`. It was pinned at 0.23.8 (now
-  deprecated, and inside two published critical advisories,
-  GHSA-jmq8-2mfr-49mh and GHSA-44f3-xgp9-pvp2), but nothing in the shipped
-  package ever imported it by name: the real-adapter and telemetry-bridge load
-  the scanner from a monorepo sibling path (`../../../hackmyagent/dist/...`),
-  which resolves only inside this repo's development checkout and never in a
-  consumer install. Removing the pin drops that whole advisory-affected
-  subtree from every consumer's install closure and changes no behavior. If
-  you were relying on `@opena2a/oasb` to pull `hackmyagent` transitively,
-  install it directly at 0.32.0 or later.
-- The benchmark runner no longer carries `telemetry-bridge`, an unused module
-  that `runBenchmark` called after each submission and that tried to load a
-  module which does not exist. The library's exports are unchanged.
-
-### Changed
-
-- `OASB_ADAPTER` selects the product for all 222 scenario tests, the count
-  at the time of this change (223 since the INT-005 entry below). 37 atomic,
-  integration, baseline and E2E test files (159 tests) built the reference
-  adapter directly, and 5 more (23 tests) ran on the selected adapter without
-  a capability gate, so a scorecard for llm-guard, rebuff or your own adapter
-  counted the reference adapter's passes, and stub results, as that
-  product's own. Each scenario file now builds its adapter with
-  `createAdapter()`, reads events and enforcements through the
-  `SecurityProductAdapter` contract and wraps its suite in
-  `describeWithCapability`, which now also takes a list: a suite that spans
-  several surfaces runs only when the adapter declares every one. With
-  llm-guard or rebuff selected, 16 tests run (AT-AI-001 and AT-AI-005) and
-  206 are N/A, where 197 ran and 25 were skipped before; with the reference
-  adapter every result is unchanged. Two checks read reference-adapter state
-  that the contract does not expose and run only on the reference adapter:
-  the process monitor's status in AT-PROC-001 (N/A on any other adapter) and
-  the instance's running state in INT-008. AT-AI-005 builds its pattern
-  scanner before its tests run instead of while the suite is collected, so
-  it no longer calls an adapter that lacks pattern scanning.
-  `scripts/adapter-gating.test.mjs`, run by `npm run test:scripts`, runs the
-  scenario tests against an adapter that declares no capabilities and
-  against llm-guard and rebuff, and fails when a suite runs without every
-  capability it needs.
-
-- The README offers the Scanner Benchmark as a recall-only comparison across
-  products. It recommended the benchmark "for an apples-to-apples detection
-  comparison across products", but HackMyAgent labeled 3,704 of the 3,881
-  benign samples, so false-positive rate, precision, F1, flag rate and tier on
-  the corpus favor that scanner by construction; only recall on the 270
-  malicious samples is comparable. `npm run check:readme` now fails when a
-  paragraph, table row or heading of the README offers the Scanner Benchmark
-  for comparing products without calling it a recall-only comparison.
-- The MITRE ATLAS coverage tables mark E2E-003 as skipped. Its one test is
-  skipped on every platform, but the README's MITRE ATLAS Coverage table and
-  `docs/mitre-atlas-mapping.md` listed it under AML.T0025 as if it ran.
-  `npm run check:readme` now fails when a scenario test whose tests are all
-  skipped is listed, without "(skipped)" after its ID, in a table of the
-  README's MITRE ATLAS Coverage section or of a page that section links to.
-- INT-005 checks anomaly detection, as `docs/test-catalog.md` said it did. It
-  injected 30 normal events back to back and then 5 events already labelled
-  violation/high, and checked the rule alert, the event buffer and the
-  severities; no anomaly scorer was called. A new test spreads normal process
-  events over 60 simulated minutes, 1 to 5 a minute, then sends a burst of 20
-  events labelled normal in one minute. It checks that the scorer learns one
-  baseline bucket per minute, scores no baseline event above a z-score of 2
-  and scores the burst above 2. The catalog said "5 minutes normal traffic";
-  5 minutes was only the window of an event buffer query, and the entry now
-  describes the 60-minute baseline. The suite has 223 attack scenarios, 166
-  of them mapped to MITRE ATLAS.
-- The README no longer says that every scenario maps to MITRE ATLAS. At the
-  time of this change, 165 of the 222 tests, in 33 of the 47 scenario files,
-  cited one of 15 ATLAS techniques (166 of 223 since the INT-005 entry
-  above); the other 57, in 14 files, test the product's defensive response
-  and its own detection machinery and cite none. The introduction,
-  the MITRE ATLAS Coverage section, `docs/mitre-atlas-mapping.md` and the
-  package description now say so. `npm run check:readme` and the release
-  smoke's drift guard compare each of these README counts with the scenario
-  files, where a file maps to ATLAS when it cites a technique ID such as
-  `AML.T0050`.
-- BL-003 checks that a product keeps its anomaly baselines across a restart.
-  It passed only when the baselines were lost, so a product that persists
-  them failed it. The `AnomalyScorer` contract gains optional `save(dataDir)`
-  and `load(dataDir)`, and an adapter whose scorer has them declares the new
-  `baseline-persistence` capability; BL-003 reports N/A for a product without
-  it. The ARP adapter declares it when the installed hackmyagent's
-  `AnomalyDetector` has `save` and `load`, and passes BL-003. The llm-guard
-  and rebuff adapters keep baselines in memory only and now report BL-003 as
-  N/A where they passed it.
-- A pinned run's `summary.json` names the NanoMind model of the two adapters
-  that use it by the `version` in `nanomind-version.json` of the verified
-  model directory, or by the directory's manifest sha256 when it has no
-  version. It read the version from `~/.nanomind/models` whichever directory
-  was verified, and wrote `vunknown` and `"version": "unknown"` when there was
-  no version file; `results/2026-10-10-d8306ef8/` and
-  `results/2026-10-10-2a89ce5d/`, both written before this change, keep the
-  labels they were written with. The same change renames the two adapters in
-  `scripts/run-benchmark-v2.ts`, which verifies no model directory and still
-  reads `~/.nanomind/models`: without a version file there they are now
-  `NanoMind TME (model only)` and `HMA Full Pipeline (AST + NanoMind)`, where
-  they were `NanoMind TME vunknown (model only)` and
-  `HMA Full Pipeline (AST + NanoMind vunknown)`; the model-only adapter's
-  version is still `unknown` (`src/benchmark/hma-pipeline-adapter.test.ts`
-  checks these names). The package exports the same classes as
-  `benchmark.HMATMEOnlyAdapter` and `benchmark.HMAPipelineAdapter`, and they
-  also read `~/.nanomind/models` there, so code that constructs them from
-  `@opena2a/oasb` gets the same new names.
-  `src/benchmark/pinned/runs-of-record.test.ts` now checks, in a checkout
-  with full history, that each run's `oasb.commit` is an ancestor of
-  `HEAD`. `docs/pinned-benchmark.md` and `--help` describe two more refusals:
-  a scanner whose classifier the harness cannot trace (exit 2), and a
-  classifier whose model session after the scan is not the one it loaded
-  (exit 3). The docs also say that the recorded lockfile sha256 depends on the
-  name of the `--hma` directory, which npm writes into the lockfile.
-- `scripts/run-benchmark-v2.ts` and `scripts/run-dvaa-benchmark.ts` load the
-  sibling hackmyagent and DVAA checkouts unpinned, so they now refuse to run
-  (exit 2) without `--unpinned`. They no longer overwrite
-  `benchmark-results-v6.json` or `dvaa-benchmark-results.json`: they print
-  their results and write a file only to a new path given with
-  `--out=<file>`. The deprecated `scripts/run-benchmark.ts` now points to the
-  pinned harness and to `run-benchmark-v2.ts --unpinned`; it printed a
-  `run-benchmark-v2.ts` command without `--unpinned`, which is refused.
-- `npm run check:readme` compares every test count the README states with
-  the suite, each for equality: the badge, the Quick Start comment, the Counts
-  note, the `npm run test:*` comments, the scenario counts, including the one
-  in the `opena2a benchmark run` comment, and each row of the
-  "What Gets Tested" table, per source directory. It read none of them, so a
-  README with stale counts passed it. It collects the suite with vitest
-  (no test runs), so it needs `npm ci` and compares each passing count with
-  the tests that are not skipped; `--tests <report.json>` compares with a
-  vitest JSON report instead, and `--no-counts` skips the comparison, which
-  the first step of `npm run smoke` uses before it installs. A report written
-  in another checkout is read by each file's path from its `src/` directory,
-  as the drift guard reads it; it was read relative to the checkout running
-  the check, so every count taken from a test file's directory mismatched
-  (the total, passing and skipped counts did not). In both README checks, a
-  report without `testResults`, a `testResults` entry without a `name` or an
-  `assertionResults` list, and a test result that is not an object with a
-  string `status` are each reported by that field or entry instead of a
-  JavaScript error, a README path that does not exist is reported by its path
-  instead of a stack trace, and `--help` prints the usage on stdout and exits
-  0. A README or test report that cannot be read is named once, followed by
-  the reason (`ENOENT: no such file or directory`); the line repeated the path
-  in Node's error message after it. An error whose message does not end with
-  the path keeps its whole message instead of only its code. The statements
-  both checks compare are one list, `STATEMENTS` in
-  `scripts/readme-counts.mjs`; each check kept its own copy before, and a
-  reworded sentence had to be updated in both. The tests of both checks run
-  after `npm ci` in `npm run smoke`, and include one that changes each count
-  of a README in turn, one that runs `npm run check:readme` on this README,
-  and one that collects the suite with the llm-guard and rebuff adapters; the
-  last two fail when collecting leaves an adapter data directory.
-- Constructing an adapter no longer creates its data directory: the ARP
-  adapter creates its ARP instance and the directory on first use, and the
-  llm-guard and rebuff adapters create the directory when `dataDir` is first
-  read. Collecting the suite (`npm run check:readme`, `vitest list`) left ten
-  empty `arp-lab-*` directories in the temp directory on every run, and
-  `npm test` left one for each adapter it constructed and never stopped.
-- The README's Skills Security Benchmark section now matches the scoring code:
-  the nine attack categories in `src/benchmark/types.ts`, controls SS-01 to
-  SS-10 and SEC-021 with their compliance levels in
-  `src/benchmark/controls.ts`, and tiers assigned from F1, false-positive
-  rate, category coverage and kappa in `src/benchmark/scoring.ts`. The
-  previous tables listed categories, level requirements and tier criteria the
-  code does not use. No tier is published for the v2 corpus, because its F1
-  and false-positive rate are withdrawn.
-- The README no longer repeats two claims corrected elsewhere: that over 2,900
-  benign registry MCP servers declare wildcard tool access (corrected in
-  BENCHMARK-RESULTS.md § 3 on 2026-08-27), and the "lines 9-11" location of
-  the corpus labeling rule, which now points at the rule's code. The DVAA
-  runner comment names its sibling-checkout prerequisite instead of a stale
-  "70 scenarios" count.
-- The release smoke's drift guard (`scripts/check-test-counts.mjs`, run by
-  `npm run smoke`) compares every test count the README states with the
-  suite: the badge, the Quick Start comment, the Counts note, the per-group
-  comments, the scenario counts in the prose, the scenario-file count and
-  every row of the What Gets Tested table. It read three of them before, and
-  passed a badge lower than the passing count. Its tests run with
-  `npm run test:scripts`.
-- `npm test` runs the tests in `scripts/` (`npm run test:scripts`) before the
-  suite, so the pull request CI job and the release workflow, which run
-  `npm test`, run them too: the tests of both README checks, and
-  `scripts/changelog-width.test.mjs`, which fails when a line of this file is
-  wider than 80 characters. The README check tests ran only in
-  `npm run smoke` before, so a pull request could change a README check, or
-  add a test without updating the README's counts, and pass CI. They are not
-  vitest tests and do not change the totals the README states.
-  `npx vitest run` and the `npm run test:*` groups run the suite without
-  them.
-- The changelog width test does not count the carriage return of a CRLF line
-  ending, so an 80-character line passes in a checkout that converts line
-  endings; it was reported as 81 wide. The test exempts one line, the
-  2026-08-27 correction recorded as a single paragraph, and now matches that
-  line whole: any line that starts the same way was exempt before, at any
-  width.
-- `npm run smoke` runs `npm run test:scripts` instead of a list of its own,
-  which named two of the three test files in `scripts/` and left the
-  changelog width test out.
-- The drift guard in `npm run smoke` compares the test counts of the README in
-  the fresh clone, the committed one. It read the README of the working tree
-  the smoke was started from, so an uncommitted edit to it was what the smoke
-  measured. The test of this in `scripts/check-test-counts.test.mjs` fails
-  when the last line before the drift guard that changes directory is not
-  `cd "$TMP/oasb"`, so a `cd "$ROOT"` between the clone and the guard no
-  longer passes it, and it accepts `./README.md` as the README's path. It
-  counts a line that is not a comment as a change of directory when one of
-  its commands is `cd`, `pushd` or `popd`, also written `\cd`. A line that
-  ends in a backslash is read as one line with the next, unless the
-  backslash is escaped or in a comment. A command starts the line or follows
-  `;`, `&`, `|`, a `(` left open on the line or the `)` of a `case` pattern,
-  and its name comes after any `NAME=value` or `NAME+=value` assignments, any
-  `function NAME` and any of `!`, `{`, `if`, `elif`, `while`, `until`,
-  `then`, `do`, `else`, `eval`, `time`, `builtin` and `command`; a `{` inside
-  a word, as in `x{cd`, or after the command's name starts no command. Text
-  in a quoted string, a `$'...'` string (in which `\'` does not end the
-  string), a `${...}` expansion, a command substitution, a comment or a
-  `(...)` subshell that closes on the line is not a command of the script's
-  shell and is not counted. Some lines count that leave the script's shell
-  where it is: a `cd` in a pipeline, in a background job or in the body of a
-  shell function, called or not, and, as each line is read on its own unless
-  a backslash joins it to the next, a `cd` on a line of a subshell, string or
-  here-document that spans lines. A change of directory written another way
-  (`"cd"`, `eval "cd ..."`, a variable or an alias), or made by a sourced
-  file or by a call of a shell function defined before the clone, is not
-  detected.
-- The drift guard in `npm run smoke` counts an E2E-001 case skipped as
-  inconclusive with the passing tests, not with the skipped ones, and lists
-  each such case in its output. A case is skipped so only when the host
-  delivered no file event to the harness's own watcher, which is not a change
-  to the suite, but the guard read the passing and skipped counts of the run
-  as they were, so on a loaded host the smoke failed with the README's
-  passing and skipped counts reported as drift. E2E-001 now skips such a case
-  with `skipInconclusive` (`src/harness/filesystem-watch.ts`), which records
-  the reason as `inconclusive` in the test's meta, where vitest's JSON
-  reporter writes it. A test skipped without it, such as a new `it.skip`,
-  still changes the skipped count the guard compares. A file in which a test
-  was skipped so and no test passed with the product's own event fails the
-  guard as `NOT MEASURED`, whatever the counts say: when the host delivers no
-  file event for them, the E2E-001 detection cases are skipped and the run
-  says nothing about the file, although its case that expects no violation
-  for a normal file still passes. A detection case that gets the product's
-  event records `detected` in its meta (`markDetected` in
-  `src/harness/filesystem-watch.ts`), and the guard takes a file with a case
-  skipped as inconclusive as measured only when a test that passed carries
-  that mark. The same holds where Node.js has no recursive `fs.watch`, since
-  the entry below that starts "Two E2E-001 verdicts change": every case is
-  skipped so there, and the guard fails the file that way on every run.
-  `node scripts/check-readme.mjs --tests <report>` counts a case
-  skipped as inconclusive with the passing tests too and prints how many
-  there were: it compared the README's passing counts with the tests that
-  passed only, so it failed on a report the guard accepted.
-  `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
-  `src/` calls `skip(`, written so, on anything but `it`, `test` or
-  `describe`, so a test that skips at run time has to call
-  `skipInconclusive`. It reads the text of those files: a skip written
-  another way (`ctx.skip (...)`, `ctx['skip'](...)`) or made by a helper
-  outside those files is not detected. It runs its skip fixture with vitest's
-  cache off and fails when the run adds or removes an entry of the fixture
-  directory, so the run writes nothing under `scripts/`; an entry that was
-  there before the run, such as a `.DS_Store`, does not fail it.
-- `src/benchmark/pinned/runs-of-record.test.ts` checks every committed run
-  inside a fixed set of eight tests, so committing a run no longer changes the
-  `npm test` total. Its check that at least one
-  committed run says what scored its samples no longer needs a run of the
-  current record schema: a run of any schema but v1 that records what scored
-  its samples is enough, so raising the schema does not fail that check
-  before a run of the new schema exists.
-- `npm test` on Node 24 under load on macOS no longer fails now and then with
-  an unhandled `setTypeOfService EINVAL` error while every test passes.
-  Node 24's `fetch` sets the type-of-service option on a new connection just
-  before it writes the request and lets the error escape when the connection
-  was reset first, which the stand-in NanoMind daemons in
-  `src/benchmark/pinned/pinned.test.ts` do on purpose. That file now treats
-  the option as best effort, as Node 26's `fetch` does, so a reset connection
-  fails only its own request, and a new test resets a connection at that
-  point.
-- `src/benchmark/pinned/pinned.test.ts` now ignores every error the
-  type-of-service option raises, as Node 26's `fetch` does, instead of only
-  EINVAL. A platform that reports another errno for a torn-down socket no
-  longer fails `npm test` with an unhandled error, and a new test checks the
-  option for EINVAL, ECONNRESET, ENOTCONN, EBADF, ENOPROTOOPT and an error
-  with no errno. Two more tests check that the option is called once, with
-  its return value passed through, when it succeeds, and that the file
-  installs the wrapper; on Node 26.7.0, no test failed before when the
-  wrapper, or its call to the original option, was removed.
-- The pinned harness tests check at the end of every test that the
-  type-of-service option is still the wrapper the file installed, so a test
-  that replaces the option and leaves the replacement in place fails; the
-  check was made once before, when one test ran. That test now also calls
-  the option through `Socket.prototype` on a socket that is not connected:
-  the value it sets reads back, and a value the original option refuses
-  raises no error. On Node 26.7.0 every test passed before when the
-  installed wrapper was a function that never calls the original option, or
-  when a later test replaced the wrapper with one.
-- The README's What Gets Tested table calls the one skipped test "skipped on
-  every platform", as its Counts note does. The table said
-  "environment-skipped", but the test is skipped unconditionally.
-- A relative `OASB_ADAPTER` path, such as `OASB_ADAPTER=./my-adapter.js npm
-  test` from the README, resolves from the directory the command runs in. It
-  resolved from `src/harness/`, so the module was not found; an absolute path
-  or a package name loads as before. Three tests in
-  `src/harness/create-adapter.test.ts` load an adapter from a temporary
-  directory by a `./` path, a `../` path and an absolute path, and the README
-  counts them in a new Adapter loading row of What Gets Tested.
-- An `OASB_ADAPTER` value that is not `arp`, `llm-guard`, `rebuff`, a path
-  or a module that resolves stops the run with one line that names those
-  values and the class shapes a module may export, with no stack. It died
-  with Node's `Cannot find module` and its require stack. A case variant of
-  a built-in name, such as `ARP` or `Llm-Guard`, gets the same line with the
-  name it differs from (`did you mean "llm-guard"?`) and is never loaded as
-  a package: on a case-insensitive filesystem `Llm-Guard` loaded the
-  llm-guard npm package as a custom module, and the run failed with
-  `adapter.getCapabilities is not a function`.
-- A custom adapter module that assigns its class to `module.exports` loads.
-  It was refused as "does not export an adapter class", while the same class
-  as a default or named export loaded. A module that exports no class now
-  gets the accepted shapes in its message: the default export, a named
-  export `Adapter`, or `module.exports = Class`, which `docs/adapters.md`
-  states under The adapters. `scripts/doc-facts.test.mjs` reads each page
-  this entry names after `module.exports = Class` and fails when it does not
-  state all three shapes. Four tests in `src/harness/create-adapter.test.ts`
-  hold both entries, and `npm test` runs 428 tests (427 passing, 1 skipped).
-- `OASB_ADAPTER=rebuff` now runs the heuristic detection of the rebuff npm
-  package, as the README says. rebuff was not a dev dependency, so `npm ci`
-  did not install it, and its published package holds TypeScript sources
-  only, which Node cannot require: the adapter caught the failed load, scored
-  every input 0 and scanned with its own `RBUF-*` patterns alone, with no
-  message. rebuff 0.1.0 is now a dev dependency, and
-  `src/harness/rebuff-loader.ts` compiles the sources the heuristic needs in
-  memory with the `typescript` dev dependency. An input that only the
-  heuristic catches ("Pay no attention to prior messages") is reported as
-  `RBUF-HEUR-001`; it was not detected before. When rebuff or typescript is
-  not installed, each scan throws an error that names the package and how to
-  install it, instead of returning a result; when the install does not hold
-  the heuristic, the error names the source file and the reason. Constructing
-  the adapter still needs neither package. Five tests in
-  `src/harness/rebuff-wrapper.test.ts` cover the loading, a missing or
-  incomplete rebuff install and the failed scan; none covers a missing
-  typescript. The rebuff figures in `REPORT.md` were measured before this
-  change and have not been re-measured.
-- The README's Usage via OpenA2A CLI section shows the commands the CLIs
-  have: `opena2a benchmark <dir>` (with `--level` and `--format json`) and
-  `hackmyagent secure <dir> -b oasb-1` (with `--fail-below`), which check an
-  agent directory against the OASB-1 controls. It showed
-  `opena2a benchmark run` running all 222 scenarios, a `--technique` filter
-  and per-technique detection rates in the JSON output; the OpenA2A CLI has
-  no `benchmark run` subcommand or `--technique` option, and runs none of
-  the scenarios, which still run with `npm test`. `npm run check:readme`
-  fails when a README line shows `opena2a benchmark run` or an `opena2a`
-  command with `--technique`, and no longer looks for the
-  `# all <n> scenarios` comment.
-- The README and BENCHMARK-RESULTS.md report the pinned run of record in
-  `results/2026-10-10-2a89ce5d/` beside the 2026-06-05 figures:
-  hackmyagent 0.33.2 detects 192/270 (71.1%) with the full pipeline,
-  138/270 (51.1%) with static patterns and 251/270 (93.0%) with the model
-  alone, and 17 of 86 DVAA scenarios (19.8%). Both pages said the 2026-06-05
-  figures of hackmyagent 0.23.8 had not been re-measured and led with them,
-  82.6% (223/270) and 25 of 86, although two pinned runs of record were
-  committed. The inputs of the 2026-06-05 run were not recorded, so it is not
-  a baseline for the pinned run and the difference is not traced to a cause.
-  `src/benchmark/pinned/runs-of-record.test.ts` now fails when either page
-  does not name the newest run of record or does not state its count for
-  each corpus adapter and for the DVAA scenarios.
-- `npm run report` (`scripts/generate-report.ts`) reads the MITRE ATLAS
-  mapping from the `// ATLAS:` header of each scenario file and reports 15
-  techniques. It printed a fixed table of the mapping withdrawn on
-  2026-06-03, 10 techniques, with AT-PROC-001 under AML.T0046 (now
-  "Spamming AI System with Chaff Data") and INT-002 under AML.T0056 (now
-  "Extract LLM System Prompt"), and it left out the E2E scenarios. Given a
-  vitest JSON report it takes each file's status from its tests, so a file
-  whose tests were all skipped shows SKIP where vitest marks the file passed,
-  and it exits 1 on a file that is not a vitest JSON report.
-  AT-INT-002 and AT-INT-004 gain the `// ATLAS:` header their mapping in
-  `docs/mitre-atlas-mapping.md` already gave them, and
-  `scripts/scenario-report.test.mjs` fails when the headers and that page's
-  Coverage Summary disagree. REPORT.md is marked as the 2026-03-23 snapshot it
-  is: its mapping, its integration and E2E counts, its "all 16 capability
-  categories" for arp-guard and its llm-guard results no longer hold. The
-  demo GIF in the README still shows the 222-test run and is not re-recorded.
-- When arp-guard is not installed, `getCapabilityMatrix()` and the default
-  adapter's methods throw an error that names `npm install arp-guard` and the
-  `OASB_ADAPTER` alternative. They threw `Cannot find module 'arp-guard'`,
-  which is what the README's library example did after
-  `npm install @opena2a/oasb`: arp-guard is an optional peer dependency and
-  npm does not install it. The example now installs arp-guard too.
-  `scripts/library-entry.test.mjs` builds the package and loads it where
-  arp-guard cannot be resolved.
-- `docs/AUDIT-2026-06-03.md` is marked as of 2026-06-03 and sends the reader
-  to the README for the current test counts. Its table gives 23
-  scoring-engine tests and an `npm test` total of 245, the counts of that
-  day, under a first paragraph that said every count is measured from
-  `npm test`. Two statements that did not hold when it was written are
-  corrected and dated. The one skipped E2E test is disabled on every
-  platform; the page said it is skipped when `lsof` or `ss` is unavailable.
-  On 2026-06-03, under `OASB_ADAPTER=llm-guard`, the process, network,
-  filesystem and enforcement suites passed, because they then constructed
-  the arp-guard adapter directly whichever adapter was selected; follow-up 1
-  said they report failures. They are gated now and report N/A (see the
-  first entry under Changed, on `OASB_ADAPTER` selecting the product for
-  every scenario test). `npm run check:readme` now fails when a page
-  the README links under a dated file name does not say "as of" that date
-  and link to the README above its first H2.
-- Four statements in the README and `BENCHMARK-RESULTS.md` are corrected to
-  match the data. The ATLAS sentence said the AI-agent technique family was
-  added in 2025; of the agent techniques mapped here, AML.T0081 and
-  AML.T0086 were created on 2025-09-30, AML.T0105 on 2026-01-30 and
-  AML.T0034.002 on 2026-03-30 (also corrected in
-  `docs/mitre-atlas-mapping.md`). The README said `corpus/v2.json` has since
-  grown uncategorized malicious samples; the file last changed on 2026-03-27
-  and already held its 225 when both published runs excluded them. Of the
-  177 hand-authored benign samples, 107 declare `source: 'registry'` and 70
-  declare `source: 'enterprise'`; all 177 were said to declare `registry`.
-  The `allowedTools: ['*']` line in `scripts/export-registry-corpus.mjs` is
-  243, not 233. `scripts/doc-facts.test.mjs` reads the corpus and the script
-  and fails when the last three statements no longer match them.
-- AT-AI-005 now fails when a pattern the scanner exposes has no known
-  payload, and it has payloads for JB-003 (hypothetical bypass) and MCP-004
-  (runtime MCP tool registration or override), the two of the reference
-  build's 20 patterns it never exercised. Its first test checked only that
-  there were at least 18 patterns. The test count is unchanged.
-  `docs/test-catalog.md` and REPORT.md's AT-AI-005 row no longer say the test
-  covers 19 patterns. REPORT.md's scan throughput row says it was measured on
-  2026-03-23 on the 19-pattern build and not re-measured on the 20-pattern
-  one.
-- `docs/shield-maturity-extension.md` no longer maps its eight SM categories
-  to MITRE ATLAS techniques, and says that it is a proposal. Its mapping
-  table gave eight technique IDs names that `docs/mitre-atlas-mapping.md`,
-  the page whose IDs and names are verified against MITRE's `ATLAS.yaml`,
-  does not give them: AML.T0015 is Evade AI Model there, not "Automated
-  Triage", AML.T0025 is Exfiltration via Cyber Means, not "Credential Theft",
-  and the other six IDs are not on that page. The SM categories check the
-  security product's own machinery, not an attack, so the page leaves them
-  unmapped, as the mapping page leaves the defensive-response and capability
-  tests. The page also said that 48 of its 52 SM tests "pass today", but no
-  SM test exists in this repository and there is no `src/maturity/`. It now
-  opens with a proposal status, states each category's Shield coverage as
-  expected and not measured, and drops the 92% figure.
-  `scripts/check-maturity-page.mjs`, run by `npm run test:scripts`, fails
-  when the page writes an ATLAS technique ID that the mapping page does not
-  list or lists under another name, and, while `src/maturity` has no test
-  file, when the page is not marked as a proposal or states Shield coverage
-  without "not measured".
-- The Known Gaps table of `npm run report` words each gap and its severity
-  as the README's Known Detection Gaps table does. It said that anomaly
-  baselines are not persisted across restarts while the same report listed
-  BL-003, which checks that they are saved and loaded, as passing; the gap
-  is that the runtime does not reload them when it restarts.
-  `scripts/scenario-report.test.mjs` fails when the two tables differ.
-- `npm run check:readme` names a key of `STATEMENTS` in
-  `scripts/readme-counts.mjs` that is not one of its counts. It threw a
-  TypeError instead.
-- The OpenAI-shaped and AWS-shaped keys in AT-AI-002's output-leak payloads
-  spell FAKE and are joined at run time, so a credential scan of a push that
-  touches them does not refuse it; OL-001 still matches both.
-  `scripts/placeholder-credentials.test.mjs` fails when an API-key-shaped
-  value in `src/` does not spell FAKE.
-- STATUS.md says that no agent trust certificate work is planned in this
-  repository. The planning memo that recorded it, `briefs/`, is removed.
-- `npm run check:readme` also names a key of `STATEMENTS` that every object
-  inherits, such as `constructor` or `toString`. It threw a TypeError for
-  those.
-- `scripts/placeholder-credentials.test.mjs` no longer reports a hyphenated
-  word that has "sk" before a hyphen, such as a `risk-` compound with twenty
-  or more letters and hyphens after the hyphen, as an OpenAI-shaped key.
-- AT-AI-002's AWS output-leak test is named for the access key ID, the part
-  of the payload OL-001 matches, and checks that OL-001 is the pattern that
-  matched. It was named for a secret key, which OL-001 does not detect.
-- `npm run report` writes `REPORT.generated.md`, which git ignores. It wrote
-  `REPORT.md` and so replaced the 2026-03-23 run kept there as recorded.
-- The Summary of `npm run report` counts the attack scenarios only, the
-  tests under `src/atomic`, `src/integration`, `src/baseline` and `src/e2e`.
-  It counted every test of the run: the scoring-engine, pinned benchmark
-  harness and adapter tests were in "Passed" and the skipped scenarios in
-  the denominator of the pass rate, so a run of AT-AI-001 and
-  `src/benchmark/scoring.test.ts` with an adapter that declares no
-  capabilities read 17 passed and a 60.7% pass rate with every scenario
-  skipped. The table now gives the scenarios, the passed, the failed, the
-  not applicable (in a suite skipped by the product's capability
-  declaration) and the skipped for another reason, and a pass rate over the
-  passed and failed scenarios; with none of those it reads "not measured (0
-  scenarios evaluated)". The other tests are on a "Harness self-tests" line
-  outside the pass rate. A scenario file that vitest marks failed with no
-  failed test, such as one whose adapter threw while it was collected, is
-  FAIL instead of SKIP and is counted in the table. "Unique ATLAS techniques
-  covered" gave the 15 techniques the scenario headers map, whatever the
-  status of their files; that count is now "techniques mapped", and a report
-  with results also gives the techniques covered by a passing scenario.
-- The report `npm run report` writes names the product under test. A vitest
-  run with a JSON report file writes `<report>.adapter.json` beside it
-  (`scripts/record-adapter.mjs`, a global setup in `vitest.config.ts`): the
-  `OASB_ADAPTER` value, `arp` when it is unset, and the product, version and
-  capabilities the adapter's `getCapabilities()` declares. The record holds
-  the SHA-256 of the report it was written for, so a record left beside a
-  report from another run is not read. Without a record the report reads
-  "Product under test: not recorded" and names the command that writes both.
-- The secret scan in the security workflow reads every commit a push to
-  `main` adds, from the push's previous head to its new head; it read only
-  the head commit, so a push of several commits left all but the last
-  unscanned. A push with no previous head in the history, such as a force
-  push, is read in full. The weekly scheduled run reads the full history,
-  not only the last commit. gitleaks is pinned to 8.30.1 and its archive is
-  checked against the release's sha256 before it is unpacked; it was the
-  latest release, unchecked. The job's token can only read the repository.
-  `scripts/secret-scan-workflow.test.mjs` checks these: the workflow's
-  triggers, that the job has no condition of its own and fails when
-  gitleaks reports a leak, the read-only token, the pinned version, the
-  checksum's value and the step that checks it, the download host, the pull
-  request range, the push range and its fallback, and the scheduled run's
-  full history. Its last test weakens a copy of the workflow in each of
-  those ways and fails when no other test fails on the copy; the change to
-  the step that checks the checksum is made only where `sha256sum` is
-  installed, as the test that catches it runs only there. It does not check
-  the workflow's concurrency settings, under which a later run can cancel
-  one before its scan finishes, or which version of the checkout action the
-  job uses.
-- `scripts/placeholder-credentials.test.mjs` reports an OpenAI-shaped key
-  written right after an escape sequence, such as `\n` or `\x3D`, or after a
-  percent-encoded byte, such as `%3D`. A key after the letter or digit that
-  ends one was read as the middle of a word, so the test passed such a value.
-- `scripts/scenario-report.test.mjs` reads `.gitignore` to check that it
-  ignores `REPORT.generated.md`. It asked git, and so failed in a source
-  archive without git metadata or where git is not installed. It decides as
-  git does: the last line that matches the file decides, a glob such as
-  `REPORT.*.md` or `!*.md` included. It read only lines that name the file,
-  so a later `!*.md` passed the test although git then does not ignore it.
-- `npm run report` exits 1, writing no report, when the results file named
-  as its argument does not exist, and names the `npx vitest run` command
-  that writes it. It wrote a report with every status N/A and exited 0, as
-  it still does when no argument is given and `test-results.json` does not
-  exist.
-- `npm run report` runs tsx 4.23.15, pinned as a devDependency. It ran
-  `npx tsx`, which downloaded the registry's current tsx when none was
-  installed.
-- `docs/demo.tape` states no test or scenario count. It said 222 tests and
-  222 attack scenarios; the README states the counts.
-- `docs/demo.tape` runs from the root of any clone. Its hidden setup changed
-  into one checkout path under the home directory.
-- Before each case, the E2E-001 live filesystem tests write files named
-  `oasb-watch-probe-N` into the watched directory, one every 250 ms, until
-  the product reports one. They paused a fixed 200 ms after starting the
-  product. The wait is at most 5 seconds, and it ends 1 second before the
-  10-second timeout of the hook it runs in, so a product that is slow to
-  start gets the time the fixed pause left it: the wait lasts at least
-  200 ms. The `.env` case and the normal-file case leave the probe events
-  out. Each detection still waits 5 seconds, and `vitest.config.ts` is not
-  changed. A `waitForEvent` that throws, or that does not settle when its
-  timeout passes, counts as no report. The 8 tests in
-  `src/harness/filesystem-watch.test.ts` cover the wait and its budget.
-- Of six test adapters written for the comparison, not in this
-  repository, the E2E-001 result changed for one: an adapter whose watcher
-  misses the writes made in the first second after `start()` went from
-  4 failed and 1 passed to 5 passed. Adapters that report each write
-  7 seconds late (4 failed, 1 passed), that report only sensitive paths
-  with a `start()` of 5.2, 6 or 9 seconds (5 passed), whose `waitForEvent`
-  never settles (5 passed) or throws (4 failed, 1 passed), and that report
-  every write as a violation (1 failed, 4 passed) kept their results.
-  `llm-guard` and `rebuff` skip E2E-001 with and without the change.
-- With the probe wait alone, E2E-001 detection cases still reached their
-  5-second timeout under full-suite load: in one
-  `npx vitest run --maxWorkers=4` on a 16-core macOS host at a 1-minute
-  load of 7.9 to 8.1, the `.bashrc` and `.npmrc` cases timed out. The file
-  run alone, with four workers, passed at a load of 9.1 and had one such
-  timeout at a load of 10.4 while other test runs shared the host. The
-  entry below reads such a case against the harness's own watcher.
-- An E2E-001 detection case the product reported nothing for within its
-  5-second window is read against a control: the harness's own `fs.watch`
-  of the watched directory, opened before the product starts and closed
-  after it stops, which records every file event the host delivers to the
-  process. The control is read when the window has ended, also when the
-  product's wait fails sooner. When it saw the path within the window, the
-  case fails as before, with the control's time added to the message; when
-  it saw nothing, the case is skipped from inside the test as inconclusive,
-  naming the path, the window, the measured load and the product's own
-  error. A case whose product reported no probe file within the readiness
-  wait goes on to its write, as before, when the control saw one of the
-  probe files; when the control saw none, the case is skipped as
-  inconclusive without its write, naming the wait, how many of the probe
-  files the control saw and the measured load. A case is skipped only when
-  the control saw no file event for what decides it: none for the case's
-  file within its 5-second window, or none for any probe file during the
-  readiness wait of a product that reported none. A case that is not
-  skipped passes or fails as it did before, so the adapters compared above
-  keep their results in every case that is not skipped. The window, the
-  single write per case, the five cases and their assertions do not
-  change. No detection case passes without the product's own event. The
-  entry below that starts "Two E2E-001 verdicts change" changes two of
-  these verdicts: it adds a skip where the control cannot be opened, and a
-  filesystem event without `data` no longer fails a case. On a
-  16-core macOS host at a 1-minute load of 14.8 to 28.3, with `fseventsd`
-  at 85% to 106% of a core, the file run alone five times gave 0 failed and
-  4 or 5 skipped per run; each readiness skip stated that the control saw
-  0 of the 20 probe files written. One `npx vitest run --maxWorkers=4` of
-  the whole suite, at a load of 21.4 with `fseventsd` at 112%, gave 370
-  passed, 3 skipped (2 E2E-001 cases and E2E-003) and 0 failed. Against a
-  scratch adapter outside the repository that polls the directory, each
-  mode run once with the file alone: reporting only sensitive paths, 5
-  passed; the same with a `waitForEvent` that never times out, 3 passed and
-  2 skipped before their write; reporting nothing, with a `waitForEvent`
-  that throws, or reporting each write 7 seconds late, it failed each case
-  whose write the control saw (3, 3 and 2 of the 4) and skipped the others;
-  with a `waitForEvent` that fails at once for the case's file, it failed
-  the 1 case whose write the control saw, 2939 ms after the write, and
-  skipped the 3 others. The normal-file case passed in each of those runs.
-  With the control replaced by a watcher that delivers nothing, reporting
-  only files that are not sensitive skipped all 4 detection cases and
-  passed none, and reporting nothing skipped all 5 before their write.
-  `src/harness/filesystem-watch.test.ts` has 11 more tests, 19 in the file,
-  for the control and the rules; the suite was then 373 tests, 372 not
-  skipped. `docs/test-catalog.md` states the 5000 ms window for E2E-001
-  instead of a latency of about 200 ms, which no measurement supported.
-- `scripts/changelog-width.test.mjs` also fails when a line of
-  `docs/testing/release-smoke.md` is wider than 80 characters. Two lines of
-  the guide's drift guard step were wider, 104 and 84 characters; they are
-  rewrapped at 78 or less, with the text unchanged.
-- Two E2E-001 verdicts change. First, where Node.js has no recursive
-  `fs.watch`, every E2E-001 case is skipped as inconclusive; each one
-  failed there. The control is a recursive `fs.watch`, which Node.js has
-  on Linux from 19.1.0, while `package.json` allows Node.js 18. Before
-  19.1.0 on Linux, opening it throws `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`
-  in the hook that runs before each case, so all five cases, the
-  normal-file case among them, failed with that error whatever the product
-  did. Now each case is skipped there, before the product is created or
-  any file is written, with a message that says the case was not measured
-  and names the Node.js version, the platform and the error; any other
-  error on opening the control still fails the case. The skip is made
-  with `skipInconclusive`, as every run-time skip of a test under `src/`
-  is, so the release smoke's drift guard counts these cases with the
-  passing tests and, as no test of the file passed, fails the file as
-  `NOT MEASURED` on every run on such a Node.js;
-  `docs/testing/release-smoke.md` says so. Not run on Node.js 18: with
-  `fs.watch` replaced by one that throws that error for a recursive watch,
-  the file gave 5 failed before this change and 5 skipped with it, each
-  recorded as inconclusive, and the drift guard read the report of that
-  run as the file not measured; a unit test replaces the watch function
-  the same way. Second, a filesystem
-  event that has no `data`, which the adapter interface allows, no longer
-  fails a detection case. The four detection predicates read `data`
-  without a check and threw a `TypeError` on such an event; they now read
-  it with `?.` and pass over the event. With such an event collected
-  before a case's wait, the wait failed at once, so the case failed when
-  the control saw the path and was skipped as inconclusive when it saw
-  nothing, also when the product then reported the write; now the case
-  waits for that report and is read by it. With such an event arriving
-  during the wait, the `TypeError` was thrown into the adapter's call of
-  its event handler; now nothing is thrown. A product whose only report of
-  the write has no `data` is read as a miss, as before. Measured with the
-  harness's event collector, a stubbed control and the predicates as
-  written before and after. The reference adapter's filesystem monitor
-  puts `data` on every event it reports (hackmyagent 0.23.8, the locked
-  version), so its results do not change. Nothing else in this entry
-  changes a verdict. An error the control's watcher reports was ignored, so
-  its silence afterwards read as the host delivering nothing. The first
-  such error is kept and named in the inconclusive message of a case the
-  control recorded no event for, in the 5-second window or in the readiness
-  wait; a case whose path the control recorded before the error still
-  fails as a product miss. The inconclusive messages gave `loadavg 0.00` on
-  Windows, where Node.js measures no load; there they say `loadavg
-  unavailable on Windows`. After a case, the control is closed and the
-  watched directory removed also when the product's `stop()` rejects; both
-  were left behind. The rules a case is read by stay where they were:
-  `awaitDetection` and `readinessSkip` decide in
-  `src/harness/filesystem-watch.ts`, and the test file fails the case or
-  skips it with `skipInconclusive`, where
-  `scripts/check-test-counts.test.mjs` checks each skip.
-  `src/harness/filesystem-watch.test.ts` has 12 more tests, 31 in the
-  file: for the message where Node.js has no recursive `fs.watch`, the
-  control's error, the load on Windows, the end of a case, a case the
-  control saw only other files for, and an upper bound on the wait that
-  follows a product miss. The README states a limit of the readiness
-  wait: a product whose `start()` returns 8.8 seconds or more into the hook
-  leaves that wait at its 200 ms minimum, so when it also reports no probe
-  file, its cases are measured only if the control saw a probe file within
-  those 200 ms. On a 16-core macOS host at a 1-minute load of 16.3 to
-  24.3, the file run alone three times gave 0 failed in each run: 4
-  skipped and the normal-file case passed; 5 skipped; 5 skipped. Each skip
-  named a wait in which the control saw no event, so no detection case was
-  measured in those runs.
-- The git commands of `src/benchmark/pinned/pinned.test.ts` are stopped
-  after 8 seconds and fail with a message that names the command. They had
-  no time limit, and the calls are synchronous: a stalled git blocked the
-  test worker, so the 10-second test timeout could not fire. One more test
-  covers it, 99 in `src/benchmark/pinned`; the suite is 386 tests, 385 not
-  skipped.
-- `npm run typecheck:tests` type-checks `src/` with its test files
-  (`tsconfig.test.json`, no output). `npm run build` excludes the test
-  files and vitest does not check types, so a type error in a test was
-  never reported. The 8 in E2E-001 are fixed, each by reading an event's
-  optional `data` with `?.`. The assertions do not change; one verdict
-  does, as the E2E-001 entry above states: a filesystem event without
-  `data` no longer fails a detection case. On 2026-10-12 the command
-  reports 259 errors in 34 other scenario test files, which this entry
-  does not fix, and `npm test` does not run it.
-- Those 259 errors are fixed, and `npm test` runs the check: its
-  `pretest` script runs `scripts/typecheck-tests.test.mjs`, which fails
-  when `npm run typecheck:tests` reports a type error or when
-  `tsconfig.test.json` takes in no scenario test file. The adapter
-  interface gains, as optional additions, what the reference adapter
-  implements and the tests use: the `anomaly` event category,
-  `requireLlmConfirmation` on `AlertRule`, `threshold` on `AlertCondition`,
-  and `targetPid` as a third argument of `EnforcementEngine.execute()` and
-  as a field of `EnforcementResult`; `activity` stays. The tests read an
-  event's optional `data` with `!`, which leaves what they run unchanged.
-  Events the tests inject with the `connection` category or the `warning`
-  severity, which neither the interface nor the reference adapter defines,
-  now use `normal`, the category the reference adapter gives a connection
-  to an allowed host and a file write it does not flag, and `medium`, the
-  severity it gives a connection to a host that is not allowed. With the
-  reference adapter, the 148 tests in those 34 files have the same results
-  before and after: 147 pass, 1 is skipped.
-- The code that reads an E2E-001 case moves from the test file to
-  `src/harness/filesystem-watch.ts`, where unit tests cover it:
-  `detectWrite` awaits the product's event for a write, fails the case on
-  a product miss, skips it as inconclusive when the host delivered no
-  event and marks it detected only when the product reported the write;
-  `openControlWatchOrSkip` opens the control and skips the case as
-  inconclusive where Node.js has no recursive `fs.watch`; and
-  `isSensitiveFileEvent` and `fileEventFor` are the four detection
-  predicates. In the test file, deleting the mark, that skip or the
-  rethrow of any other error on opening the control, or reading an
-  event's `data` without `?.`, left `npm test` and `npm run test:scripts`
-  passing. The code is the same, so no verdict changes.
-  `scripts/check-test-counts.test.mjs` fails when a `*.test.ts` file under
-  `src/` names `markDetected` or writes a property named `detected`, which
-  on a task's meta only `markDetected` writes, and when E2E-001 stops
-  calling `detectWrite` or `openControlWatchOrSkip`, or passes a detection
-  case a predicate other than `isSensitiveFileEvent` or `fileEventFor` of
-  the name the case writes. It reads the text of those files: a mark
-  written another way, such as with a key built at run time
-  (`meta[key] = true`), with an object whose `detected` key is on another
-  line than `meta`, with an object whose `detected` key follows a matcher
-  (`.toBe(`) on its line or with an object whose `detected` key follows
-  another `.toXxx(` call (`.toString(`) after `expect` on its line, or made
-  by a helper outside those files, is not detected. From a matcher call
-  after `expect` on its line, such as `.toEqual(`, to the end of the line
-  the check takes only an assignment as a write, so an assertion that reads
-  the mark there (`.toEqual({ detected: true })`,
-  `.toHaveProperty('detected', true)`) does not fail it. A call such as
-  `.toString(` before `expect`, or on a line without `expect`, is not a
-  matcher call; the check took one as a matcher, so a line such as
-  `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
-  did not fail it. A matcher call on a later line than its `expect`, as in a
-  chained assertion that continues with `.toHaveProperty('detected', true)`
-  on the next line, is not taken as a matcher call either, so that read of
-  the mark fails the check: write the matcher call on the line of its
-  `expect`. After `expect` on a line the check takes every `.toXxx(` call
-  as a matcher call, chained to that `expect` or not, so after
-  `expect.assertions(0);` on the same line the write in
-  `String(1).toString(); Object.assign(ctx.task.meta, { detected: true });`
-  still does not fail it. No file under `src/` has either form. The check
-  finds the first `expect` on a line once and looks for a matcher call
-  after it, and finds the first `meta` word once and looks for a
-  `detected` key after it, so its time grows with the length of the line.
-  Its patterns took time that grew with the square of that length: the
-  matcher pattern looked back for `expect` from every `.`, over 3 seconds
-  on a line of 80,000 `.` characters, and the key pattern ran on from every
-  `meta` word to the end of the line, over 1 second on a line of 120,000
-  characters of `meta` words, and tried every split of a run of spaces
-  after `detected` between the spaces it allows before and after a `]`,
-  over 7 seconds on a run of 120,000 spaces.
-  `fileEventFor` read an event without a path as the text
-  `undefined`, so a name that is part of it (`def`, `fine`, an empty name)
-  matched such an event; it now matches only an event whose path contains
-  the name. E2E-001's names (`.ssh`, `.bashrc`, `.npmrc`) are not part of
-  that text, so no verdict changes. After a
-  case whose product's `stop()` rejects and whose control's `close()`
-  throws, `endWatchCase` passes on the rejection of `stop()`, as its
-  description says; it passed on the error of `close()`. The README says
-  an inconclusive E2E-001 skip prints the measured load where the
-  platform measures one: on Windows the message says `loadavg unavailable
-  on Windows`. `src/harness/filesystem-watch.test.ts` has 10 more tests,
-  41 in the file; the suite is 396 tests, 395 not skipped.
-- The deprecated AST adapter (`HMARealASTAdapter` in
-  `src/benchmark/hma-real-adapter.ts`) now calls `analyzeCredentials`,
-  `analyzeGovernance`, `analyzeScope` and `analyzePrompt` with the sample
-  content, like the pipeline adapter. It called them with the AST alone, a
-  route the shipped scanner never takes. No committed result changes: this
-  adapter produced none, and its only runner, `scripts/run-benchmark.ts`,
-  stays deprecated. The adapter now loads hackmyagent from the root
-  `configureHmaRoot()` names, as the pipeline adapters do; without that
-  call it is the sibling checkout, as before. Three more tests cover the
-  calls and the root, 28 in `src/benchmark` outside
-  `src/benchmark/pinned`; the suite is 399 tests, 398 not skipped.
-- An AST adapter that has scanned once now compiles on the
-  `SemanticCompiler` of the root `configureHmaRoot()` names next. It kept
-  the compiler of the first root, so a second scan built its AST on that
-  build and ran the analyzers of the new one. One more test scans twice
-  on one adapter across a root change, 29 in `src/benchmark` outside
-  `src/benchmark/pinned`; the suite is 400 tests, 399 not skipped.
-- The deprecated AST adapter (`HMARealASTAdapter`) and the full adapter
-  built on it (`HMARealFullAdapter`) report as their version the version in
-  the package.json of the hackmyagent root they load, as the pipeline
-  adapters do. Both reported the fixed string `0.12.3` whichever build
-  `configureHmaRoot()` named. The static adapter (`HMARealStaticAdapter`)
-  loads no build and keeps its fixed version. No committed result changes:
-  these adapters produced none. One more test covers the version, 30 in
-  `src/benchmark` outside `src/benchmark/pinned`; the suite is 401 tests,
-  400 not skipped.
-- A benchmark adapter that has scanned reports the version of the
-  hackmyagent root configured at its last scan. `HMARealASTAdapter`,
-  `HMARealFullAdapter`, `HMAPipelineAdapter` and `HMAPipelineStaticAdapter`
-  read the version when they are created and again at each scan. They read
-  it only when they were created, so an adapter that scanned again after
-  `configureHmaRoot()` named another root still reported the version of the
-  first root, while the AST, full and pipeline adapters loaded the new one
-  for that scan. Until its first scan an adapter reports the version of the
-  root configured when it was created.
-  `HMAPipelineAdapter` and `HMATMEOnlyAdapter` now scan on the
-  `SemanticCompiler` or the classifier of the root `configureHmaRoot()`
-  names next, as `HMARealASTAdapter` does. Each kept the one of the first
-  root it scanned with: after a root change the pipeline adapter built its
-  AST on that build and ran the analyzers of the new one, and the
-  model-only adapter classified on that build. No committed result changes:
-  only the pinned harness calls `configureHmaRoot()`, once, before it
-  creates its adapters, and the other runners scan on the sibling checkout
-  throughout. Four more tests cover the version after a root change, the
-  root the pipeline and model-only adapters scan on after one, and that an
-  adapter builds one `SemanticCompiler` for its scans on one root, 34 in
-  `src/benchmark` outside `src/benchmark/pinned`; the suite is 405 tests,
-  404 not skipped.
-- The README is shorter. Its first screen runs one scenario file and shows
-  what that prints, and its reference text moved, as written, to the pages
-  it links: what OASB is and is not to `docs/how-it-works.md`; the What Gets
-  Tested table, the Counts note and the command for each group to
-  `docs/test-catalog.md`; the MITRE ATLAS Coverage table to
-  `docs/mitre-atlas-mapping.md`; the harness files to
-  `docs/test-harness.md`; the adapter details and the note on cross-product
-  numbers to `docs/adapters.md`; the Skills Security Benchmark, its corpus,
-  runners and latest results to `docs/pinned-benchmark.md`; the Known
-  Detection Gaps to `docs/known-gaps.md`; and the Updates table to
-  `docs/updates.md`. `npm run check:readme` and the release smoke's drift
-  guard read the test counts, the What Gets Tested table and the links on
-  those pages as they read the README's (`README_PAGES` in
-  `scripts/readme-counts.mjs`), and a message about a page names it. The
-  per-test tables moved to `docs/test-catalog.md` as well, and the
-  Contributing section became a line of the Documentation list.
-  `npm run check:readme` fails when the README has 400 lines or more, when
-  its first H2 heading is not `## Quick Start` or is at line 25 or later,
-  when no shell code block with a command starts before line 30, and when a
-  relative link it reads does not resolve; `npm run smoke` runs these layout
-  and link checks. It reads three link forms, each written within one line:
-  inline links (`[text](path)`, with an optional double-quoted title),
-  reference definitions at the start of a line (`[label]: path`) and quoted
-  HTML `href` attributes. It checks a `#anchor` only in links to `.md`
-  files. Other forms, such as an unquoted `href` or a definition on the
-  same line as a list marker (`- [label]: path`), are not checked.
-- `src/benchmark/pinned/runs-of-record.test.ts` looks for the newest run's
-  counts on `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md` outside
-  code spans and code blocks. The page's description of that test writes
-  the form of a count as code, `192/270`, which is the full-pipeline count
-  of `results/2026-10-10-2a89ce5d/`, so with the HMA Full Pipeline row
-  deleted from the page's Latest Results table the test still passed (8 of
-  8); it now fails on that edit. The page says a count written only as code
-  does not count. The file still holds 8 tests.
-- `npm run check:readme` reports a link whose path, or whose anchor in a
-  link to a `.md` file, has a malformed %-escape, such as
-  `[the plan](100%.md)`, by its page and line and says to write a literal %
-  as `%25`; on such a link it ended with an uncaught `URIError` and a stack
-  trace. This holds in the README, on the pages that took its text and, with
-  the counts checked, in the README's MITRE ATLAS Coverage section.
-- `src/benchmark/pinned/runs-of-record.test.ts` also leaves out indented code
-  blocks when it looks for the newest run's counts on
-  `docs/pinned-benchmark.md` and `BENCHMARK-RESULTS.md`: text that starts
-  four or more columns past the margin, or past the content of the list item
-  or block quote it is in, and does not continue paragraph text. With the HMA
-  Full Pipeline row deleted from the page's Latest Results table and
-  `hma-pipeline 192/270` added at the end of the page as an indented code
-  block, the test passed (8 of 8); it now fails on that edit. The page says a
-  count written only in a code block does not count. The file still holds 8
-  tests.
-- `src/benchmark/pinned/runs-of-record.test.ts` checks that a count in a
-  fenced code block holding a blank line, a `text` block of `hma-pipeline`,
-  a blank line and `192/270`, is not a stated count. Its one fenced-block
-  case had no blank line, so the code-span pattern of `outsideCode` removed
-  that block too, and with the fenced-block pattern deleted the file still
-  passed (8 of 8). The code-span pattern does not cross a blank line, so
-  the new case fails on that edit (1 failed, 7 passed). The file still
-  holds 8 tests.
-- For an anchor with a malformed %-escape, `npm run check:readme` now says
-  to drop the %, since a heading's anchor has none, and names the anchor to
-  write when dropping it matches a heading: `[x](#100%-coverage)` under the
-  heading `## 100% coverage` is told to write `#100-coverage`, which passes.
-  It said to write the % as `%25`, and `[x](#100%25-coverage)` then failed
-  with `anchor "#100%25-coverage" has no matching heading in README.md`. A
-  link path with a malformed %-escape is still told to write `%25`.
-- The README header shows the CI status badge in place of the tests badge
-  and the MITRE ATLAS badge, whose counts were typed into their URLs. The
-  two sentences of the description that stated the scenario and MITRE ATLAS
-  counts moved, as written, to the What Gets Tested section of
-  `docs/test-catalog.md`, a page both count checks read; the README keeps
-  the first of them without its count. The line
-  "MITRE ATT&CK Evaluations, but for AI agent security products." moved to
-  `docs/how-it-works.md`. The count list both checks read
-  (`scripts/readme-counts.mjs`) has no tests badge entry, and
-  `npm run check:readme` fails on a static shields.io badge in the README's
-  prose whose message starts with a digit, such as `tests-404%20passing`.
-- `npm run check:readme` reports a link with an anchor to a directory whose
-  name ends in `.md`, such as `[a](x.md#setup)` or `[a](x.md#100%)`, by its
-  line and says to link the page in that directory that holds the heading;
-  on such a link it ended with `Error: EISDIR` and a stack trace. It ended
-  with the same error on a link without an anchor to such a directory whose
-  name carries a date (`docs/AUDIT-2026-06-03.md`) and, with the counts
-  checked, on one in the README's MITRE ATLAS Coverage section; it does not
-  read such a directory as a page.
-- `src/benchmark/pinned/runs-of-record.test.ts` leaves out a fenced code
-  block inside a list item or block quote when it looks for the newest run's
-  counts. It found fences with a pattern that matched only a fence starting
-  a line after at most three spaces, so with the HMA Full Pipeline row
-  deleted from the Latest Results table of `docs/pinned-benchmark.md` and a
-  numbered list item appended whose fenced block, indented four spaces,
-  holds `hma-pipeline`, a blank line and `192/270`, the test passed (8 of
-  8); it now fails on that edit (1 failed, 7 passed). It now finds fenced
-  blocks while it follows block quotes and list items, as it does for
-  indented code, and a fenced block ends with the list item or block quote
-  that holds it. A line that starts with three backticks and holds another
-  backtick is read as text with a code span; it opened a fenced block that
-  ran to a closing fence or to the end of the page. The file still holds 8
-  tests.
-- `npm run check:readme` holds the README's first-run capture to the suite.
-  The capture under Quick Start, of
-  `npx vitest run AT-AI-001 --reporter=verbose`, states 11 tests in 1 file
-  and names tests by their full names, and no check read it, so a renamed
-  test or a changed count left it stale. The check now fails when the
-  command the capture names is not a `vitest run` that a code block above it
-  shows, when a `✓` line names a test that the command does not select or
-  that is skipped, or when a `Test Files` or `Tests` line states a passed,
-  failed, skipped or total count other than that of the files and tests the
-  command selects. On this README it prints
-  "capture of `npx vitest run AT-AI-001 --reporter=verbose` matches the
-  collected suite: 11 tests in 1 test file".
-- The README's OpenA2A CLI example said that
-  `opena2a benchmark ./my-agent --level L2` checks levels L1, L2 and L3.
-  opena2a-cli 0.10.13 checks the OASB-1 controls of levels L1 and L2 for
-  `--level L2`: it reads them with hackmyagent's `getCheckIdsForLevel`, which
-  takes the controls of the level given and of the levels below it. The
-  comment now says "OASB-1 controls of levels L1 and L2". hackmyagent 0.33.2
-  `secure -b oasb-1` selects levels the same way: on a directory holding a
-  `package.json` and an `index.js` it reports 26 controls, verified and
-  unverified, at L1, 44 at L2 and 46 at L3. `npm run check:readme` now fails
-  when a shell comment in a code block, on an `opena2a benchmark` line or on
-  a `hackmyagent secure` line with `-b oasb-1`, names OASB-1 levels other
-  than those up to the level the line gives with `--level` (or `-l` for
-  hackmyagent), or than L1 when it gives none.
-- The README's capture under Quick Start links its full output,
-  `docs/captures/quick-start.txt`, and `docs/captures/quick-start.json`
-  beside it records the command, the environment (`CI=true`, `NO_COLOR=1`),
-  the exit code, the vitest and Node.js versions and the date of the run.
-  The full output is what that run printed, with the RUN banner, which names
-  the vitest version and the absolute path of the checkout, replaced by
-  `...` and without the trailing blank line. The two timings in the
-  README's capture that differed from it were re-taken from that run.
-  `npm run check:readme` now holds a full output that the line above a
-  capture links as `[full output](<file>)` to the suite as it holds the
-  capture, and fails when the full output leaves out a test the command
-  selects that is not skipped (with `--tests`: that passed) or a
-  `Test Files` or `Tests` line, when the capture shows a line, other than a
-  blank or `...` line, that the full output does not have, or when the
-  `.json` file beside it is missing or names another command or another
-  full output. On this README it prints "Its full output
-  docs/captures/quick-start.txt shows the 11 tests not skipped and holds
-  each line of the capture".
-- With the counts checked, `npm run check:readme` reports a
-  `[full output](<file>)` link above a capture whose path has a malformed
-  %-escape, such as `[full output](docs/captures/100%.txt)`, by its line
-  and says to write a literal % as `%25`, and reads the capture as linking
-  no full output; on such a link it ended with an uncaught `URIError` and a
-  stack trace.
-- `getCapabilityMatrix()` and the `getCapabilities()` of the reference,
-  llm-guard and rebuff adapters report as `version` the `version` field of
-  the installed package's own `package.json`. The reference adapter
-  reported the `VERSION` export of arp-guard, which arp-guard 0.3.0
-  re-exports from `hackmyagent/arp`: a constant of the installed
-  hackmyagent, not arp-guard's version (`0.2.0` with the arp-guard 0.3.0
-  and hackmyagent 0.23.8 that this checkout's lockfile installs), or
-  `0.3.0` when that export was missing. The llm-guard and rebuff adapters
-  reported `0.1.8` and `0.1.0` whichever version was installed. When an
-  `exports` map hides `package.json`, the reference and llm-guard adapters
-  report the `VERSION` export followed by
-  ` (VERSION export; package.json not resolvable)`. When the package is
-  not installed, `getCapabilities()` throws the error a scan with that
-  adapter throws; for arp-guard that is the message naming
-  `npm install arp-guard` and `OASB_ADAPTER`, as before.
-  `scripts/library-entry.test.mjs` holds each case.
-- The README's "Use as a library" example scores a two-sample submission
-  with `benchmark.scoreSubmission` and prints its recall, and says that F1,
-  precision, false-positive rate and tier on the bundled corpus are
-  withdrawn. It ended on `benchmark.determineTier(/* aggregate metrics */)`.
-  Run as written, that line threw
-  `TypeError: Cannot read properties of undefined (reading 'f1')`, and given
-  metrics, `determineTier` assigns a tier from the withdrawn F1 and
-  false-positive rate. It stays exported, and `docs/pinned-benchmark.md`
-  describes it. The documented-command check in `npm run smoke` runs the
-  block as written. It read a call whose argument list is only a comment as
-  a placeholder and checked only that the call named a function, so it
-  passed on that block. `scripts/check-documented-commands.test.mjs` fails
-  when the block has such a call.
-- The README's Usage via OpenA2A CLI section no longer says that
-  `hackmyagent secure -b oasb-1` checks "the same controls" as
-  `opena2a benchmark`. The two report different figures: opena2a-cli 0.10.13
-  scores the check IDs of the level's controls, passing over evaluated, and
-  at L1 counts 39 of them, from the catalogue of the hackmyagent 0.25.2 it
-  installs; hackmyagent 0.33.2 scores controls, passed over verified, with
-  unverified and not applicable controls left out, and at L1 counts 26. On
-  the same agent directory the first printed
-  `L1:         13% (8 of 39 controls evaluated)` and the second
-  `Compliance: 5% (1/19 verified controls)`. The section now says the two
-  percentages are not comparable with each other, only each with its own
-  earlier runs, and that neither tool's help text states how its percentage
-  is computed.
-  `scripts/doc-facts.test.mjs` fails when the section says
-  "the same controls".
-- The development runner `scripts/run-benchmark-v2.ts` prints, for each
-  adapter, its recall and the malicious samples it detected and missed, and
-  a comparison summary of recall whose `%` signs share one column. It names
-  precision, F1, FPR and flag rate as withdrawn instead of printing their
-  values: each reads the benign class, which its own warning says makes them
-  circular. It printed them in each adapter's block and in summary rows such
-  as `67.5  % | 99.3  % | 51.1  % | 0.03  % | 3.6%`. The results file it
-  writes with `--out` is unchanged.
-- `npm run report` lists, in each row of its OWASP Agentic table, the
-  scenarios whose `// OWASP Agentic:` header names that ID, each with its
-  status in the results file (N/A without one), and names the IDs no
-  scenario covers, ASI04, ASI06 and ASI09 on this tree; each row read "See
-  mapping docs". Its Known Gaps table, headed "Known Gaps (Documented)", is
-  now headed as the reference adapter's (ARP) and says that in a report on
-  another product those gaps describe ARP.
-- `docs/test-catalog.md` gives the test counts in one paragraph and the
-  E2E-001 skips in a note of their own; the first sentence of the counts
-  held the whole E2E-001 skip rule in a parenthetical.
-- `docs/test-catalog.md` describes the Summary `npm run report` writes, in
-  the paragraph under Run the suite that the README's Evaluating Other
-  Products section links: the Product under test line, the attack-scenario
-  rows (Scenarios, Passed, Failed, Not applicable, Skipped for another
-  reason, and a Pass rate over the scenarios that passed or failed), the
-  separate Harness self-tests line and the Known Gaps of the Reference
-  Adapter (ARP). The README said the file held "a summary of the run (total,
-  passed, failed and skipped tests, and the pass rate)", but the Summary
-  counts the attack scenarios only. `scripts/doc-facts.test.mjs` generates a
-  report from a sample run and fails when the test catalog paragraph does
-  not name the product line, the scenario directories, a Summary row, what
-  the pass rate is over, the harness line or the known gaps heading as the
-  report words them.
-- `docs/adapters.md` says that a missing rebuff package fails each scenario
-  file while vitest collects it, before any of its tests runs, with the
-  error that names the package, and that a missing `typescript` fails each
-  scan. It said each scan fails when either package is missing.
-  `getCapabilities()` of the rebuff adapter reads rebuff's version from its
-  `package.json`, and each scenario file calls it while it is collected:
-  with rebuff moved out of `node_modules`,
-  `OASB_ADAPTER=rebuff npx vitest run src/atomic/ai-layer/AT-AI-001`
-  reported the file failed and no tests; with `typescript` moved out, its
-  11 tests failed with the error that names `typescript`.
-  `scripts/doc-facts.test.mjs` fails when the paragraph says "when either
-  package is missing" or does not state the two cases, and
-  `src/harness/rebuff-wrapper.test.ts` checks both cases against the
-  capability check and the scans, with the loader replaced by a stub.
-
-### Fixed
-
-- A vitest run that selects attack scenarios now ends with one line on
-  stderr: `OASB: <evaluated> of <selected> attack scenarios evaluated`,
-  counting the scenario tests that passed or failed. When it evaluated none,
-  as under an adapter that declares no capabilities, the line is
-  `OASB: not measured (0 of <selected> attack scenarios evaluated)` and the
-  run exits 2; it exited 0 with every scenario skipped and said nothing.
-  When the run's results cannot be read, the line is
-  `OASB: not measured (the run's test results could not be read)` and the
-  run exits 2. A run that selects no scenario, such as
-  `npx vitest run src/benchmark/`, and collecting the suite without running
-  it print no line and keep their exit. The JSON report of
-  `--reporter=json --outputFile` is still written. No variable or flag
-  lowers the floor. `scripts/check-documented-commands.mjs` now expects
-  exit 2 from its two runs whose every test must be skipped.
-- `LICENSE` holds the full canonical Apache License 2.0 text, 202 lines, in
-  place of the 98-line abridgement that 0.4.0 shipped, which shortened or
-  dropped clauses.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
