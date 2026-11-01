@@ -374,6 +374,49 @@ README's test counts do not include them.
   a modified scanner checkout is not refused; or when the CLI does not
   exit 2 on a missing corpus or an unknown scanner. On macOS a connect
   attempt inside the offline arm's sandbox must be refused.
+- `scripts/external-skill-adjudication.test.mjs`: the adjudicated arm of the
+  same runner (`scripts/external-skill-adjudication.ts`), on a synthetic
+  corpus and a fixture scanner. Fails when a benign sample that holds every
+  file of a malicious sample (same path, same sha256, `_meta.json` left out)
+  is not paired with it, or a pair is found the other way round; when a run
+  does not take both members of each pair out of its adjudicated row, takes
+  a different set out for another scanner, or scans after finding another
+  number of pairs than `--expect-contested` gives; when a tampered
+  adjudication block or adjudicated summary passes the run check; when a
+  sample an adjudication record gives another class or drops stays in the
+  arm; when the row is not `interim` before the benign class is complete,
+  `adjudicated` at kappa 0.80 and decoy recall 0.90 and above, and
+  `advisory` below either; when an adjudication record for another corpus,
+  with an unknown or repeated id, or with an annotator's drop is read; or
+  when `--rescore` scans again, changes the run directory, or reads a corpus
+  other than the one the run scanned.
+- `scripts/external-skill-annotation.test.mjs`: the blind annotation stream
+  (`--annotation-export`, `--verify-export`,
+  `scripts/external-skill-annotation.ts`), on a synthetic corpus. Fails when
+  the contested samples do not come first and the flip list next, when a
+  benign sample is missing, when a decoy is contested or flipped, when the
+  same seed does not give the same stream, or when a copy differs from its
+  sample. A `_meta.json`, a class or original directory name, a scanner
+  field and a corpus label are each planted into a copy of an export in
+  turn, and the test fails when the export check passes any of them. It
+  also fails when the writer accepts a key inside the export, an export
+  inside the corpus, more decoys than the corpus holds, an unknown flip-list
+  sample or a symlink.
+- `scripts/external-skill-transfer.test.mjs`: the transfer corpus
+  (`--transfer`, `scripts/external-skill-transfer.ts`) and its Parquet reader
+  (`scripts/parquet-columns.ts`), on a Parquet file the test writes itself.
+  Fails when a column read across dictionary and plain pages, data pages v1
+  and v2, the snappy, gzip and zstd codecs, nulls and two row groups differs
+  from what was written, or an unsupported codec or a nested column is read
+  instead of refused; when the cell rule does not exclude exact text and
+  benign name-shared identities, put advisory sources in the advisory cell
+  and report malicious name-shared identities as their own row; when a
+  release with another sha256, a split row the table contradicts or a test
+  identity with no text is read; when the cells are written although they
+  differ from `--expect-cells`; or when a materialised cell is not one
+  SKILL.md per neutral id at a reproducible commit that the runner scans and
+  its run check passes. Where the Node in use has no zstd, the reader must
+  refuse a zstd page with the Node version it needs.
 
 ## The README checks on every pull request
 
