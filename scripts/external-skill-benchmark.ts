@@ -40,6 +40,18 @@
  * <out>.incomplete/ and renamed to <out> when complete, so a run directory is
  * complete or absent, and an incomplete one is re-run whole. verifyRun()
  * recomputes a run directory's verdicts and summary from its own rows.
+ *
+ * Adjudicated arm (scripts/external-skill-adjudication.ts): beside every
+ * as-served row the runner scores an adjudicated row, the same rows minus the
+ * contested pairs of the corpus and minus every sample a blind human
+ * adjudication record gives another class or drops. The exclusions come from
+ * the corpus and the record, never from a scanner, so they are the same for
+ * every scanner row. --rescore gives a run written before this arm existed
+ * its adjudicated row from its own predictions, with no re-scan.
+ *
+ * The blind annotation stream (--annotation-export,
+ * scripts/external-skill-annotation.ts) and the transfer corpus (--transfer,
+ * scripts/external-skill-transfer.ts) are switches of the same CLI.
  */
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -63,11 +75,44 @@ import {
 import { cpus, devNull, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { HARDENING_CHECK_IDS } from '../src/benchmark/hma-pipeline-adapter.js';
+import {
+  CONTESTED_RULE,
+  EXCLUSION_REASONS,
+  LABEL_RULE,
+  type Adjudication,
+  type AdjudicationLabel,
+  type ContestedPair,
+  type ExclusionReason,
+  contestedMembers,
+  contestedPairs,
+  exclusionOf,
+  labelOf,
+  readAdjudication,
+  readAnnotationKey,
+} from './external-skill-adjudication.js';
+import { readFlipList, verifyAnnotationExport, writeAnnotationExport } from './external-skill-annotation.js';
+import {
+  compareCells,
+  computeTransferCells,
+  formatCells,
+  materialiseTransfer,
+  parseColumns,
+  parseExpectedCells,
+  parseLabels,
+} from './external-skill-transfer.js';
 
 export const RUN_SCHEMA = 'oasb-external-skill-run/v1';
+export const RESCORE_SCHEMA = 'oasb-external-skill-rescore/v1';
 export const RUN_FILES = ['predictions.jsonl', 'record.json', 'summary.json'];
 export const INCOMPLETE_MARKER = '.oasb-external-run-incomplete';
-export const HARNESS_FILES = ['scripts/external-skill-benchmark.ts', 'scripts/run-external-skill-benchmark.ts'];
+export const HARNESS_FILES = [
+  'scripts/external-skill-benchmark.ts',
+  'scripts/run-external-skill-benchmark.ts',
+  'scripts/external-skill-adjudication.ts',
+  'scripts/external-skill-annotation.ts',
+  'scripts/external-skill-transfer.ts',
+  'scripts/parquet-columns.ts',
+];
 
 /** The checks the verdict rule leaves out: posture gaps, not present attacks. */
 export const RULE_EXCLUSIONS: ReadonlySet<string> = HARDENING_CHECK_IDS;
@@ -659,6 +704,90 @@ export interface Summary {
   measuredFalse: number;
   modelPresentBefore: number;
   modelPresentAfter: number;
+  /** The adjudicated arm; absent in a run written before the arm existed. */
+  adjudicated?: AdjudicatedSummary;
+}
+
+/** The record's adjudication block: what leaves the adjudicated arm, why, and the row's label. */
+export interface AdjudicationBlock {
+  contestedRule: string;
+  /** Every contested pair of the corpus, whether or not this run selected its members. */
+  contestedPairs: ContestedPair[];
+  expectedContested: number | null;
+  record: { recordSha256: string; keySha256: string; items: number; unresolved: number } | null;
+  benignSamples: number;
+  benignFinal: number;
+  benignComplete: boolean;
+  kappa: number | null;
+  kappaItems: number;
+  decoys: number;
+  decoyRecall: number | null;
+  labelRule: string;
+  label: AdjudicationLabel;
+  /** The rows of this run that leave the adjudicated arm, sorted by sample. */
+  exclusions: Array<{ sample: string; reason: ExclusionReason }>;
+}
+
+export interface AdjudicatedSummary {
+  label: AdjudicationLabel;
+  excluded: Record<Label, Record<ExclusionReason, number>>;
+  metrics: { all: Metrics; dev: Metrics; 'held-out': Metrics };
+  flagAll: Metrics;
+}
+
+/** The adjudication block of a run over `rows`, from the corpus's contested pairs and an optional adjudication record. */
+export function adjudicationBlock(
+  rows: Array<Pick<PredictionRow, 'sample' | 'label'>>,
+  pairs: ContestedPair[],
+  adjudication: Adjudication | null,
+  benignSamples: number,
+  expectedContested: number | null,
+): AdjudicationBlock {
+  const members = contestedMembers(pairs);
+  const exclusions = rows
+    .map(r => ({ sample: r.sample, reason: exclusionOf(r.sample, r.label, members, adjudication) }))
+    .filter((e): e is { sample: string; reason: ExclusionReason } => e.reason !== null)
+    .sort((a, b) => (a.sample < b.sample ? -1 : 1));
+  const state = adjudication
+    ? { benignComplete: adjudication.benignComplete, kappa: adjudication.kappa, decoyRecall: adjudication.decoyRecall }
+    : null;
+  return {
+    contestedRule: CONTESTED_RULE,
+    contestedPairs: pairs,
+    expectedContested,
+    record: adjudication
+      ? { recordSha256: adjudication.recordSha256, keySha256: adjudication.keySha256, items: adjudication.items, unresolved: adjudication.unresolved }
+      : null,
+    benignSamples,
+    benignFinal: adjudication?.benignFinal ?? 0,
+    benignComplete: adjudication?.benignComplete ?? false,
+    kappa: adjudication?.kappa ?? null,
+    kappaItems: adjudication?.kappaItems ?? 0,
+    decoys: adjudication?.decoys ?? 0,
+    decoyRecall: adjudication?.decoyRecall ?? null,
+    labelRule: LABEL_RULE,
+    label: labelOf(state),
+    exclusions,
+  };
+}
+
+/** The adjudicated arm: the run's rows minus the block's exclusions, scored as the as-served rows are. */
+export function adjudicatedSummary(rows: PredictionRow[], block: Pick<AdjudicationBlock, 'exclusions' | 'label'>): AdjudicatedSummary {
+  const out = new Map(block.exclusions.map(e => [e.sample, e.reason]));
+  const zero = () => Object.fromEntries(EXCLUSION_REASONS.map(r => [r, 0])) as Record<ExclusionReason, number>;
+  const excluded: Record<Label, Record<ExclusionReason, number>> = { malicious: zero(), benign: zero() };
+  for (const r of rows) {
+    const reason = out.get(r.sample);
+    if (reason) excluded[r.label][reason] += 1;
+  }
+  const kept = rows.filter(r => !out.has(r.sample));
+  const all = scoreRows(kept);
+  return {
+    label: block.label,
+    excluded,
+    metrics: { all, dev: scoreRows(kept.filter(r => r.split === 'dev')), 'held-out': scoreRows(kept.filter(r => r.split === 'held-out')) },
+    flagAll: flagAll(all),
+  };
 }
 
 export function summarize(rows: PredictionRow[], runId: string): Summary {
@@ -751,6 +880,10 @@ export interface RunOptions {
   workers?: number;
   timeoutMs?: number;
   out?: string;
+  /** Refuse to scan when the corpus has another number of contested pairs. */
+  expectContested?: number;
+  /** A blind human adjudication record and the annotation key it refers to. */
+  adjudication?: { record: string; key: string };
   log?: (line: string) => void;
 }
 
@@ -865,6 +998,12 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
   }
   if (corpusGit.dirty) throw new UsageError(`the corpus checkout has ${corpusGit.dirty} modified or untracked paths; scan it unmodified`);
 
+  // The contested pairs of the whole corpus, found before any sample is scanned.
+  const pairs = contestedPairs(allSamples);
+  if (opts.expectContested !== undefined && pairs.length !== opts.expectContested) {
+    throw new Error(`the corpus has ${pairs.length} contested pairs, not the ${opts.expectContested} this run expects; nothing was scanned`);
+  }
+
   // The offline arm proves its denial before any sample is scanned.
   const wrapper = opts.network === 'off' ? offlineWrapper() : [];
   const probeHost = opts.probeHost ?? DEFAULT_PROBE_HOST;
@@ -879,6 +1018,10 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
 
   log(`hashing the corpus (${allSamples.length} samples)`);
   const manifest = manifestOf(classRoot, LABELS.map(l => classDirs[l]));
+  const benignKeys = allSamples.filter(s => s.label === 'benign').map(s => s.key);
+  const adjudication = opts.adjudication
+    ? readAdjudication(opts.adjudication.record, opts.adjudication.key, { commit: corpusGit.commit, manifestSha256: manifest.sha256, benignKeys })
+    : null;
   const harness = gitState(REPO_ROOT);
   const harnessFiles = HARNESS_FILES.map(path => ({ path, sha256: sha256(readFileSync(join(REPO_ROOT, path))) }));
   const modelFiles: Array<{ path: string; sha256: string }> = [];
@@ -962,6 +1105,8 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
     excludedSoFar = rows.filter(r => r.excluded !== null).length;
 
     const summary = summarize(rows, runId);
+    const adjudicationOfRun = adjudicationBlock(rows, pairs, adjudication, benignKeys.length, opts.expectContested ?? null);
+    summary.adjudicated = adjudicatedSummary(rows, adjudicationOfRun);
     let determinism: any = null;
     let comparison: any = null;
     if (opts.determinismOf && ref) {
@@ -1051,6 +1196,7 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
         excluded: excludedSoFar,
       },
       metrics: summary.metrics.all,
+      adjudication: adjudicationOfRun,
       workers,
       timeoutMs,
       determinism,
@@ -1138,10 +1284,113 @@ export function verifyRun(dir: string, opts: { requireCleanHarness?: boolean } =
   need(JSON.stringify(record.counts) === JSON.stringify(counts), 'record counts are not the rows');
   need(record.selection?.n === rows.length && record.selection?.keysSha256 === keysSha256(rows.map(r => r.sample)), 'selection');
   const recomputed = summarize(rows, record.runId);
+  if (record.adjudication !== undefined) {
+    const blockProblems = verifyAdjudicationBlock(record.adjudication, rows);
+    problems.push(...blockProblems);
+    if (blockProblems.length === 0) recomputed.adjudicated = adjudicatedSummary(rows, record.adjudication);
+  }
   need(JSON.stringify(summary) === JSON.stringify(recomputed), 'summary.json is not the summary of predictions.jsonl');
   need(JSON.stringify(record.metrics) === JSON.stringify(recomputed.metrics.all), 'record metrics are not the summary');
   need(record.ok === ((record.determinism?.pass ?? true) && (record.comparison?.pass ?? true)), 'record ok');
   return problems;
+}
+
+/**
+ * Checks a record's adjudication block against the run's rows: the rules are
+ * the published ones, every selected member of a contested pair is out as
+ * contested and no other sample is, an exclusion other than contested needs an
+ * adjudication record, and the label is the rule's label on the recorded
+ * agreement and decoy recall.
+ */
+export function verifyAdjudicationBlock(block: any, rows: Array<Pick<PredictionRow, 'sample'>>): string[] {
+  const problems: string[] = [];
+  if (typeof block !== 'object' || block === null || !Array.isArray(block.contestedPairs) || !Array.isArray(block.exclusions)) {
+    return ['adjudication block is not a block of this runner'];
+  }
+  if (block.contestedRule !== CONTESTED_RULE) problems.push('adjudication: the contested rule is not the published one');
+  if (block.labelRule !== LABEL_RULE) problems.push('adjudication: the label rule is not the published one');
+  const samples = new Set(rows.map(r => r.sample));
+  const pairsOk = block.contestedPairs.every(
+    (p: any) => typeof p?.benign === 'string' && p.benign.startsWith('benign/') && typeof p?.malicious === 'string' && p.malicious.startsWith('malicious/'),
+  );
+  if (!pairsOk) problems.push('adjudication: a contested pair is not a benign and a malicious sample');
+  const members = contestedMembers(pairsOk ? block.contestedPairs : []);
+  const reasons = new Map<string, unknown>();
+  let previous = '';
+  for (const e of block.exclusions) {
+    if (typeof e?.sample !== 'string' || !samples.has(e.sample)) problems.push(`adjudication: excluded sample ${e?.sample} is not a row of this run`);
+    else if (e.sample <= previous) problems.push('adjudication: exclusions are not sorted and unique');
+    else previous = e.sample;
+    if (!EXCLUSION_REASONS.includes(e?.reason)) problems.push(`adjudication: exclusion reason ${e?.reason}`);
+    reasons.set(e?.sample, e?.reason);
+  }
+  for (const s of samples) {
+    if (members.has(s) && reasons.get(s) !== 'contested') problems.push(`adjudication: ${s} is a member of a contested pair and is not out as contested`);
+  }
+  for (const [s, reason] of reasons) {
+    if (reason === 'contested' && !members.has(s as string)) problems.push(`adjudication: ${s} is out as contested and is in no contested pair`);
+    if (reason !== 'contested' && block.record === null) problems.push(`adjudication: ${s} is out as ${reason} with no adjudication record`);
+  }
+  if (block.expectedContested !== null && block.expectedContested !== block.contestedPairs.length) {
+    problems.push(`adjudication: ${block.contestedPairs.length} contested pairs, the run expected ${block.expectedContested}`);
+  }
+  if (block.record === null && block.benignComplete !== false) problems.push('adjudication: complete with no adjudication record');
+  const label = labelOf({ benignComplete: block.benignComplete === true, kappa: block.kappa ?? null, decoyRecall: block.decoyRecall ?? null });
+  if (block.label !== label) problems.push(`adjudication: label ${block.label}, the rule gives ${label}`);
+  return problems;
+}
+
+// ---------------------------------------------------------------------- rescore
+
+export interface RescoreOptions {
+  run: string;
+  corpus: string;
+  expectContested?: number;
+  adjudication?: { record: string; key: string };
+  log?: (line: string) => void;
+}
+
+/**
+ * The adjudicated arm of a run written before the arm existed, from its own
+ * predictions: no sample is scanned again. The corpus must be the one the run
+ * scanned (same manifest sha256); the run itself must pass verifyRun().
+ */
+export function rescoreRun(opts: RescoreOptions): { record: any; summary: Summary; block: AdjudicationBlock; rescore: any } {
+  const runDir = resolve(opts.run);
+  const problems = verifyRun(runDir);
+  if (problems.length > 0) throw new UsageError(`${opts.run} does not pass --verify: ${problems[0]}`);
+  const record = readJson(join(runDir, 'record.json'));
+  const summary: Summary = readJson(join(runDir, 'summary.json'));
+  const rows = readPredictions(runDir);
+  const classDirs: Record<Label, string> = record.corpus.classDirs;
+  const classRoot = locateClassRoot(resolve(opts.corpus), classDirs);
+  const { samples } = listSamples(classRoot, classDirs);
+  const corpusGit = gitState(classRoot);
+  const manifest = manifestOf(classRoot, LABELS.map(l => classDirs[l]));
+  if (manifest.sha256 !== record.corpus.manifestSha256) {
+    throw new UsageError(`the corpus at ${opts.corpus} has manifest ${manifest.sha256.slice(0, 16)}, the run scanned ${String(record.corpus.manifestSha256).slice(0, 16)}`);
+  }
+  const pairs = contestedPairs(samples);
+  if (opts.expectContested !== undefined && pairs.length !== opts.expectContested) {
+    throw new Error(`the corpus has ${pairs.length} contested pairs, not the ${opts.expectContested} this re-score expects`);
+  }
+  const benignKeys = samples.filter(s => s.label === 'benign').map(s => s.key);
+  const adjudication = opts.adjudication
+    ? readAdjudication(opts.adjudication.record, opts.adjudication.key, { commit: corpusGit.commit, manifestSha256: manifest.sha256, benignKeys })
+    : null;
+  const block = adjudicationBlock(rows, pairs, adjudication, benignKeys.length, opts.expectContested ?? null);
+  const adjudicated = adjudicatedSummary(rows, block);
+  const harness = gitState(REPO_ROOT);
+  const rescore = {
+    schema: RESCORE_SCHEMA,
+    createdAt: new Date().toISOString(),
+    run: { runId: record.runId, files: RUN_FILES.map(name => ({ name, sha256: sha256(readFileSync(join(runDir, name))) })) },
+    harness: { commit: harness.commit, dirty: harness.dirty !== 0, files: HARNESS_FILES.map(path => ({ path, sha256: sha256(readFileSync(join(REPO_ROOT, path))) })) },
+    corpus: { commit: corpusGit.commit, manifestSha256: manifest.sha256 },
+    adjudication: block,
+    adjudicated,
+  };
+  return { record, summary: { ...summary, adjudicated }, block, rescore };
 }
 
 // ------------------------------------------------------------------------- CLI
@@ -1150,7 +1399,9 @@ export const USAGE = `Usage: npx tsx scripts/run-external-skill-benchmark.ts --c
 
 Scans every sample of a skill corpus with a pinned scanner, one child process per sample
 (cwd = the sample, a fresh empty HOME, a five-variable environment), scores each sample with
-the published OASB verdict rule, prints the table and writes a run directory.
+the published OASB verdict rule, prints the table and writes a run directory. Beside every
+as-served row it prints the adjudicated row: the same samples minus the contested pairs of the
+corpus and minus every sample a blind human adjudication record gives another class or drops.
 
   --corpus <dir>              the directory holding the class directories, or one above it
   --malicious <name>          malicious class directory (default: malware)
@@ -1177,18 +1428,57 @@ the published OASB verdict rule, prints the table and writes a run directory.
   --probe-host <ip>           host for the offline arm's connect probe (default ${DEFAULT_PROBE_HOST})
   --out <dir>                 run directory (default results/<date>-<corpus>-<instrument>-<arm>-<runId>/);
                               a complete one is not run again, an incomplete one is re-run whole
+  --expect-contested <n>      stop before scanning when the corpus has another number of
+                              contested pairs (also with --contested, --rescore, --annotation-export)
+  --adjudication <file>       a blind human adjudication record, one JSON object per line:
+                              {"id","annotatorA","annotatorB","adjudicated"}; needs --annotation-key
+  --annotation-key <file>     the key --annotation-export wrote (item id to sample)
   --verify <run dir>          check a run directory against itself and exit
   --help
 
+Switches that run alone and exit:
+  --contested                 print the contested pairs of --corpus: a benign sample that holds
+                              every file of a malicious sample at the same path with the same
+                              sha256 (_meta.json left out); both members leave both classes
+  --rescore <run dir>         the adjudicated rows of a run from its own predictions, no re-scan
+                              (a run written before the adjudicated arm existed); needs the
+                              --corpus the run scanned; --out <file> writes the re-score as JSON
+  --annotation-export <dir>   write the blind annotation stream of --corpus: contested samples
+                              first, then each --flip-list <file>[,<file>] (one sample key per
+                              line), then every other benign sample and --decoys <n> malicious
+                              decoys, mixed; seeded by --seed <s>; position ids, no _meta.json,
+                              no class or directory name; the key goes to --annotation-key <file>,
+                              outside the export
+  --verify-export <dir>       check an export against --annotation-key and --corpus
+  --transfer <parquet>        compute the transfer cells of a release table against the SKILL.md
+                              files of --reference-corpus <dir> (pin: --reference-commit <sha>);
+                              with --out <dir>, write them as a corpus (<dir>/corpus, one git
+                              commit) and a membership manifest (<dir>/manifest.json)
+  --transfer-sha256 <hex>     required: refuse a parquet with another sha256
+  --transfer-revision <rev>   required: the release revision the parquet was read at (recorded)
+  --split-file <csv>          required: the release's split file (--split-sha256 <hex> pins it)
+  --split-value <value>       the split whose identities are read (default test)
+  --transfer-columns <spec>   required: id=<col>,label=<col>,source=<col>,text=<col>
+                              [,redacted=<col>][,split=<split-file column, default split>]
+  --transfer-labels <spec>    required: malicious=<value>,benign=<value>
+  --advisory-sources <list>   sources whose identities form the advisory cell, comma-separated
+  --expect-cells <spec>       <excluded>/<gate-benign>/<gate-malicious>/<advisory>; excluded and
+                              gate-malicious may be <a>+<b>, any field may add @<source>:<n>,...;
+                              other counts stop the run and nothing is written (required with --out)
+
 Exit status: 0 when the run completed and every check it was asked for passed, 1 when a
-determinism or comparison check failed, 2 on a usage error.`;
+determinism, comparison or export check failed, an expected count differed, or an input was
+refused, 2 on a usage error.`;
 
 const VALUE_FLAGS = new Set([
   'corpus', 'malicious', 'benign', 'corpus-commit', 'corpus-name', 'scanner', 'scanner-dir', 'integrity', 'instrument', 'network',
   'model', 'compare-to', 'max-gap', 'determinism-of', 'determinism-n', 'split', 'sample', 'seed', 'samples-from', 'workers',
-  'timeout-ms', 'probe-host', 'out', 'verify',
+  'timeout-ms', 'probe-host', 'out', 'verify', 'expect-contested', 'adjudication', 'annotation-key', 'rescore', 'annotation-export',
+  'decoys', 'flip-list', 'verify-export', 'transfer', 'transfer-sha256', 'transfer-revision', 'split-file', 'split-sha256',
+  'split-value', 'transfer-columns', 'transfer-labels', 'advisory-sources', 'reference-corpus', 'reference-commit', 'expect-cells',
 ]);
-const BOOLEAN_FLAGS = new Set(['neutral', 'help']);
+const BOOLEAN_FLAGS = new Set(['neutral', 'help', 'contested']);
+const MODE_FLAGS = ['verify', 'verify-export', 'contested', 'rescore', 'annotation-export', 'transfer'];
 
 export function parseArgs(argv: string[]): Record<string, string | boolean> {
   const args: Record<string, string | boolean> = {};
@@ -1218,23 +1508,50 @@ function int(value: string | boolean | undefined, name: string): number | undefi
   return n;
 }
 
+function count(value: string | boolean | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || typeof value !== 'string' || value.trim() === '') throw new UsageError(`--${name} takes a whole number`);
+  return n;
+}
+
 const fmt = (x: number | null) => (x === null ? '   -  ' : x.toFixed(4));
 
-export function formatTable(record: any, summary: Summary): string {
+export function formatTable(record: any, summary: Summary, block: AdjudicationBlock | undefined = record.adjudication): string {
   const row = (name: string, m: Metrics) =>
     `${name.padEnd(28)} ${String(m.tp).padStart(6)} ${String(m.fp).padStart(6)} ${String(m.fn).padStart(6)} ${String(m.tn).padStart(6)}   ${fmt(m.precision)}  ${fmt(m.recall)}  ${fmt(m.f1)}  ${fmt(m.fpr)}  ${String(m.malicious.excluded + m.benign.excluded).padStart(8)}`;
   const all = summary.metrics.all;
+  const adj = summary.adjudicated;
   const lines = [
     `${record.scanner.spec} ${record.instrument}, network ${record.network.arm}${record.neutral.enabled ? ', neutralised' : ''}${record.model.seeded ? ', model seeded' : ''}`,
     `corpus ${record.corpus.name} at ${record.corpus.commit ?? 'no commit'}, manifest ${record.corpus.manifestSha256.slice(0, 16)}`,
     `n malicious ${all.malicious.n} (excluded ${all.malicious.excluded}), n benign ${all.benign.n} (excluded ${all.benign.excluded}); run ${record.runId}`,
     '',
     `${''.padEnd(28)} ${'tp'.padStart(6)} ${'fp'.padStart(6)} ${'fn'.padStart(6)} ${'tn'.padStart(6)}   precision recall  F1      FPR     excluded`,
-    row(`${record.scanner.name} ${record.scanner.version}`, all),
-    row('  dev half', summary.metrics.dev),
-    row('  held-out half', summary.metrics['held-out']),
-    row('flag every sample', summary.flagAll),
   ];
+  const rows: Array<[string, Metrics, Metrics | undefined]> = [
+    [`${record.scanner.name} ${record.scanner.version}`, all, adj?.metrics.all],
+    ['  dev half', summary.metrics.dev, adj?.metrics.dev],
+    ['  held-out half', summary.metrics['held-out'], adj?.metrics['held-out']],
+    ['flag every sample', summary.flagAll, adj?.flagAll],
+  ];
+  for (const [name, m, a] of rows) {
+    lines.push(row(name, m));
+    if (a && adj) lines.push(row(`${/^ */.exec(name)![0]}  adjudicated, ${adj.label}`, a));
+  }
+  if (adj && block) {
+    const out = (l: Label) => {
+      const e = adj.excluded[l];
+      return `${l} ${e.contested + e['adjudicated-other'] + e.dropped} (contested ${e.contested}, adjudicated other ${e['adjudicated-other']}, dropped ${e.dropped})`;
+    };
+    lines.push('', `adjudicated arm, ${adj.label}: out of both classes in this run: ${out('malicious')}, ${out('benign')}; contested pairs in the corpus ${block.contestedPairs.length}`);
+    const r = block.record;
+    lines.push(
+      r
+        ? `adjudication record ${r.recordSha256.slice(0, 16)}: ${r.items} items, ${r.unresolved} unresolved; benign samples with a final class ${block.benignFinal} of ${block.benignSamples}; kappa ${block.kappa === null ? '-' : block.kappa.toFixed(4)} over ${block.kappaItems} items; decoy recall ${block.decoyRecall === null ? '-' : block.decoyRecall.toFixed(4)} of ${block.decoys}`
+        : 'no adjudication record: the adjudicated row is interim',
+    );
+  }
   if (record.determinism) {
     const d = record.determinism;
     lines.push('', `determinism against run ${d.of}: ${d.verdictAgree}/${d.requested} verdicts, ${d.identicalCheckSet}/${d.requested} check sets: ${d.pass ? 'pass' : 'FAIL'}`);
@@ -1246,6 +1563,167 @@ export function formatTable(record: any, summary: Summary): string {
   return lines.join('\n');
 }
 
+/** The corpus a switch reads: located, listed, at its pinned commit and unmodified. */
+function corpusOf(args: Record<string, string | boolean>) {
+  if (typeof args.corpus !== 'string') throw new UsageError('--corpus is required');
+  if (!isDir(resolve(args.corpus))) throw new UsageError(`--corpus ${args.corpus} is not a directory`);
+  const classDirs: Record<Label, string> = { malicious: (args.malicious as string | undefined) ?? 'malware', benign: (args.benign as string | undefined) ?? 'benign' };
+  const classRoot = locateClassRoot(resolve(args.corpus), classDirs);
+  const { samples } = listSamples(classRoot, classDirs);
+  const corpusGit = gitState(classRoot);
+  if (typeof args['corpus-commit'] === 'string' && corpusGit.commit !== args['corpus-commit']) {
+    throw new UsageError(`the corpus checkout is at ${corpusGit.commit}, not ${args['corpus-commit']}`);
+  }
+  if (corpusGit.dirty) throw new UsageError(`the corpus checkout has ${corpusGit.dirty} modified or untracked paths; read it unmodified`);
+  return { classDirs, classRoot, samples, corpusGit };
+}
+
+function adjudicationArgs(args: Record<string, string | boolean>): { record: string; key: string } | undefined {
+  if (args.adjudication === undefined) {
+    if (args['annotation-key'] !== undefined) throw new UsageError('--annotation-key goes with --adjudication (or with --annotation-export or --verify-export)');
+    return undefined;
+  }
+  if (typeof args['annotation-key'] !== 'string') throw new UsageError('--adjudication needs --annotation-key, the key of the export it adjudicates');
+  return { record: resolve(args.adjudication as string), key: resolve(args['annotation-key']) };
+}
+
+function need(args: Record<string, string | boolean>, ...names: string[]): void {
+  for (const name of names) if (typeof args[name] !== 'string') throw new UsageError(`--${name} is required here`);
+}
+
+async function contestedCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
+  const c = corpusOf(args);
+  const expected = count(args['expect-contested'], 'expect-contested');
+  const pairs = contestedPairs(c.samples);
+  const n = (l: Label) => c.samples.filter(s => s.label === l).length;
+  print(`corpus at ${c.corpusGit.commit ?? 'no commit'}: benign ${n('benign')}, malicious ${n('malicious')}; contested pairs (a malicious sample's file set contained in a benign sample) ${pairs.length}`);
+  for (const p of pairs) print(`${p.benign} <= ${p.malicious}`);
+  if (expected !== undefined && pairs.length !== expected) {
+    print(`expected ${expected} contested pairs, found ${pairs.length}: stop`);
+    return 1;
+  }
+  return 0;
+}
+
+async function rescoreCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
+  need(args, 'corpus');
+  const out = typeof args.out === 'string' ? resolve(args.out) : null;
+  if (out && existsSync(out)) throw new UsageError(`${out} exists; a re-score is written once`);
+  const r = rescoreRun({
+    run: args.rescore as string,
+    corpus: args.corpus as string,
+    expectContested: count(args['expect-contested'], 'expect-contested'),
+    adjudication: adjudicationArgs(args),
+  });
+  print(formatTable(r.record, r.summary, r.block));
+  if (out) {
+    writeFileSync(out, JSON.stringify(r.rescore, null, 2) + '\n');
+    print(`\nre-score: ${out}`);
+  }
+  return 0;
+}
+
+async function annotationExportCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
+  need(args, 'annotation-key', 'seed', 'decoys');
+  const c = corpusOf(args);
+  const decoys = count(args.decoys, 'decoys')!;
+  const expected = count(args['expect-contested'], 'expect-contested');
+  const pairs = contestedPairs(c.samples);
+  if (expected !== undefined && pairs.length !== expected) throw new Error(`the corpus has ${pairs.length} contested pairs, not the ${expected} the export expects; nothing was written`);
+  const manifest = manifestOf(c.classRoot, LABELS.map(l => c.classDirs[l]));
+  const flipLists = typeof args['flip-list'] === 'string'
+    ? args['flip-list'].split(',').filter(Boolean).map(path => ({ path: resolve(path), keys: readFlipList(resolve(path)) }))
+    : [];
+  const result = writeAnnotationExport({
+    samples: c.samples,
+    classRoot: c.classRoot,
+    classDirs: c.classDirs,
+    corpus: { commit: c.corpusGit.commit, manifestSha256: manifest.sha256 },
+    contested: pairs,
+    decoys,
+    seed: args.seed as string,
+    flipLists,
+    exportDir: args['annotation-export'] as string,
+    keyFile: args['annotation-key'] as string,
+  });
+  const r = result.roles;
+  print(`annotation stream: ${result.items} items (contested ${r.contested}, flip list ${r.flip}, benign ${r.benign}, decoys ${r.decoy}); stream sha256 ${result.streamSha256}`);
+  print(`key (outside the export): ${resolve(args['annotation-key'] as string)}, sha256 ${result.keySha256}`);
+  return 0;
+}
+
+async function verifyExportCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
+  need(args, 'annotation-key');
+  const c = corpusOf(args);
+  const { key } = readAnnotationKey(resolve(args['annotation-key'] as string));
+  const manifest = manifestOf(c.classRoot, LABELS.map(l => c.classDirs[l]));
+  if (key.corpus?.manifestSha256 !== manifest.sha256) throw new UsageError('the corpus is not the one the export was written from (manifest sha256 differs)');
+  if (JSON.stringify(key.classDirs) !== JSON.stringify(c.classDirs)) throw new UsageError('the export was written with other class directories; pass --malicious and --benign as it was');
+  const lookup = new Map(c.samples.map(s => [s.key, { dir: s.dir, name: s.name }]));
+  const dir = resolve(args['verify-export'] as string);
+  const problems = verifyAnnotationExport(dir, key, lookup, c.classDirs);
+  print(problems.length === 0 ? `${args['verify-export']}: consistent with its key and the corpus` : problems.map(p => `${args['verify-export']}: ${p}`).join('\n'));
+  return problems.length === 0 ? 0 : 1;
+}
+
+async function transferCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
+  need(args, 'transfer-sha256', 'transfer-revision', 'split-file', 'transfer-columns', 'transfer-labels', 'reference-corpus');
+  if (!/^[0-9a-f]{64}$/.test(args['transfer-sha256'] as string)) throw new UsageError('--transfer-sha256 takes 64 hex digits');
+  if (typeof args['split-sha256'] === 'string' && !/^[0-9a-f]{64}$/.test(args['split-sha256'])) throw new UsageError('--split-sha256 takes 64 hex digits');
+  const out = typeof args.out === 'string' ? resolve(args.out) : null;
+  if (out && typeof args['expect-cells'] !== 'string') throw new UsageError('--out with --transfer needs --expect-cells: written cells are checked against their expected counts first');
+  const expected = typeof args['expect-cells'] === 'string' ? parseExpectedCells(args['expect-cells']) : null;
+  const referenceDirs: Record<Label, string> = { malicious: (args.malicious as string | undefined) ?? 'malware', benign: (args.benign as string | undefined) ?? 'benign' };
+  if (!isDir(resolve(args['reference-corpus'] as string))) throw new UsageError(`--reference-corpus ${args['reference-corpus']} is not a directory`);
+  const referenceRoot = locateClassRoot(resolve(args['reference-corpus'] as string), referenceDirs);
+  const reference = gitState(referenceRoot);
+  if (typeof args['reference-commit'] === 'string' && reference.commit !== args['reference-commit']) {
+    throw new UsageError(`the reference corpus checkout is at ${reference.commit}, not ${args['reference-commit']}`);
+  }
+  const cells = computeTransferCells({
+    parquet: resolve(args.transfer as string),
+    parquetSha256: args['transfer-sha256'] as string,
+    revision: args['transfer-revision'] as string,
+    splitFile: resolve(args['split-file'] as string),
+    splitSha256: args['split-sha256'] as string | undefined,
+    splitValue: (args['split-value'] as string | undefined) ?? 'test',
+    columns: parseColumns(args['transfer-columns'] as string),
+    labels: parseLabels(args['transfer-labels'] as string),
+    advisorySources: typeof args['advisory-sources'] === 'string' ? args['advisory-sources'].split(',').map(s => s.trim()).filter(Boolean) : [],
+    referenceRoot,
+    referenceClassDirs: referenceDirs,
+    reference,
+  });
+  const rel = cells.release;
+  print(`release at ${rel.revision}: parquet sha256 ${rel.parquet.sha256} (${rel.parquet.rows} rows), split file sha256 ${rel.splitFile.sha256}, split ${rel.split}`);
+  print(`reference corpus at ${cells.reference.commit ?? 'no commit'}: ${cells.reference.files} ${cells.reference.file} files, manifest ${cells.reference.manifestSha256.slice(0, 16)}`);
+  print(formatCells(cells.counts));
+  const redacted = cells.identities.filter(x => x.redacted);
+  if (redacted.length > 0) {
+    const where = [...new Set(redacted.map(x => `${x.cell}-${x.label}`))].sort().join(', ');
+    print(`redacted text: ${redacted.length} identities (${where}); listed in the manifest`);
+  }
+  if (expected) {
+    const diff = compareCells(cells.counts, expected);
+    if (diff.length > 0) {
+      print(`the recomputed cells differ from the expected counts; nothing was written:\n${diff.join('\n')}`);
+      return 1;
+    }
+    print('the recomputed cells equal the expected counts');
+  }
+  if (out) {
+    const harness = gitState(REPO_ROOT);
+    const m = materialiseTransfer(cells, out, {
+      createdAt: new Date().toISOString(),
+      expectedCells: args['expect-cells'],
+      harness: { commit: harness.commit, dirty: harness.dirty !== 0, files: HARNESS_FILES.map(path => ({ path, sha256: sha256(readFileSync(join(REPO_ROOT, path))) })) },
+    });
+    print(`materialised: ${m.corpus} at commit ${m.commit} (tree ${m.tree})`);
+    print(`membership manifest: ${join(m.out, 'manifest.json')}, sha256 ${m.manifestSha256}`);
+  }
+  return 0;
+}
+
 export async function runCli(argv: string[], print: (text: string) => void = t => process.stdout.write(t + '\n')): Promise<number> {
   try {
     const args = parseArgs(argv);
@@ -1253,11 +1731,18 @@ export async function runCli(argv: string[], print: (text: string) => void = t =
       print(USAGE);
       return 0;
     }
+    const modes = MODE_FLAGS.filter(m => args[m] !== undefined);
+    if (modes.length > 1) throw new UsageError(`take one of ${modes.map(m => `--${m}`).join(', ')}`);
     if (typeof args.verify === 'string') {
       const problems = verifyRun(resolve(args.verify));
       print(problems.length === 0 ? `${args.verify}: consistent` : problems.map(p => `${args.verify}: ${p}`).join('\n'));
       return problems.length === 0 ? 0 : 1;
     }
+    if (args['verify-export'] !== undefined) return await verifyExportCli(args, print);
+    if (args.contested === true) return await contestedCli(args, print);
+    if (args.rescore !== undefined) return await rescoreCli(args, print);
+    if (args['annotation-export'] !== undefined) return await annotationExportCli(args, print);
+    if (args.transfer !== undefined) return await transferCli(args, print);
     if (typeof args.corpus !== 'string') throw new UsageError('--corpus is required');
     if (typeof args.scanner !== 'string') throw new UsageError('--scanner is required');
     const name = args.scanner.slice(0, Math.max(0, args.scanner.lastIndexOf('@')));
@@ -1268,6 +1753,8 @@ export async function runCli(argv: string[], print: (text: string) => void = t =
     if (!['all', 'dev', 'held-out'].includes(split)) throw new UsageError('--split is all, dev or held-out');
     const maxGap = args['max-gap'] === undefined ? undefined : Number(args['max-gap']);
     if (maxGap !== undefined && !(maxGap >= 0 && maxGap <= 1)) throw new UsageError('--max-gap takes a number from 0 to 1');
+    const expectContested = count(args['expect-contested'], 'expect-contested');
+    const adjudication = adjudicationArgs(args);
     const log = (line: string) => process.stderr.write(line + '\n');
     const scanner = resolveScanner(adapter, args.scanner, args['scanner-dir'] as string | undefined, log);
     const result = await runBenchmark({
@@ -1295,6 +1782,8 @@ export async function runCli(argv: string[], print: (text: string) => void = t =
       workers: int(args.workers, 'workers'),
       timeoutMs: int(args['timeout-ms'], 'timeout-ms'),
       out: args.out as string | undefined,
+      expectContested,
+      adjudication,
       log,
     });
     if (result.summary) print(formatTable(result.record, result.summary));
