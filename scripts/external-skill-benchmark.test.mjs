@@ -8,7 +8,9 @@
 // reports the findings a sample's SKILL.md declares, in the JSON report shape
 // of `hackmyagent check --json`. No real corpus, scanner or network is used,
 // except that the offline-arm cell runs a connect attempt inside the macOS
-// sandbox profile, where the sandbox refuses it before any packet leaves.
+// sandbox profile, where the sandbox refuses it before any packet leaves. The
+// offline runs give the runner the probe host 127.0.0.1, so the connect
+// attempt a run makes outside its wrapper stays on the loopback interface.
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -240,6 +242,71 @@ test('the offline arm runs the scanner in a network-denied child process', () =>
   const probe = "require('node:net').connect(443, '1.1.1.1').on('connect', () => { console.log('connected'); process.exit(0); }).on('error', e => { console.log('refused ' + e.code); process.exit(0); });";
   const r = spawnSync(darwin[0], [...darwin.slice(1), process.execPath, '-e', probe], { encoding: 'utf8', timeout: 15000 });
   assert.match(r.stdout, /^refused /, r.stdout + r.stderr);
+});
+
+test('the offline denial probe: only a refused connect is a denial, and a wrapper that does not run the probe gives no answer', () => {
+  // None of these wrappers starts the connect attempt: one exits 1, one is
+  // missing, one never exits and is stopped at the probe's timeout.
+  assert.equal(lib.probeNetwork([process.execPath, '-e', 'process.exit(1)', '--'], '127.0.0.1', 5000), 'no-answer status=1 signal=null');
+  assert.equal(lib.probeNetwork([join(root, 'no-such-wrapper')], '127.0.0.1', 5000), 'no-answer status=null signal=null');
+  assert.equal(lib.probeNetwork([process.execPath, '-e', 'setInterval(() => {}, 1000)', '--'], '127.0.0.1', 1500), 'no-answer status=null signal=SIGTERM');
+  for (const outcome of ['refused EPERM', 'refused ENETUNREACH', 'refused error']) assert.equal(lib.probeRefused(outcome), true, outcome);
+  for (const outcome of ['connected', 'timeout', 'no-answer status=1 signal=null', 'no-answer status=null signal=null', 'no-answer status=null signal=SIGTERM', '', null, undefined]) {
+    assert.equal(lib.probeRefused(outcome), false, String(outcome));
+  }
+});
+
+test('the offline arm refuses to start when its connect probe times out or gets no answer, and runs when the probe is refused', async () => {
+  const offline = wrapper => ({ network: 'off', wrapper, probeHost: '127.0.0.1' });
+  const refusedToStart = async (name, wrapper, outcome) => {
+    await assert.rejects(() => run(name, { run: offline(wrapper) }), e => e.message.includes(`answered ${JSON.stringify(outcome)}`), name);
+    const out = join(root, 'runs', name);
+    assert.ok(!existsSync(out) && !existsSync(`${out}.incomplete`), `${name}: a run directory was written`);
+  };
+  // The wrapper exits 1 or is missing, so the probe gets no answer; or the
+  // connect attempt behind the wrapper times out.
+  await refusedToStart('offline-wrapper-exits', [process.execPath, '-e', 'process.exit(1)', '--'], 'no-answer status=1 signal=null');
+  await refusedToStart('offline-wrapper-missing', [join(root, 'no-such-wrapper')], 'no-answer status=null signal=null');
+  await refusedToStart('offline-probe-timeout', [process.execPath, '-e', "console.log('timeout')", '--'], 'timeout');
+  await assert.rejects(() => run('offline-wrapper-empty', { run: offline([]) }), lib.UsageError);
+  await assert.rejects(() => run('online-wrapper', { run: { wrapper: [process.execPath] } }), lib.UsageError);
+
+  // The control: this wrapper answers the probe as a denying sandbox does and
+  // runs each scan as given, so its run differs from an online run only in
+  // the probe. On macOS the sandbox profile itself runs the same control.
+  const refusing = [process.execPath, '-e', [
+    'const [cmd, ...args] = process.argv.slice(1);',
+    "if (args[0] === '-e') { console.log('refused EPERM'); process.exit(0); }",
+    "const r = require('node:child_process').spawnSync(cmd, args, { stdio: 'inherit' });",
+    'process.exit(r.status === null ? 1 : r.status);',
+  ].join(' '), '--'];
+  const controls = [['offline-probe-refused', refusing]];
+  if (process.platform === 'darwin') controls.push(['offline-sandbox', undefined]);
+  const rowsOf = dir => predictions(dir).map(r => ({ sample: r.sample, verdict: r.verdict, excluded: r.excluded, failed: r.failed }));
+  const online = rowsOf((await run('offline-control-online')).out);
+  let refusedRun;
+  for (const [name, wrapper] of controls) {
+    const { out, result } = await run(name, { run: offline(wrapper) });
+    assert.equal(result.status, 'complete', name);
+    assert.equal(result.ok, true, name);
+    const record = JSON.parse(readFileSync(join(out, 'record.json'), 'utf8'));
+    assert.equal(record.network.arm, 'offline', name);
+    assert.equal(record.network.deniedProbe, 'refused EPERM', name);
+    assert.deepEqual(record.counts, { malicious: 6, benign: 6, excluded: 1 }, name);
+    assert.deepEqual(rowsOf(out), online, name);
+    assert.deepEqual(lib.verifyRun(out), [], name);
+    refusedRun ??= out;
+  }
+
+  // The run check admits an offline record only when its probe was refused.
+  for (const outcome of ['no-answer status=1 signal=null', 'no-answer status=null signal=null', 'timeout', 'connected']) {
+    const copy = join(root, 'runs', `offline-record-${outcome.replace(/[^a-z0-9]+/g, '-')}`);
+    cpSync(refusedRun, copy, { recursive: true });
+    const record = JSON.parse(readFileSync(join(copy, 'record.json'), 'utf8'));
+    record.network.deniedProbe = outcome;
+    writeFileSync(join(copy, 'record.json'), JSON.stringify(record));
+    assert.deepEqual(lib.verifyRun(copy), [`offline denial probe ${JSON.stringify(outcome)}`], outcome);
+  }
 });
 
 test('the scanner gets the minimal environment and a fresh empty HOME per sample, with no credential variable', async () => {

@@ -376,9 +376,13 @@ README's test counts do not include them.
   does not pass; when a second sample selection, a `--seed` the selection
   would not use, or a modified scanner checkout is not refused; when the
   record of a copied, sampled or determinism run names a seed other than
-  the one its selection used; or when the CLI does not exit 2 on a missing
-  corpus or an unknown scanner. On macOS a connect attempt inside the
-  offline arm's sandbox must be refused.
+  the one its selection used; when the offline arm scans after a connect
+  probe that timed out or got no answer from its wrapper, does not run
+  after a refused probe, or its run check passes a record whose probe was
+  not refused; or when the CLI does not exit 2 on a missing corpus or an
+  unknown scanner. On macOS a connect attempt inside the offline arm's
+  sandbox must be refused, and a run inside it must give the rows an
+  online run gives.
 - `scripts/external-skill-adjudication.test.mjs`: the adjudicated arm of the
   same runner (`scripts/external-skill-adjudication.ts`), on a synthetic
   corpus and a fixture scanner. Fails when a benign sample that holds every
