@@ -610,3 +610,56 @@ test('the CLI prints its usage, and refuses a run with no corpus or no scanner',
   const unknown = spawnSync(process.execPath, ['--import', 'tsx', cli, '--corpus', root, '--scanner', 'no-such-scanner@1.0.0'], { cwd: repo, encoding: 'utf8' });
   assert.equal(unknown.status, 2);
 });
+
+test('a switch that names a path to read refuses a missing path, or one of the other kind, with exit 2 and a message naming the switch and the path', async () => {
+  const cli = join(repo, 'scripts', 'run-external-skill-benchmark.ts');
+  const corpus = join(root, 'corpus');
+  const { out: runDir } = await run('path-check-base');
+  // A real export and key over the corpus, for the cases that read them beside the path under test.
+  const exportDir = join(root, 'path-check-export');
+  const keyFile = join(root, 'path-check-key.json');
+  const exported = spawnSync(process.execPath, ['--import', 'tsx', cli, '--annotation-export', exportDir, '--annotation-key', keyFile,
+    '--corpus', corpus, '--decoys', '0', '--seed', 's'], { cwd: repo, encoding: 'utf8' });
+  assert.equal(exported.status, 0, exported.stderr);
+  // A hackmyagent install the run resolves without installing anything; --network on, so no connect probe runs.
+  const install = fixtureScanner(join(root, 'path-check-install'), 'hackmyagent', LABEL_READER);
+  const scanOut = join(root, 'runs', 'path-check-scan');
+  const scan = ['--corpus', corpus, '--scanner', 'hackmyagent@1.0.0', '--scanner-dir', install, '--network', 'on', '--out', scanOut];
+  const file = join(root, 'path-check-file.txt');
+  writeFileSync(file, 'fixture\n');
+  const transfer = ['--transfer-sha256', sha256('fixture\n'), '--transfer-revision', 'fixture', '--transfer-columns', 'id=a,label=b,source=c,text=d',
+    '--transfer-labels', 'malicious=M,benign=B', '--reference-corpus', corpus];
+  const gone = join(root, 'not-there');
+  const secondExport = join(root, 'path-check-export-2');
+  const secondKey = join(root, 'path-check-key-2.json');
+  // [switch, kind it reads, path given, argv]
+  const cases = [
+    ['verify', 'directory', gone, p => ['--verify', p]],
+    ['verify', 'directory', file, p => ['--verify', p]],
+    ['rescore', 'directory', gone, p => ['--rescore', p, '--corpus', corpus]],
+    ['corpus', 'directory', gone, p => ['--rescore', runDir, '--corpus', p]],
+    ['adjudication', 'file', gone, p => ['--rescore', runDir, '--corpus', corpus, '--adjudication', p, '--annotation-key', keyFile]],
+    ['verify-export', 'directory', gone, p => ['--verify-export', p, '--annotation-key', keyFile, '--corpus', corpus]],
+    ['annotation-key', 'file', gone, p => ['--verify-export', exportDir, '--annotation-key', p, '--corpus', corpus]],
+    ['flip-list', 'file', gone, p => ['--annotation-export', secondExport, '--annotation-key', secondKey, '--corpus', corpus,
+      '--decoys', '0', '--seed', 's', '--flip-list', `${file},${p}`]],
+    ['adjudication', 'file', gone, p => [...scan, '--adjudication', p, '--annotation-key', keyFile]],
+    ['annotation-key', 'file', gone, p => [...scan, '--adjudication', file, '--annotation-key', p]],
+    ['compare-to', 'directory', gone, p => [...scan, '--compare-to', p]],
+    ['determinism-of', 'directory', gone, p => [...scan, '--determinism-of', p]],
+    ['samples-from', 'directory', gone, p => [...scan, '--samples-from', p]],
+    // Checked before the scanner is resolved: this --scanner-dir is no install of it.
+    ['compare-to', 'directory', gone, p => [...scan.slice(0, 4), '--scanner-dir', gone, '--network', 'on', '--compare-to', p]],
+    ['transfer', 'file', gone, p => ['--transfer', p, '--split-file', file, ...transfer]],
+    ['transfer', 'file', root, p => ['--transfer', p, '--split-file', file, ...transfer]],
+    ['split-file', 'file', gone, p => ['--transfer', file, '--split-file', p, ...transfer]],
+  ];
+  for (const [name, kind, path, argv] of cases) {
+    const r = spawnSync(process.execPath, ['--import', 'tsx', cli, ...argv(path)], { cwd: repo, encoding: 'utf8' });
+    assert.equal(r.status, 2, `--${name} ${path}: ${r.stderr}`);
+    assert.equal(r.stderr.split('\n')[0], `--${name} ${path} is not a ${kind}`);
+    assert.doesNotMatch(r.stderr, /hashing the corpus/, `--${name} ${path}: refused before the corpus is hashed`);
+  }
+  assert.ok(!existsSync(scanOut) && !existsSync(`${scanOut}.incomplete`), 'no run directory is written');
+  assert.ok(!existsSync(secondExport) && !existsSync(`${secondExport}.incomplete`) && !existsSync(secondKey), 'no export and no key is written');
+});
