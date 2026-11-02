@@ -916,6 +916,14 @@ function slug(text: string): string {
 
 const keysSha256 = (keys: string[]) => sha256([...keys].sort().join('\n') + '\n');
 
+/** The files of a model directory, and the sha256 over their `<sha256>  <path>` lines. */
+function modelManifestOf(dir: string): { files: Array<{ path: string; sha256: string }>; sha256: string } {
+  const paths: string[] = [];
+  walkFiles(dir, paths);
+  const files = paths.map(f => ({ path: relative(dir, f).split(sep).join('/'), sha256: sha256(readFileSync(f)) }));
+  return { files, sha256: sha256(files.map(f => `${f.sha256}  ${f.path}`).join('\n') + '\n') };
+}
+
 /** Scans the selected samples and writes the run directory. */
 export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
   const log = opts.log ?? ((line: string) => process.stderr.write(line + '\n'));
@@ -990,12 +998,21 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
   pool0 = keys.map(k => byKey.get(k)!);
   if (pool0.length === 0) throw new UsageError('no sample selected');
 
+  // The model-present arm's files, hashed before a re-run is checked against the run it repeats.
+  const model = opts.model ? modelManifestOf(opts.model) : null;
   if (opts.determinismOf && ref) {
     const r = ref.record;
     const same = r.scanner.name === scanner.name && r.scanner.version === scanner.version && r.scanner.integrity === scanner.integrity
       && r.scanner.gitCommit === scanner.gitCommit && r.instrument === opts.instrument && r.network.arm === arm && r.neutral.enabled === !!opts.neutral
       && r.model.seeded === !!opts.model;
     if (!same) throw new UsageError('a determinism re-run uses the scanner, instrument and arm of the run it repeats');
+    const seededBefore: string | null = r.model.manifestSha256 ?? null;
+    const seededNow = model?.sha256 ?? null;
+    if (seededBefore !== seededNow) {
+      const short = (h: string | null) => (h === null ? 'none' : h.slice(0, 16));
+      const now = opts.model ? `--model ${opts.model} has manifest ${short(seededNow)}` : 'this run seeds no model';
+      throw new UsageError(`a determinism re-run seeds the model of the run it repeats: ${now}, the run it repeats seeded manifest ${short(seededBefore)}`);
+    }
   }
   if (opts.compareTo && ref) {
     const r = ref.record;
@@ -1034,12 +1051,6 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
     : null;
   const harness = gitState(REPO_ROOT);
   const harnessFiles = HARNESS_FILES.map(path => ({ path, sha256: sha256(readFileSync(join(REPO_ROOT, path))) }));
-  const modelFiles: Array<{ path: string; sha256: string }> = [];
-  if (opts.model) {
-    const files: string[] = [];
-    walkFiles(opts.model, files);
-    for (const f of files) modelFiles.push({ path: relative(opts.model, f).split(sep).join('/'), sha256: sha256(readFileSync(f)) });
-  }
 
   mkdirSync(partial, { recursive: true });
   writeFileSync(join(partial, INCOMPLETE_MARKER), '');
@@ -1170,7 +1181,7 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
         home: 'fresh-empty-per-sample',
         tmpdir: 'fresh-empty-per-sample',
       },
-      model: { seeded: !!opts.model, files: modelFiles, manifestSha256: opts.model ? sha256(modelFiles.map(f => `${f.sha256}  ${f.path}`).join('\n') + '\n') : null },
+      model: { seeded: !!opts.model, files: model?.files ?? [], manifestSha256: model?.sha256 ?? null },
       neutral: {
         enabled: !!opts.neutral,
         dropped: opts.neutral ? [...NEUTRAL_DROPPED] : [],
