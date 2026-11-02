@@ -370,12 +370,15 @@ README's test counts do not include them.
   schema fails that check; when a determinism re-run passes for a scanner
   that changed between runs, or the neutralised arm passes for a scanner
   that reads `_meta.json`; when the model-present arm does not copy the
-  model directory into each fresh HOME; when a second sample selection, a
-  `--seed` the selection would not use, or a modified scanner checkout is
-  not refused; when the record of a copied, sampled or determinism run
-  names a seed other than the one its selection used; or when the CLI
-  does not exit 2 on a missing corpus or an unknown scanner. On macOS a
-  connect attempt inside the offline arm's sandbox must be refused.
+  model directory into each fresh HOME; when a determinism re-run of a
+  model-present run that seeds other model files, or none, is not refused
+  before it scans, or one that seeds the same files from another directory
+  does not pass; when a second sample selection, a `--seed` the selection
+  would not use, or a modified scanner checkout is not refused; when the
+  record of a copied, sampled or determinism run names a seed other than
+  the one its selection used; or when the CLI does not exit 2 on a missing
+  corpus or an unknown scanner. On macOS a connect attempt inside the
+  offline arm's sandbox must be refused.
 - `scripts/external-skill-adjudication.test.mjs`: the adjudicated arm of the
   same runner (`scripts/external-skill-adjudication.ts`), on a synthetic
   corpus and a fixture scanner. Fails when a benign sample that holds every

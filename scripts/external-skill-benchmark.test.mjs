@@ -454,6 +454,35 @@ test('the model-present arm copies the model directory into each fresh HOME and 
   assert.ok(existsSync(join(model, 'tokenizer.json')), 'the source model directory is left in place');
 });
 
+test('determinism: a re-run seeds a model directory with the files of the run it repeats; another model, or none, is refused before any scan', async () => {
+  const modelA = join(root, 'determinism-model-a');
+  const modelACopy = join(root, 'determinism-model-a-copy');
+  const modelB = join(root, 'determinism-model-b');
+  for (const [dir, text] of [[modelA, '{"fixture":"a"}'], [modelACopy, '{"fixture":"a"}'], [modelB, '{"fixture":"b"}']]) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'tokenizer.json'), text);
+  }
+  const reader = options => ({ scannerName: 'fixture-label-reader', run: options });
+  const { out } = await run('determinism-model-base', reader({ model: modelA }));
+  const base = JSON.parse(readFileSync(join(out, 'record.json'), 'utf8'));
+
+  const copy = await run('determinism-model-copy', reader({ model: modelACopy, determinismOf: out }));
+  assert.equal(copy.result.ok, true, 'the same files in another directory are the same model');
+  assert.equal(copy.result.record.model.manifestSha256, base.model.manifestSha256);
+  assert.equal(copy.result.record.determinism.pass, true);
+
+  await assert.rejects(
+    () => run('determinism-model-other', reader({ model: modelB, determinismOf: out })),
+    e => e instanceof lib.UsageError && e.message.includes(base.model.manifestSha256.slice(0, 16)),
+    'a model directory whose files differ is refused, and the refusal names the manifest of the run it repeats',
+  );
+  await assert.rejects(() => run('determinism-model-none', reader({ determinismOf: out })), lib.UsageError);
+  for (const name of ['determinism-model-other', 'determinism-model-none']) {
+    assert.ok(!existsSync(join(root, 'runs', name)), `${name}: a refused re-run writes no run directory`);
+    assert.ok(!existsSync(join(root, 'runs', `${name}.incomplete`)), `${name}: a refused re-run starts no scan`);
+  }
+});
+
 test('a run takes one sample selection: a second reference, or a sample or split beside a reference, is refused', async () => {
   const { out } = await run('selection-base');
   await assert.rejects(() => run('selection-two-references', { run: { determinismOf: out, compareTo: out } }), lib.UsageError);
