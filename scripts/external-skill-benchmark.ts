@@ -964,15 +964,25 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
   const reference = opts.determinismOf ?? opts.compareTo ?? opts.samplesFrom;
   const ref = reference ? referenceRun(reference) : null;
   let keys: string[];
-  const seed = opts.determinismOf ? (opts.seed ?? 'determinism') : opts.seed;
+  // Set only where a selection takes the seed, so the record names no other seed.
+  let seed: string | undefined;
   if (ref) {
     keys = ref.rows.map(r => r.sample);
-    if (opts.determinismOf) keys = selectSeeded(keys, Math.min(opts.determinismN ?? DETERMINISM_N, keys.length), seed!);
+    if (opts.determinismOf) {
+      seed = opts.seed ?? 'determinism';
+      keys = selectSeeded(keys, Math.min(opts.determinismN ?? DETERMINISM_N, keys.length), seed);
+    }
   } else if (opts.sample !== undefined) {
     if (opts.seed === undefined) throw new UsageError('--sample needs --seed');
-    keys = selectSeeded(pool0.map(s => s.key), opts.sample, opts.seed);
+    seed = opts.seed;
+    keys = selectSeeded(pool0.map(s => s.key), opts.sample, seed);
   } else {
     keys = pool0.map(s => s.key);
+  }
+  if (opts.seed !== undefined && seed === undefined) {
+    throw new UsageError(ref
+      ? `--${opts.compareTo !== undefined ? 'compare-to' : 'samples-from'} repeats the samples of that run and takes no --seed`
+      : '--seed goes with --sample or --determinism-of');
   }
   const byKey = new Map(allSamples.map(s => [s.key, s]));
   const missing = keys.filter(k => !byKey.has(k));

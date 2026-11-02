@@ -461,6 +461,30 @@ test('a run takes one sample selection: a second reference, or a sample or split
   await assert.rejects(() => run('selection-split-and-reference', { run: { compareTo: out, split: 'dev' } }), lib.UsageError);
 });
 
+test('a seed the selection would not use is refused, so a record names only the seed its selection used', async () => {
+  const { out } = await run('seed-base');
+  const base = JSON.parse(readFileSync(join(out, 'record.json'), 'utf8'));
+  const unused = [
+    ['seed-beside-samples-from', { samplesFrom: out, seed: 'zzz' }, /^--samples-from repeats the samples of that run and takes no --seed$/],
+    ['seed-beside-compare-to', { compareTo: out, seed: 'zzz' }, /^--compare-to repeats the samples of that run and takes no --seed$/],
+    ['seed-without-sample', { seed: 'only' }, /^--seed goes with --sample or --determinism-of$/],
+  ];
+  for (const [name, options, message] of unused) {
+    await assert.rejects(() => run(name, { run: options }), e => e instanceof lib.UsageError && message.test(e.message), name);
+    assert.ok(!existsSync(join(root, 'runs', name)), `${name}: no run directory is written`);
+    assert.ok(!existsSync(join(root, 'runs', `${name}.incomplete`)), `${name}: no incomplete run is left`);
+  }
+  const selection = dir => JSON.parse(readFileSync(join(dir, 'record.json'), 'utf8')).selection;
+  const copied = await run('seed-none-samples-from', { run: { samplesFrom: out } });
+  assert.equal(selection(copied.out).seed, null);
+  assert.equal(selection(copied.out).from, base.runId);
+  assert.equal(selection(copied.out).keysSha256, base.selection.keysSha256);
+  const sampled = await run('seed-with-sample', { run: { sample: 3, seed: 'zzz' } });
+  assert.deepEqual([selection(sampled.out).sample, selection(sampled.out).seed, selection(sampled.out).n], [3, 'zzz', 3]);
+  const repeated = await run('seed-with-determinism', { run: { determinismOf: out, determinismN: 5, seed: 'zzz' } });
+  assert.deepEqual([selection(repeated.out).seed, selection(repeated.out).from, selection(repeated.out).n], ['zzz', base.runId, 5]);
+});
+
 test('a scanner checkout is pinned by its commit, and a checkout with modified or untracked files is refused', () => {
   const dir = join(root, 'checkout');
   mkdirSync(join(dir, 'dist'), { recursive: true });
