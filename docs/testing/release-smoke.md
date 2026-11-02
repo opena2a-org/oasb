@@ -419,7 +419,11 @@ README's test counts do not include them.
   from what was written, or an unsupported codec or a nested column is read
   instead of refused; when the cell rule does not exclude exact text and
   benign name-shared identities, put advisory sources in the advisory cell
-  and report malicious name-shared identities as their own row; when a
+  and report malicious name-shared identities as their own row; when the
+  frontmatter name rule takes a name from a name line whose value still
+  holds a quote once one pair of matching surrounding quotes is removed, or
+  from the line after an empty name line, or takes 5 ms or more, at the best
+  of up to five calls, to read a name line holding 100,000 spaces; when a
   release with another sha256, a split row the table contradicts or a test
   identity with no text is read; when the cells are written although they
   differ from `--expect-cells`; or when a materialised cell is not one

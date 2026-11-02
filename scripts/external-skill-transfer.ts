@@ -10,8 +10,9 @@
  * a reference corpus:
  * - excluded when its text is byte-identical to a reference SKILL.md (exact),
  *   or when it is benign and its frontmatter name equals a reference SKILL.md
- *   name (name); the frontmatter name is the first line matching NAME_PATTERN,
- *   stripped and lowercased;
+ *   name (name); the frontmatter name is read by NAME_RULE: NAME_PATTERN takes
+ *   each name line, and the code trims its value, removes one pair of
+ *   matching surrounding quotes and lowercases it;
  * - otherwise advisory when its source is an advisory source;
  * - otherwise a gate identity of its class; a malicious gate identity whose
  *   name equals a reference name is reported as its own row.
@@ -34,7 +35,10 @@ import { join, relative, resolve, sep } from 'node:path';
 import { type ParquetValue, describeParquet, openParquet, readColumns } from './parquet-columns.js';
 
 export const TRANSFER_SCHEMA = 'oasb-transfer-cells/v1';
-export const NAME_PATTERN = /^name:\s*["']?([^"'\n]+?)["']?\s*$/m;
+export const NAME_PATTERN = /^name:(.*)$/m;
+export const NAME_RULE =
+  'the first line matching namePattern whose value (its capture), trimmed, stripped of one pair of matching surrounding quotes where it has them, and trimmed again, is not empty and holds no " or \'; that value, lowercased';
+const NAME_LINES = new RegExp(NAME_PATTERN.source, 'gm');
 export const REFERENCE_FILE = 'SKILL.md';
 export const CELLS = ['gate', 'advisory', 'excluded'] as const;
 export const MATERIALISED_CLASS_DIRS = { malicious: 'malware', benign: 'benign' } as const;
@@ -53,12 +57,20 @@ export function transferNeutralId(id: string): string {
   return `n-${sha256(`neutral\n${id}`).slice(0, 16)}`;
 }
 
-/** The frontmatter name rule: the first line matching NAME_PATTERN, stripped and lowercased. */
+/**
+ * The frontmatter name rule (NAME_RULE). NAME_PATTERN takes each name line in
+ * turn and nothing more; the white space and the quotes around its value are
+ * read here, in code. A line whose value is then empty or holds a quote gives
+ * no name, and the next name line is read.
+ */
 export function frontmatterName(text: string): string | null {
-  const m = NAME_PATTERN.exec(text);
-  if (!m) return null;
-  const name = m[1].trim().toLowerCase();
-  return name === '' ? null : name;
+  for (const m of text.matchAll(NAME_LINES)) {
+    let value = m[1].trim();
+    const quote = value[0];
+    if (value.length > 1 && (quote === '"' || quote === "'") && value.endsWith(quote)) value = value.slice(1, -1).trim();
+    if (value !== '' && !value.includes('"') && !value.includes("'")) return value.toLowerCase();
+  }
+  return null;
 }
 
 /** RFC 4180 CSV: quoted fields, doubled quotes, CRLF or LF rows. */
@@ -480,6 +492,7 @@ export function materialiseTransfer(cells: TransferCells, outDir: string, extra:
       ...extra,
       rule: CELL_RULE,
       namePattern: NAME_PATTERN.source,
+      nameRule: NAME_RULE,
       release: cells.release,
       reference: cells.reference,
       counts: cells.counts,
