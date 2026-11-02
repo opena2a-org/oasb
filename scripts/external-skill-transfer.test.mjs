@@ -545,6 +545,28 @@ test('the CLI materialises the cells when they equal the expected counts, and wr
   assert.match(printOnly.stdout, /^advisory 2 \(S-ADV 2\)$/m);
 });
 
+test('the CLI: a value of --expect-cells, --transfer-columns or --transfer-labels that does not parse is a usage error, found before any file is read', () => {
+  // Every path names a file or directory that does not exist, so a parse
+  // error is the first refusal only when the values are parsed first.
+  const missing = join(root, 'not-written');
+  const good = { 'expect-cells': EXPECT, 'transfer-columns': COLUMNS_SPEC, 'transfer-labels': 'malicious=M,benign=B' };
+  const cases = [
+    ['expect-cells', '1/2', '--expect-cells takes <excluded>/<gate-benign>/<gate-malicious>/<advisory>'],
+    ['transfer-columns', 'id=a', 'column spec: label= is required'],
+    ['transfer-labels', 'malicious=1,benign=1', 'label spec: malicious=<value>,benign=<value>, two different values'],
+  ];
+  for (const [flag, value, message] of cases) {
+    const values = { ...good, [flag]: value };
+    const r = spawnSync(process.execPath, ['--import', 'tsx', cli, '--transfer', join(missing, 'table.parquet'), '--transfer-sha256', parquetSha,
+      '--transfer-revision', 'fixture-revision', '--split-file', join(missing, 'split.csv'), '--reference-corpus', join(missing, 'reference'),
+      ...Object.entries(values).flatMap(([name, v]) => [`--${name}`, v])], { cwd: repo, encoding: 'utf8' });
+    assert.equal(r.status, 2, `--${flag} ${value}: ${r.stderr}`);
+    assert.equal(r.stderr.split('\n')[0], message, `--${flag} ${value}`);
+    assert.match(r.stderr, /--transfer-sha256 <hex>/, 'the usage text follows the message');
+    assert.equal(r.stdout, '');
+  }
+});
+
 test('the runner scans a materialised gate cell as a corpus at its commit, and the run passes its own check', async () => {
   const cells = tr.computeTransferCells(spec());
   const m = tr.materialiseTransfer(cells, join(root, 'materialised-run'));
