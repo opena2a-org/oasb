@@ -281,7 +281,12 @@ export function scannerEnv(home: string, tmp: string): Record<string, string> {
   return { HOME: home, LANG: 'en_US.UTF-8', OPENA2A_TELEMETRY: 'off', PATH: scannerPath(), TMPDIR: tmp };
 }
 
-/** Runs a TCP connect to host:443 behind `wrapper` and returns its outcome: connected, refused <code> or timeout. */
+/**
+ * Runs a TCP connect to host:443 behind `wrapper` and returns its outcome:
+ * connected, refused <code> or timeout; or no-answer status=<exit status>
+ * signal=<signal> when the probe prints nothing, as when the wrapper is
+ * missing, exits without running the connect, or is stopped at timeoutMs.
+ */
 export function probeNetwork(wrapper: string[], host: string, timeoutMs = 15000): string {
   const box = mkdtempSync(join(tmpdir(), 'oasb-probe-'));
   try {
@@ -299,6 +304,16 @@ export function probeNetwork(wrapper: string[], host: string, timeoutMs = 15000)
   } finally {
     rmSync(box, { recursive: true, force: true });
   }
+}
+
+/**
+ * True when a connect probe outcome is a refused connect, `refused <code>`.
+ * The offline arm scans only after such an outcome: connected reached the
+ * host, timeout is a connect attempt that got no reply in time, and no-answer
+ * is a probe that printed nothing, so none of them shows a denial.
+ */
+export function probeRefused(outcome: unknown): boolean {
+  return typeof outcome === 'string' && outcome.startsWith('refused ');
 }
 
 function gitEnv(): Record<string, string> {
@@ -877,6 +892,12 @@ export interface RunOptions {
   compareTo?: string;
   maxGap?: number;
   probeHost?: string;
+  /**
+   * The offline arm's argv prefix that denies network to each scanner process
+   * (default: offlineWrapper() for this platform). A connect probe run behind
+   * it must be refused before any sample is scanned.
+   */
+  wrapper?: string[];
   workers?: number;
   timeoutMs?: number;
   out?: string;
@@ -931,6 +952,9 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
   const instrumentArgs = adapter.instruments[opts.instrument];
   if (!instrumentArgs) throw new UsageError(`${adapter.name} has no instrument ${opts.instrument} (${Object.keys(adapter.instruments).join(', ')})`);
   if (opts.network !== 'off' && opts.network !== 'on') throw new UsageError('--network is off or on');
+  if (opts.wrapper !== undefined && (opts.network !== 'off' || opts.wrapper.length === 0)) {
+    throw new UsageError('a wrapper is a non-empty argv prefix, and only the offline arm (--network off) takes one');
+  }
   if (opts.integrity && opts.integrity !== scanner.integrity) {
     throw new UsageError(`${scanner.spec} has integrity ${scanner.integrity}, not ${opts.integrity}`);
   }
@@ -1031,14 +1055,17 @@ export async function runBenchmark(opts: RunOptions): Promise<RunResult> {
     throw new Error(`the corpus has ${pairs.length} contested pairs, not the ${opts.expectContested} this run expects; nothing was scanned`);
   }
 
-  // The offline arm proves its denial before any sample is scanned.
-  const wrapper = opts.network === 'off' ? offlineWrapper() : [];
+  // The offline arm proves its denial before any sample is scanned: the
+  // connect probe behind the wrapper must be refused.
+  const wrapper = opts.network === 'off' ? (opts.wrapper ?? offlineWrapper()) : [];
   const probeHost = opts.probeHost ?? DEFAULT_PROBE_HOST;
   let deniedProbe: string | null = null;
   let hostProbe: string | null = null;
   if (opts.network === 'off') {
     deniedProbe = probeNetwork(wrapper, probeHost);
-    if (deniedProbe === 'connected') throw new Error(`the offline arm reached ${probeHost}:443 through ${wrapper[0]}; refusing to scan`);
+    if (!probeRefused(deniedProbe)) {
+      throw new Error(`the offline arm's connect to ${probeHost}:443 through ${wrapper[0]} answered ${JSON.stringify(deniedProbe)}, not refused <code>; refusing to scan`);
+    }
     hostProbe = probeNetwork([], probeHost);
     log(`offline arm: connect to ${probeHost}:443 inside ${basename(wrapper[0])}: ${deniedProbe}; outside: ${hostProbe}`);
   }
@@ -1276,7 +1303,7 @@ export function verifyRun(dir: string, opts: { requireCleanHarness?: boolean } =
   need(['offline', 'online'].includes(record.network?.arm), 'network arm');
   if (record.network?.arm === 'offline') {
     need(Array.isArray(record.network.wrapper) && record.network.wrapper.length > 0, 'offline wrapper');
-    need(typeof record.network.deniedProbe === 'string' && record.network.deniedProbe !== 'connected', 'offline denial probe');
+    need(probeRefused(record.network.deniedProbe), `offline denial probe ${JSON.stringify(record.network.deniedProbe)}`);
   }
   need(JSON.stringify(record.environment?.names) === JSON.stringify(SCANNER_ENV_NAMES), 'environment names');
   need(record.environment?.home === 'fresh-empty-per-sample', 'fresh HOME per sample');
