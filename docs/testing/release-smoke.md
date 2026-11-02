@@ -379,8 +379,15 @@ README's test counts do not include them.
   the one its selection used; when the offline arm scans after a connect
   probe that timed out or got no answer from its wrapper, does not run
   after a refused probe, or its run check passes a record whose probe was
-  not refused; or when the CLI does not exit 2 on a missing corpus or an
-  unknown scanner. On macOS a connect attempt inside the offline arm's
+  not refused; when the CLI does not exit 2 on a missing corpus or an
+  unknown scanner; or when a switch that names a path to read is given a
+  path that is not there (`--verify`, `--rescore`, `--corpus` with
+  `--rescore`, `--adjudication`, `--annotation-key`, `--verify-export`,
+  `--flip-list`, `--compare-to`, `--determinism-of`, `--samples-from`,
+  `--transfer`, `--split-file`), `--verify` a file or `--transfer` a
+  directory, and the CLI does not exit 2 with a message that names the
+  switch and the path, or a scan run hashes the corpus or writes a run
+  directory first. On macOS a connect attempt inside the offline arm's
   sandbox must be refused, and a run inside it must give the rows an
   online run gives.
 - `scripts/external-skill-adjudication.test.mjs`: the adjudicated arm of the

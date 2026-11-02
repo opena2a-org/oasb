@@ -1632,11 +1632,30 @@ function adjudicationArgs(args: Record<string, string | boolean>): { record: str
     return undefined;
   }
   if (typeof args['annotation-key'] !== 'string') throw new UsageError('--adjudication needs --annotation-key, the key of the export it adjudicates');
-  return { record: resolve(args.adjudication as string), key: resolve(args['annotation-key']) };
+  return { record: inputPath('adjudication', args.adjudication as string, 'file'), key: inputPath('annotation-key', args['annotation-key'], 'file') };
 }
 
 function need(args: Record<string, string | boolean>, ...names: string[]): void {
   for (const name of names) if (typeof args[name] !== 'string') throw new UsageError(`--${name} is required here`);
+}
+
+/**
+ * The resolved path a switch names for the runner to read. A path that does
+ * not exist, or is a directory where a file is read or the other way round, is
+ * a usage error that names the switch and the path as given. Symlinks are
+ * followed, as the reads of the path follow them.
+ */
+function inputPath(name: string, value: string, kind: 'directory' | 'file'): string {
+  const path = resolve(value);
+  let directory: boolean | undefined;
+  try {
+    directory = statSync(path).isDirectory();
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') throw e;
+  }
+  if (directory !== (kind === 'directory')) throw new UsageError(`--${name} ${value} is not a ${kind}`);
+  return path;
 }
 
 async function contestedCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
@@ -1655,6 +1674,8 @@ async function contestedCli(args: Record<string, string | boolean>, print: (text
 
 async function rescoreCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
   need(args, 'corpus');
+  inputPath('rescore', args.rescore as string, 'directory');
+  inputPath('corpus', args.corpus as string, 'directory');
   const out = typeof args.out === 'string' ? resolve(args.out) : null;
   if (out && existsSync(out)) throw new UsageError(`${out} exists; a re-score is written once`);
   const r = rescoreRun({
@@ -1673,15 +1694,16 @@ async function rescoreCli(args: Record<string, string | boolean>, print: (text: 
 
 async function annotationExportCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
   need(args, 'annotation-key', 'seed', 'decoys');
+  const flipPaths = typeof args['flip-list'] === 'string'
+    ? args['flip-list'].split(',').filter(Boolean).map(path => inputPath('flip-list', path, 'file'))
+    : [];
   const c = corpusOf(args);
   const decoys = count(args.decoys, 'decoys')!;
   const expected = count(args['expect-contested'], 'expect-contested');
   const pairs = contestedPairs(c.samples);
   if (expected !== undefined && pairs.length !== expected) throw new Error(`the corpus has ${pairs.length} contested pairs, not the ${expected} the export expects; nothing was written`);
   const manifest = manifestOf(c.classRoot, LABELS.map(l => c.classDirs[l]));
-  const flipLists = typeof args['flip-list'] === 'string'
-    ? args['flip-list'].split(',').filter(Boolean).map(path => ({ path: resolve(path), keys: readFlipList(resolve(path)) }))
-    : [];
+  const flipLists = flipPaths.map(path => ({ path, keys: readFlipList(path) }));
   const result = writeAnnotationExport({
     samples: c.samples,
     classRoot: c.classRoot,
@@ -1702,13 +1724,14 @@ async function annotationExportCli(args: Record<string, string | boolean>, print
 
 async function verifyExportCli(args: Record<string, string | boolean>, print: (text: string) => void): Promise<number> {
   need(args, 'annotation-key');
+  const dir = inputPath('verify-export', args['verify-export'] as string, 'directory');
+  const keyPath = inputPath('annotation-key', args['annotation-key'] as string, 'file');
   const c = corpusOf(args);
-  const { key } = readAnnotationKey(resolve(args['annotation-key'] as string));
+  const { key } = readAnnotationKey(keyPath);
   const manifest = manifestOf(c.classRoot, LABELS.map(l => c.classDirs[l]));
   if (key.corpus?.manifestSha256 !== manifest.sha256) throw new UsageError('the corpus is not the one the export was written from (manifest sha256 differs)');
   if (JSON.stringify(key.classDirs) !== JSON.stringify(c.classDirs)) throw new UsageError('the export was written with other class directories; pass --malicious and --benign as it was');
   const lookup = new Map(c.samples.map(s => [s.key, { dir: s.dir, name: s.name }]));
-  const dir = resolve(args['verify-export'] as string);
   const problems = verifyAnnotationExport(dir, key, lookup, c.classDirs);
   print(problems.length === 0 ? `${args['verify-export']}: consistent with its key and the corpus` : problems.map(p => `${args['verify-export']}: ${p}`).join('\n'));
   return problems.length === 0 ? 0 : 1;
@@ -1721,6 +1744,8 @@ async function transferCli(args: Record<string, string | boolean>, print: (text:
   const out = typeof args.out === 'string' ? resolve(args.out) : null;
   if (out && typeof args['expect-cells'] !== 'string') throw new UsageError('--out with --transfer needs --expect-cells: written cells are checked against their expected counts first');
   const expected = typeof args['expect-cells'] === 'string' ? parseExpectedCells(args['expect-cells']) : null;
+  const parquet = inputPath('transfer', args.transfer as string, 'file');
+  const splitFile = inputPath('split-file', args['split-file'] as string, 'file');
   const referenceDirs: Record<Label, string> = { malicious: (args.malicious as string | undefined) ?? 'malware', benign: (args.benign as string | undefined) ?? 'benign' };
   if (!isDir(resolve(args['reference-corpus'] as string))) throw new UsageError(`--reference-corpus ${args['reference-corpus']} is not a directory`);
   const referenceRoot = locateClassRoot(resolve(args['reference-corpus'] as string), referenceDirs);
@@ -1729,10 +1754,10 @@ async function transferCli(args: Record<string, string | boolean>, print: (text:
     throw new UsageError(`the reference corpus checkout is at ${reference.commit}, not ${args['reference-commit']}`);
   }
   const cells = computeTransferCells({
-    parquet: resolve(args.transfer as string),
+    parquet,
     parquetSha256: args['transfer-sha256'] as string,
     revision: args['transfer-revision'] as string,
-    splitFile: resolve(args['split-file'] as string),
+    splitFile,
     splitSha256: args['split-sha256'] as string | undefined,
     splitValue: (args['split-value'] as string | undefined) ?? 'test',
     columns: parseColumns(args['transfer-columns'] as string),
@@ -1782,7 +1807,7 @@ export async function runCli(argv: string[], print: (text: string) => void = t =
     const modes = MODE_FLAGS.filter(m => args[m] !== undefined);
     if (modes.length > 1) throw new UsageError(`take one of ${modes.map(m => `--${m}`).join(', ')}`);
     if (typeof args.verify === 'string') {
-      const problems = verifyRun(resolve(args.verify));
+      const problems = verifyRun(inputPath('verify', args.verify, 'directory'));
       print(problems.length === 0 ? `${args.verify}: consistent` : problems.map(p => `${args.verify}: ${p}`).join('\n'));
       return problems.length === 0 ? 0 : 1;
     }
@@ -1803,6 +1828,9 @@ export async function runCli(argv: string[], print: (text: string) => void = t =
     if (maxGap !== undefined && !(maxGap >= 0 && maxGap <= 1)) throw new UsageError('--max-gap takes a number from 0 to 1');
     const expectContested = count(args['expect-contested'], 'expect-contested');
     const adjudication = adjudicationArgs(args);
+    for (const name of ['determinism-of', 'compare-to', 'samples-from']) {
+      if (typeof args[name] === 'string') inputPath(name, args[name] as string, 'directory');
+    }
     const log = (line: string) => process.stderr.write(line + '\n');
     const scanner = resolveScanner(adapter, args.scanner, args['scanner-dir'] as string | undefined, log);
     const result = await runBenchmark({
