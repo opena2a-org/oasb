@@ -4,9 +4,11 @@
 // scripts, adapters and scenario files they describe, that docs/demo.tape
 // states no count and writes the results file its report step reads, that
 // docs/oasb-demo.gif is the recording of that tape docs/captures/demo.json
-// records, and that the verdict methodology in scripts/run-benchmark-v2.ts,
+// records, that the verdict methodology in scripts/run-benchmark-v2.ts,
 // benchmark-results-v6.json and src/benchmark/hma-pipeline-adapter.ts does
-// not give the server count BENCHMARK-RESULTS.md withdrew.
+// not give the server count BENCHMARK-RESULTS.md withdrew, and that a row of
+// docs/updates.md that starts with a version has a date CHANGELOG.md gives
+// that version.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -407,4 +409,84 @@ test('the LLM07 row of docs/owasp-agentic-mapping.md names the system-prompt ext
     })
     .map(({ file }) => file);
   assert.deepEqual(citing, [], 'the LLM07 row says no scenario cites LLM07');
+});
+
+// CHANGELOG.md gives a version its release date in a `## <version> - <date>`
+// heading, and records a cut or a tag of a version that was not released in a
+// line, heading or not, that starts `<version> - <date>` and whose note has
+// the word never, as `0.4.1 - 2026-10-17 (cut at 3ed25cf; never released)`
+// does. A row of docs/updates.md whose change starts with a version, as
+// `**v0.4.0** - ` does, has the release date of that version; or it has the
+// date of such a line and says the version was not released.
+function changelogDates(changelog) {
+  const released = new Map();
+  const unreleased = new Map();
+  for (const [, heading, version, date, note] of changelog.matchAll(/^(## )?(\d+\.\d+\.\d+) - (\d{4}-\d{2}-\d{2})\b(.*)$/gm)) {
+    if (/\bnever\b/.test(note)) {
+      if (!unreleased.has(version)) unreleased.set(version, new Set());
+      unreleased.get(version).add(date);
+    } else if (heading && !released.has(version)) {
+      released.set(version, date);
+    }
+  }
+  return { released, unreleased };
+}
+
+const versionRows = (updates) =>
+  updates
+    .split(/\r?\n/)
+    .map((line) => line.match(/^\|\s*(\d{4}-\d{2}-\d{2})\s*\|(.*)\|\s*$/))
+    .filter(Boolean)
+    .map(([, date, change]) => ({ date, change: change.trim(), version: change.trim().match(/^(?:\*\*)?v(\d+\.\d+\.\d+)\b/)?.[1] }))
+    .filter((row) => row.version);
+
+const NOT_RELEASED = /\b(?:not|never) (?:released|reached npm)\b/i;
+
+function misdatedRows(updates, changelog) {
+  const { released, unreleased } = changelogDates(changelog);
+  const problems = [];
+  for (const { date, change, version } of versionRows(updates)) {
+    const dated = released.has(version) ? `CHANGELOG.md dates ${version} ${released.get(version)}` : `CHANGELOG.md gives ${version} no release date`;
+    if (unreleased.get(version)?.has(date)) {
+      if (!NOT_RELEASED.test(change)) {
+        problems.push(`the v${version} row is dated ${date}, which CHANGELOG.md records for a ${version} that was never released, and the row does not say it was not released; ${dated}`);
+      }
+    } else if (date !== released.get(version)) {
+      problems.push(`the v${version} row is dated ${date}; ${dated}`);
+    }
+  }
+  return problems;
+}
+
+test('the release-date check reports a version row whose date is not one CHANGELOG.md gives that version', () => {
+  const changelog = [
+    '## 0.4.1 - 2026-10-31',
+    '',
+    '0.4.1 - 2026-10-17 (cut at 3ed25cf; never released)',
+    '',
+    '## 0.4.0 - 2026-07-13',
+    '',
+    '## 0.3.2 - 2026-04-22 (tag only; never reached npm)',
+  ].join('\n');
+  const row = (date, change) => `| Date | Change |\n|------|--------|\n| ${date} | ${change} |\n`;
+  assert.deepEqual(misdatedRows(row('2026-10-17', '**v0.4.1** - changes.'), changelog), [
+    'the v0.4.1 row is dated 2026-10-17, which CHANGELOG.md records for a 0.4.1 that was never released, and the row does not say it was not released; CHANGELOG.md dates 0.4.1 2026-10-31',
+  ]);
+  assert.deepEqual(misdatedRows(row('2026-10-17', '**v0.4.1 cut at 3ed25cf, not released.** Changes.'), changelog), []);
+  assert.deepEqual(misdatedRows(row('2026-10-31', '**v0.4.1** - changes.'), changelog), []);
+  assert.deepEqual(misdatedRows(row('2026-10-20', '**v0.4.1 cut, not released.** Changes.'), changelog), [
+    'the v0.4.1 row is dated 2026-10-20; CHANGELOG.md dates 0.4.1 2026-10-31',
+  ]);
+  assert.deepEqual(misdatedRows(row('2026-07-14', 'v0.4.0 - changes.'), changelog), ['the v0.4.0 row is dated 2026-07-14; CHANGELOG.md dates 0.4.0 2026-07-13']);
+  assert.deepEqual(misdatedRows(row('2026-04-22', 'v0.3.2 - changes.'), changelog), [
+    'the v0.3.2 row is dated 2026-04-22, which CHANGELOG.md records for a 0.3.2 that was never released, and the row does not say it was not released; CHANGELOG.md gives 0.3.2 no release date',
+  ]);
+  assert.deepEqual(misdatedRows(row('2026-04-22', 'v0.3.2, a tag that never reached npm.'), changelog), []);
+  assert.deepEqual(misdatedRows(row('2026-10-10', '**Pinned run of record**: hackmyagent 0.33.2.'), changelog), []);
+});
+
+test('each row of docs/updates.md that starts with a version has a date CHANGELOG.md gives that version', () => {
+  const updates = read('docs/updates.md');
+  assert.ok(versionRows(updates).length > 0, 'docs/updates.md has no row whose change starts with a version; update this test with the table');
+  assert.deepEqual(misdatedRows(updates, read('CHANGELOG.md')), []);
 });
