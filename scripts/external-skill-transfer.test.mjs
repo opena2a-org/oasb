@@ -413,8 +413,33 @@ test('the frontmatter name rule and the split file parser', () => {
   assert.equal(tr.frontmatterName('---\r\nname: Deep-Name\r\n---\r\n'), 'deep-name');
   assert.equal(tr.frontmatterName('  name: indented is not a match\n'), null);
   assert.equal(tr.frontmatterName('no name here\n'), null);
+  assert.equal(tr.frontmatterName('name: "Double Quoted"\n'), 'double quoted');
+  assert.equal(tr.frontmatterName("name: '  Padded  '\n"), 'padded');
+  assert.equal(tr.frontmatterName("name: don't-panic\nname: Next Line\n"), 'next line', 'a line whose value holds a quote gives no name');
+  assert.equal(tr.frontmatterName('name: ""\nname: after-empty\n'), 'after-empty', 'an empty quoted value gives no name');
+  assert.equal(tr.frontmatterName('name: "a"b"\n'), null);
+  assert.equal(tr.frontmatterName('name: \'Mismatched"\n'), null, 'quotes that do not match are not removed');
+  assert.equal(tr.frontmatterName('name: "Unclosed\n'), null, 'a quote without its pair is not removed');
+  assert.equal(tr.frontmatterName('---\nname:\ndescription: no name given\n---\n'), null, 'the value is read from the name line only');
   assert.deepEqual(tr.parseCsv('a,b\r\n"x, y","say ""hi"""\r\nz,\r\n'), [['a', 'b'], ['x, y', 'say "hi"'], ['z', '']]);
   assert.throws(() => tr.parseCsv('a\n"open'), /quoted field/);
+});
+
+test('the frontmatter name rule reads a name line holding 100000 spaces in a few milliseconds', () => {
+  const spaces = ' '.repeat(100000);
+  for (const [text, name] of [[`name: x${spaces}y\n`, `x${spaces}y`], [`name: x${spaces}'y\n`, null]]) {
+    // The best of up to five calls, so that one call slowed by other load on
+    // the machine is retried; a call over a second ends the loop.
+    let best = Infinity;
+    for (let i = 0; i < 5; i++) {
+      const t = process.hrtime.bigint();
+      const got = tr.frontmatterName(text);
+      best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6);
+      assert.equal(got, name);
+      if (best < 5 || best > 1000) break;
+    }
+    assert.ok(best < 5, `a name line of ${text.length} characters took ${best.toFixed(1)} ms at best; the bound is 5 ms`);
+  }
 });
 
 test('the cells: exact text and benign name-shared are excluded, advisory sources are advisory, malicious name-shared is its own row', () => {
@@ -488,6 +513,8 @@ test('materialisation writes one SKILL.md per identity under a neutral id, one c
   assert.equal(git(a.corpus, 'status', '--porcelain', '--untracked-files=all'), '');
   const manifest = JSON.parse(readFileSync(join(a.out, 'manifest.json'), 'utf8'));
   assert.equal(manifest.schema, tr.TRANSFER_SCHEMA);
+  assert.equal(manifest.namePattern, tr.NAME_PATTERN.source);
+  assert.equal(manifest.nameRule, tr.NAME_RULE);
   assert.equal(manifest.corpus.commit, a.commit);
   assert.deepEqual(manifest.redacted, ['T10']);
   assert.equal(manifest.identities.length, 18);
