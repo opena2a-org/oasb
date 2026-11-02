@@ -99,6 +99,7 @@ import {
   parseColumns,
   parseExpectedCells,
   parseLabels,
+  TransferError,
 } from './external-skill-transfer.js';
 
 export const RUN_SCHEMA = 'oasb-external-skill-run/v1';
@@ -1743,7 +1744,19 @@ async function transferCli(args: Record<string, string | boolean>, print: (text:
   if (typeof args['split-sha256'] === 'string' && !/^[0-9a-f]{64}$/.test(args['split-sha256'])) throw new UsageError('--split-sha256 takes 64 hex digits');
   const out = typeof args.out === 'string' ? resolve(args.out) : null;
   if (out && typeof args['expect-cells'] !== 'string') throw new UsageError('--out with --transfer needs --expect-cells: written cells are checked against their expected counts first');
-  const expected = typeof args['expect-cells'] === 'string' ? parseExpectedCells(args['expect-cells']) : null;
+  // A flag value that does not parse is a usage error (exit 2), found here,
+  // before the reference corpus or a release file is read.
+  const flagValue = <T>(parse: () => T): T => {
+    try {
+      return parse();
+    } catch (e) {
+      if (e instanceof TransferError) throw new UsageError(e.message);
+      throw e;
+    }
+  };
+  const expected = typeof args['expect-cells'] === 'string' ? flagValue(() => parseExpectedCells(args['expect-cells'] as string)) : null;
+  const columns = flagValue(() => parseColumns(args['transfer-columns'] as string));
+  const labels = flagValue(() => parseLabels(args['transfer-labels'] as string));
   const parquet = inputPath('transfer', args.transfer as string, 'file');
   const splitFile = inputPath('split-file', args['split-file'] as string, 'file');
   const referenceDirs: Record<Label, string> = { malicious: (args.malicious as string | undefined) ?? 'malware', benign: (args.benign as string | undefined) ?? 'benign' };
@@ -1760,8 +1773,8 @@ async function transferCli(args: Record<string, string | boolean>, print: (text:
     splitFile,
     splitSha256: args['split-sha256'] as string | undefined,
     splitValue: (args['split-value'] as string | undefined) ?? 'test',
-    columns: parseColumns(args['transfer-columns'] as string),
-    labels: parseLabels(args['transfer-labels'] as string),
+    columns,
+    labels,
     advisorySources: typeof args['advisory-sources'] === 'string' ? args['advisory-sources'].split(',').map(s => s.trim()).filter(Boolean) : [],
     referenceRoot,
     referenceClassDirs: referenceDirs,
