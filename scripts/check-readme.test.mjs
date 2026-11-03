@@ -19,10 +19,21 @@ const USAGE = /^usage: node scripts\/check-readme\.mjs \[--tests <report\.json> 
 
 const HEAD = '# Title\n\n## Quick Start\n\n```bash\nnpm test\n```\n\n## Guide\n\n';
 
+// A module for --import that adds an exit listener to the check's process:
+// it writes the processor time, user and system, that the process used, in
+// microseconds, to file descriptor 3.
+const CPU_TIME = `data:text/javascript,${encodeURIComponent(
+  "import { writeSync } from 'node:fs'; process.on('exit', () => { const { user, system } = process.cpuUsage(); writeSync(3, String(user + system)); });",
+)}`;
+
 // Write a README (layout checks pass) plus docs/guide.md and any other pages
 // given by their path from the README's directory, give the pages listed in
 // `unreadable` mode 000, run the check on it without the test count check.
-function check(body, pages = {}, unreadable = []) {
+// With `cpuTime`, also give back as `cpuMs` the processor time in
+// milliseconds that the check's process used (CPU_TIME), NaN when it wrote
+// none. The wall time of the spawn also holds the time the process waited
+// for a processor, which grows with the load on the host; this does not.
+function check(body, pages = {}, unreadable = [], { cpuTime = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
   try {
     mkdirSync(join(dir, 'docs'));
@@ -33,8 +44,14 @@ function check(body, pages = {}, unreadable = []) {
     }
     for (const path of unreadable) chmodSync(join(dir, path), 0o000);
     writeFileSync(join(dir, 'README.md'), HEAD + body);
-    const r = spawnSync(process.execPath, [script, '--no-counts', join(dir, 'README.md')], { encoding: 'utf8' });
-    return { status: r.status, stderr: r.stderr };
+    const args = [script, '--no-counts', join(dir, 'README.md')];
+    if (!cpuTime) {
+      const r = spawnSync(process.execPath, args, { encoding: 'utf8' });
+      return { status: r.status, stderr: r.stderr };
+    }
+    const r = spawnSync(process.execPath, ['--import', CPU_TIME, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe', 'pipe'] });
+    const usec = r.output?.[3];
+    return { status: r.status, stderr: r.stderr, cpuMs: /^\d+$/.test(usec) ? Number(usec) / 1000 : NaN };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -3091,7 +3108,7 @@ test("a quote in an attribute's name in an HTML block opens no quoted value, and
   }
 });
 
-test('a page with a reference definition whose title or label runs on over 40,000 or 60,000 lines is checked in under 2 seconds', () => {
+test('a page with a reference definition whose title or label runs on over 40,000 or 60,000 lines is checked in under 2 seconds of processor time', () => {
   // markdown-it 14.1.0 reads a title, and a label, on over the lines after
   // it, up to the quote or the ] that closes it or to the end of its
   // paragraph, and the check reads them so.
@@ -3101,16 +3118,23 @@ test('a page with a reference definition whose title or label runs on over 40,00
   // 26.12.0 these pages took 4.1, 6.8 and 4.7 seconds to check, and 0.17,
   // 0.23 and 0.12 seconds before the check read definitions as markdown-it
   // does.
+  // The bound is on the processor time of the check's process, not on the
+  // wall time of its spawn. On Node.js 26.12.1, in 16 spawns of the second
+  // page made four at a time on a host with a load average of 34 on 16
+  // cores, the wall time went over 2 seconds in 12 while the processor time
+  // stayed between 0.89 and 1.04 seconds; before the check read these pages
+  // in linear time, it used over 4 seconds of processor time on each of
+  // them, in each of two runs.
   for (const big of [
     `# Big\n\n[a]: guide.md\n"t\n${'xxxxxxxxxxxxxxxxxx\n'.repeat(60000)}`,
     `# Big\n\n[a]: guide.md\n    "t\n${'[b]: guide.md\n'.repeat(40000)}`,
     `# Big\n\n[a\n${'xxxxxxxxxxxxxxxxxx\n'.repeat(60000)}]: guide.md\n`,
   ]) {
-    const started = process.hrtime.bigint();
-    const r = check('See [the big page](docs/big.md).\n', { 'docs/big.md': big });
-    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    const r = check('See [the big page](docs/big.md).\n', { 'docs/big.md': big }, [], { cpuTime: true });
+    const start = JSON.stringify(big.slice(0, 24));
     assert.equal(r.status, 0, r.stderr.slice(0, 500));
-    assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a page that starts ${JSON.stringify(big.slice(0, 24))}`);
+    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for a page that starts ${start}`);
+    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for a page that starts ${start}`);
   }
 });
 
