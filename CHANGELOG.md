@@ -3535,10 +3535,47 @@ table row or a scenario file's header; or other, which says what it changes.
   commonmark.js writes alone, as markdown-it writes the description as
   text of the `alt` attribute. Where a tab follows the `>` of a block
   quote inside another block quote, markdown-it counts the columns of the
-  tab otherwise, and the check may read another number of spaces than it
+  tab otherwise, and the check then read another number of spaces than it
   writes, or none: ` > >`, a tab and `* x <a href="docs/` above ` >>`,
-  three spaces, a tab and `guide.md">y</a>` exits 0, where the `href`
-  that markdown-it writes links to `docs/ guide.md`.
+  three spaces, a tab and `guide.md">y</a>` exited 0, where the `href`
+  that markdown-it writes links to `docs/ guide.md`; the next entry
+  describes how the check reads such a line now.
+- `npm run check:readme` reads the target of an `href` in raw HTML of a
+  paragraph whose quoted value runs on to the next line inside a block
+  quote that another block quote holds as markdown-it 14.1.0 (html: true)
+  writes it where tabs stand in the markers or at the start of the lines.
+  markdown-it counts the columns of a tab there from where the text of the
+  outer block quote starts, not from the start of the line, and the check
+  counted them from the start of the line, as commonmark.js 0.31.2 does.
+  With `docs/guide.md` present, `> > 1.`, a tab and `x <a href="docs/`
+  above a tab, two spaces and `guide.md">y</a>` exited 1 with
+  `link target "docs/  guide.md" does not exist`, and now exits 0: after
+  `> > 1.` markdown-it counts the tab as 4 columns and gives the list item
+  an indentation of 6 columns, so it writes none of the tab and the two
+  spaces, and both renderers write the value `docs/`, a line feed and
+  `guide.md`, which parse5 7.3.0 and the URL parser of Node.js 26.12.1
+  resolve to `docs/guide.md`. `> >`, a tab, `1.`, a tab and
+  `x <a href="docs/` above `> >`, two tabs, a space and `guide.md">y</a>`
+  exited 1 for `docs/ guide.md` and now exits 0 too. Where markdown-it
+  reads the first line as indented code, or ends the block quote that
+  holds the paragraph on a line above its last, it writes those lines as
+  other blocks, and the check reads the targets that commonmark.js writes
+  alone: `> > >`, a space, a tab and `x <a href="docs/` above three spaces
+  and `guide.md">y</a>`, where markdown-it writes no link, exited 1 for
+  `docs/   guide.md` and now exits 0.
+  ` > >`, a tab and `* x <a href="docs/` above ` >>`, three spaces, a tab
+  and `guide.md">y</a>` exited 0 and now fails with
+  `link target "docs/ guide.md" does not exist`, the target that
+  markdown-it writes. The check still reads these otherwise: where
+  commonmark.js reads the first line as indented code, as `>`, a tab,
+  ` > >`, a tab and ` x <a href="docs/` above `>   guide.md">y</a>`, it
+  reads no target of a value that runs on from it, also where markdown-it
+  writes one, here `docs/  guide.md`; and where markdown-it goes on with a
+  block quote at a `>` that commonmark.js reads as text, it may name a
+  second target that markdown-it does not write, as on a line of a tab,
+  two spaces, `> `, a tab and `guide.md">y</a>` after
+  `- > x <a href="docs/`, where it names `docs/  > guide.md` beside
+  `docs/> guide.md`, which commonmark.js writes.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

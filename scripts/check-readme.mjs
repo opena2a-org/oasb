@@ -1522,6 +1522,106 @@ function htmlBlockLine(line, holders) {
   return [(blank ? '' : rest) + cr, (quoteTab ? text.slice(i) : rest) + cr];
 }
 
+// The state in which markdown-it 14.1.0 reads a line of a page in the
+// block quotes and list items that hold a block, as its block rules set
+// it, as { begin, shift, count, tabs }: `begin`, the index in the line
+// where the text of the innermost block quote that the line goes on with
+// starts, or 0 (bMarks in markdown-it); `shift`, how many spaces and tabs
+// follow there, or, in a list item that the line opens, how many
+// characters from there up to the item's text (tShift); `count`, the
+// columns that those spaces and tabs take, or the column where that text
+// starts (sCount); and `tabs`, the column from which markdown-it counts
+// the columns of a tab after `begin`, a tab moving on to the next multiple
+// of 4 from there (bsCount). markdownItLine() gives the state of `line`
+// outside any block quote, where markdown-it counts the columns of a tab
+// from the start of the line, as CommonMark does.
+function markdownItLine(line) {
+  let shift = 0;
+  let count = 0;
+  for (; line[shift] === ' ' || line[shift] === '\t'; shift++) count = nextColumn(line[shift], count);
+  return { begin: 0, shift, count, tabs: 0 };
+}
+
+// The state of `line` in a block quote whose > is at line[s.begin +
+// s.shift], `s` being the state of the line in what holds the block quote,
+// as markdown-it's block quote rule sets it. The block quote takes the >
+// and a space after it, or a tab after it that ends one column past it as
+// markdown-it counts the columns of a tab there; its text starts after
+// them, and the spaces and tabs after that are its `shift`. markdown-it then
+// counts the columns of a tab after `begin` from s.count, the columns
+// before the >, plus one for the > and one where a space or a tab follows
+// it, without s.tabs: so in a block quote inside another, it counts them
+// from where the text of the outer block quote starts, not from the start
+// of the line, and a tab after > > 1. takes 4 columns, where CommonMark
+// counts 2.
+function markdownItQuote(line, s) {
+  let pos = s.begin + s.shift + 1;
+  let initial = s.count + 1;
+  let space = false; // whether a space or a tab follows the >
+  let adjust = 0; // 1 where the text starts at that tab, as it is wider than one column
+  if (line[pos] === ' ') {
+    pos++;
+    initial++;
+    space = true;
+  } else if (line[pos] === '\t') {
+    space = true;
+    if ((s.tabs + initial) % 4 === 3) {
+      pos++;
+      initial++;
+    } else {
+      adjust = 1;
+    }
+  }
+  const begin = pos;
+  let offset = initial;
+  for (; line[pos] === ' ' || line[pos] === '\t'; pos++) offset += line[pos] === '\t' ? 4 - ((offset + s.tabs + adjust) % 4) : 1;
+  return { begin, shift: pos - begin, count: offset - initial, tabs: s.count + 1 + (space ? 1 : 0) };
+}
+
+// The indentation that markdown-it's list rule gives `item`, a list item
+// whose list marker is at line[s.begin + s.shift], `s` being the state of
+// `line` in what holds the item, and the state of the line in the item, as
+// { indent, state }. The indentation is s.count, the length of the marker
+// and the columns of the spaces and tabs after the marker, counted from
+// s.tabs, or one column of those where they take more than 4 or no text
+// follows them; the item's text starts after them all.
+function markdownItItem(line, s, item) {
+  let pos = s.begin + s.shift + item.marker;
+  const initial = s.count + item.marker;
+  let offset = initial;
+  for (; line[pos] === ' ' || line[pos] === '\t'; pos++) offset += line[pos] === '\t' ? 4 - ((offset + s.tabs) % 4) : 1;
+  const after = pos < line.length && offset - initial <= 4 ? offset - initial : 1;
+  return { indent: initial + after, state: { begin: s.begin, shift: pos - s.begin, count: offset, tabs: s.tabs } };
+}
+
+// The indentation that markdown-it 14.1.0 gives holders[n], a list item, as
+// markdownItItem() reads it on the line that opens the item, `holders`
+// being block quotes and list items, outermost first, as lineStart() takes
+// them in `containers`. That line goes on with the first item.matched of
+// those before the item and opens the others, so markdown-it reads the
+// item's marker in the state that the block quotes before it give the line,
+// and the list items before it that the line opens. Read once for each
+// item, and for those list items as well.
+function markdownItIndent(holders, n) {
+  const item = holders[n];
+  if (item.indent === undefined) {
+    const { line } = item;
+    let s = markdownItLine(line);
+    for (let k = 0; k < n; k++) {
+      const holder = holders[k];
+      if (holder.quote) {
+        s = markdownItQuote(line, s);
+      } else if (k >= item.matched) {
+        const opened = markdownItItem(line, s, holder);
+        holder.indent ??= opened.indent;
+        s = opened.state;
+      }
+    }
+    item.indent = markdownItItem(line, s, item).indent;
+  }
+  return item.indent;
+}
+
 // The spaces and tabs that markdown-it 14.1.0 writes before the text of
 // `line`, a line after the first of a paragraph, whose text starts at
 // line[at], past the > markers of the block quotes that the line goes on
@@ -1529,38 +1629,84 @@ function htmlBlockLine(line, holders) {
 // leaves out. `holders` are the block quotes and list items that hold the
 // paragraph, as lineStart() takes them in `containers`, and the line goes
 // on with the first `matched` of them, fewer on a line that goes on with
-// the paragraph lazily. markdown-it leaves out the markers of the block
-// quotes that the line goes on with, up to the innermost of them, and of
-// the list items outside it, as htmlBlockLine() reads them on a line of an
-// HTML block, and after them as many columns of spaces and tabs as the
-// list items inside the innermost block quote that holds the paragraph
-// take, or the list items that hold it where no block quote does, or all
-// of them where the line holds fewer, as on a line that goes on lazily
-// with such a list item. It writes the rest of the spaces and tabs as
-// htmlBlockLine() writes them. So it writes three spaces of a line of five
-// spaces and guide.md">y</a> after - x <a href="docs/, all five after
-// - > x <a href="docs/, whose block quote that line goes on with lazily,
-// all three of a line of three spaces and guide.md">y</a> after
-// > x <a href="docs/, and none of a line of a space and guide.md">y</a>
-// after - x <a href="docs/.
+// the paragraph lazily. markdown-it reads the line in the state that the
+// block quotes among those `matched` give it, as markdownItQuote() reads
+// them, and writes it from the `begin` of that state, without as many
+// columns of spaces and tabs there as markdownItIndent() reads for the
+// innermost of `holders` where that is a list item, none where it is a
+// block quote, or all of them where the line holds fewer, counting the
+// columns of a tab from the state's `tabs`. Where those columns end inside a
+// tab, it writes the columns of the tab past them as spaces. So it writes
+// three spaces of a line of five spaces and guide.md">y</a> after
+// - x <a href="docs/, all five after - > x <a href="docs/, whose block
+// quote that line goes on with lazily, all three of a line of three spaces
+// and guide.md">y</a> after > x <a href="docs/, and none of a line of a
+// space and guide.md">y</a> after - x <a href="docs/. Nor does it write any
+// of a line of a tab, two spaces and guide.md">y</a> after > > 1., a tab
+// and x <a href="docs/, as it gives that list item an indentation of 6
+// columns, where CommonMark reads 4. Where it gives a list item more
+// columns than the line holds before the > of a block quote inside the
+// item that the line goes on with, markdown-it ends that block quote, and
+// the paragraph with it, on the line above, and paragraphLead() gives
+// null.
 function paragraphLead(line, at, holders, matched) {
   if (at === 0) return '';
-  let inner = -1; // the index in `holders` of the innermost block quote
-  let quote = -1; // that of the innermost block quote that the line goes on with
-  for (let n = 0; n < holders.length; n++) {
-    if (!holders[n].quote) continue;
-    inner = n;
-    if (n < matched) quote = n;
+  let s = markdownItLine(line);
+  let inner = -1; // the index in `holders` of the innermost list item read since the last block quote
+  for (let n = 0; n < matched; n++) {
+    if (!holders[n].quote) {
+      inner = n;
+      continue;
+    }
+    if (inner !== -1 && s.count < markdownItIndent(holders, inner)) return null;
+    s = markdownItQuote(line, s);
+    inner = -1;
   }
-  let width = 0; // the columns that the list items inside the innermost block quote take
-  for (let n = inner + 1; n < holders.length; n++) width += holders[n].width;
-  const markers = holders.slice(0, quote + 1);
-  if (width > 0) markers.push({ width });
-  const written = htmlBlockLine(line, markers)[1];
-  // Where the line holds fewer columns of spaces and tabs than `width`,
-  // htmlBlockLine() moves on into its text, and none of them is written.
-  const text = line.slice(at);
-  return written.endsWith(text) ? written.slice(0, written.length - text.length) : '';
+  const last = holders.length - 1;
+  const indent = last >= 0 && !holders[last].quote ? markdownItIndent(holders, last) : 0;
+  let first = s.begin;
+  let col = 0;
+  for (; col < indent && (line[first] === ' ' || line[first] === '\t'); first++) col += line[first] === '\t' ? 4 - ((col + s.tabs) % 4) : 1;
+  return (col > indent ? ' '.repeat(col - indent) : '') + line.slice(first, at);
+}
+
+// Whether markdown-it 14.1.0 reads `line`, the first line of a paragraph as
+// CommonMark reads it, as a line of indented code. `holders` are the block
+// quotes and list items that hold the paragraph, as lineStart() takes them
+// in `containers`, and the line goes on with the first `matched` of them
+// and opens the others. markdown-it reads the line in the state that the
+// block quotes among them and the list items that it opens give it, as
+// markdownItQuote() and markdownItItem() read them, from the outermost on,
+// and reads code, opening none of the rest, where the state's `count` is
+// 4 or more columns past the indentation of the innermost list item read
+// since the last block quote, as markdownItIndent() reads it, or past 0
+// where there is none: before a block quote or a list item that the line
+// opens, and after the last of `holders`. It then writes no link of the
+// line. As it counts the columns of a tab otherwise in a block quote
+// inside another, this may be so where CommonMark reads paragraph text:
+// after > > - and a space, it counts a tab as 4 columns, and the item's
+// text as code, where CommonMark counts 2 and reads text.
+function markdownItCode(line, holders, matched) {
+  const text = line.endsWith('\r') ? line.slice(0, -1) : line;
+  let s = markdownItLine(text);
+  let inner = -1; // the index in `holders` of the innermost list item read since the last block quote
+  const indent = () => (inner === -1 ? 0 : markdownItIndent(holders, inner));
+  for (let n = 0; n < holders.length; n++) {
+    const holder = holders[n];
+    if (n >= matched && s.count - indent() >= 4) return true;
+    if (holder.quote) {
+      s = markdownItQuote(text, s);
+      inner = -1;
+    } else {
+      if (n >= matched) {
+        const opened = markdownItItem(text, s, holder);
+        holder.indent ??= opened.indent;
+        s = opened.state;
+      }
+      inner = n;
+    }
+  }
+  return s.count - indent() >= 4;
 }
 
 // The targets of the hrefs on the lines of the HTML blocks of `lines`, the
@@ -2340,7 +2486,12 @@ function tableHeader(start, containers, next, pipeless) {
 // The start of one line, read as CommonMark reads it. `containers` are the
 // block quotes ({ quote: true }) and list items ({ width, empty }) open after
 // the line above, outermost first, and `paragraph` says whether that line
-// was paragraph text. The line goes on with a block quote when its > follows
+// was paragraph text. A list item also holds the line that opens it,
+// without the \r of a \r\n, as `line`, how many of the containers that held
+// the line above that line goes on with, as `matched`, and the length of
+// its list marker, as `marker`, from which markdownItIndent() reads the
+// indentation that markdown-it 14.1.0 gives the item. The line goes on
+// with a block quote when its > follows
 // at most 3 columns of indentation (the > takes one column of a space or tab
 // after it), and with a list item when it is blank, unless the item holds
 // nothing yet, or indented by the item's width: the columns from where the
@@ -2478,10 +2629,10 @@ function lineStart(line, containers, paragraph, stops) {
       return { matched, opened, rest: 'text', row: text.slice(j) };
     }
     if (empty || d - col > 4) {
-      opened.push({ width: width + 1, empty });
+      opened.push({ width: width + 1, empty, line: text, matched, marker: marker[0].length });
       if (!empty) advance(1);
     } else {
-      opened.push({ width: width + d - col, empty });
+      opened.push({ width: width + d - col, empty, line: text, matched, marker: marker[0].length });
       i = k;
       col = d;
     }
@@ -2550,10 +2701,12 @@ function afterQuotes(line, quotes) {
 // on a line of an HTML block, read as 'block'; `starts`, whether the line
 // starts a block rather than going on with the paragraph above; `html`,
 // whether the line is a line of an HTML block that the reader follows,
-// whose text is raw HTML; `j`, its index in the lines; and for a table row,
-// `row`, its text from where it starts, `columns`, how many cells the
-// header row of its table holds, and `header`, whether it is that header
-// row. Given a set as `quotedFences`, the reader
+// whose text is raw HTML; `j`, its index in the lines; `matched`, how many
+// of the containers that held the line above it goes on with, as
+// lineStart() reads it; and for a table row, `row`, its text from where it
+// starts, `columns`, how many cells the header row of its table holds, and
+// `header`, whether it is that header row. Given a set as `quotedFences`,
+// the reader
 // adds to it the index in `lines` of each line of a fenced code block that
 // it follows, its fences included. Given a map as `htmlLines`, the reader
 // sets in it the index in `lines` of each line of an HTML block that it
@@ -2701,7 +2854,8 @@ function blockReader(lines, quotedFences, htmlLines, tables = true) {
       fenced = start.fence;
       quotedFences?.add(j);
     }
-    return rest === 'row' ? { j, rest, starts, html, row: start.row, columns, header } : { j, rest, starts, html };
+    const { matched } = start;
+    return rest === 'row' ? { j, rest, starts, html, matched, row: start.row, columns, header } : { j, rest, starts, html, matched };
   };
   read.start = (line) => lineStart(line, containers, paragraph, stops);
   read.inHtml = inHtml;
@@ -3378,8 +3532,9 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   // below, and null when it is not, as { at, lead }: `at` past the > markers
   // of the block quotes of `containers` that it goes on with, and the spaces
   // and tabs after them, and `lead` the spaces and tabs that markdown-it
-  // writes before that text, as paragraphLead() reads them. The line above
-  // it is text of that paragraph, so it is not a table row.
+  // writes before that text, as paragraphLead() reads them, or null where
+  // it ends the paragraph on the line above. The line above it is text of
+  // that paragraph, so it is not a table row.
   const textStart = (k) => {
     const { line, inFence, fenceOpen, fenceClose } = lines[k];
     if (inFence || fenceOpen || fenceClose) return null;
@@ -3451,6 +3606,13 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
         texts.push(next.at);
         leads.push(next.lead);
       }
+      // Where markdown-it reads the first line as indented code, as
+      // markdownItCode() reads it, it writes no link of that line, and where
+      // it ends the paragraph on a line above the last, as paragraphLead()
+      // gives null for the line after it, none of a value that runs on over
+      // that end: in both, the check reads the targets of the paragraph as
+      // commonmark.js writes them alone.
+      if (leads.length > 1 && (leads.includes(null) || markdownItCode(l.line, read.containers, block.matched))) leads.fill('');
       // The text of a line of a paragraph from where defined.hidden() says
       // that both renderers hide the rest of the line is none of the
       // paragraph's text: neither writes a link, a code span or raw HTML of

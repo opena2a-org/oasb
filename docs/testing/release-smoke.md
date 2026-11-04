@@ -37,7 +37,18 @@ the claims this repository publishes:
    the spaces and tabs at the start of that line, and markdown-it, on a
    line that goes on with the block quotes and list items that hold the
    paragraph, only those markers and that indentation, as in an HTML
-   block; the check reads the path that each writes.
+   block, counting the columns of a tab in a block quote inside another
+   from where the text of the outer block quote starts; the check reads
+   the path that each writes. Where markdown-it reads the first line as
+   indented code, or ends a block quote that holds the paragraph on a line
+   above its last, it writes those lines as other blocks, and the check
+   reads the path that commonmark.js writes. It reads these two kinds of
+   input otherwise: where commonmark.js reads the first line as indented
+   code and the value runs on from it, the check reads no path, also where
+   markdown-it writes one; and where markdown-it goes on with a block
+   quote at a `>` that commonmark.js reads as text, the check may name a
+   second path, which markdown-it does not write, beside the one that
+   commonmark.js writes.
    `<div><a href="docs/` above three spaces and
    `guide.md">y</a></div>`, and `x <a href="docs/` above three spaces and
    `guide.md">y</a>`, fail with
