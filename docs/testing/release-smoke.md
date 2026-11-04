@@ -375,6 +375,29 @@ README's test counts do not include them.
   the controls it lists; when an argument the command does not take does
   not exit 1 with the usage; when a scenario file has the ID `checklist`;
   or when the README does not link the page and name the command.
+- `scripts/check-vendor.test.mjs`: the vendored catalogue check
+  (`scripts/check-vendor.mjs`, also `npm run check:vendor`). The check packs
+  the hackmyagent release that `VENDOR.json` pins by exact version and
+  tarball integrity, with `npm pack hackmyagent@<version>`, and compares
+  `bin/oasb-1-checklist.json` byte for byte with the projection of the
+  OASB-1 catalogue in it, with the questions of `docs/oasb-1-checklist.md`.
+  Two of these tests reach the npm registry: one runs the check as
+  `npm test` runs it, and the first of those that run it with `--tarball`
+  packs the release for them. Fails when the check passes a copy of
+  `bin/oasb-1-checklist.json` with one character changed: in a
+  requirement, a step, a check, a question, the source, the version of the
+  standard, the specification, a level name or a verification; a backslash
+  added that leaves the same text; a space added to the indentation; or a
+  comma or the final line feed removed. Also fails when the check passes a
+  question changed on the page; when it reads a tarball whose integrity or
+  version is not the pinned one; when it reads a `VENDOR.json` that pins a
+  range, a tag, a git reference or a version that holds a commit ID; when
+  `--write` does not write the projection; when it passes a control the
+  page asks no question of or two, or a page that names another release of
+  hackmyagent or none; when a step is not made from an audit step as the
+  check describes; when the check runs any of the catalogue module, or
+  takes a value of it that is not a literal; or when an argument the check
+  does not take does not exit 1 with the usage.
 - `scripts/external-skill-benchmark.test.mjs`: the external skill-scanner
   benchmark runner (`scripts/run-external-skill-benchmark.ts`), run on a
   synthetic corpus and fixture scanners written into a temporary directory.
