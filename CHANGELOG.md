@@ -3566,16 +3566,40 @@ table row or a scenario file's header; or other, which says what it changes.
   ` > >`, a tab and `* x <a href="docs/` above ` >>`, three spaces, a tab
   and `guide.md">y</a>` exited 0 and now fails with
   `link target "docs/ guide.md" does not exist`, the target that
-  markdown-it writes. The check still reads these otherwise: where
+  markdown-it writes. The check still reads one of these otherwise: where
   commonmark.js reads the first line as indented code, as `>`, a tab,
   ` > >`, a tab and ` x <a href="docs/` above `>   guide.md">y</a>`, it
   reads no target of a value that runs on from it, also where markdown-it
-  writes one, here `docs/  guide.md`; and where markdown-it goes on with a
-  block quote at a `>` that commonmark.js reads as text, it may name a
-  second target that markdown-it does not write, as on a line of a tab,
-  two spaces, `> `, a tab and `guide.md">y</a>` after
-  `- > x <a href="docs/`, where it names `docs/  > guide.md` beside
-  `docs/> guide.md`, which commonmark.js writes.
+  writes one, here `docs/  guide.md`. Where markdown-it goes on with a
+  block quote at a `>` that commonmark.js reads as text, it named a second
+  target that markdown-it does not write, as on a line of a tab, two
+  spaces, `> `, a tab and `guide.md">y</a>` after `- > x <a href="docs/`,
+  where it named `docs/  > guide.md` beside `docs/> guide.md`, which
+  commonmark.js writes; the next entry describes how the check reads such
+  a line now.
+- `npm run check:readme` reads the targets of a paragraph as commonmark.js
+  0.31.2 writes them alone where a line that goes on with the paragraph
+  lazily starts its text at a `>`. CommonMark reads the `>` of a block
+  quote after at most 3 columns of spaces and tabs, so commonmark.js writes
+  such a `>` as text of the paragraph, and markdown-it 14.1.0 (html: true)
+  may read it as the marker of the block quote and write the rest of the
+  line, or end the paragraph before the line. The check read the line from
+  its `>` in what markdown-it writes as well, so an `href` in raw HTML
+  whose quoted value runs on to it could have a second target that neither
+  renderer writes. With `docs/guide.md` present, `> 10. x <a href="docs/`
+  above six spaces and `> guide.md">y</a>` exited 1 with
+  `link target "docs/> guide.md" does not exist`, the target that
+  commonmark.js writes, and `link target "docs/  > guide.md" does not
+  exist`; markdown-it writes `guide.md">y</a>` on the second line, and its
+  `href` links to `docs/guide.md`. The check now names the first alone and
+  still exits 1. It also names `docs/> guide.md` alone of four spaces and
+  `> guide.md">y</a>` after `100. > x <a href="docs/`, which markdown-it
+  writes as indented code, with no link, where it named
+  `docs/    > guide.md` as well. Of six spaces and `> nowhere.md">y</a>`
+  after `> 10. x <a href="docs/`, where the target that markdown-it writes,
+  `docs/nowhere.md`, does not exist either, the check names
+  `docs/> nowhere.md` alone, where it named `docs/  > nowhere.md` beside
+  it.
 - `npm run check:readme` reads the indentation that markdown-it 14.1.0
   gives the list items that hold a paragraph in one pass over the line
   that opens them. It read that line from its start for each item that a

@@ -3196,6 +3196,55 @@ test('a quoted href value of a paragraph that runs on to the next line in a bloc
   }
 });
 
+test('a quoted href value of a paragraph that runs on to a line that goes on with it lazily and whose text starts at a > names the target that commonmark.js writes alone', () => {
+  // CommonMark reads the > of a block quote after at most 3 columns of
+  // spaces and tabs, so a line of six spaces and > guide.md">y</a> after
+  // > 10. x <a href="docs/ goes on with the paragraph lazily, and
+  // commonmark.js 0.31.2 writes > guide.md">y</a> on it: the href's value
+  // is docs/, a line feed and > guide.md, which parse5 7.3.0 and the URL
+  // parser of Node.js 26.12.1 resolve to docs/> guide.md. markdown-it
+  // 14.1.0 (html: true) reads that > as the marker of the block quote and
+  // writes guide.md">y</a> on the line, so its href links to docs/guide.md.
+  // The check named docs/  > guide.md as well, which neither writes.
+  // In the first six bodies the href that markdown-it writes links to
+  // docs/guide.md too; in the last three markdown-it ends the paragraph
+  // before the second line and writes no link: the second line is indented
+  // code past the list item of 100., a list item that - guide.md">y</a>
+  // starts, and blank. The check names the target that commonmark.js
+  // writes alone.
+  for (const [body, target] of [
+    ['> 10. x <a href="docs/\n      > guide.md">y</a>\n', 'docs/> guide.md'],
+    ['> 10. x <a href="docs/\r\n      > guide.md">y</a>\r\n', 'docs/> guide.md'],
+    ['> x <a href="docs/\n    > guide.md">y</a>\n', 'docs/> guide.md'],
+    [`> x <a href="docs/\n${' '.repeat(40)}> guide.md">y</a>\n`, 'docs/> guide.md'],
+    ['> > x <a href="docs/\n>     > guide.md">y</a>\n', 'docs/> guide.md'],
+    ['- > x <a href="docs/\n\t  > \tguide.md">y</a>\n', 'docs/> guide.md'],
+    ['100. > x <a href="docs/\n    > guide.md">y</a>\n', 'docs/> guide.md'],
+    ['> 10. x <a href="docs/\n      > - guide.md">y</a>\n', 'docs/> - guide.md'],
+    ['> 10. x <a href="docs/\n      >\n> ">y</a>\n', 'docs/>'],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, JSON.stringify(body));
+    assert.equal(r.stderr.trim(), `README: line 11: link target "${target}" does not exist.`, JSON.stringify(body));
+  }
+  // A line that goes on with every block quote and list item that holds the
+  // paragraph is read as before, where its text starts at a > too: after
+  // - x <a href="docs/, markdown-it writes the four spaces past the item's
+  // indentation and > guide.md">y</a> on a line of six spaces and
+  // > guide.md">y</a>, and its href links to docs/    > guide.md, which the
+  // check names after docs/> guide.md. On a line that goes on lazily past
+  // the > of the inner block quote, which both read as its marker, both
+  // link to docs/guide.md.
+  const r = check('- x <a href="docs/\n      > guide.md">y</a>\n');
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.stderr.trim().split('\n'), [
+    'README: line 11: link target "docs/> guide.md" does not exist.',
+    'README: line 11: link target "docs/    > guide.md" does not exist.',
+  ]);
+  const lazy = check('> - > - x <a href="docs/\n>   > guide.md">y</a>\n');
+  assert.equal(lazy.status, 0, lazy.stderr);
+});
+
 test('a paragraph that 100,000 list items and as many block quotes hold, each inside the one before, whose quoted href value runs on to the next line is checked in under 2 seconds of processor time', () => {
   // paragraphLead() asks markdownItIndent() about each list item that a
   // block quote the line goes on with follows, and markdownItIndent() read

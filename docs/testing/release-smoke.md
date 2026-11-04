@@ -42,13 +42,13 @@ the claims this repository publishes:
    the path that each writes. Where markdown-it reads the first line as
    indented code, or ends a block quote that holds the paragraph on a line
    above its last, it writes those lines as other blocks, and the check
-   reads the path that commonmark.js writes. It reads these two kinds of
-   input otherwise: where commonmark.js reads the first line as indented
-   code and the value runs on from it, the check reads no path, also where
-   markdown-it writes one; and where markdown-it goes on with a block
-   quote at a `>` that commonmark.js reads as text, the check may name a
-   second path, which markdown-it does not write, beside the one that
-   commonmark.js writes.
+   reads the path that commonmark.js writes. It reads that path alone too
+   where a line that goes on with the paragraph lazily starts its text at
+   a `>`, which commonmark.js writes as text, where markdown-it may read it
+   as the marker of a block quote that holds the paragraph, or end the
+   paragraph before that line. It reads one kind of input otherwise: where
+   commonmark.js reads the first line as indented code and the value runs
+   on from it, the check reads no path, also where markdown-it writes one.
    `<div><a href="docs/` above three spaces and
    `guide.md">y</a></div>`, and `x <a href="docs/` above three spaces and
    `guide.md">y</a>`, fail with
