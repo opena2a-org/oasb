@@ -5008,12 +5008,20 @@ test('a 4 MB line of a tag of 1,000,000 attributes in a code block is checked in
   }
 });
 
-test('a 3.9 MB line of a tag of 987,000 attributes outside a code block is checked in under 2 seconds, also above a dated page\'s first H2', () => {
+test('a 3.9 MB line of a tag of 987,000 attributes outside a code block is checked in under 2 seconds of processor time, also above a dated page\'s first H2', () => {
   // The inline reader read a tag with one pattern of the whole tag, which
   // threw a RangeError (Maximum call stack size exceeded) on such a line,
   // with or without a > at its end, and the check exited 1 with its stack;
   // so did the reader of a dated page's note, which reads a tag that runs
   // on to a later line of its paragraph.
+  // The bound is on the processor time of the check's process, not on the
+  // wall time of its spawn. On Node.js 26.12.1, in 32 spawns of the four
+  // checks this test makes, eight of each, made four at a time on a host
+  // with a load average of 19.9 to 21.8 on 16 cores, the wall time went
+  // over 2 seconds in 4 while the processor time stayed between 398 and
+  // 815 ms; in 32 more made under taskpolicy -c background, the wall time
+  // went over 2 seconds in 12 and the processor time stayed between 633
+  // and 1,556 ms.
   const see = 'See the [README](../README.md) for the current figures.';
   for (const end of ['', '>']) {
     const line = `<a ${'b=c '.repeat(987000)}${end}`;
@@ -5021,11 +5029,11 @@ test('a 3.9 MB line of a tag of 987,000 attributes outside a code block is check
       [`${line}\n`, {}],
       [DATED_LINK, datedPage(`As of 2026-06-03.\n${line}\nx\n\n${see}\n`)],
     ]) {
-      const started = process.hrtime.bigint();
-      const r = check(body, pages);
-      const ms = Number(process.hrtime.bigint() - started) / 1e6;
+      const r = check(body, pages, [], { cpuTime: true });
+      const what = `a line of ${line.length} characters${body === DATED_LINK ? ' on a dated page' : ''}`;
       assert.equal(r.status, 0, r.stderr);
-      assert.ok(ms < 2000, `${ms.toFixed(0)} ms for a line of ${line.length} characters${body === DATED_LINK ? ' on a dated page' : ''}`);
+      assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
+      assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
     }
   }
 });
