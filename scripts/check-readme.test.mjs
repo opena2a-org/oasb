@@ -3153,6 +3153,49 @@ test('the spaces at the start of a line that a quoted href value of a paragraph 
   }
 });
 
+test('a quoted href value of a paragraph that runs on to the next line in a block quote inside another is read as markdown-it counts the columns of a tab there', () => {
+  // In a block quote inside another, markdown-it 14.1.0 counts the columns
+  // of a tab from where the text of the outer block quote starts, not from
+  // the start of the line as commonmark.js 0.31.2 does. After > > 1. it
+  // counts a tab as 4 columns, gives the list item an indentation of 6
+  // columns, and so writes none of the tab and two spaces at the start of
+  // the next line of the first body below. In each of the first three
+  // bodies, commonmark.js and markdown-it (html: true) write docs/, a line
+  // feed and guide.md as the href's value, which parse5 7.3.0 and the URL
+  // parser of Node.js 26.12.1 resolve to docs/guide.md. In the other three,
+  // commonmark.js writes that value and markdown-it writes no link: it
+  // reads the first line of the fourth and the fifth as indented code, and
+  // ends the block quote inside the list item of the sixth on its first
+  // line. The check exited 1 on each but the fifth, reading a target with
+  // spaces in it.
+  for (const body of [
+    '> > 1.\tx <a href="docs/\n\t  guide.md">y</a>\n',
+    '> >\t1.\tx <a href="docs/\n> >\t\t guide.md">y</a>\n',
+    '>  >2) x <a href="docs/\n >  > \t  guide.md">y</a>\n',
+    '> > > \tx <a href="docs/\n   guide.md">y</a>\n',
+    '> > - \tx <a href="docs/\n> >    guide.md">y</a>\n',
+    '> > 1.\t> x <a href="docs/\n> >     >\t guide.md">y</a>\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${JSON.stringify(body)}\n${r.stderr}`);
+  }
+  // Where markdown-it writes spaces there, the check names the target that
+  // it writes: docs/, a line feed, a space and guide.md in the first body
+  // below, and docs/, a line feed, two spaces, a tab and guide.md in the
+  // second, where commonmark.js writes docs/, a line feed and guide.md.
+  // The check exited 0 on both. In the third, both write docs/, a line
+  // feed and nowhere.md, and the check named docs/  nowhere.md as well.
+  for (const [body, target] of [
+    [' > >\t* x <a href="docs/\n >>   \tguide.md">y</a>\n', 'docs/ guide.md'],
+    ['> >2) x <a href="docs/\n> \t>\t \tguide.md">y</a>\n', 'docs/  guide.md'],
+    ['> > 1.\tx <a href="docs/\n\t  nowhere.md">y</a>\n', 'docs/nowhere.md'],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, JSON.stringify(body));
+    assert.equal(r.stderr.trim(), `README: line 11: link target "${target}" does not exist.`, JSON.stringify(body));
+  }
+});
+
 test("a quote in an attribute's name in an HTML block opens no quoted value, and no tag is read inside another", () => {
   // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) pass each of
   // these blocks through, and parse5 7.3.0, which reads a tag as the HTML
