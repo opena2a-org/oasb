@@ -3076,6 +3076,83 @@ test('the spaces at the start of a line that a quoted href value runs on to in a
   }
 });
 
+test('the spaces at the start of a line that a quoted href value of a paragraph runs on to are read as each renderer writes them', () => {
+  // commonmark.js 0.31.2 writes a line of a paragraph after its first
+  // without the spaces and tabs at its start. markdown-it 14.1.0 (html:
+  // true) writes it without the spaces before the > of each block quote
+  // that the line goes on with, up to the innermost, the > and the space
+  // after it, and the indentation of the list items outside that block
+  // quote; without the indentation of the list items inside the innermost
+  // block quote that holds the paragraph, or of those that hold it where no
+  // block quote does; and with the other spaces at its start in raw HTML.
+  // parse5 7.3.0 reads docs/, a line feed and guide.md in the href's value
+  // in what commonmark.js writes of the first body, and docs/, a line feed,
+  // three spaces and guide.md in what markdown-it writes, which the URL
+  // parser of Node.js 26.12.1 resolves to docs/%20%20%20guide.md. Here
+  // the spaces are in a block quote, a list item or both, on a line that
+  // goes on with them lazily, after a tab that follows a >, after the tab
+  // that a list item's indentation takes, in a setext heading, after a
+  // --!> that ends a comment for a browser, and on lines that end in a
+  // carriage return and a line feed. The check exited 0 on each, as it read
+  // the target that commonmark.js writes alone.
+  for (const [body, target] of [
+    ['x <a href="docs/\n   guide.md">y</a>\n', 'docs/   guide.md'],
+    ['> x <a href="docs/\n>   guide.md">y</a>\n', 'docs/  guide.md'],
+    ['- x <a href="docs/\n     guide.md">y</a>\n', 'docs/   guide.md'],
+    ['> x <a href="docs/\n   guide.md">y</a>\n', 'docs/   guide.md'],
+    ['- > x <a href="docs/\n     guide.md">y</a>\n', 'docs/     guide.md'],
+    ['- > x <a href="docs/\n guide.md">y</a>\n', 'docs/ guide.md'],
+    ['> > x <a href="docs/\n>   guide.md">y</a>\n', 'docs/  guide.md'],
+    ['> - > - x <a href="docs/\n>       guide.md">y</a>\n', 'docs/    guide.md'],
+    ['> x <a href="docs/\n>\t guide.md">y</a>\n', 'docs/ guide.md'],
+    ['- x <a href="docs/\n\t guide.md">y</a>\n', 'docs/   guide.md'],
+    ['x <a href="docs/\n   guide.md">y</a>\n===\n', 'docs/   guide.md'],
+    ['x <!-- --!> <a href="docs/\n   guide.md">y</a> -->\n', 'docs/   guide.md'],
+    ['x <a href="docs/\r\n   guide.md">y</a>\r\n', 'docs/   guide.md'],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.equal(r.stderr.trim(), `README: line 11: link target "${target}" does not exist.`, body);
+  }
+  // In each of these the href links to docs/guide.md in what both write:
+  // markdown-it leaves out the indentation of the list item, also on a line
+  // that goes on with it lazily, and the > and the space after it, and on
+  // the sixth it writes the tab after the line feed, which the URL parser
+  // removes. Inside an image commonmark.js writes the tag, whose href links
+  // to docs/guide.md, and markdown-it writes the description as text of the
+  // alt attribute, where it makes no link.
+  for (const body of [
+    '- x <a href="docs/\n  guide.md">y</a>\n',
+    '1. x <a href="docs/\n   guide.md">y</a>\n',
+    '- x <a href="docs/\n guide.md">y</a>\n',
+    '> - x <a href="docs/\n>  guide.md">y</a>\n',
+    '> x <a href="docs/\n> guide.md">y</a>\n',
+    'x <a href="docs/\n\tguide.md">y</a>\n',
+    '![<b title=">"><a href="docs/\n   guide.md">y</a>](docs/guide.md)\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // Where neither target exists, the check names each, the one that
+  // commonmark.js writes first. A line break in text between two pieces of
+  // raw HTML, which the quoted value of a tag that starts after the > of a
+  // <? runs on over, is followed by none of the spaces in what either
+  // writes, so the check names one target there, with the line where the
+  // tag ends, on which the check reads its href.
+  for (const [body, targets, line] of [
+    ['x <a href="docs/\n   nowhere.md">y</a>\n', ['docs/nowhere.md', 'docs/   nowhere.md'], 11],
+    ["x <? > <a href=\"docs/ ?>\n   guide.md <b title='\"'>y\n", ["docs/ ?>guide.md <b title='"], 12],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.deepEqual(
+      r.stderr.trim().split('\n'),
+      targets.map((target) => `README: line ${line}: link target "${target}" does not exist.`),
+      body,
+    );
+  }
+});
+
 test("a quote in an attribute's name in an HTML block opens no quoted value, and no tag is read inside another", () => {
   // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) pass each of
   // these blocks through, and parse5 7.3.0, which reads a tag as the HTML
