@@ -1601,23 +1601,39 @@ function markdownItItem(line, s, item) {
 // those before the item and opens the others, so markdown-it reads the
 // item's marker in the state that the block quotes before it give the line,
 // and the list items before it that the line opens. Read once for each
-// item, and for those list items as well.
+// item, and for those list items as well, each of which then holds the
+// state of the line in it as `state`. The reading of an item goes on from
+// the innermost list item before it that the line opens and that was read,
+// over the holders after that one alone, so that the readings for all the
+// list items that one line opens take one pass over its holders together,
+// not one from the start of the line for each item.
 function markdownItIndent(holders, n) {
   const item = holders[n];
   if (item.indent === undefined) {
     const { line } = item;
-    let s = markdownItLine(line);
-    for (let k = 0; k < n; k++) {
+    let k = n;
+    while (k > item.matched && holders[k - 1].state === undefined) k--;
+    let s;
+    if (k > item.matched) {
+      s = holders[k - 1].state;
+    } else {
+      s = markdownItLine(line);
+      k = 0;
+    }
+    for (; k < n; k++) {
       const holder = holders[k];
       if (holder.quote) {
         s = markdownItQuote(line, s);
       } else if (k >= item.matched) {
         const opened = markdownItItem(line, s, holder);
         holder.indent ??= opened.indent;
+        holder.state ??= opened.state;
         s = opened.state;
       }
     }
-    item.indent = markdownItItem(line, s, item).indent;
+    const opened = markdownItItem(line, s, item);
+    item.indent = opened.indent;
+    item.state = opened.state;
   }
   return item.indent;
 }
@@ -1701,6 +1717,7 @@ function markdownItCode(line, holders, matched) {
       if (n >= matched) {
         const opened = markdownItItem(text, s, holder);
         holder.indent ??= opened.indent;
+        holder.state ??= opened.state;
         s = opened.state;
       }
       inner = n;
@@ -2490,8 +2507,9 @@ function tableHeader(start, containers, next, pipeless) {
 // without the \r of a \r\n, as `line`, how many of the containers that held
 // the line above that line goes on with, as `matched`, and the length of
 // its list marker, as `marker`, from which markdownItIndent() reads the
-// indentation that markdown-it 14.1.0 gives the item. The line goes on
-// with a block quote when its > follows
+// indentation that markdown-it 14.1.0 gives the item, which the item then
+// holds as `indent`, with the state of the line in it as `state`. The line
+// goes on with a block quote when its > follows
 // at most 3 columns of indentation (the > takes one column of a space or tab
 // after it), and with a list item when it is blank, unless the item holds
 // nothing yet, or indented by the item's width: the columns from where the

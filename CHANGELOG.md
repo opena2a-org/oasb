@@ -3576,6 +3576,20 @@ table row or a scenario file's header; or other, which says what it changes.
   two spaces, `> `, a tab and `guide.md">y</a>` after
   `- > x <a href="docs/`, where it names `docs/  > guide.md` beside
   `docs/> guide.md`, which commonmark.js writes.
+- `npm run check:readme` reads the indentation that markdown-it 14.1.0
+  gives the list items that hold a paragraph in one pass over the line
+  that opens them. It read that line from its start for each item that a
+  block quote the next line goes on with follows, so a paragraph that many
+  list items and block quotes held, each inside the one before, took time
+  that grew with the square of their number. On macOS arm64 with Node.js
+  26.12.1, with `docs/guide.md` present, a README that holds `- > `
+  repeated 16,000 times and `x <a href="docs/` above `  > ` repeated as
+  often and `guide.md">y</a>` took 1.7 seconds of processor time to check,
+  7.6 seconds with 32,000 of each and 84 seconds with 100,000; it now takes
+  0.28, 0.35 and 0.55 seconds. With the list items and block quotes opened
+  on a line above the paragraph, or with a tab after each `>`, 32,000 of
+  each took 6.6 and 8.2 seconds, and 100,000 now take 0.74 and 0.64
+  seconds. The check exits 0 on each, as before.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
