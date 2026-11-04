@@ -30,12 +30,17 @@ the claims this repository publishes:
    (`href="path"`, `href='path'` or `href=path`). It reads the path of an
    `href` without the tabs and line breaks that a browser removes from a
    URL: in a paragraph and in an HTML block a quoted value may run on to
-   the next line. In a paragraph that line's `>` markers and indentation
-   are no part of the path. In an HTML block the renderers leave out only
-   the `>` of each block quote and a space after it and the indentation of
-   each list item, so the other spaces at the start of the line are part
-   of the path: `<div><a href="docs/` above three spaces and
-   `guide.md">y</a></div>` fails with
+   the next line. In an HTML block the renderers leave out only the spaces
+   before the `>` of each block quote, the `>` and a space after it, and
+   the indentation of each list item, so the other spaces at the start of
+   the line are part of the path. In a paragraph commonmark.js leaves out
+   the spaces and tabs at the start of that line, and markdown-it, on a
+   line that goes on with the block quotes and list items that hold the
+   paragraph, only those markers and that indentation, as in an HTML
+   block; the check reads the path that each writes.
+   `<div><a href="docs/` above three spaces and
+   `guide.md">y</a></div>`, and `x <a href="docs/` above three spaces and
+   `guide.md">y</a>`, fail with
    `link target "docs/   guide.md" does not exist`. On a line of indented
    code an `href` is read when its value ends on that line. In an HTML
    block a tag may run on over its lines, and a quote in an attribute's

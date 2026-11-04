@@ -3448,7 +3448,7 @@ table row or a scenario file's header; or other, which says what it changes.
   as commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) write the
   line: without the `>` of each block quote that holds the block and the
   space after it, and without the indentation of each list item. It
-  removed those spaces, as it removes them on a line of a paragraph. With
+  removed those spaces, as it then removed them on a line of a paragraph. With
   `docs/guide.md` present, `<div><a href="docs/` above three spaces and
   `guide.md">y</a></div>` exited 0, and now exits 1 with
   `link target "docs/   guide.md" does not exist`: parse5 7.3.0 reads the
@@ -3506,6 +3506,39 @@ table row or a scenario file's header; or other, which says what it changes.
   60,000 lines of `xxxxxxxxxxxxxxxxxx` and `]: guide.md`, it took 4.7
   seconds and now takes 0.21, against 0.12. Each exits 0. These are one
   run of each.
+- `npm run check:readme` reads the target of an `href` in raw HTML of a
+  paragraph whose quoted value runs on to a later line as commonmark.js
+  0.31.2 writes it and as markdown-it 14.1.0 (html: true) writes it, where
+  it read the target that commonmark.js writes alone. commonmark.js
+  writes such a line without the spaces and tabs at its start, and
+  markdown-it, on a line that goes on with the block quotes and list items
+  that hold the paragraph, without the spaces before the `>` of each block
+  quote, the `>` and the space after it, and without the indentation of
+  each list item, as both write a line of an HTML block, and with the
+  other spaces. With `docs/guide.md` present, `x <a href="docs/` above
+  three spaces and `guide.md">y</a>` exited 0, and now exits 1 with
+  `link target "docs/   guide.md" does not exist`: parse5 7.3.0 reads the
+  value `docs/`, a line feed, three spaces and `guide.md` in what
+  markdown-it writes, and the URL parser of Node.js 26.12.1 resolves it to
+  `docs/%20%20%20guide.md`. In a block quote, `> x <a href="docs/` above
+  `>   guide.md">y</a>` now fails with
+  `link target "docs/  guide.md" does not exist`, and in a list item,
+  `- x <a href="docs/` above five spaces and `guide.md">y</a>` fails with
+  that message for `docs/   guide.md`; with two spaces, the indentation of
+  the item, it exits 0, as before. On a line that goes on with the
+  paragraph lazily, `- > x <a href="docs/` above five spaces and
+  `guide.md">y</a>` now fails for `docs/     guide.md`, as markdown-it
+  writes the five spaces, and `- x <a href="docs/` above a space and
+  `guide.md">y</a>` exits 0, as it writes none. Where neither target
+  exists, the check names both, the one that commonmark.js writes first.
+  Inside an image's description the check reads the target that
+  commonmark.js writes alone, as markdown-it writes the description as
+  text of the `alt` attribute. Where a tab follows the `>` of a block
+  quote inside another block quote, markdown-it counts the columns of the
+  tab otherwise, and the check may read another number of spaces than it
+  writes, or none: ` > >`, a tab and `* x <a href="docs/` above ` >>`,
+  three spaces, a tab and `guide.md">y</a>` exits 0, where the `href`
+  that markdown-it writes links to `docs/ guide.md`.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

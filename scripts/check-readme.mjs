@@ -227,7 +227,17 @@
 //      dir/file.md, as do x <a href=" dir/file.md ">y</a> and
 //      x <a href="&#32;dir/fil&#x65;.md">y</a>, and
 //      x <a href=" https://example.com/x">y</a> is not looked up as a file,
-//      as its target starts with a scheme. In an HTML block the spaces at
+//      as its target starts with a scheme. That is the target that
+//      commonmark.js 0.31.2 writes, without the spaces and tabs at the start
+//      of such a line. markdown-it 14.1.0 writes raw HTML of a paragraph
+//      without the markers of such a line that it reads, as paragraphLead()
+//      describes, and keeps the other spaces and tabs at its start, so an
+//      href outside an image whose quoted value runs on over a line break
+//      in raw HTML has the target that markdown-it writes as well, where the
+//      two differ, as paragraphCodeSpans() describes, and the check reads
+//      both: x <a href="docs/ on one line and three spaces and
+//      guide.md">y</a> on the next link to docs/guide.md and to
+//      docs/   guide.md. In an HTML block the spaces at
 //      the start of a line that a quoted value runs on to are part of the
 //      target, after the markers of the block quotes and list items that
 //      hold the block, which the renderers leave out, as htmlBlockLine()
@@ -882,7 +892,23 @@ const DESTINATION = 'destination';
 // markdown-it writes the description as text that ends no comment. A
 // reader asks about the runs, the < and the ( it meets from left to right,
 // and asks for hrefs() once it has read the line.
-function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null) {
+// The target of an href is read as hrefUrl() reads a value of a paragraph,
+// without the spaces that stand for the > markers and indentation at the
+// start of each line after the first, as commonmark.js writes it. `leads`
+// gives, for each line after the first, the spaces and tabs that
+// markdown-it writes there instead, as paragraphLead() reads them, and
+// markdown-it writes them in raw HTML, where a browser reads them in a
+// quoted value. So an href outside an image whose quoted value runs on
+// over a line break inside a piece of raw HTML has a second target where
+// the two differ: its value read with those spaces and tabs, as hrefUrl()
+// reads one that a renderer writes, which hrefs() gives after the first.
+// x <a href="docs/ on one line and three spaces and guide.md">y</a> on the
+// next, also in a comment after a --!> that ends it for a browser, link
+// to docs/guide.md and docs/   guide.md. A line break in text between two
+// pieces of raw HTML, which a tag that the first leaves open may run on
+// over, is no part of a piece, and markdown-it writes none of the spaces
+// and tabs after it there, as commonmark.js writes none.
+function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null, leads = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
   const htmlAt = inlineHtml(text);
@@ -901,6 +927,47 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null
   const marks = [];
   const altAt = altHrefs(text, marks);
   const hrefs = []; // the hrefs of the tags read, as tagHref() gives them, in order
+  const pieces = []; // the pieces of raw HTML read outside images, as [from, to] in the joined lines, in order
+  // The lines as [from, to, k] in the joined lines, each with the line feed
+  // after it, for partHolding(), made the first time the value of an href
+  // runs on over a line break.
+  let rows = null;
+  // The target of `href`, an href of raw HTML outside an image, as above,
+  // in what markdown-it writes: its value in quotes, text[href.at + 1] to
+  // text[href.to], with `leads` in place of the spaces after each line
+  // break inside a piece of raw HTML. A value without a line break has the
+  // target read, and an unquoted value, which white space ends, holds none.
+  const markdownItTarget = (href) => {
+    const start = href.at + 1;
+    const value = text.slice(start, href.to);
+    let p = value.indexOf('\n');
+    if (p === -1) return href.target;
+    if (rows === null) {
+      rows = [];
+      let at = 0;
+      for (let n = 0; n < lines.length; n++) {
+        rows.push([at, at + lines[n].length + 1, n]);
+        at += lines[n].length + 1;
+      }
+    }
+    let k = partHolding(rows, start)[2];
+    let written = '';
+    let from = 0;
+    for (; p !== -1; p = value.indexOf('\n', p + 1)) {
+      k++;
+      written += value.slice(from, p + 1);
+      from = Math.min(p + 1 + (texts[k] ?? 0), value.length);
+      if (partHolding(pieces, start + p)) written += leads[k] ?? '';
+    }
+    return hrefUrl(written + value.slice(from), false);
+  };
+  // Notes `href`, an href of raw HTML outside an image, and after it its
+  // target in what markdown-it writes where that differs.
+  const note = (href) => {
+    hrefs.push(href);
+    const other = markdownItTarget(href);
+    if (other !== href.target) hrefs.push({ target: other, at: href.at });
+  };
   let mark = 0; // the index in `marks` of the first one that may end after `read`
   let open = null; // what the raw HTML read outside images leaves open, as rawHtmlHrefs() gives it
   let read = 0; // the index in the joined lines after the raw HTML read last
@@ -949,7 +1016,7 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null
     textTo(at);
     if (open === null || open === IN_COMMENT) return;
     const runs = open.value !== -1 || (open.named && open.state === BEFORE_VALUE);
-    if ((end.tag !== null || !runs) && writtenEnds(text, at, end.tag ?? '</p>', open) && open.href) hrefs.push(open.href);
+    if ((end.tag !== null || !runs) && writtenEnds(text, at, end.tag ?? '</p>', open) && open.href) note(open.href);
     open = null;
   };
   let given = 0; // how many of them hrefs() has given
@@ -983,10 +1050,14 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null
           textTo(at + i);
           read = html.end;
           const image = imageAt(at + i);
-          let found = [];
-          if (image === undefined) ({ hrefs: found, open } = rawHrefs(text, at + i, html.end, html.tag, elements, open));
-          else if (!elements.open() && open === null) found = altAt(image, at + i, html.end, html.tag);
-          for (const href of found) hrefs.push(href);
+          if (image === undefined) {
+            pieces.push([at + i, html.end]);
+            let found;
+            ({ hrefs: found, open } = rawHrefs(text, at + i, html.end, html.tag, elements, open));
+            for (const href of found) note(href);
+          } else if (!elements.open() && open === null) {
+            for (const href of altAt(image, at + i, html.end, html.tag)) hrefs.push(href);
+          }
         } else if (html.end > at + i + 1) {
           marks.push([at + i, html.end, AUTOLINK_TAG]);
         }
@@ -1280,12 +1351,13 @@ function inlineDestinations(line, open, spans) {
 // an attribute's name or of an unquoted value; after href, of its name;
 // and after the =, as the first character of an unquoted value, which
 // then takes the quotes of a quoted value after it. hrefAt(text, i) reads
-// the one that starts at text[i], as { target, at, end }, and gives null
+// the one that starts at text[i], as { target, at, end, to }, and gives null
 // when none starts there. An unquoted value runs to a tab, a line feed, a
 // form feed, a carriage return, a space or a >, as a browser's tokenizer
 // reads one. `at` is the index of the quote that opens the value, or of
-// its first character when it is unquoted, and `end` the index after the
-// value and its closing quote. The target is the value as hrefUrl() reads
+// its first character when it is unquoted, `end` the index after the
+// value and its closing quote, and `to` the index where the value ends,
+// before that quote. The target is the value as hrefUrl() reads
 // it. HREF matches only the first character of an unquoted value, and
 // hrefAt() reads the rest with UNQUOTED_VALUE, so a test of HREF at an
 // index, as tagHref() makes at the indexes of a tag, reads no unquoted
@@ -1296,10 +1368,10 @@ function hrefAt(text, i) {
   const href = matchAt(HREF, text, i);
   if (!href) return null;
   const quoted = href[1] ?? href[2];
-  if (quoted !== undefined) return { target: hrefUrl(quoted), at: HREF.lastIndex - quoted.length - 2, end: HREF.lastIndex };
+  if (quoted !== undefined) return { target: hrefUrl(quoted), at: HREF.lastIndex - quoted.length - 2, end: HREF.lastIndex, to: HREF.lastIndex - 1 };
   const at = HREF.lastIndex;
   const [value] = matchAt(UNQUOTED_VALUE, text, at);
-  return { target: hrefUrl(value), at, end: at + value.length };
+  return { target: hrefUrl(value), at, end: at + value.length, to: at + value.length };
 }
 
 // The target of an href whose value is `value`, as a browser reads it: its
@@ -1317,9 +1389,11 @@ function hrefAt(text, i) {
 // so a NUL is kept. Where `paragraph` is true, the value is in the lines of
 // a paragraph that paragraphCodeSpans() joins, where the spaces after a line
 // break stand for the > markers and indentation that CommonMark leaves out
-// of the paragraph's text, and they are removed first. Where it is false,
-// the value is in text as a renderer writes it, such as that of an HTML
-// block that htmlBlockHrefs() reads, and they are kept, as a browser keeps
+// of the paragraph's text, and they are removed first, as commonmark.js
+// writes the value. Where it is false, the value is in text as a renderer
+// writes it, such as that of an HTML block that htmlBlockHrefs() reads, or
+// that of a paragraph as markdown-it writes it, as paragraphCodeSpans()
+// reads it, and they are kept, as a browser keeps
 // them in the value and the URL parser in the URL: docs/, a line break,
 // three spaces and guide.md are docs/   guide.md. The line break is removed
 // after the references are read, as a browser reads it in the value, so a
@@ -1448,6 +1522,47 @@ function htmlBlockLine(line, holders) {
   return [(blank ? '' : rest) + cr, (quoteTab ? text.slice(i) : rest) + cr];
 }
 
+// The spaces and tabs that markdown-it 14.1.0 writes before the text of
+// `line`, a line after the first of a paragraph, whose text starts at
+// line[at], past the > markers of the block quotes that the line goes on
+// with and the spaces and tabs after them, which commonmark.js 0.31.2
+// leaves out. `holders` are the block quotes and list items that hold the
+// paragraph, as lineStart() takes them in `containers`, and the line goes
+// on with the first `matched` of them, fewer on a line that goes on with
+// the paragraph lazily. markdown-it leaves out the markers of the block
+// quotes that the line goes on with, up to the innermost of them, and of
+// the list items outside it, as htmlBlockLine() reads them on a line of an
+// HTML block, and after them as many columns of spaces and tabs as the
+// list items inside the innermost block quote that holds the paragraph
+// take, or the list items that hold it where no block quote does, or all
+// of them where the line holds fewer, as on a line that goes on lazily
+// with such a list item. It writes the rest of the spaces and tabs as
+// htmlBlockLine() writes them. So it writes three spaces of a line of five
+// spaces and guide.md">y</a> after - x <a href="docs/, all five after
+// - > x <a href="docs/, whose block quote that line goes on with lazily,
+// all three of a line of three spaces and guide.md">y</a> after
+// > x <a href="docs/, and none of a line of a space and guide.md">y</a>
+// after - x <a href="docs/.
+function paragraphLead(line, at, holders, matched) {
+  if (at === 0) return '';
+  let inner = -1; // the index in `holders` of the innermost block quote
+  let quote = -1; // that of the innermost block quote that the line goes on with
+  for (let n = 0; n < holders.length; n++) {
+    if (!holders[n].quote) continue;
+    inner = n;
+    if (n < matched) quote = n;
+  }
+  let width = 0; // the columns that the list items inside the innermost block quote take
+  for (let n = inner + 1; n < holders.length; n++) width += holders[n].width;
+  const markers = holders.slice(0, quote + 1);
+  if (width > 0) markers.push({ width });
+  const written = htmlBlockLine(line, markers)[1];
+  // Where the line holds fewer columns of spaces and tabs than `width`,
+  // htmlBlockLine() moves on into its text, and none of them is written.
+  const text = line.slice(at);
+  return written.endsWith(text) ? written.slice(0, written.length - text.length) : '';
+}
+
 // The targets of the hrefs on the lines of the HTML blocks of `lines`, the
 // lines of a page or of a part of it as parse() tags them, as a map from
 // the index in `lines` of a line that blockReader() reads as a line of an
@@ -1526,9 +1641,9 @@ function htmlBlockHrefs(lines) {
 // `text`, one line or the lines of a paragraph joined by line breaks: the
 // first href attribute outside the tag's quoted values, as hrefAt() reads
 // one, its value in quotes, where it may hold a line break, or unquoted,
-// as { target, at, end }, `at` and `end` being indexes in `text`. It is
-// null when the tag holds none, as a closing tag does. In an open tag a
-// quote outside a quoted value opens one, as neither its name, an
+// as { target, at, end, to }, `at`, `end` and `to` being indexes in
+// `text`. It is null when the tag holds none, as a closing tag does. In an
+// open tag a quote outside a quoted value opens one, as neither its name, an
 // attribute's name nor an unquoted value holds a quote, so
 // <b title="<a href='target'>"> holds no href: the <a> is inside the
 // quoted value.
@@ -1571,10 +1686,11 @@ const UNQUOTED = 'unquoted';
 // While `find` is true, tagStep() notes as `href` the value of the tag's
 // first attribute named href, whatever the case of its letters, as a
 // browser drops a later one, when that attribute has a value, as
-// { target, at }: the value, in quotes, where it may hold a line break, or
-// unquoted, as hrefUrl() reads it, given `paragraph`, and `at` the index in
+// { target, at, to }: the value, in quotes, where it may hold a line break,
+// or unquoted, as hrefUrl() reads it, given `paragraph`, `at` the index in
 // `text` of the quote that opens it, or of its first character when it is
-// unquoted. It notes none in a closing tag.
+// unquoted, and `to` the index in `text` where it ends, before a quote that
+// closes it. It notes none in a closing tag.
 const newTag = (at, closing, find = !closing, paragraph = true) => ({ at, closing, find, paragraph, state: BEFORE_NAME, name: -1, named: false, value: -1, href: null });
 
 // Reads `c`, the character that text[i] to text[last] stands for, in the
@@ -1599,11 +1715,11 @@ function tagStep(tag, c, text, i, last = i) {
   if (state === '"' || state === "'") {
     if (c !== state) return false;
     tag.state = BEFORE_NAME;
-    if (tag.value !== -1) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i), tag.paragraph), at: tag.value - 1 }, -1];
+    if (tag.value !== -1) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i), tag.paragraph), at: tag.value - 1, to: i }, -1];
     return false;
   }
   if (state === IN_NAME && tag.name === 4 && (c === '>' || c === '/' || c === '=' || isHtmlSpace(c))) [tag.find, tag.named] = [false, true];
-  if (state === UNQUOTED && tag.value !== -1 && (c === '>' || isHtmlSpace(c))) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i), tag.paragraph), at: tag.value }, -1];
+  if (state === UNQUOTED && tag.value !== -1 && (c === '>' || isHtmlSpace(c))) [tag.href, tag.value] = [{ target: hrefUrl(text.slice(tag.value, i), tag.paragraph), at: tag.value, to: i }, -1];
   if (c === '>') return true;
   if (state === BEFORE_VALUE) {
     if (isHtmlSpace(c)) return false;
@@ -1831,7 +1947,7 @@ const IN_COMMENT = 'comment';
 // The hrefs of the open tags that a browser reads in text[from] to
 // text[to], raw HTML that a renderer passes on as written, such as a
 // comment, processing instruction, CDATA section or declaration that
-// CommonMark reads inline, in order, as { target, at } as newTag()
+// CommonMark reads inline, in order, as { target, at, to } as newTag()
 // describes them (`hrefs`), and what the text leaves open (`open`). The
 // text is read as a browser's tokenizer reads raw HTML from its data
 // state: a comment runs from <!-- to the first --> or --!> after its <!,
@@ -3259,18 +3375,21 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   const htmlTargets = (j) => (blockHrefs ??= htmlBlockHrefs(lines)).get(j) ?? [];
   // Where the text of lines[k] starts when it is text that goes on with the
   // paragraph that the reader's `containers` hold, as the reader reads it
-  // below, and -1 when it is not: past the > markers of the block quotes of
-  // `containers` that it goes on with, and the spaces and tabs after them.
-  // The line above it is text of that paragraph, so it is not a table row.
+  // below, and null when it is not, as { at, lead }: `at` past the > markers
+  // of the block quotes of `containers` that it goes on with, and the spaces
+  // and tabs after them, and `lead` the spaces and tabs that markdown-it
+  // writes before that text, as paragraphLead() reads them. The line above
+  // it is text of that paragraph, so it is not a table row.
   const textStart = (k) => {
     const { line, inFence, fenceOpen, fenceClose } = lines[k];
-    if (inFence || fenceOpen || fenceClose) return -1;
+    if (inFence || fenceOpen || fenceClose) return null;
     const start = lineStart(line, read.containers, true);
-    if (read.restOf(k, start, true, false) !== 'text' || start.opened.length > 0) return -1;
+    if (read.restOf(k, start, true, false) !== 'text' || start.opened.length > 0) return null;
     let quotes = 0;
     for (let c = 0; c < start.matched; c++) if (read.containers[c].quote) quotes++;
     const text = afterQuotes(line, quotes);
-    return line.length - text.length + text.match(/^[ \t]*/)[0].length;
+    const at = line.length - text.length + text.match(/^[ \t]*/)[0].length;
+    return { at, lead: paragraphLead(line, at, read.containers, start.matched) };
   };
   // What a renderer writes after the text of the block that starts at
   // lines[j], as paragraphCodeSpans() takes it as `end`. After a paragraph
@@ -3327,7 +3446,11 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       // run on to the lines that go on with it, and those of any other
       // block are read on its line alone.
       const texts = [0];
-      if (paragraph) for (let at; j + texts.length < lines.length && (at = textStart(j + texts.length)) !== -1; ) texts.push(at);
+      const leads = [''];
+      for (let next; paragraph && j + texts.length < lines.length && (next = textStart(j + texts.length)) !== null; ) {
+        texts.push(next.at);
+        leads.push(next.lead);
+      }
       // The text of a line of a paragraph from where defined.hidden() says
       // that both renderers hide the rest of the line is none of the
       // paragraph's text: neither writes a link, a code span or raw HTML of
@@ -3345,7 +3468,7 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
         });
       }
       const end = paragraph || (rest === 'block' && !html) ? blockEnd(j, texts.length, paragraph) : null;
-      open.code = paragraphCodeSpans(blockLines, texts, defined, end);
+      open.code = paragraphCodeSpans(blockLines, texts, defined, end, leads);
     }
     // A fence holds no link, whether parse() tags it or not: what follows the
     // run of an opening fence is an info string, not text, and a line that
