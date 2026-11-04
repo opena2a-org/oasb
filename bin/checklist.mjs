@@ -13,6 +13,9 @@
 // read from oasb-1-checklist.json beside this file. docs/oasb-1-checklist.md
 // is the same checklist as a page, and scripts/oasb-1-checklist.test.mjs
 // fails when the page and the command's output differ.
+// scripts/check-vendor.mjs fails when oasb-1-checklist.json is not, byte for
+// byte, the projection of the OASB-1 catalogue in the hackmyagent release
+// that VENDOR.json pins.
 //
 // Exits 0 with the list on stdout, and 1, with the usage on stderr, on an
 // argument it does not take or a level other than L1, L2 and L3.

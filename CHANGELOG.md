@@ -399,6 +399,21 @@ table row or a scenario file's header; or other, which says what it changes.
   README links, and `scripts/oasb-1-checklist.test.mjs` fails when the page
   and the command's output list different controls or give a control's
   text differently. `npx @opena2a/oasb --help` names the command.
+- `npm run check:vendor` (`scripts/check-vendor.mjs`) compares
+  `bin/oasb-1-checklist.json` byte for byte with its projection of the
+  OASB-1 catalogue in a published hackmyagent release. `VENDOR.json` pins
+  the release by exact version and the sha512 integrity of its tarball:
+  hackmyagent 0.33.2. The check packs it with
+  `npm pack hackmyagent@<version>`, refuses a tarball with another
+  integrity or version, reads its catalogue module as data, without running
+  it, and writes the projection of the catalogue that the checklist makes,
+  with the questions of `docs/oasb-1-checklist.md`. A difference fails the
+  check, which names its line and column; `--write` writes the projection
+  to the file. The check also fails when the page asks no question of a
+  control, or names a release of hackmyagent other than the pinned one.
+  `npm test`, which the CI job runs, runs the check through
+  `scripts/check-vendor.test.mjs`, two of whose tests reach the npm
+  registry.
 
 ### Removed
 
