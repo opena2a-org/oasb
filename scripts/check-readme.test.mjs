@@ -3196,6 +3196,36 @@ test('a quoted href value of a paragraph that runs on to the next line in a bloc
   }
 });
 
+test('a paragraph that 100,000 list items and as many block quotes hold, each inside the one before, whose quoted href value runs on to the next line is checked in under 2 seconds of processor time', () => {
+  // paragraphLead() asks markdownItIndent() about each list item that a
+  // block quote the line goes on with follows, and markdownItIndent() read
+  // the line that opens the item from its start, over every holder before
+  // the item, once for each item asked about, so the time grew with the
+  // square of the number of items. On macOS arm64 with Node.js 26.12.1,
+  // the first page below took 1.7 seconds of processor time with 16,000
+  // list items and block quotes, 7.6 seconds with 32,000 and 84 seconds
+  // with 100,000; the second and the third took 6.6 and 8.2 seconds with
+  // 32,000. Each item now holds the state of its opening line in it, and
+  // the reading of an item goes on from the innermost item before it that
+  // was read, so the three pages take 0.55, 0.74 and 0.64 seconds.
+  // The bound is on the processor time of the check's process, not on the
+  // wall time of its spawn, which also holds the time the process waits
+  // for a processor on a loaded host.
+  const n = 100000;
+  const pages = [
+    `${'- > '.repeat(n)}x <a href="docs/\n${'  > '.repeat(n)}guide.md">y</a>\n`,
+    `${'- > '.repeat(n)}a\n${'  > '.repeat(n)}x <a href="docs/\n${'  > '.repeat(n)}guide.md">y</a>\n`,
+    `${'- >\t'.repeat(n)}x <a href="docs/\n${'  >\t'.repeat(n)}guide.md">y</a>\n`,
+  ];
+  pages.forEach((body, i) => {
+    const r = check(body, {}, [], { cpuTime: true });
+    const which = `page ${i + 1} of ${body.length} characters`;
+    assert.equal(r.status, 0, `${which}\n${r.stderr.slice(0, 500)}`);
+    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${which}`);
+    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${which}`);
+  });
+});
+
 test("a quote in an attribute's name in an HTML block opens no quoted value, and no tag is read inside another", () => {
   // commonmark.js 0.31.2 and markdown-it 14.1.0 (html: true) pass each of
   // these blocks through, and parse5 7.3.0, which reads a tag as the HTML
