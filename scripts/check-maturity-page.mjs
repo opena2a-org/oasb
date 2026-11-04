@@ -22,6 +22,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMain } from './is-main.mjs';
 
 export const PAGE = 'docs/shield-maturity-extension.md';
 export const ATLAS_PAGE = 'docs/mitre-atlas-mapping.md';
@@ -90,8 +91,7 @@ export function checkPage(root) {
   return fail;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
+if (isMain(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) {
     console.log(USAGE);

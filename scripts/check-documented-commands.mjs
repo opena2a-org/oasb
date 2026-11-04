@@ -34,6 +34,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMain } from './is-main.mjs';
 import { reportFiles, sourcePath } from './readme-counts.mjs';
 
 const USAGE = 'Usage: node scripts/check-documented-commands.mjs [path/to/checkout]';
@@ -231,8 +232,7 @@ export function checkDocumentedCommands(root) {
   return failures;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
+if (isMain(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) {
     console.log(USAGE);

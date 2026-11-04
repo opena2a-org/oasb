@@ -3640,6 +3640,31 @@ table row or a scenario file's header; or other, which says what it changes.
   on a line above the paragraph, or with a tab after each `>`, 32,000 of
   each took 6.6 and 8.2 seconds, and 100,000 now take 0.74 and 0.64
   seconds. The check exits 0 on each, as before.
+- `scripts/check-vendor.mjs`, `scripts/check-test-counts.mjs`,
+  `scripts/check-maturity-page.mjs`, `scripts/check-owasp-mapping.mjs`,
+  `scripts/check-documented-commands.mjs` and `scripts/bait-edition.mjs`
+  run when node is started with them through a symbolic link to a
+  directory above them or to the file. Each ran only when
+  `process.argv[1]`, the path node was started by, made absolute, was the
+  path in `import.meta.url` of its module, which node gives by default
+  with each link resolved. Started through `/tmp` on macOS, a link to
+  `/private/tmp`, each exited 0 and printed nothing on an argument it does
+  not take, where started by its real path it exited 1 with its usage, and
+  `check-vendor.mjs` exited 0 on a copy of the files it reads with the
+  `"version"` of `bin/oasb-1-checklist.json` changed from 1.0.0 to 1.0.1.
+  Each now asks `isMain` (`scripts/is-main.mjs`), which compares the two
+  paths once each is resolved to its real path: started through `/tmp`,
+  through a link to the script, or through a link to a directory above it
+  under `--preserve-symlinks-main`, each exits 1 with its usage on that
+  argument, and `check-vendor.mjs` fails on that copy with the first
+  difference at line 4, column 19. `npm run check:vendor` starts the check
+  by a relative path, which node resolves against the physical working
+  directory, and the tests that `npm test` runs start each of the six by a
+  path made from the real path of the test file, so neither went through
+  a link: `npm run check:vendor -- --bogus` in a directory reached through
+  a link exited 1 with the usage before the change as well.
+  `scripts/is-main.test.mjs` starts each of the six through links and
+  fails when one exits or prints otherwise than started by its own path.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

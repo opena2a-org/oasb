@@ -32,6 +32,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMain } from './is-main.mjs';
 import { QUALIFIERS, README_PAGES, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInconclusiveSkip, readFailure, reportFiles, sourcePath } from './readme-counts.mjs';
 
 const LABELS = {
@@ -198,7 +199,7 @@ export function compareCounts(results, readme, source) {
   return { live, compared: statements.length + rows.length, drift };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const usage = 'usage: node scripts/check-test-counts.mjs <vitest-results.json> [path/to/README.md]';
   const args = process.argv.slice(2);
