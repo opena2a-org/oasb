@@ -3290,6 +3290,37 @@ test('a quoted href value of a paragraph that ends above a line that goes on wit
   assert.equal(over.stderr.trim(), 'README: line 11: link target "docs/gui> de.md" does not exist.');
 });
 
+test('a quoted href value of a paragraph that starts on or below a line that goes on with it lazily and whose text starts at a > names the target that markdown-it writes', () => {
+  // In these bodies markdown-it 14.1.0 (html: true) reads the > of such a
+  // line as the marker of the block quote that holds the paragraph and
+  // goes on with the paragraph: it writes y of the line of four spaces and
+  // > y after > x, where commonmark.js 0.31.2 writes > y. An href whose
+  // value starts on that line, or below it, and runs on to the next line
+  // links to docs/ guide.md in what markdown-it writes, which does not
+  // exist, and to docs/guide.md in what commonmark.js writes: the check
+  // names the target that markdown-it writes. It once read the value of
+  // such an href as commonmark.js writes it alone, and exited 0 on each of
+  // these bodies.
+  for (const [body, line] of [
+    ['> x\n    > y\n> <a href="docs/\n>  guide.md">z</a>\n', 13],
+    ['> x\n    > <a href="docs/\n guide.md">y</a>\n', 12],
+    ['> > x\n>     > y\n> > <a href="docs/\n> >  guide.md">z</a>\n', 13],
+    ['- > x\n\t  > y\n  > <a href="docs/\n  >  guide.md">z</a>\n', 13],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, JSON.stringify(body));
+    assert.equal(r.stderr.trim(), `README: line ${line}: link target "docs/ guide.md" does not exist.`, JSON.stringify(body));
+  }
+  // A value that starts below such a line and runs on to another one is
+  // read as commonmark.js writes it alone, as one that runs on to the
+  // first: of > x, four spaces and > y, > <a href="docs/ and four spaces
+  // and > guide.md">z</a>, commonmark.js links to docs/> guide.md and
+  // markdown-it to docs/guide.md.
+  const second = check('> x\n    > y\n> <a href="docs/\n    > guide.md">z</a>\n');
+  assert.equal(second.status, 1);
+  assert.equal(second.stderr.trim(), 'README: line 13: link target "docs/> guide.md" does not exist.');
+});
+
 test('a paragraph that 100,000 list items and as many block quotes hold, each inside the one before, whose quoted href value runs on to the next line is checked in under 2 seconds of processor time', () => {
   // paragraphLead() asks markdownItIndent() about each list item that a
   // block quote the line goes on with follows, and markdownItIndent() read

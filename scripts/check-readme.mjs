@@ -908,9 +908,9 @@ const DESTINATION = 'destination';
 // pieces of raw HTML, which a tag that the first leaves open may run on
 // over, is no part of a piece, and markdown-it writes none of the spaces
 // and tabs after it there, as commonmark.js writes none. Where `leads`
-// gives null for a line, what markdown-it writes from that line on is not
-// read, as linkReader() describes, and an href whose quoted value runs on
-// to that line, or past it, has no second target.
+// gives null for a line, what markdown-it writes on that line is not read,
+// as linkReader() describes, and an href whose quoted value runs on to that
+// line, or past it, has no second target.
 function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null, leads = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
@@ -1682,9 +1682,11 @@ function markdownItIndent(holders, n) {
 // before a line of four spaces and > guide.md">y</a> after
 // 100. x <a href="docs/, which it writes as indented code. paragraphLead()
 // reads such a line as it reads any other, and linkReader() reads no lead
-// of it, nor of the lines after it, as it describes. The lines above it
-// markdown-it writes as text of the paragraph, with the spaces and tabs
-// that paragraphLead() reads there.
+// of it, as it describes, so a value that runs on to it is read as
+// commonmark.js writes it alone. The lines above it markdown-it writes as
+// text of the paragraph, with the spaces and tabs that paragraphLead()
+// reads there, and the leads of the lines below it are read as those of
+// any other line.
 function paragraphLead(line, at, holders, matched) {
   if (at === 0) return '';
   let s = markdownItLine(line);
@@ -3643,9 +3645,9 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       // block are read on its line alone.
       const texts = [0];
       const leads = [''];
-      let cut = -1; // the index in `texts` of the first line that textStart() reads as `cut`, or -1 where there is none
+      const cuts = []; // the indices in `texts` of the lines that textStart() reads as `cut`
       for (let next; paragraph && j + texts.length < lines.length && (next = textStart(j + texts.length)) !== null; ) {
-        if (cut === -1 && next.cut) cut = texts.length;
+        if (next.cut) cuts.push(texts.length);
         texts.push(next.at);
         leads.push(next.lead);
       }
@@ -3654,16 +3656,17 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       // it ends the paragraph on a line above the last, as paragraphLead()
       // gives null for the line after it, none of a value that runs on over
       // that end: in both, the check reads the targets of the paragraph as
-      // commonmark.js writes them alone. Otherwise, from the first line that
-      // goes on with the paragraph lazily and whose text starts at a >,
+      // commonmark.js writes them alone. Otherwise, the lead of each line
+      // that goes on with the paragraph lazily and whose text starts at a >,
       // which markdown-it may read otherwise than as text, as
-      // paragraphLead() describes, the check reads what markdown-it writes
-      // no further: the leads from that line on are null, so that
-      // paragraphCodeSpans() reads the target of an href whose value runs
-      // on to one of those lines as commonmark.js writes it alone, and that
-      // of a value that ends above that line as on any other line.
+      // paragraphLead() describes, is null, so that paragraphCodeSpans()
+      // reads the target of an href whose value runs on to one of those
+      // lines as commonmark.js writes it alone. A value that runs on to none
+      // of them, one that ends above such a line or starts on it or below
+      // it, is read with the leads that paragraphLead() reads, as on any
+      // other line.
       if (leads.length > 1 && (leads.includes(null) || markdownItCode(l.line, read.containers, block.matched))) leads.fill('');
-      else if (cut !== -1) leads.fill(null, cut);
+      else for (const k of cuts) leads[k] = null;
       // The text of a line of a paragraph from where defined.hidden() says
       // that both renderers hide the rest of the line is none of the
       // paragraph's text: neither writes a link, a code span or raw HTML of

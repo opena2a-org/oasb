@@ -47,7 +47,8 @@ the claims this repository publishes:
    and starts its text at a `>`, or on past that line, as commonmark.js
    writes that `>` as text, where markdown-it may read it as the marker of
    a block quote that holds the paragraph, or end the paragraph before that
-   line; a value that ends above that line is read as on any other line.
+   line; a value that runs on to no such line, one that ends above it or
+   starts on it or below it, is read as on any other line.
    It reads one kind of input otherwise: where commonmark.js reads the
    first line as indented code and the value runs on from it, the check
    reads no path, also where markdown-it writes one.

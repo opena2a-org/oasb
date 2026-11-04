@@ -3600,12 +3600,17 @@ table row or a scenario file's header; or other, which says what it changes.
   after `> 10. x <a href="docs/`, where the target that markdown-it writes,
   `docs/nowhere.md`, does not exist either, the check names
   `docs/> nowhere.md` alone, where it named `docs/  > nowhere.md` beside
-  it. An `href` whose value ends above such a line is read as before, as
-  markdown-it writes the lines above it as text of the paragraph:
-  `> x <a href="docs/` above a space and `guide.md">y</a>` above four
-  spaces and `> z` still fails with
+  it. An `href` whose value runs on to no such line is read as before:
+  one whose value ends above such a line, as markdown-it writes the lines
+  above it as text of the paragraph, and one whose value starts on such a
+  line or below it. `> x <a href="docs/` above a space and
+  `guide.md">y</a>` above four spaces and `> z` still fails with
   `link target "docs/ guide.md" does not exist`, the target that
-  markdown-it writes; commonmark.js links to `docs/guide.md`.
+  markdown-it writes; commonmark.js links to `docs/guide.md`. So do the
+  four lines `> x`; four spaces and `> y`; `> <a href="docs/`; and `>`,
+  two spaces and `guide.md">z</a>`, where markdown-it reads the `>` after
+  the four spaces as the marker of the block quote and goes on with the
+  paragraph.
 - `npm run check:readme` reads the indentation that markdown-it 14.1.0
   gives the list items that hold a paragraph in one pass over the line
   that opens them. It read that line from its start for each item that a
