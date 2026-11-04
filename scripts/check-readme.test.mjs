@@ -3245,6 +3245,51 @@ test('a quoted href value of a paragraph that runs on to a line that goes on wit
   assert.equal(lazy.status, 0, lazy.stderr);
 });
 
+test('a quoted href value of a paragraph that ends above a line that goes on with it lazily and whose text starts at a > names the target that markdown-it writes', () => {
+  // markdown-it 14.1.0 (html: true) writes the lines of such a paragraph
+  // above that line as its text, with the spaces and tabs that
+  // paragraphLead() reads, whether it then reads the > as the marker of
+  // the block quote and goes on with the paragraph, as on a line of four
+  // spaces and > z after > x <a href="docs/ above a space and
+  // guide.md">y</a>, or ends the paragraph before the line, as after
+  // 100. x <a href="docs/ above eight spaces and guide.md">y</a>, where it
+  // writes that line as indented code. So its hrefs link to docs/ guide.md
+  // and docs/   guide.md, which do not exist, where commonmark.js 0.31.2
+  // links to docs/guide.md on each: the check names the target that
+  // markdown-it writes. It once read every href of such a paragraph as
+  // commonmark.js writes it alone, and exited 0 on each of these bodies.
+  for (const [body, target] of [
+    ['> x <a href="docs/\n guide.md">y</a>\n    > z\n', 'docs/ guide.md'],
+    ['100. x <a href="docs/\n        guide.md">y</a>\n    > z\n', 'docs/   guide.md'],
+    ['> 10. x <a href="docs/\n>       guide.md">y</a>\n      > z\n', 'docs/  guide.md'],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, JSON.stringify(body));
+    assert.equal(r.stderr.trim(), `README: line 11: link target "${target}" does not exist.`, JSON.stringify(body));
+  }
+  // In one paragraph, an href whose value ends above that line has the
+  // target that markdown-it writes, and one whose value runs on to the
+  // line is read as commonmark.js writes it alone: after
+  // > x <a href="docs/, a line of a space and guide.md">y</a> <a href="docs/
+  // and a line of four spaces and > guide.md">z</a>, markdown-it links to
+  // docs/ guide.md and docs/guide.md, and commonmark.js to docs/guide.md
+  // and docs/> guide.md.
+  const both = check('> x <a href="docs/\n guide.md">y</a> <a href="docs/\n    > guide.md">z</a>\n');
+  assert.equal(both.status, 1);
+  assert.deepEqual(both.stderr.trim().split('\n'), [
+    'README: line 11: link target "docs/ guide.md" does not exist.',
+    'README: line 12: link target "docs/> guide.md" does not exist.',
+  ]);
+  // A value that runs on from above that line to past it is read as
+  // commonmark.js writes it alone as well: of > x <a href="docs/ above a
+  // space and gui above four spaces and > de.md">y</a>, markdown-it writes
+  // de.md">y</a> on the third line, so its href links to docs/ guide.md,
+  // which the check does not name, and commonmark.js to docs/gui> de.md.
+  const over = check('> x <a href="docs/\n gui\n    > de.md">y</a>\n');
+  assert.equal(over.status, 1);
+  assert.equal(over.stderr.trim(), 'README: line 11: link target "docs/gui> de.md" does not exist.');
+});
+
 test('a paragraph that 100,000 list items and as many block quotes hold, each inside the one before, whose quoted href value runs on to the next line is checked in under 2 seconds of processor time', () => {
   // paragraphLead() asks markdownItIndent() about each list item that a
   // block quote the line goes on with follows, and markdownItIndent() read
