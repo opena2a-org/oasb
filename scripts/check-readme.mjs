@@ -907,7 +907,10 @@ const DESTINATION = 'destination';
 // to docs/guide.md and docs/   guide.md. A line break in text between two
 // pieces of raw HTML, which a tag that the first leaves open may run on
 // over, is no part of a piece, and markdown-it writes none of the spaces
-// and tabs after it there, as commonmark.js writes none.
+// and tabs after it there, as commonmark.js writes none. Where `leads`
+// gives null for a line, what markdown-it writes from that line on is not
+// read, as linkReader() describes, and an href whose quoted value runs on
+// to that line, or past it, has no second target.
 function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null, leads = []) {
   const text = lines.map((line, k) => (texts[k] > 0 ? ' '.repeat(texts[k]) + line.slice(texts[k]) : line)).join('\n');
   const codeSpanAt = codeSpans(text);
@@ -936,7 +939,8 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null
   // in what markdown-it writes: its value in quotes, text[href.at + 1] to
   // text[href.to], with `leads` in place of the spaces after each line
   // break inside a piece of raw HTML. A value without a line break has the
-  // target read, and an unquoted value, which white space ends, holds none.
+  // target read, as has one that runs on to a line whose lead is null, and
+  // an unquoted value, which white space ends, holds none.
   const markdownItTarget = (href) => {
     const start = href.at + 1;
     const value = text.slice(start, href.to);
@@ -955,6 +959,7 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null
     let from = 0;
     for (; p !== -1; p = value.indexOf('\n', p + 1)) {
       k++;
+      if (leads[k] === null) return href.target;
       written += value.slice(from, p + 1);
       from = Math.min(p + 1 + (texts[k] ?? 0), value.length);
       if (partHolding(pieces, start + p)) written += leads[k] ?? '';
@@ -1665,19 +1670,22 @@ function markdownItIndent(holders, n) {
 // item that the line goes on with, markdown-it ends that block quote, and
 // the paragraph with it, on the line above, and paragraphLead() gives
 // null.
-// It gives null as well where the line goes on with the paragraph lazily
-// and its text starts at a >, which commonmark.js writes as text of the
-// paragraph. markdown-it may read that > as the marker of a block quote
-// that holds the paragraph, after more columns of spaces and tabs than
-// CommonMark reads one after, and write the line from past it, or end the
-// paragraph before the line. So it writes guide.md">y</a> of a line of six
-// spaces and > guide.md">y</a> after > 10. x <a href="docs/, where
-// commonmark.js writes > guide.md">y</a>, and ends the paragraph before
-// the line where the rest of it is - guide.md">y</a>, which starts a list
-// item, and before a line of four spaces and > guide.md">y</a> after
-// 100. x <a href="docs/, which it writes as indented code.
+// Where the line goes on with the paragraph lazily and its text starts at
+// a >, which commonmark.js writes as text of the paragraph, markdown-it
+// may read that > as the marker of a block quote that holds the
+// paragraph, after more columns of spaces and tabs than CommonMark reads
+// one after, and write the line from past it, or end the paragraph before
+// the line. So it writes guide.md">y</a> of a line of six spaces and
+// > guide.md">y</a> after > 10. x <a href="docs/, where commonmark.js
+// writes > guide.md">y</a>, and ends the paragraph before the line where
+// the rest of it is - guide.md">y</a>, which starts a list item, and
+// before a line of four spaces and > guide.md">y</a> after
+// 100. x <a href="docs/, which it writes as indented code. paragraphLead()
+// reads such a line as it reads any other, and linkReader() reads no lead
+// of it, nor of the lines after it, as it describes. The lines above it
+// markdown-it writes as text of the paragraph, with the spaces and tabs
+// that paragraphLead() reads there.
 function paragraphLead(line, at, holders, matched) {
-  if (matched < holders.length && line[at] === '>') return null;
   if (at === 0) return '';
   let s = markdownItLine(line);
   let inner = -1; // the index in `holders` of the innermost list item read since the last block quote
@@ -3559,12 +3567,13 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
   const htmlTargets = (j) => (blockHrefs ??= htmlBlockHrefs(lines)).get(j) ?? [];
   // Where the text of lines[k] starts when it is text that goes on with the
   // paragraph that the reader's `containers` hold, as the reader reads it
-  // below, and null when it is not, as { at, lead }: `at` past the > markers
-  // of the block quotes of `containers` that it goes on with, and the spaces
-  // and tabs after them, and `lead` the spaces and tabs that markdown-it
-  // writes before that text, as paragraphLead() reads them, or null where
-  // it ends the paragraph on the line above, or where the line goes on with
-  // the paragraph lazily and its text starts at a >, as paragraphLead()
+  // below, and null when it is not, as { at, lead, cut }: `at` past the >
+  // markers of the block quotes of `containers` that it goes on with, and
+  // the spaces and tabs after them; `lead` the spaces and tabs that
+  // markdown-it writes before that text, as paragraphLead() reads them, or
+  // null where it ends the paragraph on the line above; and `cut` whether
+  // the line goes on with the paragraph lazily and its text starts at a >,
+  // which markdown-it may read otherwise than as text, as paragraphLead()
   // describes. The line above it is text of that paragraph, so it is not a
   // table row.
   const textStart = (k) => {
@@ -3576,7 +3585,7 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
     for (let c = 0; c < start.matched; c++) if (read.containers[c].quote) quotes++;
     const text = afterQuotes(line, quotes);
     const at = line.length - text.length + text.match(/^[ \t]*/)[0].length;
-    return { at, lead: paragraphLead(line, at, read.containers, start.matched) };
+    return { at, lead: paragraphLead(line, at, read.containers, start.matched), cut: start.matched < read.containers.length && line[at] === '>' };
   };
   // What a renderer writes after the text of the block that starts at
   // lines[j], as paragraphCodeSpans() takes it as `end`. After a paragraph
@@ -3634,7 +3643,9 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       // block are read on its line alone.
       const texts = [0];
       const leads = [''];
+      let cut = -1; // the index in `texts` of the first line that textStart() reads as `cut`, or -1 where there is none
       for (let next; paragraph && j + texts.length < lines.length && (next = textStart(j + texts.length)) !== null; ) {
+        if (cut === -1 && next.cut) cut = texts.length;
         texts.push(next.at);
         leads.push(next.lead);
       }
@@ -3642,12 +3653,17 @@ function linkReader(lines, codeLines, outside, htmlLines, page = lines) {
       // markdownItCode() reads it, it writes no link of that line, and where
       // it ends the paragraph on a line above the last, as paragraphLead()
       // gives null for the line after it, none of a value that runs on over
-      // that end. paragraphLead() gives null too for a line that goes on
-      // with the paragraph lazily and whose text starts at a >, which
-      // markdown-it may read otherwise than as text, as it describes. In
-      // each, the check reads the targets of the paragraph as commonmark.js
-      // writes them alone.
+      // that end: in both, the check reads the targets of the paragraph as
+      // commonmark.js writes them alone. Otherwise, from the first line that
+      // goes on with the paragraph lazily and whose text starts at a >,
+      // which markdown-it may read otherwise than as text, as
+      // paragraphLead() describes, the check reads what markdown-it writes
+      // no further: the leads from that line on are null, so that
+      // paragraphCodeSpans() reads the target of an href whose value runs
+      // on to one of those lines as commonmark.js writes it alone, and that
+      // of a value that ends above that line as on any other line.
       if (leads.length > 1 && (leads.includes(null) || markdownItCode(l.line, read.containers, block.matched))) leads.fill('');
+      else if (cut !== -1) leads.fill(null, cut);
       // The text of a line of a paragraph from where defined.hidden() says
       // that both renderers hide the rest of the line is none of the
       // paragraph's text: neither writes a link, a code span or raw HTML of
