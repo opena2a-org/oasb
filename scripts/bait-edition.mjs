@@ -24,8 +24,8 @@
 // does not take or two of its options.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { isMain } from './is-main.mjs';
 
 export const RECORD_SCHEMA = 'oasb-bait-run/v1';
 export const EDITION_SCHEMA = 'oasb-bait-edition/v1';
@@ -819,5 +819,4 @@ export function main(argv, out = process.stdout, err = process.stderr) {
   return 2;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) process.exitCode = main(process.argv.slice(2));
+if (isMain(import.meta.url)) process.exitCode = main(process.argv.slice(2));

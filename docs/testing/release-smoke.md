@@ -479,6 +479,21 @@ README's test counts do not include them.
   SKILL.md per neutral id at a reproducible commit that the runner scans and
   its run check passes. Where the Node in use has no zstd, the reader must
   refuse a zstd page with the Node version it needs.
+- `scripts/is-main.test.mjs`: `isMain` (`scripts/is-main.mjs`), which tells
+  a script whether node was started with it, and the six scripts that ask
+  it: `scripts/check-vendor.mjs`, `scripts/check-test-counts.mjs`,
+  `scripts/check-maturity-page.mjs`, `scripts/check-owasp-mapping.mjs`,
+  `scripts/check-documented-commands.mjs` and `scripts/bait-edition.mjs`.
+  It starts each with an argument it does not take: by its own path,
+  through a symbolic link to the repository, through a link to the script,
+  and through the link to the repository under `--preserve-symlinks-main`.
+  Fails when a start by its own path does not exit 1 with the usage, or a
+  start through a link exits or prints otherwise. Also fails when `isMain`
+  is false for the path of its own file through a link to the repository
+  or to the file, or true for another file, for no path or for `-`; when a
+  JavaScript or TypeScript file in `scripts/` or `bin/`, other than a test
+  file and `scripts/is-main.mjs`, names `process.argv[1]`; or when the
+  files there that import `isMain` are not those six.
 
 ## The README checks on every pull request
 

@@ -23,6 +23,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMain } from './is-main.mjs';
 import { SCENARIO_DIRS } from './readme-counts.mjs';
 
 // The OWASP Top 10 for Agentic Applications for 2026, published 2025-12-09:
@@ -203,8 +204,7 @@ export function checkMapping(root) {
   return fail;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
+if (isMain(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) {
     console.log(USAGE);

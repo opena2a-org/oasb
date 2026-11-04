@@ -46,6 +46,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { errorLine } from './check-documented-commands.mjs';
+import { isMain } from './is-main.mjs';
 
 export const VENDOR = 'VENDOR.json';
 export const COPY = 'bin/oasb-1-checklist.json';
@@ -485,5 +486,4 @@ export function main(args) {
   }
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) process.exitCode = main(process.argv.slice(2));
+if (isMain(import.meta.url)) process.exitCode = main(process.argv.slice(2));
