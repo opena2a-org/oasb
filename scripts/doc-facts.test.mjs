@@ -8,7 +8,8 @@
 // benchmark-results-v6.json and src/benchmark/hma-pipeline-adapter.ts does
 // not give the server count BENCHMARK-RESULTS.md withdrew, and that a row of
 // docs/updates.md that starts with a version has a date CHANGELOG.md gives
-// that version.
+// that version, and that REPORT.md names the hackmyagent version
+// package-lock.json installs.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -489,4 +490,17 @@ test('each row of docs/updates.md that starts with a version has a date CHANGELO
   const updates = read('docs/updates.md');
   assert.ok(versionRows(updates).length > 0, 'docs/updates.md has no row whose change starts with a version; update this test with the table');
   assert.deepEqual(misdatedRows(updates, read('CHANGELOG.md')), []);
+});
+
+// REPORT.md ships in the npm package and names the hackmyagent version the
+// lockfile installs; a dependency move that changes package-lock.json must
+// change that sentence with it.
+test('REPORT.md names the hackmyagent version package-lock.json installs', () => {
+  const installed = JSON.parse(read('package-lock.json')).packages['node_modules/hackmyagent']?.version;
+  assert.ok(installed, 'package-lock.json has no node_modules/hackmyagent entry; update this test');
+  const claims = [...flat('REPORT.md').matchAll(/hackmyagent version the lockfile installs, (\d+\.\d+\.\d+)/g)].map((m) => m[1]);
+  assert.ok(claims.length > 0, 'REPORT.md does not say which hackmyagent version the lockfile installs; update this test with the wording');
+  for (const claimed of claims) {
+    assert.equal(claimed, installed, `REPORT.md says the lockfile installs hackmyagent ${claimed}; package-lock.json installs ${installed}`);
+  }
 });

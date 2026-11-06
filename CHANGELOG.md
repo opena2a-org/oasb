@@ -3665,6 +3665,13 @@ table row or a scenario file's header; or other, which says what it changes.
   a link exited 1 with the usage before the change as well.
   `scripts/is-main.test.mjs` starts each of the six through links and
   fails when one exits or prints otherwise than started by its own path.
+- REPORT.md, in its note on what changed since the 2026-03-23 snapshot,
+  names hackmyagent 0.33.2 as the version the lockfile installs, where it
+  named 0.23.8 after the lockfile moved to 0.33.2. On 0.33.2 the arp
+  adapter (arp-guard 0.3.0) declares 19 capabilities, event-correlation
+  among them, as the note says. `scripts/doc-facts.test.mjs` fails when the
+  version REPORT.md says the lockfile installs is not the
+  `node_modules/hackmyagent` version in package-lock.json (#381)
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
