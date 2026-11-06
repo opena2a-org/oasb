@@ -291,10 +291,13 @@ README's test counts do not include them.
   the default or the JSON reporter, when the reference adapter's run does
   not exit 0 with `OASB: <evaluated> of <selected> attack scenarios
   evaluated`, when a run of no scenario file or `vitest list` prints a
-  line, when results that cannot be read do not exit 2, or when a run of
+  line, when results that cannot be read do not exit 2, when a run of
   E2E-003 with a PATH that holds node and `which` alone, and so neither
   `lsof` nor `ss`, does not exit 2 with the not-measured line and its test
-  skipped as inconclusive for want of the tool.
+  skipped as inconclusive for want of the tool, or when a run of E2E-003
+  with an `lsof` (macOS) or `ss` (Linux) first on PATH that waits 1.5 s,
+  past the network monitor's 1000 ms poll, before it runs the real tool
+  does not pass its test and exit 0 with no unhandled error.
 - `scripts/oasb-bin.test.mjs`: the oasb command that
   `npx @opena2a/oasb <ID>` runs (`bin/oasb.mjs`, `bin/run-scenario.mjs`).
   It builds the package into `node_modules/@opena2a/oasb` of a temporary
