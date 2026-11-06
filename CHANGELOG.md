@@ -3706,25 +3706,27 @@ table row or a scenario file's header; or other, which says what it changes.
   `scripts/scenario-floor.test.mjs` runs the file with such a PATH and fails
   unless the run exits 2 with that line and the test is skipped with that
   message.
-- E2E-003 no longer fails outside its test where `lsof` (macOS) or `ss`
-  (Linux) answers slower than the network monitor's 1000 ms poll. The poll
-  that reported the test's connection could end the test before the test's
-  echo server had read the client's write; afterEach then destroyed the
-  client, the echo reached a closed peer, and the reset of the server's
-  socket, which had no `error` listener, was an uncaught error: vitest
-  printed `Vitest caught 1 unhandled error` with `Error: read ECONNRESET`
-  and exited 1 with the test passed, and `node bin/oasb.mjs E2E-003`
-  reported FAIL (the run failed outside a test). On macOS, with an `lsof`
-  first on PATH that waited 1.5 s before it ran the real one, 4 of 5 vitest
-  runs of the file exited 1 so. The echo server's socket now has an `error`
-  listener, as an error of the echo connection is not an event of the
-  product and the verdict rests on the product's event alone: with the same
-  `lsof`, 5 of 5 runs passed and exited 0. Where the monitor sees no
-  connection (an `lsof` and a `netstat` that print nothing), the test still
-  fails with `Timed out after 15000ms waiting for event` and exits 1.
-  `scripts/scenario-floor.test.mjs` runs the file with such a slow tool
-  first on PATH and fails unless its test passes and the run exits 0 with
-  no unhandled error.
+- E2E-003 no longer fails outside its test on macOS where `lsof` answers
+  slower than the network monitor's 1000 ms poll. The poll that reported
+  the test's connection could end the test before the test's echo server
+  had read the client's write; afterEach then destroyed the client, the
+  echo reached a closed peer, and the reset of the server's socket, which
+  had no `error` listener, was an uncaught error: vitest printed
+  `Vitest caught 1 unhandled error` with `Error: read ECONNRESET` and
+  exited 1 with the test passed, and `node bin/oasb.mjs E2E-003` reported
+  FAIL (the run failed outside a test). With an `lsof` first on PATH that
+  waited 1.5 s before it ran the real one, 4 of 5 vitest runs of the file
+  exited 1 so. The echo server's socket now has an `error` listener, as an
+  error of the echo connection is not an event of the product and the
+  verdict rests on the product's event alone: with the same `lsof`, 5 of 5
+  runs passed and exited 0. Where the monitor sees no connection (an
+  `lsof` and a `netstat` that print nothing), the test still fails with
+  `Timed out after 15000ms waiting for event` and exits 1. On Linux, where
+  the monitor polls `ss`, a run of the file with an `ss` that answered as
+  slowly did not fail before this change, so the change alters nothing
+  there. `scripts/scenario-floor.test.mjs` runs the file with such a slow
+  tool first on PATH and fails unless its test passes and the run exits 0
+  with no unhandled error; it catches the regression on macOS alone.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
