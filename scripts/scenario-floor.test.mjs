@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -151,6 +151,43 @@ test('E2E-003 under a PATH that holds neither lsof nor ss is skipped as inconclu
     assert.doesNotMatch(r.stdout, /^SKIP:/m, 'the test printed a SKIP line instead of skipping');
     assert.deepEqual(oasbLines(r.stderr), [notMeasured(1)], `stderr:\n${r.stderr.slice(-2000)}`);
     assert.equal(r.status, 2, `stderr:\n${r.stderr.slice(-2000)}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The tool E2E-003's network monitor polls, every 1000 ms in that test.
+const NETWORK_TOOL = process.platform === 'darwin' ? 'lsof' : 'ss';
+
+/** `text` quoted for a POSIX shell. */
+const shQuote = (text) => `'${text.replaceAll("'", `'\\''`)}'`;
+
+test('E2E-003 with an lsof (macOS) or ss (Linux) that answers slower than the monitor polls passes and exits 0, with no unhandled error', { skip }, (t) => {
+  const real = process.platform === 'win32' ? undefined : onPath(NETWORK_TOOL);
+  if (!real) {
+    t.skip(`${NETWORK_TOOL} is not on PATH, so E2E-003 does not run the monitor here`);
+    return;
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-floor-'));
+  try {
+    // A wrapper first on PATH that waits 1.5 s, past the monitor's 1000 ms
+    // interval, and then runs the real tool. The poll that reports the
+    // test's connection can then end the test before the echo server has
+    // read the client's write: afterEach destroys the client, the echo
+    // reaches a closed peer, and the server's socket is reset.
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    writeFileSync(join(bin, NETWORK_TOOL), `#!/bin/sh\nsleep 1.5\nexec ${shQuote(real)} "$@"\n`, { mode: 0o755 });
+    const out = join(dir, 'report.json');
+    const r = runVitest(['run', ...withDefault(out), E2E_003], null, { PATH: `${bin}${delimiter}${process.env.PATH ?? ''}` });
+    const output = `${r.stdout}\n${r.stderr}`;
+    assert.doesNotMatch(output, /unhandled error/i, `the run caught an unhandled error:\n${output.slice(-3000)}`);
+    assert.ok(existsSync(out), `vitest wrote no JSON report (exit ${r.status}):\n${r.stderr.slice(-2000)}`);
+    const tests = JSON.parse(readFileSync(out, 'utf8')).testResults.flatMap((file) => file.assertionResults);
+    assert.equal(tests.length, 1, `the report holds ${tests.length} tests for ${E2E_003}, not 1`);
+    assert.equal(tests[0].status, 'passed', `${tests[0].fullName}: ${tests[0].status}\n${(tests[0].failureMessages ?? []).join('\n')}`);
+    assert.deepEqual(oasbLines(r.stderr), ['OASB: 1 of 1 attack scenarios evaluated'], `stderr:\n${r.stderr.slice(-2000)}`);
+    assert.equal(r.status, 0, `stderr:\n${r.stderr.slice(-2000)}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
