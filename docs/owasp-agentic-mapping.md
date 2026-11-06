@@ -35,7 +35,7 @@ The agent uses a legitimate tool in an unsafe or unauthorized way.
 | AT-NET-002 | Connection to suspicious host (webhook.site, ngrok) | Network |
 | AT-NET-004 | Allowed host bypass via subdomain | Network |
 | AT-NET-005 | Exfiltration to known destinations | Network |
-| E2E-003 | Live network monitor detects real TCP connections (skipped on every platform) | Network |
+| E2E-003 | Live network monitor detects real TCP connections | Network |
 | E2E-005 | Network interceptor catches a connection before it opens | Network |
 | INT-001 | Internal contact for credentials, then exfiltration to an external host | Integration |
 | INT-002 | MCP tool abuse (path traversal + command injection) | Integration |

@@ -57,7 +57,7 @@ function writeSources(dir) {
 
 // A vitest JSON report of FILES, as the reporter writes it with absolute
 // paths. The skipped test is in the last file under src/e2e, so the tests of
-// E2E-001 pass, as in the suite, where the skipped test is in E2E-003.
+// E2E-001 pass.
 function suite(files = FILES, skipped = 1) {
   const skippedIn = Object.keys(files).findLast(path => path.includes('/e2e/'));
   const testResults = Object.entries(files).map(([path, n]) => ({

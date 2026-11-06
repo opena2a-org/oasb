@@ -3672,6 +3672,20 @@ table row or a scenario file's header; or other, which says what it changes.
   among them, as the note says. `scripts/doc-facts.test.mjs` fails when the
   version REPORT.md says the lockfile installs is not the
   `node_modules/hackmyagent` version in package-lock.json (#381)
+- E2E-003 runs. Its one test was skipped (`it.skip`) on every platform, so a
+  run of the file evaluated no attack scenario, because on Linux it timed
+  out: `ss -tpn state established` (iproute2 6.1.0) prints no State column,
+  and the network monitor of hackmyagent 0.23.8 read the local and peer
+  addresses from the fourth and fifth fields, as if it printed one.
+  hackmyagent 0.33.2, which the lockfile installs, takes the monitor from
+  `@opena2a/aim-sdk` 1.3.1, which finds the columns by the header line of
+  `ss`. In a Debian 12 container (Node.js 20.20.2, iproute2 6.1.0) the test
+  passed in 10 of 10 runs as a user other than root with hackmyagent 0.33.2,
+  and timed out after 15 s waiting for the event with 0.23.8. On macOS,
+  where the monitor polls `lsof`, `node bin/oasb.mjs E2E-003` reports PASS
+  against arp-guard 0.3.0. The rows of E2E-003 in the MITRE ATLAS and OWASP
+  Agentic tables drop their skip marks, and `docs/test-catalog.md` counts
+  439 tests passing and 0 skipped on every platform.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 

@@ -81,8 +81,7 @@ the claims this repository publishes:
    `npm ci`, the tests in `scripts/` (`npm run test:scripts`) run; each file
    is listed under [The tests in `scripts/`](#the-tests-in-scripts).
 2. **Build + full suite.** `npm run build` then the complete vitest run,
-   including E2E. E2E-003 is skipped on every platform (`it.skip`); any
-   failure fails the smoke.
+   including E2E; any failure fails the smoke.
 3. **README count drift guard.** `scripts/check-test-counts.mjs` reads the
    per-file results of the JSON reporter and compares every test count the
    README in the clone and the pages of `README_PAGES` beside it state with
