@@ -2,8 +2,11 @@
 // Proves ARP's NetworkMonitor detects real TCP connections via lsof/ss polling.
 // No event injection — the monitor polls the OS network state directly.
 //
-// NOTE: Requires lsof (macOS) or ss (Linux) to be available.
-// Test skips gracefully if neither tool is present.
+// NOTE: Requires lsof (macOS) or ss (Linux) on PATH. Where the tool of the
+// platform is not, the test is skipped as inconclusive (skipInconclusive in
+// ../harness/filesystem-watch), so a run of the file reports NOT MEASURED and
+// exits 2, as a run whose every test is skipped does, and the README count
+// drift guard reports the file as not measured.
 //
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM06
@@ -15,6 +18,7 @@ import * as net from 'net';
 import * as os from 'os';
 import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
+import { skipInconclusive } from '../harness/filesystem-watch';
 import type { SecurityProductAdapter } from '../harness/adapter';
 
 function hasNetworkTool(): boolean {
@@ -87,10 +91,9 @@ describeWithCapability('network-monitoring', 'E2E-003: Live Network Detection', 
     });
   });
 
-  it('should detect a new outbound TCP connection', { timeout: 20000 }, async () => {
+  it('should detect a new outbound TCP connection', { timeout: 20000 }, async (ctx) => {
     if (!networkAvailable) {
-      console.log('SKIP: lsof/ss not available — network E2E test requires system tools');
-      return;
+      skipInconclusive(ctx, 'inconclusive: lsof (macOS) or ss (Linux) is not on PATH; the test runs the network monitor only where it is');
     }
 
     clientSocket = net.connect({ host: '127.0.0.1', port: serverPort });

@@ -11,9 +11,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,9 +35,12 @@ const notMeasured = (selected) => `OASB: not measured (0 of ${selected} attack s
 /** The lines of `text` that start with "OASB:". */
 const oasbLines = (text) => text.split('\n').filter((line) => line.startsWith('OASB:'));
 
-/** Runs vitest with `args`, with OASB_ADAPTER=adapter, or unset when adapter is null. */
-function runVitest(args, adapter) {
-  const env = { ...process.env };
+/**
+ * Runs vitest with `args`, with OASB_ADAPTER=adapter, or unset when adapter is
+ * null, and with the variables of `vars` set over this process's environment.
+ */
+function runVitest(args, adapter, vars = {}) {
+  const env = { ...process.env, ...vars };
   delete env.OASB_ADAPTER;
   if (adapter) env.OASB_ADAPTER = adapter;
   return spawnSync(process.execPath, [vitest, ...args], { cwd: repo, encoding: 'utf8', env });
@@ -103,6 +106,54 @@ test('collecting a scenario file without running it (vitest list) prints no OASB
   const r = runVitest(['list', SCENARIO_FILE], NO_CAPABILITY_ADAPTER);
   assert.deepEqual(oasbLines(r.stdout + r.stderr), []);
   assert.equal(r.status, 0, `stderr:\n${r.stderr.slice(-2000)}`);
+});
+
+// E2E-003 runs the network monitor only where `which` finds lsof (macOS) or ss
+// (Linux) on PATH; where it does not, the test skips itself as inconclusive,
+// and the run has evaluated nothing.
+const E2E_003 = 'src/e2e/E2E-003.live-network-detection.test.ts';
+const E2E_003_SKIP = /^inconclusive: lsof \(macOS\) or ss \(Linux\) is not on PATH/;
+
+/** The first executable named `name` in a directory of this process's PATH. */
+function onPath(name) {
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (!dir) continue;
+    const file = join(dir, name);
+    try {
+      accessSync(file, constants.X_OK);
+      return file;
+    } catch {
+      // not in this directory
+    }
+  }
+  return undefined;
+}
+
+test('E2E-003 under a PATH that holds neither lsof nor ss is skipped as inconclusive, so the run says not measured and exits 2', { skip }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scenario-floor-'));
+  try {
+    // A PATH of one directory, holding node for vitest's workers and `which`
+    // for the test's check of the tool, which then finds neither tool. Without
+    // a `which` on this process's PATH, the check fails for want of it, with
+    // the same outcome.
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    symlinkSync(process.execPath, join(bin, 'node'));
+    const which = onPath('which');
+    if (which) symlinkSync(which, join(bin, 'which'));
+    const out = join(dir, 'report.json');
+    const r = runVitest(['run', ...withDefault(out), E2E_003], null, { PATH: bin });
+    assert.ok(existsSync(out), `vitest wrote no JSON report (exit ${r.status}):\n${r.stderr.slice(-2000)}`);
+    const tests = JSON.parse(readFileSync(out, 'utf8')).testResults.flatMap((file) => file.assertionResults);
+    assert.equal(tests.length, 1, `the report holds ${tests.length} tests for ${E2E_003}, not 1`);
+    assert.equal(tests[0].status, 'skipped', `${tests[0].fullName}: ${tests[0].status}`);
+    assert.match(String(tests[0].meta?.inconclusive), E2E_003_SKIP, 'the test was not skipped as inconclusive for want of the tool');
+    assert.doesNotMatch(r.stdout, /^SKIP:/m, 'the test printed a SKIP line instead of skipping');
+    assert.deepEqual(oasbLines(r.stderr), [notMeasured(1)], `stderr:\n${r.stderr.slice(-2000)}`);
+    assert.equal(r.status, 2, `stderr:\n${r.stderr.slice(-2000)}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /**

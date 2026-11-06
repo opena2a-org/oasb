@@ -107,9 +107,12 @@ the claims this repository publishes:
    Where Node.js has no recursive `fs.watch` (Linux before 19.1.0), the
    harness cannot open its watcher, every E2E-001 case is skipped so, and the
    guard fails that way on every run: run the smoke on a Node.js that has
-   one. A statement it cannot find fails too, so a wording change has to
-   update `STATEMENTS` in `scripts/readme-counts.mjs`, the one list both
-   README checks read. Its own tests (`npm run test:scripts`) run after
+   one. E2E-003 is skipped so where `lsof` (macOS) or `ss` (Linux) is not
+   on PATH, and the guard names its file as not measured: run the smoke
+   where the tool is. A statement it cannot find fails too, so a wording
+   change has to update `STATEMENTS` in `scripts/readme-counts.mjs`, the
+   one list both README checks read. Its own tests (`npm run test:scripts`)
+   run after
    `npm ci`. Any mismatch fails the smoke. If you
    add or remove tests, update the counts in the same change or this gate
    blocks the release - that is the point. Committing a run under `results/`
@@ -288,7 +291,10 @@ README's test counts do not include them.
   the default or the JSON reporter, when the reference adapter's run does
   not exit 0 with `OASB: <evaluated> of <selected> attack scenarios
   evaluated`, when a run of no scenario file or `vitest list` prints a
-  line, or when results that cannot be read do not exit 2.
+  line, when results that cannot be read do not exit 2, or when a run of
+  E2E-003 with a PATH that holds node and `which` alone, and so neither
+  `lsof` nor `ss`, does not exit 2 with the not-measured line and its test
+  skipped as inconclusive for want of the tool.
 - `scripts/oasb-bin.test.mjs`: the oasb command that
   `npx @opena2a/oasb <ID>` runs (`bin/oasb.mjs`, `bin/run-scenario.mjs`).
   It builds the package into `node_modules/@opena2a/oasb` of a temporary

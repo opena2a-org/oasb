@@ -3685,7 +3685,27 @@ table row or a scenario file's header; or other, which says what it changes.
   where the monitor polls `lsof`, `node bin/oasb.mjs E2E-003` reports PASS
   against arp-guard 0.3.0. The rows of E2E-003 in the MITRE ATLAS and OWASP
   Agentic tables drop their skip marks, and `docs/test-catalog.md` counts
-  439 tests passing and 0 skipped on every platform.
+  439 tests passing and 0 skipped on every platform where `lsof` (macOS) or
+  `ss` (Linux) is on PATH.
+- E2E-003 is skipped as inconclusive where `lsof` (macOS) or `ss` (Linux) is
+  not on PATH, so a run of the file there reports NOT MEASURED and exits 2,
+  as it did while the test was skipped on every platform. With `it.skip`
+  removed, the test returned after printing `SKIP: lsof/ss not available`
+  where `which` found no tool, and vitest recorded it as passed: with a PATH
+  that held node and `which` alone, a vitest run of the file printed
+  `OASB: 1 of 1 attack scenarios evaluated` and exited 0, and
+  `node bin/oasb.mjs E2E-003` printed `PASS (1 of 1 test passed)` and exited
+  0. The test now calls `skipInconclusive` (`src/harness/filesystem-watch.ts`)
+  with a message that names the tools, as E2E-001 does for a case the host
+  delivered no file event for: the same vitest run prints
+  `OASB: not measured (0 of 1 attack scenarios evaluated)` and exits 2, the
+  command reports `NOT MEASURED (0 of 1 test evaluated)` and exits 2, and
+  `scripts/check-test-counts.mjs` counts the skip with the passing tests and
+  names the file as not measured. `docs/test-catalog.md` says so, and limits
+  its 0 skipped on every platform to hosts where the tool is on PATH.
+  `scripts/scenario-floor.test.mjs` runs the file with such a PATH and fails
+  unless the run exits 2 with that line and the test is skipped with that
+  message.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
