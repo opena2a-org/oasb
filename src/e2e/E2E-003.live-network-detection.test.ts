@@ -55,10 +55,10 @@ describeWithCapability('network-monitoring', 'E2E-003: Live Network Detection', 
       // The test ends when the monitor reports the connection, and afterEach
       // then destroys the client. Where that poll ran before this socket read
       // the client's write, the echo reaches a closed peer, which answers with
-      // a reset, and the next read here fails with ECONNRESET. An error of the
-      // echo connection is not an event of the product, and the verdict rests
-      // on the product's event alone, so it is not left to fail the run as an
-      // uncaught error.
+      // a reset; on macOS the next read here then fails with ECONNRESET. An
+      // error of the echo connection is not an event of the product, and the
+      // verdict rests on the product's event alone, so it is not left to fail
+      // the run as an uncaught error.
       socket.on('error', () => {});
     });
 
