@@ -12,7 +12,7 @@ Of the 223 tests across 47 scenario files, 166 tests in 33 files map to 15 uniqu
 |-----------|----|-------|
 | Command and Scripting Interpreter | AML.T0050 | AT-PROC-001/002, E2E-002/004 |
 | Escape to Host | AML.T0105 | AT-PROC-004 |
-| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001/002/004/005, E2E-005, E2E-003 (skipped) |
+| Exfiltration via Cyber Means | AML.T0025 | AT-NET-001/002/004/005, E2E-003/005 |
 | Agentic Resource Consumption | AML.T0034.002 | AT-PROC-003, AT-NET-003, AT-FS-004, AT-INT-004 |
 | Unsecured Credentials | AML.T0055 | AT-FS-001/003, E2E-001/006 |
 | Data from Local System | AML.T0037 | AT-FS-002 |
@@ -66,7 +66,7 @@ Data exfiltration over conventional network channels.
 | AT-NET-002 | Connection to known-bad host (webhook.site, ngrok) |
 | AT-NET-004 | Allowed-host bypass via subdomain matching |
 | AT-NET-005 | Exfiltration destination detection (transfer.sh, requestbin) |
-| E2E-003 (skipped) | `lsof` / `ss` polling detects outbound TCP. Skipped on every platform (`it.skip`) until the `ss` check sees the connection on Linux CI, so it adds no coverage yet |
+| E2E-003 | `lsof` (macOS) or `ss` (Linux) polling detects outbound TCP |
 | E2E-005 | `net.Socket.connect` intercepted before connection |
 
 ### AML.T0055 - Unsecured Credentials

@@ -29,20 +29,20 @@ Counts below are the live test totals (`npm test`); each maps to a source direct
 | Scoring-engine unit tests | 34 | `src/benchmark` | Pooled metrics, tier/compliance assignment, Cohen's Kappa, leaderboard, NanoMind adapter names, analyzer calls of the deprecated AST adapter, the scanner root the AST, pipeline and model-only adapters scan on and the version an adapter reports after a root change |
 | Pinned benchmark harness tests | 118 | `src/benchmark/pinned` | Pin file checks, refusal of unpinned or changed inputs, results never overwritten |
 | Adapter tests | 64 | `src/harness` | `OASB_ADAPTER` module paths: relative paths resolve from the working directory, a module that assigns its class to `module.exports` loads, and a value that selects no adapter, a case variant of a built-in name or a module that exports no class stops the run with one line that names what it accepts; the rebuff adapter runs the rebuff package's heuristic, and a scan fails with the reason when the package cannot be loaded; a missing rebuff package fails the capability check a scenario file makes while it is collected, and a missing `typescript` fails each scan instead; `waitForFilesystemWatch`, which E2E-001 calls before each case, writes probe files until the watcher reports one, within the time the hook has left; the harness's own control watcher and the rules that read an E2E-001 case against it: a product miss, read when the 5 s window ends (a failure when the host delivered the event, inconclusive when it delivered none), and a product that reported no probe file (the case makes its write when the watcher saw one, and is inconclusive when it saw none); the inconclusive skip of a case where Node.js has no recursive `fs.watch`, the watcher's own error in an inconclusive message, the mark of a case that got the product's own event, the detection predicates, which pass over an event without data, and the end of a case, which closes the watcher and removes the directory also when `stop()` rejects, and passes that rejection on |
-| **`npm test` total** | **439** | (438 pass, 1 skipped on every platform) | |
+| **`npm test` total** | **439** | (439 pass, 0 skipped on every platform) | |
 
 ### Counts
 
-> **Counts.** `npm test` runs **439 tests** (438 passing, 1 skipped on every platform: the live network-detection E2E, disabled pending a reliable cross-platform check - see `src/e2e/E2E-003`): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **34 scoring-engine unit tests**, **118 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "438 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
+> **Counts.** `npm test` runs **439 tests** (439 passing, 0 skipped on every platform): **223 attack scenarios** (atomic, integration, baseline, E2E) plus **34 scoring-engine unit tests**, **118 pinned benchmark harness tests** and the adapter tests in `src/harness`. "223" is the scenario count; "439 passing" is the full `npm test` total. Both are reproducible from a clean checkout - see [What Gets Tested](#what-gets-tested). Before the suite, `npm test` runs the tests in `scripts/` (`npm run test:scripts`, each file listed in [the release smoke guide](testing/release-smoke.md#the-tests-in-scripts)), which these counts do not include.
 >
-> **E2E-001 skips.** Besides that one test, E2E-001 cases are skipped only when the harness's own watcher recorded no file event: none for the case's file within its 5 s window, or none for any probe file during the readiness wait of a product that reported none. Each such skip prints the wait, what that watcher saw, the error it reported if it reported one, and the measured load where the platform measures one. Where Node.js has no recursive `fs.watch`, as on Linux before Node.js 19.1.0, that watcher cannot be opened and every E2E-001 case is skipped as inconclusive with a message that says so, which the release smoke reports as the file not measured.
+> **E2E-001 skips.** E2E-001 cases are skipped only when the harness's own watcher recorded no file event: none for the case's file within its 5 s window, or none for any probe file during the readiness wait of a product that reported none. Each such skip prints the wait, what that watcher saw, the error it reported if it reported one, and the measured load where the platform measures one. Where Node.js has no recursive `fs.watch`, as on Linux before Node.js 19.1.0, that watcher cannot be opened and every E2E-001 case is skipped as inconclusive with a message that says so, which the release smoke reports as the file not measured.
 
 ### Run the suite
 
 `npm test` runs the tests in `scripts/` and then the whole suite: every attack scenario, plus the scoring-engine, pinned benchmark harness and adapter tests. The [test catalog](#what-gets-tested) has the totals, which `npm run check:readme` holds to the suite, and a command for each group.
 
 ```bash
-npm test                    # Full suite: 439 tests (438 pass, 1 skip)
+npm test                    # Full suite: 439 tests (439 pass, 0 skip)
 ```
 
 Run one group at a time:
@@ -51,7 +51,7 @@ Run one group at a time:
 npm run test:atomic         # 144 atomic detection tests (no external deps)
 npm run test:integration    # 44 tests across 8 integration scenarios
 npm run test:baseline       # 12 false-positive / baseline tests
-npm run test:e2e            # 23 E2E tests (real OS detection; E2E-003 currently skipped)
+npm run test:e2e            # 23 E2E tests (real OS detection)
 ```
 
 `vitest.config.ts` puts E2E-001 (live filesystem detection) in a project of its own, `live-filesystem`, in a later `sequence.groupOrder` than every other test file, and vitest starts the files of a group when every file of the group before it has finished. So in a run of the suite or of `npm run test:e2e`, no other test file runs beside E2E-001 while its cases wait for file events, and its lines print under the project name `live-filesystem`.
@@ -190,7 +190,7 @@ Real OS-level detection - no mocks, no event injection. These tests spawn real p
 |------|---------|-------------------------------|
 | E2E-001 | 5000ms window | fs.watch detects .env, .ssh, .bashrc, .npmrc writes; a case is skipped as inconclusive when the host delivered no file event to the harness's own watcher: none for the path within the window, or none for any probe file before the write when the product reported none; where Node.js has no recursive `fs.watch` (Linux before 19.1.0), every case is skipped as inconclusive with a message that says so; a filesystem event that has no `data` is not read as the report of a write, and the case goes on waiting |
 | E2E-002 | ~1000ms | ps polling detects child processes, suspicious binaries |
-| E2E-003 | ~1000ms | Outbound TCP detection (currently skipped pending a reliable cross-platform check) |
+| E2E-003 | ~1000ms | Outbound TCP detection |
 
 </details>
 
