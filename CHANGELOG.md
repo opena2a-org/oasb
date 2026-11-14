@@ -1600,6 +1600,14 @@ table row or a scenario file's header; or other, which says what it changes.
   or date, other than an npm, npx, `uses:` or `rev:` line in a code block,
   or a test or technique count in those three forms, and checks the moved
   sentence on its new page.
+- The README's Quick Start capture starts at its first test line and ends at
+  its `Tests` line. It opened with a `...` line for the RUN banner and closed
+  with one for the lines after the `Tests` line, the verdict line among them;
+  `docs/captures/quick-start.txt` keeps those lines. Its one other `...` line
+  stands between two lines it shows, and the sentence under it calls the
+  verdict the last line the command prints. `scripts/doc-facts.test.mjs`
+  fails when the first or last line that is not blank, in a code block under
+  a "What `<command>` prints" line of the README, is `...`.
 
 ### Fixed
 

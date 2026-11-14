@@ -3,7 +3,8 @@
 // docs/how-it-works.md and docs/owasp-agentic-mapping.md match the corpus,
 // scripts, adapters and scenario files they describe, that docs/demo.tape
 // states no count and writes the results file its report step reads, that
-// the README states no version, date or typed test count, that
+// the README states no version, date or typed test count, that its capture
+// starts and ends on a line the command prints, that
 // docs/oasb-demo.gif is the recording of that tape docs/captures/demo.json
 // records, that the verdict methodology in scripts/run-benchmark-v2.ts,
 // benchmark-results-v6.json and src/benchmark/hma-pipeline-adapter.ts does
@@ -240,6 +241,66 @@ test('the README states no version, date or typed test count', () => {
     staleLines(read('README.md')),
     [],
     'state it on the page the README links for it, and link that page; only a pinned npm, npx, uses: or rev: line in a code block may name a version',
+  );
+});
+
+// The line above a capture, which names the command it is of, as in
+// What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](...)):
+// and a line of a capture that marks lines left out, as
+// scripts/check-readme.mjs reads both.
+const CAPTURE_INTRO = /^What `[^`]+` prints\b/;
+const ELISION = /^\s*\.\.\.\s*$/;
+
+// The elision lines ("...") that open or close a capture in `text`, a code
+// block under a line that starts "What `<command>` prints", each as
+// "line <n>: ...". A capture is an excerpt: it starts below the lines it
+// leaves out at the top, such as the RUN banner that names the vitest
+// version, and ends above the lines it leaves out at the bottom, such as
+// the verdict line that names the version of the reference product, so an
+// elision line stands only between two lines the capture shows.
+const edgeElisions = (text) => {
+  const lines = text.split('\n');
+  const found = [];
+  // The nearest line above, outside a code block, that is not blank.
+  let above = '';
+  for (let i = 0; i < lines.length; i++) {
+    if (!FENCE.test(lines[i])) {
+      if (lines[i].trim()) above = lines[i].trim();
+      continue;
+    }
+    let end = i + 1;
+    while (end < lines.length && !FENCE.test(lines[end])) end++;
+    if (CAPTURE_INTRO.test(above)) {
+      const shown = [];
+      for (let n = i + 1; n < end; n++) if (lines[n].trim()) shown.push(n);
+      for (const n of new Set([shown[0], shown[shown.length - 1]])) {
+        if (n !== undefined && ELISION.test(lines[n])) found.push(`line ${n + 1}: ${lines[n].trim()}`);
+      }
+    }
+    above = '';
+    i = end;
+  }
+  return found;
+};
+
+test('the capture check finds a "..." line that opens or closes a capture, and passes one between two lines the capture shows', () => {
+  const capture = (...shown) =>
+    ['What `npx @opena2a/oasb AT-AI-001` prints, trimmed:', '', '```text', ...shown, '```'].join('\n');
+  assert.deepEqual(edgeElisions(capture('...', ' ✓ a', '      Tests  1 passed (1)')), ['line 4: ...']);
+  assert.deepEqual(edgeElisions(capture('', '...', ' ✓ a', '      Tests  1 passed (1)')), ['line 5: ...']);
+  assert.deepEqual(edgeElisions(capture(' ✓ a', '      Tests  1 passed (1)', '...')), ['line 6: ...']);
+  assert.deepEqual(edgeElisions(capture('...', ' ✓ a', '...')), ['line 4: ...', 'line 6: ...']);
+  assert.deepEqual(edgeElisions(capture(' ✓ a', '...', ' ✓ b', '', '      Tests  2 passed (2)')), []);
+  // A code block under another line is not a capture.
+  assert.deepEqual(edgeElisions('To run it:\n\n```text\n...\nnpm test\n...\n```'), []);
+  assert.deepEqual(edgeElisions(`${capture(' ✓ a')}\n\n\`\`\`text\n...\n\`\`\``), []);
+});
+
+test('the README capture starts and ends on a line the command prints, with a "..." line only between two lines it shows', () => {
+  assert.deepEqual(
+    edgeElisions(read('README.md')),
+    [],
+    'start the capture below the lines it leaves out at the top and end it above the lines it leaves out at the bottom; docs/captures/quick-start.txt keeps them',
   );
 });
 

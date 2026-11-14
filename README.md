@@ -21,7 +21,6 @@ npx @opena2a/oasb AT-AI-001   # one scenario file: prompt input scanning, agains
 What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/quick-start.txt)):
 
 ```text
-...
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect instruction override (PI-001) 4ms
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect delimiter escape (PI-002) 1ms
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect tag injection (PI-003) 0ms
@@ -31,10 +30,9 @@ What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/
 
  Test Files  1 passed (1)
       Tests  11 passed (11)
-...
 ```
 
-The last line, left out above, is the verdict for the product the adapter declares: PASS, FAIL, or NOT MEASURED when every test of the file was skipped. The command exits 0 on PASS, 1 on FAIL and 2 on NOT MEASURED; `npx @opena2a/oasb --help` lists the scenario IDs.
+The last line the command prints, left out above, is the verdict for the product the adapter declares: PASS, FAIL, or NOT MEASURED when every test of the file was skipped. The command exits 0 on PASS, 1 on FAIL and 2 on NOT MEASURED; `npx @opena2a/oasb --help` lists the scenario IDs.
 
 To run the whole suite, or to change it, work from a clone:
 
