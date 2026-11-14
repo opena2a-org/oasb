@@ -1603,11 +1603,19 @@ table row or a scenario file's header; or other, which says what it changes.
 - The README's Quick Start capture starts at its first test line and ends at
   its `Tests` line. It opened with a `...` line for the RUN banner and closed
   with one for the lines after the `Tests` line, the verdict line among them;
-  `docs/captures/quick-start.txt` keeps those lines. Its one other `...` line
-  stands between two lines it shows, and the sentence under it calls the
-  verdict the last line the command prints. `scripts/doc-facts.test.mjs`
-  fails when the first or last line that is not blank, in a code block under
-  a "What `<command>` prints" line of the README, is `...`.
+  `docs/captures/quick-start.txt` keeps the lines after the `Tests` line. Its
+  one other `...` line stands between two lines it shows, and the sentence
+  under it calls the verdict the last line the command prints.
+  `scripts/doc-facts.test.mjs` fails when the first or last line that is not
+  blank, in a code block under a "What `<command>` prints" line of the
+  README, is `...`. Its failure message says that the full output,
+  `docs/captures/quick-start.txt`, keeps the lines after the `Tests` line,
+  and that the RUN banner is elided there too, as its record,
+  `docs/captures/quick-start.json`, lists. The same file fails when that
+  message or this entry does not say that the full output keeps the lines
+  after the `Tests` line, when the full output has a `...` line after its
+  `Tests` line, or when the message does not name as elided each line the
+  record lists.
 
 ### Fixed
 

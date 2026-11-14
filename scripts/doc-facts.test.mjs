@@ -4,8 +4,10 @@
 // scripts, adapters and scenario files they describe, that docs/demo.tape
 // states no count and writes the results file its report step reads, that
 // the README states no version, date or typed test count, that its capture
-// starts and ends on a line the command prints, that
-// docs/oasb-demo.gif is the recording of that tape docs/captures/demo.json
+// starts and ends on a line the command prints, that the message of that
+// check and the 0.4.1 entry on it say docs/captures/quick-start.txt keeps
+// the lines after its `Tests` line, and the message which lines it elides,
+// that docs/oasb-demo.gif is the recording of that tape docs/captures/demo.json
 // records, that the verdict methodology in scripts/run-benchmark-v2.ts,
 // benchmark-results-v6.json and src/benchmark/hma-pipeline-adapter.ts does
 // not give the server count BENCHMARK-RESULTS.md withdrew, and that a row of
@@ -296,11 +298,82 @@ test('the capture check finds a "..." line that opens or closes a capture, and p
   assert.deepEqual(edgeElisions(`${capture(' ✓ a')}\n\n\`\`\`text\n...\n\`\`\``), []);
 });
 
-test('the README capture starts and ends on a line the command prints, with a "..." line only between two lines it shows', () => {
+// The full output the README capture links, and the record of the run that
+// printed it. Under `elided`, the record gives the number of a line of the
+// full output that is "..." in place of a line the command printed, and
+// what that line was, as "the RUN banner, which names the vitest version ...".
+const QUICK_START_OUTPUT = 'docs/captures/quick-start.txt';
+const QUICK_START_RECORD = 'docs/captures/quick-start.json';
+// The `Tests` summary line of a vitest run, as "      Tests  11 passed (11)".
+const TESTS_LINE = /^\s*Tests\s/;
+// The lines the README capture leaves out at the bottom, which the full
+// output keeps, as the capture check's message and CHANGELOG.md name them.
+const KEPT = 'the lines after the `Tests` line';
+
+// The message of the README capture check: where to start and end the
+// capture, that the full output keeps the lines the capture leaves out at
+// the bottom, and that it elides the RUN banner, which the capture leaves
+// out at the top.
+const CAPTURE_FIX =
+  'start the capture below the lines it leaves out at the top and end it above the lines it leaves out at the bottom; ' +
+  'docs/captures/quick-start.txt keeps the lines after the `Tests` line, and the RUN banner is elided there too, as docs/captures/quick-start.json records';
+
+// Checks that the full output keeps KEPT, the lines after its `Tests` line,
+// and that each line its record lists as elided is "...". Returns what the
+// record says each of those lines was, up to the first comma, such as
+// "the RUN banner".
+const quickStartElided = () => {
+  const lines = read(QUICK_START_OUTPUT).split('\n');
+  const tests = lines.findIndex((line) => TESTS_LINE.test(line));
+  assert.ok(tests >= 0, `${QUICK_START_OUTPUT} has no \`Tests\` line; update the capture check's message and this test`);
+  const after = lines.slice(tests + 1).filter((line) => line.trim());
+  assert.ok(after.length > 0, `${QUICK_START_OUTPUT} has no line after its \`Tests\` line; update the capture check's message and this test`);
   assert.deepEqual(
-    edgeElisions(read('README.md')),
+    after.filter((line) => ELISION.test(line)),
     [],
-    'start the capture below the lines it leaves out at the top and end it above the lines it leaves out at the bottom; docs/captures/quick-start.txt keeps them',
+    `${QUICK_START_OUTPUT} has a "..." line after its \`Tests\` line, so it does not keep ${KEPT}; update the capture check's message and this test`,
+  );
+  const { elided = [] } = JSON.parse(read(QUICK_START_RECORD));
+  for (const { line } of elided) {
+    assert.match(lines[line - 1] ?? '', ELISION, `${QUICK_START_RECORD} lists line ${line} of ${QUICK_START_OUTPUT} as elided, but that line is not "..."`);
+  }
+  return elided.map(({ was }) => was.split(',')[0]);
+};
+
+test('the README capture starts and ends on a line the command prints, with a "..." line only between two lines it shows', () => {
+  assert.deepEqual(edgeElisions(read('README.md')), [], CAPTURE_FIX);
+});
+
+test("the capture check's message says docs/captures/quick-start.txt keeps the lines after its Tests line and elides the lines its record lists", () => {
+  const elided = quickStartElided();
+  assert.ok(
+    CAPTURE_FIX.includes(`${QUICK_START_OUTPUT} keeps ${KEPT}`),
+    `the message does not say that ${QUICK_START_OUTPUT} keeps ${KEPT}: ${CAPTURE_FIX}`,
+  );
+  // The lines the message names as elided, each as "<name> is elided there".
+  const said = [...CAPTURE_FIX.matchAll(/\b(the [\w ]+?) is elided there\b/g)].map(([, name]) => name);
+  assert.deepEqual(said, elided, `the lines the message names as elided in ${QUICK_START_OUTPUT} are not the ones ${QUICK_START_RECORD} lists: ${CAPTURE_FIX}`);
+});
+
+// The 0.4.1 entry on the README capture says that the capture opened with a
+// "..." line for the RUN banner and closed with one for the lines after the
+// `Tests` line, and says which of the lines those two stood for the full
+// output keeps.
+test('the 0.4.1 entry on the Quick Start capture says docs/captures/quick-start.txt keeps the lines after the Tests line', () => {
+  const elided = quickStartElided();
+  const entry = read('CHANGELOG.md').split(/^## /m).find((s) => s.startsWith('0.4.1 '))?.replace(/\s+/g, ' ');
+  assert.ok(entry, 'CHANGELOG.md has no 0.4.1 section');
+  const claims = [...entry.matchAll(/a `\.\.\.` line for the RUN banner [^.;]*; `docs\/captures\/quick-start\.txt` keeps ([^.]+)\./g)];
+  assert.equal(
+    claims.length,
+    1,
+    `the 0.4.1 section of CHANGELOG.md does not say once which lines ${QUICK_START_OUTPUT} keeps of those the capture's first and last "..." lines stood for; update this test with the wording`,
+  );
+  const [[claim, kept]] = claims;
+  assert.equal(
+    kept,
+    KEPT,
+    `CHANGELOG.md says "${claim}", where ${QUICK_START_OUTPUT} keeps ${KEPT} and elides ${elided.join(' and ')}; name the lines it keeps`,
   );
 });
 
