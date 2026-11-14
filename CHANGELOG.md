@@ -1585,6 +1585,21 @@ table row or a scenario file's header; or other, which says what it changes.
   module, with `require()`. On Node.js 20.18.3 both fail with
   `ERR_REQUIRE_ESM`. vite 7.3.6, which the lockfile installs for vitest
   3.2.7, declares the same range.
+- The README names no version or date, and no count written as `N tests`,
+  `tests-N` or `N%20techniques`. Its Quick Start capture leaves out the
+  verdict line, which names the reference product's version and a test
+  count; the text under the capture says what that line reports, and
+  `docs/captures/quick-start.txt` keeps it. The README calls `REPORT.md`
+  an earlier, dated run in place of giving its date, and the library
+  example's `scannerVersion` is `'example'`, as its dataset and sample
+  versions are. The sentence that names the DVAA, hackmyagent and
+  opena2a-cli versions on which only the `hackmyagent` commands exited
+  non-zero on a Not Passing rating moved, as written, to the Usage via
+  OpenA2A CLI section of `docs/how-it-works.md`, which the README links.
+  `scripts/doc-facts.test.mjs` fails when a README line names a version
+  or date, other than an npm, npx, `uses:` or `rev:` line in a code block,
+  or a test or technique count in those three forms, and checks the moved
+  sentence on its new page.
 
 ### Fixed
 

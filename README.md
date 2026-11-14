@@ -32,10 +32,9 @@ What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/
  Test Files  1 passed (1)
       Tests  11 passed (11)
 ...
-OASB AT-AI-001 against arp-guard 0.3.0: PASS (11 of 11 tests passed)
 ```
 
-The last line is the verdict. The command exits 0 on PASS, 1 on FAIL and 2 on NOT MEASURED, when every test of the file was skipped; `npx @opena2a/oasb --help` lists the scenario IDs.
+The last line, left out above, is the verdict for the product the adapter declares: PASS, FAIL, or NOT MEASURED when every test of the file was skipped. The command exits 0 on PASS, 1 on FAIL and 2 on NOT MEASURED; `npx @opena2a/oasb --help` lists the scenario IDs.
 
 To run the whole suite, or to change it, work from a clone:
 
@@ -71,7 +70,7 @@ npx vitest run --reporter=json --outputFile=test-results.json   # the suite, wit
 npm run report -- test-results.json                             # writes REPORT.generated.md, the scorecard
 ```
 
-[REPORT.md](REPORT.md) is the 2026-03-23 run kept as recorded, not the output of this command. The [test catalog](docs/test-catalog.md#run-the-suite) says what the scorecard holds.
+[REPORT.md](REPORT.md) is an earlier run, dated and kept as recorded, not the output of this command. The [test catalog](docs/test-catalog.md#run-the-suite) says what the scorecard holds.
 
 ## Use as a library
 
@@ -100,7 +99,7 @@ const sample = (id: string): benchmark.BenchmarkSample => ({
 });
 const entry = benchmark.scoreSubmission(
   {
-    scannerId: 'my-scanner', scannerName: 'My scanner', scannerVersion: '1.0.0',
+    scannerId: 'my-scanner', scannerName: 'My scanner', scannerVersion: 'example',
     submittedAt: new Date().toISOString(), datasetVersion: 'example',
     results: [
       { sampleId: 'm1', verdict: 'malicious' },
@@ -130,7 +129,7 @@ hackmyagent secure ./my-agent -b oasb-1                 # OASB-1 controls at lev
 hackmyagent secure ./my-agent -b oasb-1 --fail-below 80 # also exit 1 below 80% compliance, for CI
 ```
 
-Of the commands above, only the `hackmyagent` ones exit non-zero on a Not Passing rating, so use one of them for a CI step that should fail on that rating. On a copy of [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent) 0.9.2 that both CLIs rate Not Passing, `hackmyagent secure -b oasb-1` (hackmyagent 0.33.2) exits 1, and `opena2a benchmark` (opena2a-cli 0.10.13) prints the rating and exits 0, also with `--ci`.
+Of the commands above, only the `hackmyagent` ones exit non-zero on a Not Passing rating, so use one of them for a CI step that should fail on that rating. [How OASB works](docs/how-it-works.md#usage-via-opena2a-cli) records the run that shows it and the versions it ran on.
 
 Both score only what they could evaluate. The rest are listed as not evaluated (OpenA2A CLI) or unverified (HackMyAgent), not counted as passing.
 

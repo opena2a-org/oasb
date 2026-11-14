@@ -3,6 +3,7 @@
 // docs/how-it-works.md and docs/owasp-agentic-mapping.md match the corpus,
 // scripts, adapters and scenario files they describe, that docs/demo.tape
 // states no count and writes the results file its report step reads, that
+// the README states no version, date or typed test count, that
 // docs/oasb-demo.gif is the recording of that tape docs/captures/demo.json
 // records, that the verdict methodology in scripts/run-benchmark-v2.ts,
 // benchmark-results-v6.json and src/benchmark/hma-pipeline-adapter.ts does
@@ -134,28 +135,112 @@ for (const doc of ['README.md', 'docs/how-it-works.md']) {
   });
 }
 
-// Of the README's OASB-1 commands, only the hackmyagent ones exit non-zero on
-// a Not Passing rating: on a copy of DVAA 0.9.2 that both CLIs rate Not
-// Passing, `hackmyagent secure -b oasb-1` of hackmyagent 0.33.2 exits 1, and
-// `opena2a benchmark` of opena2a-cli 0.10.13 exits 0, also with --ci. When
-// opena2a benchmark gains a flag that exits non-zero on the rating, update
-// the README and this test.
-test('the README says which of its OASB-1 commands exit non-zero on a Not Passing rating', () => {
-  const section = read('README.md')
+// The "## Usage via OpenA2A CLI" section of `doc`, on single-spaced text, or
+// undefined when `doc` has none.
+const usageSection = (doc) =>
+  read(doc)
     .split(/^## /m)
     .find((s) => s.startsWith('Usage via OpenA2A CLI\n'))
     ?.replace(/\s+/g, ' ');
+
+// Of the README's OASB-1 commands, only the hackmyagent ones exit non-zero on
+// a Not Passing rating: on a copy of DVAA 0.9.2 that both CLIs rate Not
+// Passing, `hackmyagent secure -b oasb-1` of hackmyagent 0.33.2 exits 1, and
+// `opena2a benchmark` of opena2a-cli 0.10.13 exits 0, also with --ci. The
+// README says which commands exit non-zero and links docs/how-it-works.md,
+// which took the sentence that names the run and its versions. When
+// opena2a benchmark gains a flag that exits non-zero on the rating, update
+// both pages and these tests.
+test('the README says which of its OASB-1 commands exit non-zero on a Not Passing rating', () => {
+  const section = usageSection('README.md');
   assert.ok(section, 'the README has no Usage via OpenA2A CLI section; update this test with the heading');
   const says = {
     'only the hackmyagent commands exit non-zero on a Not Passing rating':
       /only the `hackmyagent` ones exit non-zero on a Not Passing rating/,
+    'where the run that shows it is recorded': /\]\(docs\/how-it-works\.md#usage-via-opena2a-cli\)/,
+  };
+  for (const [what, re] of Object.entries(says)) {
+    assert.match(section, re, `the README's Usage via OpenA2A CLI section does not say ${what}; update this test with the wording`);
+  }
+});
+
+test('docs/how-it-works.md records the run that shows which OASB-1 commands exit non-zero on a Not Passing rating', () => {
+  const section = usageSection('docs/how-it-works.md');
+  assert.ok(section, 'docs/how-it-works.md has no Usage via OpenA2A CLI section; update this test with the heading');
+  const says = {
     'hackmyagent secure -b oasb-1 exits 1': /`hackmyagent secure -b oasb-1` \(hackmyagent \d+\.\d+\.\d+\) exits 1\b/,
     'opena2a benchmark exits 0, also with --ci':
       /`opena2a benchmark` \(opena2a-cli \d+\.\d+\.\d+\) prints the rating and exits 0, also with `--ci`/,
   };
   for (const [what, re] of Object.entries(says)) {
-    assert.match(section, re, `the README's Usage via OpenA2A CLI section does not say ${what}; update this test with the wording`);
+    assert.match(section, re, `docs/how-it-works.md's Usage via OpenA2A CLI section does not say ${what}; update this test with the wording`);
   }
+});
+
+// A version or a date, and a test or technique count typed into the text, as
+// the README standard finds them. Each goes stale as the suite and the tools
+// it names change, so the README states none: the pages it links keep them,
+// such as the test totals in docs/test-catalog.md, which
+// scripts/check-readme.mjs holds to the suite, the versions a run was
+// measured on in docs/how-it-works.md and docs/captures/quick-start.json,
+// and the date of REPORT.md.
+const VERSION_OR_DATE = /v?[0-9]+\.[0-9]+\.[0-9]+|20[0-9]{2}-[0-9]{2}-[0-9]{2}/;
+const TYPED_COUNT = /tests-[0-9]+|[0-9]+ tests|[0-9]+%20techniques/;
+// A line of a code block that a reader copies to install or run a pinned
+// version, which the standard allows to name it: an npm or npx command, or a
+// `uses:` or `rev:` line.
+const PINNED_LINE = /^\s*(?:\$\s*)?(?:npm|npx)\s|^\s*(?:-\s+)?(?:uses|rev):/;
+// A line that opens or closes a fenced code block.
+const FENCE = /^\s*(?:```|~~~)/;
+
+// The lines of `text` that state a version, date or typed count, each as
+// "line <n>: <line>". A pinned install or run line in a code block may state
+// a version or date, not a typed count.
+const staleLines = (text) => {
+  const found = [];
+  let inBlock = false;
+  text.split('\n').forEach((line, i) => {
+    if (FENCE.test(line)) {
+      inBlock = !inBlock;
+      return;
+    }
+    const pinned = inBlock && PINNED_LINE.test(line);
+    if (TYPED_COUNT.test(line) || (VERSION_OR_DATE.test(line) && !pinned)) found.push(`line ${i + 1}: ${line.trim()}`);
+  });
+  return found;
+};
+
+test('the stale-text patterns find a version, a date and a typed count, and pass a pinned line in a code block', () => {
+  const block = (line) => `\`\`\`bash\n${line}\n\`\`\``;
+  for (const text of [
+    'OASB AT-AI-001 against arp-guard 0.3.0: PASS',
+    'REPORT.md is the 2026-03-23 run kept as recorded.',
+    "```ts\n  scannerVersion: '1.0.0',\n```",
+    '(11 of 11 tests passed)',
+    '[![tests](https://img.shields.io/badge/tests-400%20passing-green)](x)',
+    '[![MITRE ATLAS](https://img.shields.io/badge/MITRE%20ATLAS-15%20techniques-red)](x)',
+    block('npx vitest run   # 401 tests'),
+  ]) {
+    assert.equal(staleLines(text).length, 1, `${JSON.stringify(text)} is not found as stale text`);
+  }
+  for (const text of [
+    block('npm install @opena2a/oasb@0.4.1'),
+    block('$ npx @opena2a/oasb@0.4.1 AT-AI-001'),
+    '```yaml\n  - uses: actions/checkout@v4.2.2\n```',
+    '```yaml\n    rev: v0.4.1\n```',
+    '      Tests  11 passed (11)',
+    'npm also installs two optional dependencies, and `npm install vitest@3` adds vitest.',
+  ]) {
+    assert.deepEqual(staleLines(text), [], `${JSON.stringify(text)} is found as stale text`);
+  }
+});
+
+test('the README states no version, date or typed test count', () => {
+  assert.deepEqual(
+    staleLines(read('README.md')),
+    [],
+    'state it on the page the README links for it, and link that page; only a pinned npm, npx, uses: or rev: line in a code block may name a version',
+  );
 });
 
 // The commands that write the scorecard, from the Usage lines of the
