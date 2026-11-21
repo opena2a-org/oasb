@@ -30,6 +30,8 @@ npx @opena2a/oasb AT-AI-001   # one scenario file: prompt input scanning, agains
 
 What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/quick-start.txt)).
 
+The package npm serves as latest has no `oasb` command yet, so `npx` stops there with `could not determine executable to run`; the command is in the release that [CHANGELOG.md](CHANGELOG.md) lists first. Until npm serves that release, the clone commands under [Quick Start](#quick-start) run the same scenario file.
+
 Plug in your tool, run the suite, get a detection coverage scorecard.
 
 ## Quick Start

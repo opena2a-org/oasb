@@ -123,6 +123,27 @@ test('package.json names bin/oasb.mjs as the oasb command, and npm pack ships it
   }
 });
 
+// The README's first command is `npx @opena2a/oasb AT-AI-001`, which needs a
+// published version that declares the oasb command. The version npm serves as
+// latest, 0.4.0, declares no bin, so npx stops with "could not determine
+// executable to run". Until a version with the command is on npm, the README
+// says so above its first H2, says which release has it (the one CHANGELOG.md
+// lists first, which is package.json's version), and sends the reader to the
+// clone commands. When that release reaches npm, remove the note and this test.
+test('above its first H2 the README says the package on npm has no oasb command yet, names the release that has it and points to the clone commands', () => {
+  const readme = readFileSync(join(repo, 'README.md'), 'utf8');
+  const header = readme.split(/^## /m)[0].replace(/\s+/g, ' ');
+  assert.match(header, /npx @opena2a\/oasb AT-AI-001/, 'the README header does not show npx @opena2a/oasb AT-AI-001');
+  const note = header.match(/The package npm serves as latest has no `oasb` command yet[^]*?run the same scenario file\./)?.[0];
+  assert.ok(note, 'above its first H2 the README does not say that the package npm serves as latest has no oasb command yet');
+  assert.match(note, /`could not determine executable to run`/, 'the note does not quote the error npx stops with');
+  assert.match(note, /the release that \[CHANGELOG\.md\]\(CHANGELOG\.md\) lists first/, 'the note does not name the release that has the command');
+  assert.match(note, /the clone commands under \[Quick Start\]\(#quick-start\)/, 'the note does not point to the clone commands');
+  const first = readFileSync(join(repo, 'CHANGELOG.md'), 'utf8').match(/^## (\d+\.\d+\.\d+)\b/m)?.[1];
+  assert.equal(first, pkg.version, 'the release CHANGELOG.md lists first is not the version package.json declares the oasb command in');
+  assert.match(readme, /^git clone https:\/\/github\.com\/opena2a-org\/oasb\.git$/m, 'the README has no clone command');
+});
+
 test('npx installs what the command loads: vitest, and arp-guard for the default adapter', () => {
   // npx installs a package's dependencies and optional dependencies, not its
   // devDependencies.
