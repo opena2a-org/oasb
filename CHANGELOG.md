@@ -1248,7 +1248,7 @@ table row or a scenario file's header; or other, which says what it changes.
   per-test tables moved to `docs/test-catalog.md` as well, and the
   Contributing section became a line of the Documentation list.
   `npm run check:readme` fails when the README has 400 lines or more, when
-  its first H2 heading is not `## Quick Start` or is at line 25 or later,
+  its first H2 heading is not `## Quick Start` or is at line 40 or later,
   when no shell code block with a command starts before line 30, and when a
   relative link it reads does not resolve; `npm run smoke` runs these layout
   and link checks. It reads three link forms, each written within one line:
@@ -1618,6 +1618,17 @@ table row or a scenario file's header; or other, which says what it changes.
   after the `Tests` line, when the full output has a `...` line after its
   `Tests` line, or when the message does not name as elided each line the
   record lists.
+- The README's first screen is the first command, `npx @opena2a/oasb AT-AI-001`,
+  and what it prints, then the header block: the badges, the OpenA2A line and
+  the Website and Discord links. The line that names the command, "What
+  `npx @opena2a/oasb AT-AI-001` prints", stands below the header block, above
+  Quick Start, where it stood above the capture. `npm run check:readme` reads
+  that form: the README's capture may follow a code block, the first command's,
+  with that line below it, outside a code block, above the first H2, where
+  every other capture has it above; and `## Quick Start` may start as late as
+  line 39, where the bound was line 25 (at line 40 the check fails).
+  `docs/testing/release-smoke.md` states the bound and where the capture and
+  its intro line stand.
 
 ### Fixed
 

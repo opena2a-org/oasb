@@ -334,7 +334,10 @@
 //  11. a capture of a vitest run is what that run prints on the suite. A
 //      code block that holds a summary line ("Tests  11 passed (11)") is a
 //      capture; the line above it must name the command as
-//      "What `<command>` prints", and the command must be one that a code
+//      "What `<command>` prints"; in the README header form, where the
+//      capture follows the first command's code block and stands above the
+//      header block, that line stands below the header block, above the
+//      first H2. The command must be one that a code
 //      block above that line shows: a `vitest run`, whose file filters
 //      select the test files whose path contains one of them, ignoring
 //      case, as vitest selects them, or `npx @opena2a/oasb <ID>`, which
@@ -4094,6 +4097,9 @@ function checkSkippedCoverage(tests) {
 // 11. A capture of a vitest run: a code block holding a summary line such as
 // "Tests  11 passed (11)". The line above it names the command, as
 // What `npx vitest run AT-AI-001 --reporter=verbose` prints, trimmed:
+// In the README header form, where the capture follows the first command's
+// code block and stands above the header block, that line stands below the
+// header block, above the first H2; checkCaptures() reads it there.
 const CAPTURE_INTRO = /^What `([^`]+)` prints\b/;
 const SUMMARY = /^\s*(Test Files|Tests)\s+(\S.*?)\s+\((\d+)\)\s*$/;
 const PASSED_TEST = /^\s*✓\s+(\S+)\s+>\s+(.+?)(?:\s+\d+(?:\.\d+)?m?s)?\s*$/;
