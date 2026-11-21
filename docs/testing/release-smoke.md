@@ -16,7 +16,7 @@ the claims this repository publishes:
    Before installing, `scripts/check-readme.mjs` (also `npm run check:readme`,
    which compares the test counts too, see step 3) checks the README layout:
    under 400 lines, "Quick Start" is the first H2
-   and starts before line 25, a shell command appears before line 30, and
+   and starts before line 40, a shell command appears before line 30, and
    the relative links it reads resolve, in the README, in the pages that
    took its text (`README_PAGES` in `scripts/readme-counts.mjs`) and in each
    other `.md` page a reader reaches from them by those links, each link
@@ -126,9 +126,12 @@ the claims this repository publishes:
    passing counts with the tests that passed, counting a case skipped as
    inconclusive with them as the drift guard does; a report written in
    another checkout is read by each file's path from its `src/` directory,
-   as the drift guard reads it. It holds the capture under Quick Start to
-   the same suite: the command named in "What `<command>` prints" must be a
-   `vitest run` or `npx @opena2a/oasb <ID>` that a code block above it
+   as the drift guard reads it. It holds the README's capture, the code block
+   that follows the first command's code block and stands above the header
+   block (the badges, the OpenA2A line and the Website and Discord links), to
+   the same suite: the command named in the "What `<command>` prints" line,
+   which stands below the header block, above Quick Start, must be a
+   `vitest run` or `npx @opena2a/oasb <ID>` that a code block above that line
    shows, each `✓` line must name a test of a file that command selects and
    that is not skipped, and the `Test Files` and `Tests` lines must state
    the passed, failed and skipped counts and the total of the files and
