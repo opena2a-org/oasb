@@ -1608,9 +1608,11 @@ table row or a scenario file's header; or other, which says what it changes.
   under it calls the verdict the last line the command prints.
   `scripts/doc-facts.test.mjs` fails when the first or last line that is not
   blank, in a code block under a "What `<command>` prints" line of the
-  README, is `...`. Its failure message says that the full output,
-  `docs/captures/quick-start.txt`, keeps the lines after the `Tests` line,
-  and that the RUN banner is elided there too, as its record,
+  README, or in one that follows a code block with that line below it,
+  above the first H2, as the README header form has it, is `...`, and when
+  it reads no such capture in the README. Its failure message says that the
+  full output, `docs/captures/quick-start.txt`, keeps the lines after the
+  `Tests` line, and that the RUN banner is elided there too, as its record,
   `docs/captures/quick-start.json`, lists. The same file fails when that
   message or this entry does not say that the full output keeps the lines
   after the `Tests` line, when the full output has a `...` line after its

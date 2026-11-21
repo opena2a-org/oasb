@@ -246,41 +246,70 @@ test('the README states no version, date or typed test count', () => {
   );
 });
 
-// The line above a capture, which names the command it is of, as in
+// The line that names the command a capture is of, as in
 // What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](...)):
-// and a line of a capture that marks lines left out, as
+// which stands above the capture, or, in the README header form, below it
+// (see captures()), and a line of a capture that marks lines left out, as
 // scripts/check-readme.mjs reads both.
 const CAPTURE_INTRO = /^What `[^`]+` prints\b/;
 const ELISION = /^\s*\.\.\.\s*$/;
+// An H2 heading, on a line outside a code block.
+const H2 = /^##\s/;
 
-// The elision lines ("...") that open or close a capture in `text`, a code
-// block under a line that starts "What `<command>` prints", each as
-// "line <n>: ...". A capture is an excerpt: it starts below the lines it
-// leaves out at the top, such as the RUN banner that names the vitest
-// version, and ends above the lines it leaves out at the bottom, such as
-// the verdict line that names the version of the reference product, so an
-// elision line stands only between two lines the capture shows.
+// The captures in `text`, each as [open, close], the indexes of the lines
+// that open and close its code block (close is the number of lines when no
+// line closes it), as scripts/check-readme.mjs finds the README's: a code
+// block whose nearest line above that is not blank starts
+// "What `<command>` prints", or, in the README header form, a code block
+// whose nearest line above that is not blank closes another code block (the
+// first command's), with that line below it, outside a code block, above the
+// first H2. A code block under another line is none.
+const captures = (text) => {
+  const lines = text.split('\n');
+  const blocks = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!FENCE.test(lines[i])) continue;
+    let end = i + 1;
+    while (end < lines.length && !FENCE.test(lines[end])) end++;
+    blocks.push([i, end]);
+    i = end;
+  }
+  const inBlock = (n) => blocks.some(([open, close]) => open <= n && n <= close);
+  const firstH2 = lines.findIndex((line, n) => H2.test(line) && !inBlock(n));
+  const limit = firstH2 === -1 ? lines.length : firstH2;
+  const found = [];
+  blocks.forEach(([open, close], k) => {
+    let j = open - 1;
+    while (j >= 0 && lines[j].trim() === '') j--;
+    const under = j >= 0 && !inBlock(j) && CAPTURE_INTRO.test(lines[j].trim());
+    const follows = k > 0 && blocks[k - 1][1] === j;
+    const below = () => {
+      for (let n = close + 1; n < limit; n++) {
+        if (!inBlock(n) && CAPTURE_INTRO.test(lines[n].trim())) return true;
+      }
+      return false;
+    };
+    if (under || (follows && below())) found.push([open, close]);
+  });
+  return found;
+};
+
+// The elision lines ("...") that open or close a capture in `text`, as
+// captures() finds one, each as "line <n>: ...". A capture is an excerpt:
+// it starts below the lines it leaves out at the top, such as the RUN banner
+// that names the vitest version, and ends above the lines it leaves out at
+// the bottom, such as the verdict line that names the version of the
+// reference product, so an elision line stands only between two lines the
+// capture shows.
 const edgeElisions = (text) => {
   const lines = text.split('\n');
   const found = [];
-  // The nearest line above, outside a code block, that is not blank.
-  let above = '';
-  for (let i = 0; i < lines.length; i++) {
-    if (!FENCE.test(lines[i])) {
-      if (lines[i].trim()) above = lines[i].trim();
-      continue;
+  for (const [open, close] of captures(text)) {
+    const shown = [];
+    for (let n = open + 1; n < close; n++) if (lines[n].trim()) shown.push(n);
+    for (const n of new Set([shown[0], shown[shown.length - 1]])) {
+      if (n !== undefined && ELISION.test(lines[n])) found.push(`line ${n + 1}: ${lines[n].trim()}`);
     }
-    let end = i + 1;
-    while (end < lines.length && !FENCE.test(lines[end])) end++;
-    if (CAPTURE_INTRO.test(above)) {
-      const shown = [];
-      for (let n = i + 1; n < end; n++) if (lines[n].trim()) shown.push(n);
-      for (const n of new Set([shown[0], shown[shown.length - 1]])) {
-        if (n !== undefined && ELISION.test(lines[n])) found.push(`line ${n + 1}: ${lines[n].trim()}`);
-      }
-    }
-    above = '';
-    i = end;
   }
   return found;
 };
@@ -296,6 +325,29 @@ test('the capture check finds a "..." line that opens or closes a capture, and p
   // A code block under another line is not a capture.
   assert.deepEqual(edgeElisions('To run it:\n\n```text\n...\nnpm test\n...\n```'), []);
   assert.deepEqual(edgeElisions(`${capture(' ✓ a')}\n\n\`\`\`text\n...\n\`\`\``), []);
+  assert.deepEqual(captures('To run it:\n\n```text\n...\nnpm test\n...\n```'), []);
+
+  // The README header form: the capture follows the first command's code
+  // block, above the header block, and the line that names the command
+  // stands below the header block, above the first H2.
+  const COMMAND = '```bash\nnpx @opena2a/oasb AT-AI-001   # one scenario file\n```';
+  const INTRO = 'What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/quick-start.txt)).';
+  const block = (...shown) => ['```text', ...shown, '```'].join('\n');
+  const header = (...shown) => [COMMAND, '', block(...shown), '', '[badge](x)', '', INTRO, '', '## Quick Start'].join('\n');
+  assert.deepEqual(captures(header(' ✓ a', '      Tests  1 passed (1)')), [[4, 7]]);
+  assert.deepEqual(edgeElisions(header('...', ' ✓ a', '      Tests  1 passed (1)')), ['line 6: ...']);
+  assert.deepEqual(edgeElisions(header(' ✓ a', '      Tests  1 passed (1)', '...', '')), ['line 8: ...']);
+  assert.deepEqual(edgeElisions(header('...', ' ✓ a', '...')), ['line 6: ...', 'line 8: ...']);
+  assert.deepEqual(edgeElisions(header(' ✓ a', '...', '      Tests  1 passed (1)')), []);
+  // With that line below the first H2, or above the capture's code block
+  // in place of the command's, or with a line of prose between the two code
+  // blocks, the code block is not a capture in this form.
+  assert.deepEqual(captures([COMMAND, '', block('...', ' ✓ a'), '', '## Quick Start', '', INTRO].join('\n')), []);
+  assert.deepEqual(captures([COMMAND, '', block('...', ' ✓ a'), '', '[badge](x)', '', '## Quick Start'].join('\n')), []);
+  assert.deepEqual(captures(['To run it:', '', block('...', ' ✓ a'), '', INTRO, '', '## Quick Start'].join('\n')), []);
+  assert.deepEqual(captures([COMMAND, '', 'Then:', '', block('...', ' ✓ a'), '', INTRO, '', '## Quick Start'].join('\n')), []);
+  // A "## " line of a code block is not the first H2.
+  assert.deepEqual(captures([COMMAND, '', block('## not a heading', ' ✓ a'), '', INTRO, '', '## Quick Start'].join('\n')), [[4, 7]]);
 });
 
 // The full output the README capture links, and the record of the run that
@@ -341,7 +393,13 @@ const quickStartElided = () => {
 };
 
 test('the README capture starts and ends on a line the command prints, with a "..." line only between two lines it shows', () => {
-  assert.deepEqual(edgeElisions(read('README.md')), [], CAPTURE_FIX);
+  const readme = read('README.md');
+  assert.ok(
+    captures(readme).length > 0,
+    'README.md has no capture this test reads: a code block under a "What `<command>` prints" line, or one that follows a code block ' +
+      'with that line below it, above the first H2; update captures() with the form the README has',
+  );
+  assert.deepEqual(edgeElisions(readme), [], CAPTURE_FIX);
 });
 
 test("the capture check's message says docs/captures/quick-start.txt keeps the lines after its Tests line and elides the lines its record lists", () => {
