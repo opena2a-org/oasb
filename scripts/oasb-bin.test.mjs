@@ -123,25 +123,100 @@ test('package.json names bin/oasb.mjs as the oasb command, and npm pack ships it
   }
 });
 
+/** Whether version `a` is older than version `b`, by major, minor and patch. */
+function older(a, b) {
+  const [x, y] = [a, b].map((v) => v.split('.').map(Number));
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i];
+  return false;
+}
+
+// The releases a README sentence may say have no oasb command: those before
+// the release whose CHANGELOG.md entry adds it. The README names no version
+// (scripts/doc-facts.test.mjs), so the sentence names them by that entry.
+const BEFORE_THE_COMMAND = /\bbefore the one whose \[CHANGELOG\.md\]\(CHANGELOG\.md\) entry adds `npx @opena2a\/oasb <ID>`/;
+
+/**
+ * The sentences of `text` that say a release has no oasb command and do not
+ * say it of the releases before the one whose CHANGELOG.md entry adds it. A
+ * sentence ends at a `.`, `;`, `!` or `?` followed by white space.
+ */
+function unscopedNoCommandClaims(text) {
+  return text
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.;!?]) /)
+    .filter((sentence) => /\bno `?oasb`? command\b/i.test(sentence) && !BEFORE_THE_COMMAND.test(sentence));
+}
+
+/**
+ * The oldest release whose CHANGELOG.md entry lists `npx @opena2a/oasb <ID>`
+ * under Added, the release that adds the oasb command; undefined when no
+ * entry does.
+ */
+function releaseThatAddsTheCommand(changelog) {
+  return changelog
+    .split(/^(?=## )/m)
+    .filter((entry) => {
+      const added = entry.split(/^(?=### )/m).find((section) => /^### Added\b/.test(section));
+      return added !== undefined && /^- `npx @opena2a\/oasb <ID>`/m.test(added);
+    })
+    .map((entry) => entry.match(/^## (\d+\.\d+\.\d+)\b/)?.[1])
+    .filter(Boolean)
+    .at(-1);
+}
+
+// README.md ships in the package, and the README npm serves for the package
+// is the one its latest release ships. A README sentence that says a release
+// has no oasb command holds there only when it means releases older than the
+// one that ships it: "the package npm serves as latest has no oasb command"
+// turns false there when the first release that has the command becomes
+// latest. So such a sentence says it of the releases before the one whose
+// CHANGELOG.md entry adds the command, and the next test holds that release
+// to package.json's version or an earlier one.
+test('the README says a release has no oasb command only of the releases before the one whose CHANGELOG.md entry adds it', () => {
+  const stale = 'The package npm serves as latest has no `oasb` command yet, so `npx` stops there;';
+  assert.deepEqual(unscopedNoCommandClaims(`${stale} see below.`), [stale]);
+  assert.deepEqual(unscopedNoCommandClaims("npm's latest release has no oasb command. It is coming."), ["npm's latest release has no oasb command."]);
+  const scoped = 'Releases before the one whose [CHANGELOG.md](CHANGELOG.md) entry adds `npx @opena2a/oasb <ID>` have no `oasb` command.';
+  assert.deepEqual(unscopedNoCommandClaims(`${scoped} While npm serves one of them as latest, npx stops.`), []);
+  const readme = readFileSync(join(repo, 'README.md'), 'utf8');
+  assert.deepEqual(
+    unscopedNoCommandClaims(readme),
+    [],
+    `the README says a release has no oasb command and does not say it of the releases before the one whose CHANGELOG.md entry adds it; README.md ships in ${pkg.version}, which declares the command, so once ${pkg.version} is latest the README npm serves can say it of a release that has it`,
+  );
+});
+
 // The README's first command is `npx @opena2a/oasb AT-AI-001`, which needs a
-// published version that declares the oasb command. The version npm serves as
-// latest, 0.4.0, declares no bin, so npx stops with "could not determine
-// executable to run". Until a version with the command is on npm, the README
-// says so above its first H2, says which release has it (the one CHANGELOG.md
-// lists first, which is package.json's version), and sends the reader to the
-// clone commands. When that release reaches npm, remove the note and this test.
-test('above its first H2 the README says the package on npm has no oasb command yet, names the release that has it and points to the clone commands', () => {
+// published version that declares the oasb command. The versions on npm up to
+// 0.4.0 declare no bin, and npx stops on them with "could not determine
+// executable to run". Above its first H2 the README says that the releases
+// before the one whose CHANGELOG.md entry adds the command have none, that
+// npx stops there while npm serves one of them as latest, and sends the
+// reader to the clone commands. The test holds the release whose entry adds
+// the command to package.json's version or an earlier one, so the note does
+// not count the release that ships it among those without the command. When
+// npm serves a release with the command as latest, the note and this test
+// can go; the test above stays.
+test('above its first H2 the README says the releases before the one whose CHANGELOG.md entry adds the oasb command have none, and points to the clone commands', () => {
   const readme = readFileSync(join(repo, 'README.md'), 'utf8');
   const header = readme.split(/^## /m)[0].replace(/\s+/g, ' ');
   assert.match(header, /npx @opena2a\/oasb AT-AI-001/, 'the README header does not show npx @opena2a/oasb AT-AI-001');
-  const note = header.match(/The package npm serves as latest has no `oasb` command yet[^]*?run the same scenario file\./)?.[0];
-  assert.ok(note, 'above its first H2 the README does not say that the package npm serves as latest has no oasb command yet');
-  assert.match(note, /`could not determine executable to run`/, 'the note does not quote the error npx stops with');
-  assert.match(note, /the release that \[CHANGELOG\.md\]\(CHANGELOG\.md\) lists first/, 'the note does not name the release that has the command');
+  const note = header.match(/Releases of `@opena2a\/oasb` before the one whose \[CHANGELOG\.md\]\(CHANGELOG\.md\) entry adds `npx @opena2a\/oasb <ID>` have no `oasb` command\.[^]*?run the same scenario file\./)?.[0];
+  assert.ok(note, 'above its first H2 the README does not say that the releases before the one whose CHANGELOG.md entry adds npx @opena2a/oasb <ID> have no oasb command');
+  assert.match(note, /While npm serves one of them as latest, `npx` stops there with `could not determine executable to run`/, 'the note does not say that npx stops with "could not determine executable to run" while npm serves one of them as latest');
   assert.match(note, /the clone commands under \[Quick Start\]\(#quick-start\)/, 'the note does not point to the clone commands');
-  const first = readFileSync(join(repo, 'CHANGELOG.md'), 'utf8').match(/^## (\d+\.\d+\.\d+)\b/m)?.[1];
-  assert.equal(first, pkg.version, 'the release CHANGELOG.md lists first is not the version package.json declares the oasb command in');
   assert.match(readme, /^git clone https:\/\/github\.com\/opena2a-org\/oasb\.git$/m, 'the README has no clone command');
+  // The release that adds the command is the oldest whose entry lists it
+  // under Added, also when a later entry lists it there or elsewhere.
+  const entry = (version, section, item) => `## ${version} - 2026-01-01\n\n### ${section}\n\n- ${item}\n\n`;
+  const runs = '`npx @opena2a/oasb <ID>` runs one scenario file';
+  assert.equal(releaseThatAddsTheCommand(entry('0.5.0', 'Added', runs) + entry('0.4.0', 'Added', 'a check')), '0.5.0');
+  assert.equal(releaseThatAddsTheCommand(entry('0.5.0', 'Added', '`npx @opena2a/oasb <ID>` takes --json') + entry('0.4.1', 'Added', runs)), '0.4.1');
+  assert.equal(releaseThatAddsTheCommand(entry('0.5.0', 'Fixed', runs) + entry('0.4.0', 'Added', 'a check')), undefined);
+  assert.deepEqual([older('0.4.1', '0.5.0'), older('0.4.1', '0.10.0'), older('0.4.1', '0.4.1'), older('0.10.0', '0.4.1')], [true, true, false, false]);
+  const first = releaseThatAddsTheCommand(readFileSync(join(repo, 'CHANGELOG.md'), 'utf8'));
+  assert.ok(first, 'no CHANGELOG.md entry lists npx @opena2a/oasb <ID> under Added');
+  assert.ok(!older(pkg.version, first), `the CHANGELOG.md entry that adds npx @opena2a/oasb <ID> is that of ${first}, later than package.json's ${pkg.version}`);
 });
 
 test('npx installs what the command loads: vitest, and arp-guard for the default adapter', () => {

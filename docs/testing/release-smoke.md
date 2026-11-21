@@ -314,7 +314,15 @@ README's test counts do not include them.
   adapter that declares no capabilities does not get NOT MEASURED and exit
   2, or an adapter given by a relative path whose scanner misses FAIL and
   exit 1, or when an unknown ID, an adapter that cannot be loaded or a
-  missing vitest does not exit 1 with a line that says so.
+  missing vitest does not exit 1 with a line that says so. It also fails
+  when a README sentence says a release has no `oasb` command other than of
+  the releases before the one whose `CHANGELOG.md` entry adds
+  `npx @opena2a/oasb <ID>`: `README.md` ships in the package, and the
+  README npm serves for the package is the one its latest release ships.
+  And it fails when the note above the README's first H2 does not say that
+  those releases have no `oasb` command, or when the oldest release whose
+  `CHANGELOG.md` entry lists `npx @opena2a/oasb <ID>` under Added is later
+  than the version in `package.json`.
 - `scripts/bait-edition.test.mjs`: the edition of lab runs against named
   agents (`scripts/bait-edition.mjs`), as a grid, as the dot plot that
   `--svg` prints and as the table of runs that `--runs` prints, and the
