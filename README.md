@@ -1,24 +1,10 @@
 # Open Agent Security Benchmark (OASB)
 
-[![Status: stable](https://img.shields.io/badge/status-stable-green)](STATUS.md)
-[![npm version](https://img.shields.io/npm/v/@opena2a/oasb.svg)](https://www.npmjs.com/package/@opena2a/oasb)
-[![CI](https://github.com/opena2a-org/oasb/actions/workflows/ci.yml/badge.svg)](https://github.com/opena2a-org/oasb/actions/workflows/ci.yml)
-[![Security](https://github.com/opena2a-org/oasb/actions/workflows/security.yml/badge.svg)](https://github.com/opena2a-org/oasb/actions/workflows/security.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-
-> **[OpenA2A](https://github.com/opena2a-org)**: [CLI](https://github.com/opena2a-org/opena2a) · [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [Browser Guard](https://github.com/opena2a-org/ai-browserguard) · [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)
-
-[Website](https://oasb.ai) · [Discord](https://discord.gg/uRZa3KXgEn)
-
-Standardized attack scenarios that evaluate whether a runtime security tool can detect and respond to threats against AI agents. Each scenario is mapped to the [OWASP Top 10 for Agentic Applications (2026)](docs/owasp-agentic-mapping.md), and most also to the OWASP Top 10 for LLM Applications (2025). Plug in your tool, run the suite, get a detection coverage scorecard.
-
-## Quick Start
+Standardized attack scenarios that evaluate whether a runtime security tool can detect and respond to threats against AI agents. Each scenario is mapped to the [OWASP Top 10 for Agentic Applications (2026)](docs/owasp-agentic-mapping.md), and most also to the OWASP Top 10 for LLM Applications (2025).
 
 ```bash
 npx @opena2a/oasb AT-AI-001   # one scenario file: prompt input scanning, against the reference adapter
 ```
-
-What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/quick-start.txt)):
 
 ```text
  ✓ src/atomic/ai-layer/AT-AI-001.prompt-input-scan.test.ts > AT-AI-001: Prompt Input Scanning > should detect instruction override (PI-001) 4ms
@@ -31,6 +17,22 @@ What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/
  Test Files  1 passed (1)
       Tests  11 passed (11)
 ```
+
+[![Status: stable](https://img.shields.io/badge/status-stable-green)](STATUS.md)
+[![npm version](https://img.shields.io/npm/v/@opena2a/oasb.svg)](https://www.npmjs.com/package/@opena2a/oasb)
+[![CI](https://github.com/opena2a-org/oasb/actions/workflows/ci.yml/badge.svg)](https://github.com/opena2a-org/oasb/actions/workflows/ci.yml)
+[![Security](https://github.com/opena2a-org/oasb/actions/workflows/security.yml/badge.svg)](https://github.com/opena2a-org/oasb/actions/workflows/security.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+> **[OpenA2A](https://github.com/opena2a-org)**: [CLI](https://github.com/opena2a-org/opena2a) · [HackMyAgent](https://github.com/opena2a-org/hackmyagent) · [Secretless](https://github.com/opena2a-org/secretless-ai) · [AIM](https://github.com/opena2a-org/agent-identity-management) · [Browser Guard](https://github.com/opena2a-org/ai-browserguard) · [DVAA](https://github.com/opena2a-org/damn-vulnerable-ai-agent)
+
+[Website](https://oasb.ai) · [Discord](https://discord.gg/uRZa3KXgEn)
+
+What `npx @opena2a/oasb AT-AI-001` prints, trimmed ([full output](docs/captures/quick-start.txt)).
+
+Plug in your tool, run the suite, get a detection coverage scorecard.
+
+## Quick Start
 
 The last line the command prints, left out above, is the verdict for the product the adapter declares: PASS, FAIL, or NOT MEASURED when every test of the file was skipped. The command exits 0 on PASS, 1 on FAIL and 2 on NOT MEASURED; `npx @opena2a/oasb --help` lists the scenario IDs.
 

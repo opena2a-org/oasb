@@ -391,7 +391,8 @@ import { QUALIFIERS, README_PAGES, SCENARIO_DIRS, STATEMENTS, atlasCounts, isInc
 import { findScenario, verdictLine } from '../bin/run-scenario.mjs';
 
 const MAX_LINES = 400;
-const QUICK_START_BY = 25;
+// The header form puts the start block (the first command and what it prints) and the header block above Quick Start.
+const QUICK_START_BY = 40;
 const COMMAND_BY = 30;
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -4147,7 +4148,17 @@ function checkCaptures(tests) {
 
       let j = open - 1;
       while (j >= 0 && !lines[j].inFence && !lines[j].fenceClose && lines[j].line.trim() === '') j--;
-      const intro = j >= 0 && !lines[j].inFence && !lines[j].fenceClose ? lines[j].line.trim().match(CAPTURE_INTRO) : null;
+      let intro = j >= 0 && !lines[j].inFence && !lines[j].fenceClose ? lines[j].line.trim().match(CAPTURE_INTRO) : null;
+      // The README header form: the start block's capture follows its command block with no line between, above the
+      // header block, and its intro line stands below the header block, above the first H2.
+      if (!intro && lines === readme && j >= 0 && lines[j].fenceClose) {
+        const h2 = lines.findIndex(isH2);
+        for (let k = end + 1; k < (h2 === -1 ? lines.length : h2) && !intro; k++) {
+          if (lines[k].inFence || lines[k].fenceOpen) continue;
+          const m = lines[k].line.trim().match(CAPTURE_INTRO);
+          if (m) [intro, j] = [m, k];
+        }
+      }
       if (!intro) {
         fail(
           `${at}: the code block shows what a vitest run prints, but the line above it does not name the command; ` +
