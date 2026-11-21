@@ -32,7 +32,9 @@ const CPU_TIME = `data:text/javascript,${encodeURIComponent(
 // With `cpuTime`, also give back as `cpuMs` the processor time in
 // milliseconds that the check's process used (CPU_TIME), NaN when it wrote
 // none. The wall time of the spawn also holds the time the process waited
-// for a processor, which grows with the load on the host; this does not.
+// for a processor, which grows with the load on the host; this does not,
+// but it grows as the processor that runs the process is slower
+// (CPU_RATIO).
 function check(body, pages = {}, unreadable = [], { cpuTime = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'check-readme-'));
   try {
@@ -55,6 +57,36 @@ function check(body, pages = {}, unreadable = [], { cpuTime = false } = {}) {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// A timed test holds the processor time of the check on its input under
+// CPU_RATIO times the processor time of the check on the bare README, HEAD
+// alone with docs/guide.md as check('') writes them, run on the same host
+// just after it (assertCheckTime). A slower processor raises both. In a run
+// under taskpolicy -b, which starts a process at background priority, on
+// the slower cores of a Mac with Apple silicon, three of these tests went
+// over the fixed 2,000 ms they were held to before, at 2,085 to 2,286 ms.
+// On macOS arm64 with Node.js 26.12.1, in a run of the 21 tests, their 42
+// timed checks used 57 to 475 ms and the bare README 54 to 62 ms, each
+// check under 9 times the bare README run after it; in four runs under
+// taskpolicy -b, 133 to 2,223 ms and 115 to 285 ms, each check under 12
+// times. CPU_RATIO times 54 to 62 ms is 2.7 to 3.1 seconds, under each time
+// that the comments of these tests record for the behaviour each guards
+// against on the input it checks, the least of which is 3.3 seconds.
+const CPU_RATIO = 50;
+
+// Assert that the check's process wrote its processor time, `r.cpuMs` of
+// check() with cpuTime, for the input that `what` names, and that it is
+// under CPU_RATIO times that of the check on the bare README, run here.
+function assertCheckTime(r, what) {
+  assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
+  const bare = check('', {}, [], { cpuTime: true });
+  assert.equal(bare.status, 0, bare.stderr);
+  assert.ok(Number.isFinite(bare.cpuMs), 'the check wrote no processor time for the bare README');
+  assert.ok(
+    r.cpuMs < CPU_RATIO * bare.cpuMs,
+    `${r.cpuMs.toFixed(0)} ms of processor time for ${what}, over ${CPU_RATIO} times the ${bare.cpuMs.toFixed(0)} ms of the bare README`,
+  );
 }
 
 // A small suite, by file: [passed, failed, skipped]. 15 tests: 10 attack
@@ -1368,15 +1400,14 @@ const unclosedRuns = (size) => {
   return runs.join('');
 };
 
-test('a 1 MB line of backtick runs of different lengths, none of them closed, is checked in under 2 seconds of processor time', () => {
+test(`a 1 MB line of backtick runs of different lengths, none of them closed, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // Each run was read to the end of the line for a run of its length: this
   // line took 6.4 seconds.
   const line = unclosedRuns(1 << 20);
   const r = check(`${line}\n`, {}, [], { cpuTime: true });
   const what = `a line of ${line.length} characters`;
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+  assertCheckTime(r, what);
 });
 
 test('a backslash escapes only ASCII punctuation in a link destination, so a space after one ends it', () => {
@@ -1734,7 +1765,7 @@ test('an href is not read in the text of a <script>, <style>, <textarea>, <title
   }
 });
 
-test('a line of 100,000 tags inside a <textarea> or <script>, which no end tag ends or one ends at the end of the line, is checked in under 2 seconds of processor time', () => {
+test(`a line of 100,000 tags inside a <textarea> or <script>, which no end tag ends or one ends at the end of the line, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // The end tag of the element is searched for with one searcher() of the
   // paragraph, so the line is not read again from each tag inside it. The
   // href after the </textarea> at the end of the last line is the only
@@ -1749,8 +1780,7 @@ test('a line of 100,000 tags inside a <textarea> or <script>, which no end tag e
     const what = `a line of ${line.length} characters`;
     assert.equal(r.status, failures === 0 ? 0 : 1, r.stderr.slice(0, 500));
     assert.equal((r.stderr.match(/link target "docs\/nowhere\.md" does not exist/g) ?? []).length, failures, r.stderr.slice(0, 500));
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+    assertCheckTime(r, what);
   }
 });
 
@@ -2097,7 +2127,7 @@ test('NAMED_REFERENCES holds 2,231 names, 106 of them without their ;', () => {
   assert.equal(NAMED_REFERENCES.has('period'), false);
 });
 
-test('an href with 100,000 spaces at the start and the end of its value, or 200,000 inside it, is checked in under 2 seconds of processor time', () => {
+test(`an href with 100,000 spaces at the start and the end of its value, or 200,000 inside it, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // The spaces at each end of the value are read in a loop: on Node.js
   // 26.12.0 a search for [\x01-\x20]+$ took 12.6 seconds over docs/guide.md,
   // 200,000 spaces and an x, as it went on from each space of the run to
@@ -2109,13 +2139,12 @@ test('an href with 100,000 spaces at the start and the end of its value, or 200,
       const r = check(body, {}, [], { cpuTime: true });
       const what = `an href of ${value.length} characters after ${JSON.stringify(body.slice(0, 5))}`;
       assert.equal(r.status, status, r.stderr.slice(0, 500));
-      assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-      assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+      assertCheckTime(r, what);
     }
   }
 });
 
-test('a line of a tag of 50,000 attributes href=a, each after a no-break space, is checked in under 2 seconds of processor time', () => {
+test(`a line of a tag of 50,000 attributes href=a, each after a no-break space, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // A tag in a paragraph is tested for an href at each index that an h or
   // an H follows, as a line of an HTML block or of indented code was tested
   // at each index. An unquoted value runs on past a no-break space, so a test
@@ -2131,8 +2160,7 @@ test('a line of a tag of 50,000 attributes href=a, each after a no-break space, 
     const r = check(body, {}, [], { cpuTime: true });
     const what = `a line of ${tag.length} characters after ${JSON.stringify(body.slice(0, 4))}`;
     assert.equal(r.status, 0, r.stderr.slice(0, 500));
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+    assertCheckTime(r, what);
   }
 });
 
@@ -3321,7 +3349,7 @@ test('a quoted href value of a paragraph that starts on or below a line that goe
   assert.equal(second.stderr.trim(), 'README: line 13: link target "docs/> guide.md" does not exist.');
 });
 
-test('a paragraph that 100,000 list items and as many block quotes hold, each inside the one before, whose quoted href value runs on to the next line is checked in under 2 seconds of processor time', () => {
+test(`a paragraph that 100,000 list items and as many block quotes hold, each inside the one before, whose quoted href value runs on to the next line is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // paragraphLead() asks markdownItIndent() about each list item that a
   // block quote the line goes on with follows, and markdownItIndent() read
   // the line that opens the item from its start, over every holder before
@@ -3346,8 +3374,7 @@ test('a paragraph that 100,000 list items and as many block quotes hold, each in
     const r = check(body, {}, [], { cpuTime: true });
     const which = `page ${i + 1} of ${body.length} characters`;
     assert.equal(r.status, 0, `${which}\n${r.stderr.slice(0, 500)}`);
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${which}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${which}`);
+    assertCheckTime(r, which);
   });
 });
 
@@ -3383,7 +3410,7 @@ test("a quote in an attribute's name in an HTML block opens no quoted value, and
   }
 });
 
-test('a page with a reference definition whose title or label runs on over 40,000 or 60,000 lines is checked in under 2 seconds of processor time', () => {
+test(`a page with a reference definition whose title or label runs on over 40,000 or 60,000 lines is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // markdown-it 14.1.0 reads a title, and a label, on over the lines after
   // it, up to the quote or the ] that closes it or to the end of its
   // paragraph, and the check reads them so.
@@ -3408,8 +3435,7 @@ test('a page with a reference definition whose title or label runs on over 40,00
     const r = check('See [the big page](docs/big.md).\n', { 'docs/big.md': big }, [], { cpuTime: true });
     const start = JSON.stringify(big.slice(0, 24));
     assert.equal(r.status, 0, r.stderr.slice(0, 500));
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for a page that starts ${start}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for a page that starts ${start}`);
+    assertCheckTime(r, `a page that starts ${start}`);
   }
 });
 
@@ -3439,7 +3465,7 @@ test('a carriage return with no line feed after it ends a line', () => {
   }
 });
 
-test('a 1 MB line of text and then 4,000 images, each with a tag whose unquoted href runs on into the " after its description, is checked in under 2 seconds of processor time', () => {
+test(`a 1 MB line of text and then 4,000 images, each with a tag whose unquoted href runs on into the " after its description, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // Read in a copy of the line up to that " for each image, the check ran
   // out of memory on this line on Node.js 26.12.0.
   const unit = "![<b x=\"y\"> <? > <a x=' ?> ' href=docs/guide.md](docs/guide.md) ";
@@ -3448,8 +3474,7 @@ test('a 1 MB line of text and then 4,000 images, each with a tag whose unquoted 
   const what = `a line of ${line.length} characters`;
   assert.equal(r.status, 1);
   assert.equal(r.stderr.trim().split('\n').length, 4000);
-  assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+  assertCheckTime(r, what);
 });
 
 test('a list of failures longer than a pipe holds reaches a reader that waits before it reads, whole', async () => {
@@ -3481,7 +3506,7 @@ test('a list of failures longer than a pipe holds reaches a reader that waits be
   }
 });
 
-test('a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under 2 seconds of processor time', () => {
+test(`a 1 MB line of comment, processing instruction, CDATA and declaration openings that nothing closes is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // Searched for from each opening, as a regular expression per opening
   // searches, the end of each one is read to the end of the line; on such a
   // line that did not finish in 20 seconds.
@@ -3490,8 +3515,7 @@ test('a 1 MB line of comment, processing instruction, CDATA and declaration open
   const r = check(`${line}\n`, {}, [], { cpuTime: true });
   const what = `a line of ${line.length} characters`;
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+  assertCheckTime(r, what);
 });
 
 test('link text may wrap onto the next line of its paragraph, but not into another block', () => {
@@ -3923,18 +3947,17 @@ test('an inline link indented 4 or more columns after a | line that is paragraph
   }
 });
 
-test('a line of ***, --- or ___ and 100,000 spaces or tabs before text is checked in under 2 seconds of processor time', () => {
+test(`a line of ***, --- or ___ and 100,000 spaces or tabs before text is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // The spaces and tabs could be split between the last mark and a [ \t]*
   // after the marks in every way: these three lines took 12.9 seconds.
   const lines = ['***' + ' '.repeat(100000) + 'x', '---' + '\t'.repeat(100000) + 'x', '___' + '\t'.repeat(100000) + 'x'];
   const r = check(`${lines.join('\n\n')}\n`, {}, [], { cpuTime: true });
   const what = `three lines of ${lines[0].length} characters`;
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+  assertCheckTime(r, what);
 });
 
-test('an ATX heading, in a block quote or a list item too, or a fence whose info string holds a #, with 100,000 spaces or tabs before text is checked in under 2 seconds of processor time', () => {
+test(`an ATX heading, in a block quote or a list item too, or a fence whose info string holds a #, with 100,000 spaces or tabs before text is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // The #s that close a heading were searched for from each space or tab of
   // a run that no #s follow, on to the end of the run: these five lines
   // took 24.7 seconds.
@@ -3942,22 +3965,20 @@ test('an ATX heading, in a block quote or a list item too, or a fence whose info
   const r = check(`${lines.join('\n\n')}\n`, {}, [], { cpuTime: true });
   const what = `five lines of ${lines[0].length} characters`;
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+  assertCheckTime(r, what);
 });
 
-test('a line of 50,000 list markers before text is checked in under 2 seconds of processor time', () => {
+test(`a line of 50,000 list markers before text is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // A thematic break was tried at each list marker and read to the end of
   // the line before it failed: these four lines took 41.5 seconds.
   const lines = ['- '.repeat(50000) + 'x', '* '.repeat(50000) + 'x', '-\t'.repeat(50000) + 'x', '- '.repeat(50000) + 'x - - -'];
   const r = check(`${lines.join('\n\n')}\n`, {}, [], { cpuTime: true });
   const what = `four lines of ${lines[0].length} characters`;
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+  assertCheckTime(r, what);
 });
 
-test('a page that opens 50,000 list items and then holds 50,000 blank lines, or lines of a lone >, is checked in under 2 seconds of processor time', () => {
+test(`a page that opens 50,000 list items and then holds 50,000 blank lines, or lines of a lone >, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // Each such line went on with the list items one at a time, and the list
   // of them was copied for each line: these two pages took 14.5 seconds.
   const n = 50000;
@@ -3975,21 +3996,19 @@ test('a page that opens 50,000 list items and then holds 50,000 blank lines, or 
     `README: docs/blank.md line ${n + 3}: link target "nowhere.md" does not exist.`,
     `README: docs/quoted.md line ${n + 3}: link target "nowhere.md" does not exist.`,
   ]);
-  assert.ok(Number.isFinite(r.cpuMs), 'the check wrote no processor time for the two pages');
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for two pages of ${n + 3} lines`);
+  assertCheckTime(r, `two pages of ${n + 3} lines`);
 });
 
-test('a line that goes on with 50,000 list items through 100,000 spaces or 50,000 tabs is checked in under 2 seconds of processor time', () => {
+test(`a line that goes on with 50,000 list items through 100,000 spaces or 50,000 tabs is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // The spaces and tabs before the text were read again for each list item
   // that the line went on with: these two pairs of lines took 15.7 seconds.
   const pairs = ['+ '.repeat(50000) + 'x\n' + ' '.repeat(100000) + 'y', '-\t'.repeat(50000) + 'x\n' + '\t'.repeat(50000) + 'y'];
   const r = check(`${pairs.join('\n\n')}\n`, {}, [], { cpuTime: true });
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(Number.isFinite(r.cpuMs), 'the check wrote no processor time for the two pairs of lines');
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for two pairs of lines`);
+  assertCheckTime(r, 'two pairs of lines');
 });
 
-test('a page that opens 100,000 list items, or block quotes, and then holds 100,000 lines of a lone | is checked in under 2 seconds of processor time', () => {
+test(`a page that opens 100,000 list items, or block quotes, and then holds 100,000 lines of a lone | is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // Each | line goes on with the paragraph lazily, and the next line holds
   // only the characters of a delimiter row, so tableHeader() read it with
   // a copy of the list of containers, made for each such line: these two
@@ -4010,8 +4029,7 @@ test('a page that opens 100,000 list items, or block quotes, and then holds 100,
   };
   const r = check('[items](docs/items.md) and [quoted](docs/quoted.md)\n', pages, [], { cpuTime: true });
   assert.equal(r.status, 0, r.stderr);
-  assert.ok(Number.isFinite(r.cpuMs), 'the check wrote no processor time for the two pages');
-  assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for two pages of ${n + 1} lines`);
+  assertCheckTime(r, `two pages of ${n + 1} lines`);
 });
 
 test('a code span may run on to a later line of its paragraph, and a [ or a link inside it is not read', () => {
@@ -5230,7 +5248,7 @@ test('an href between backticks on a line of an HTML block is a link, as a backt
   assert.equal(dated.status, 0, dated.stderr);
 });
 
-test('a line of an HTML block of 50,000 tag starts that no > follows is checked in under 2 seconds of processor time', () => {
+test(`a line of an HTML block of 50,000 tag starts that no > follows is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // Each < was read on to the end of the line for an href, so the time grew
   // with the square of the line's length: the page with the line of <a took
   // 17.8 seconds to check.
@@ -5240,8 +5258,7 @@ test('a line of an HTML block of 50,000 tag starts that no > follows is checked 
     const r = check(DATED_LINK, datedPage(`As of 2026-06-03.\n\n<div>\n${line}\n</div>\n\n${see}\n`), [], { cpuTime: true });
     const what = `a line of ${line.length} characters of ${unit}`;
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+    assertCheckTime(r, what);
   }
   // A tag that no > ends reads on past the other < on the line to an href,
   // and a tag that a > ends holds no href after it.
@@ -5252,7 +5269,7 @@ test('a line of an HTML block of 50,000 tag starts that no > follows is checked 
   assert.equal(ended.status, 0, ended.stderr);
 });
 
-test('a line of a tag whose attributes hold no-break spaces is checked in under 2 seconds of processor time in a code block and at the start of a paragraph', () => {
+test(`a line of a tag whose attributes hold no-break spaces is checked, in a code block and at the start of a paragraph, in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // A no-break space matched both the white space between attributes and an
   // unquoted value in the pattern that read a tag alone on a line, which
   // tried every way such a line splits into attributes: in a code block,
@@ -5261,12 +5278,11 @@ test('a line of a tag whose attributes hold no-break spaces is checked in under 
   for (const body of [`\`\`\`text\n${line('>x')}\n\`\`\`\n`, `\`\`\`text\n${line('!')}\n\`\`\`\n`, `${line('>x')}\n`]) {
     const r = check(body, {}, [], { cpuTime: true });
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${JSON.stringify(body)}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${JSON.stringify(body)}`);
+    assertCheckTime(r, JSON.stringify(body));
   }
 });
 
-test('a 4 MB line of a tag of 1,000,000 attributes in a code block is checked in under 2 seconds of processor time', () => {
+test(`a 4 MB line of a tag of 1,000,000 attributes in a code block is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // A pattern of the whole tag threw a RangeError (Maximum call stack size
   // exceeded) on such a line, with > or >x at its end, and the check exited
   // 1 with its stack.
@@ -5275,12 +5291,11 @@ test('a 4 MB line of a tag of 1,000,000 attributes in a code block is checked in
     const r = check(`\`\`\`text\n${line}\n\`\`\`\n`, {}, [], { cpuTime: true });
     const what = `a line of ${line.length} characters ending in ${end}`;
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+    assertCheckTime(r, what);
   }
 });
 
-test('a 3.9 MB line of a tag of 987,000 attributes outside a code block is checked in under 2 seconds of processor time, also above a dated page\'s first H2', () => {
+test(`a 3.9 MB line of a tag of 987,000 attributes outside a code block is checked in under ${CPU_RATIO} times the processor time of the bare README, also above a dated page's first H2`, () => {
   // The inline reader read a tag with one pattern of the whole tag, which
   // threw a RangeError (Maximum call stack size exceeded) on such a line,
   // with or without a > at its end, and the check exited 1 with its stack;
@@ -5304,13 +5319,12 @@ test('a 3.9 MB line of a tag of 987,000 attributes outside a code block is check
       const r = check(body, pages, [], { cpuTime: true });
       const what = `a line of ${line.length} characters${body === DATED_LINK ? ' on a dated page' : ''}`;
       assert.equal(r.status, 0, r.stderr);
-      assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-      assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+      assertCheckTime(r, what);
     }
   }
 });
 
-test('a paragraph line of a tag whose attributes hold no-break spaces, and that no > ends, is checked in under 2 seconds of processor time', () => {
+test(`a paragraph line of a tag whose attributes hold no-break spaces, and that no > ends, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // The inline reader's pattern of the whole tag tried every way such a line
   // splits into attributes before it failed: with <a, 24 attributes e=c, a
   // no-break space and d, and !, the check took 8.2 seconds, and with 28 of
@@ -5326,8 +5340,7 @@ test('a paragraph line of a tag whose attributes hold no-break spaces, and that 
     const cpuMs = /^\d+$/.test(usec) ? Number(usec) / 1000 : NaN;
     assert.equal(r.signal, null, 'the check did not finish in 30 seconds');
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(Number.isFinite(cpuMs), 'the check wrote no processor time');
-    assert.ok(cpuMs < 2000, `${cpuMs.toFixed(0)} ms of processor time`);
+    assertCheckTime({ cpuMs }, 'a paragraph line of a tag that no > ends');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -5582,7 +5595,7 @@ test('a comment, <script> or <style> that a </textarea> end tag inside a comment
   }
 });
 
-test('a line of 10,000 comment starts, or 4,000 lines of one, that nothing below ends, in a paragraph that a <script> left open after a </textarea> hides, is checked in under 2 seconds of processor time', () => {
+test(`a line of 10,000 comment starts, or 4,000 lines of one, that nothing below ends, in a paragraph that a <script> left open after a </textarea> hides, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // The end of a comment that runs on to a later line was looked for in the
   // rest of the paragraph from each start on the line, so the time grew
   // with the starts times the length of the lines below: the first page
@@ -5596,8 +5609,7 @@ test('a line of 10,000 comment starts, or 4,000 lines of one, that nothing below
     const what = `a page of ${intro.length} characters`;
     assert.equal(r.status, 1, r.stderr);
     assert.match(r.stderr, DATED);
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${what}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${what}`);
+    assertCheckTime(r, what);
   }
 });
 
@@ -6885,7 +6897,7 @@ test('an inline link with a title in "", in \'\' or in (), or a destination or t
   assert.match(after.stderr, /^README: line 12: link target "docs\/nowhere\.md" does not exist\./m);
 });
 
-test('a dated page with 80,000 tags open in an <svg> element and as many end tags that end none, or CDATA sections, is checked in under 2 seconds of processor time', () => {
+test(`a dated page with 80,000 tags open in an <svg> element and as many end tags that end none, or CDATA sections, is checked in under ${CPU_RATIO} times the processor time of the bare README`, () => {
   // An end tag that ended no element read the names of all the elements
   // open in foreign content, and each CDATA section read those of the
   // <tspan> elements open above the <text> element, so the time grew with
@@ -6894,8 +6906,7 @@ test('a dated page with 80,000 tags open in an <svg> element and as many end tag
   for (const line of [`<svg>${'<g>'.repeat(80000)}${'</math>'.repeat(80000)}</svg>`, `<svg><text>${'<tspan>'.repeat(80000)}${'<![CDATA[]]>'.repeat(80000)}`]) {
     const r = check(DATED_LINK, datedPage(`<div>\n${line}\n</div>\n\nAs of 2026-06-03. ${see}`), [], { cpuTime: true });
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(Number.isFinite(r.cpuMs), `the check wrote no processor time for ${line.slice(0, 16)}`);
-    assert.ok(r.cpuMs < 2000, `${r.cpuMs.toFixed(0)} ms of processor time for ${line.slice(0, 16)}`);
+    assertCheckTime(r, line.slice(0, 16));
   }
 });
 
