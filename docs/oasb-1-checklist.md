@@ -15,6 +15,14 @@ npx @opena2a/oasb checklist --level L1   # the controls a run at L1 checks
 npx @opena2a/oasb checklist --json       # the list as JSON
 ```
 
+The package npm serves as latest has no `oasb` command yet, so `npx` stops there with `could not determine executable to run`; the command is in the release that [CHANGELOG.md](../CHANGELOG.md) lists first. Until npm serves that release, the same commands run from a clone, with `node bin/oasb.mjs` in place of `npx @opena2a/oasb` and without `npm ci`:
+
+```bash
+git clone https://github.com/opena2a-org/oasb.git
+cd oasb
+node bin/oasb.mjs checklist --level L1   # the controls a run at L1 checks
+```
+
 ## Levels
 
 A level adds its controls to those of the levels below it: a HackMyAgent run at L2 checks the controls of L1 and of L2.

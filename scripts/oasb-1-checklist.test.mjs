@@ -306,6 +306,44 @@ test('no scenario file has the ID checklist, so the command hides none', () => {
   assert.ok(!ids.includes('checklist'));
 });
 
+// The page's first commands are `npx @opena2a/oasb checklist`, which need a
+// published version that declares the oasb command. The version npm serves as
+// latest, 0.4.0, declares no bin, so npx stops with "could not determine
+// executable to run". Until a version with the command is on npm, the page
+// says so above its first H2, says which release has it (the one CHANGELOG.md
+// lists first, which is package.json's version), and gives the commands that
+// print the checklist from a clone. When that release reaches npm, remove the
+// note and this test.
+test('above its first H2 the page says the package on npm has no oasb command yet, names the release that has it and gives clone commands that print the checklist', () => {
+  const header = read(PAGE).split(/^## /m)[0];
+  const flat = header.replace(/\s+/g, ' ');
+  assert.match(header, /^npx @opena2a\/oasb checklist\b/m, `${PAGE}: the header does not show npx @opena2a/oasb checklist`);
+  const note = flat.match(/The package npm serves as latest has no `oasb` command yet[^]*?from a clone[^:]*:/)?.[0];
+  assert.ok(note, `above its first H2, ${PAGE} does not say that the package npm serves as latest has no oasb command yet`);
+  assert.match(note, /`could not determine executable to run`/, 'the note does not quote the error npx stops with');
+  assert.match(note, /the release that \[CHANGELOG\.md\]\(\.\.\/CHANGELOG\.md\) lists first/, 'the note does not name the release that has the command');
+  const first = read('CHANGELOG.md').match(/^## (\d+\.\d+\.\d+)\b/m)?.[1];
+  const pkg = JSON.parse(read('package.json'));
+  assert.equal(first, pkg.version, 'the release CHANGELOG.md lists first is not the version package.json declares the oasb command in');
+  assert.equal(pkg.bin?.oasb, 'bin/oasb.mjs', 'package.json does not name bin/oasb.mjs as the oasb command');
+  assert.match(header, /^git clone https:\/\/github\.com\/opena2a-org\/oasb\.git$/m, `${PAGE}: the header has no clone command`);
+  assert.match(header, /^cd oasb$/m, `${PAGE}: the header does not enter the clone`);
+  // Each clone command that prints the checklist runs, from the checkout's
+  // bin/oasb.mjs, and exits 0 with the controls of the level it names.
+  const lines = [...header.matchAll(/^node bin\/oasb\.mjs checklist((?: --[\w=-]+(?: L\d)?)*)\s*(?:#.*)?$/gm)];
+  assert.ok(lines.length > 0, `${PAGE}: the header gives no node bin/oasb.mjs checklist command`);
+  const { levels } = loadChecklist();
+  for (const [line, flags] of lines) {
+    const args = flags.trim().split(/\s+/).filter(Boolean);
+    const r = checklist(args);
+    assert.equal(r.status, 0, `${line}: ${r.stderr}`);
+    if (!args.includes('--level')) continue;
+    const level = args[args.indexOf('--level') + 1];
+    assert.match(r.stdout, new RegExp(`^OASB-1 checklist: \\d+ controls of OASB-1 \\S+, level ${level}$`, 'm'), line);
+    assert.deepEqual(checklistJson(args).levels.map((l) => l.id), levelsUpTo({ levels }, level), line);
+  }
+});
+
 test('the README links the page and names the command', () => {
   const readme = read('README.md');
   assert.match(readme, /\]\(docs\/oasb-1-checklist\.md\)/, 'the README does not link docs/oasb-1-checklist.md');
