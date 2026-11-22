@@ -3670,6 +3670,20 @@ table row or a scenario file's header; or other, which says what it changes.
   two spaces and `guide.md">z</a>`, where markdown-it reads the `>` after
   the four spaces as the marker of the block quote and goes on with the
   paragraph.
+- `npm run check:readme` keeps the tag that raw HTML leaves open at a `[`
+  that opens no link, and reads the `href` of a tag that a link, an
+  autolink, emphasis or a hard line break ends. It forgot the tag at every
+  `[`, so the `<a href>` after one that no `]` closes, or whose reference no
+  definition names, was read as a link where the tag's quoted value holds
+  it, and it dropped the `href` that the tag already held where the text
+  after it ended the tag. With `docs/guide.md` present, `x <? > <a
+  href="docs/nowhere.md" x=" ?> [y](docs/guide.md)` exited 0, where a
+  browser ends the tag at the `>` of the link that is written there and
+  links to `docs/nowhere.md`. It fails with
+  `link target "docs/nowhere.md" does not exist`, as does the same with
+  `x='` and a `'` after it, a `*y*` or two spaces and a line break. `x <? >
+  <b x=" ?> [y <a href="docs/nowhere.md">z</a>` passes, as the `<a>` is
+  inside the quoted value.
 - `npm run check:readme` reads the indentation that markdown-it 14.1.0
   gives the list items that hold a paragraph in one pass over the line
   that opens them. It read that line from its start for each item that a

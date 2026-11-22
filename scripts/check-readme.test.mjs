@@ -2792,6 +2792,50 @@ test('a comment or a tag that raw HTML leaves open is read on into the raw HTML 
   }
 });
 
+test('a tag that raw HTML leaves open stays open at a [ that opens no link, and ends at one that does, with the href it already holds read', () => {
+  // parse5 7.3.0 reads no link to docs/nowhere.md in what commonmark.js
+  // 0.31.2 or markdown-it 14.1.0 (html: true) renders of these: a [ that
+  // opens no link or image, because no ] closes it, no definition names its
+  // reference, or a link or an image inside a link's text holds it, is text,
+  // so the <a> after it is inside the quoted value of x, or inside a tag
+  // that no > has ended; and a link whose destination holds no ' writes no
+  // quote that ends a value in single quotes.
+  for (const body of [
+    'x <? > <b x=" ?> [y <a href="docs/nowhere.md">z</a>\n',
+    'x <? > <b x=" ?> [y] <a href="docs/nowhere.md">z</a>\n',
+    'x <? > <b x=" ?> [y][ref] <a href="docs/nowhere.md">z</a>\n',
+    "x <? > <b x=' ?> [y](docs/guide.md) <a href=\"docs/nowhere.md\">z</a>\n",
+    'x <? > <a href="docs/guide.md" x=\' ?> [y] <a href="docs/nowhere.md">z</a>\n',
+    'x <? > <a href="docs/nowhere.md" x=\' ?> [y]\n',
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 0, `${body}\n${r.stderr}`);
+  }
+  // parse5 reads an href to docs/nowhere.md in what one or both render of
+  // each of these: the tag that raw HTML leaves open ends at the next >,
+  // which a link, an autolink, a code span that holds the ' that ends the
+  // value, emphasis or a hard line break writes or comes after, and its href
+  // is read where it is complete; a [ of a link in a value in double quotes
+  // writes a " that ends the value; the <a> after a [ that opens no link is
+  // read in a tag that a ' has already left unquoted.
+  for (const [body, line] of [
+    ['x <? > <a href="docs/nowhere.md" x=" ?> [y](docs/guide.md)\n', 11],
+    ['x <? > <a href="docs/nowhere.md" x=" ?> ![y](docs/guide.md)\n', 11],
+    ['x <? > <a href="docs/nowhere.md" x=" ?> [y][ref]\n\n[ref]: docs/guide.md\n', 11],
+    ['x <? > <a href="docs/nowhere.md" x=" ?> <https://example.com>\n', 11],
+    ["x <? > <a href=\"docs/nowhere.md\" x=' ?> [y](it's.md)\n", 11],
+    ["x <? > <a href=\"docs/nowhere.md\" x=' ?> ' [y]\n", 11],
+    ["x <? > <a href=\"docs/nowhere.md\" x=' ?> ' *y*\n", 11],
+    ["x <? > <a href=\"docs/nowhere.md\" x=' ?> '  \ny\n", 12],
+    ["x <? > <a href=\"docs/nowhere.md\" x=' ?> `'`\n", 11],
+    ["x <? > <b x=' ?> ' [y <a href=\"docs/nowhere.md\">z</a>\n", 11],
+  ]) {
+    const r = check(body);
+    assert.equal(r.status, 1, body);
+    assert.match(r.stderr, new RegExp(`^README: line ${line}: link target "docs/nowhere\\.md" does not exist\\.$`, 'm'), body);
+  }
+});
+
 test('a tag that raw HTML leaves open ends at the end tag after its paragraph, heading or table cell, or at the " and /> after the description of an image, unless it is inside a quoted value there', () => {
   // parse5 7.3.0 reads an href to docs/nowhere.md in what commonmark.js
   // 0.31.2 or markdown-it 14.1.0 (html: true), or both, render of each of
