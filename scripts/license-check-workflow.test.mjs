@@ -148,7 +148,10 @@ test('npx license-checker, offline with an empty npm cache, runs the pinned vers
     env: { ...process.env, npm_config_cache: cache, npm_config_offline: 'true' },
   });
   assert.equal(r.status, 0, `npx ${NAME} --help exited ${r.status} (run npm ci first): ${r.error ?? r.stderr}`);
-  assert.equal(r.stderr.split('\n')[0], `${NAME}@${pinOf(pkg)}`);
+  // npm may warn first about the user's own config, such as an .npmrc key
+  // it no longer knows; those lines are npm's, not license-checker's.
+  const lines = r.stderr.split('\n').filter((line) => !line.startsWith('npm warn '));
+  assert.equal(lines[0], `${NAME}@${pinOf(pkg)}`);
 });
 
 const INSTALL = '          npm install --ignore-scripts 2>/dev/null || true\n';
