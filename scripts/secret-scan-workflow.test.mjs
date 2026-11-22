@@ -5,13 +5,12 @@
 // release at a pinned version and checked against the archive's sha256, a
 // pull request is read from its base to its head and a push from its
 // previous head to its new head, and the scheduled run reads the full
-// history. The last test makes each of those changes to a copy of the
-// workflow and checks that one of the other tests then fails; the change to
-// the checksum step is made only where sha256sum is installed, as the test
-// that catches it runs only there.
-// It does not check the workflow's concurrency settings, under which a later
-// run can cancel one before its scan finishes, or which version of the
-// checkout action the job uses.
+// history, and only a pull request's run is cancelled by a later run: each
+// push and scheduled run has a concurrency group of its own. The last test
+// makes each of those changes to a copy of the workflow and checks that one
+// of the other tests then fails; the change to the checksum step is made only
+// where sha256sum is installed, as the test that catches it runs only there.
+// It does not check which version of the checkout action the job uses.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 //
@@ -49,6 +48,14 @@ function triggers(lines) {
     else if (event && line.trim() !== '') events[event].push(line.trim());
   }
   return events;
+}
+
+/** The trimmed lines of the workflow's top-level concurrency: block. */
+function concurrency(lines) {
+  const start = lines.indexOf('concurrency:');
+  assert.notEqual(start, -1, 'security.yml has no concurrency: block');
+  const end = lines.findIndex((line, i) => i > start && /^\S/.test(line));
+  return lines.slice(start + 1, end === -1 ? undefined : end).map((line) => line.trim()).filter(Boolean);
 }
 
 /** The lines of a job, from its key to the next job's key. */
@@ -169,6 +176,21 @@ const checks = [
       assert.deepEqual(on.pull_request, ['branches: [main]']);
       assert.deepEqual(on.push, ['branches: [main]']);
       assert.deepEqual(on.schedule, ['- cron: "0 6 * * 1"']);
+    },
+  },
+  {
+    name: 'a later run cancels only a pull request run, never a push or scheduled scan',
+    run(wf) {
+      // A cancelled push run leaves the commits it added unscanned: the next
+      // push scans from its own previous head. A group shared by pushes
+      // would also cancel a pending run when a third one starts, so each
+      // push and scheduled run gets a group named by its run id.
+      assert.deepEqual(concurrency(wf.lines), [
+        "group: security-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}",
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+      ]);
+      const jobConcurrency = wf.job.filter((line) => /^ {4}concurrency:/.test(line));
+      assert.deepEqual(jobConcurrency, [], 'secret-scan has a concurrency group of its own');
     },
   },
   {
@@ -376,6 +398,9 @@ const weakenings = [
   ['gitleaks is pinned to another version', 'GITLEAKS_VERSION: 8.30.1', 'GITLEAKS_VERSION: 8.30.0'],
   ['the pinned sha256 is another value', /(GITLEAKS_SHA256: )[0-9a-f]{64}/, `$1${'a'.repeat(64)}`],
   ['the archive is unpacked whatever its sha256', 'if [ "$actual" != "$GITLEAKS_SHA256" ]; then', 'if [ "$actual" != "$actual" ]; then', !hasSha256sum && 'sha256sum is not installed here; the runner has it'],
+  ['a later run cancels every earlier one', "cancel-in-progress: ${{ github.event_name == 'pull_request' }}", 'cancel-in-progress: true'],
+  ['pushes to main share one concurrency group', "${{ github.event_name == 'pull_request' && github.ref || github.run_id }}", '${{ github.ref }}'],
+  ['the secret-scan job has a cancelling group of its own', '    name: Secret Detection\n', '    name: Secret Detection\n    concurrency:\n      group: secret-scan-${{ github.ref }}\n      cancel-in-progress: true\n'],
   ['a step runs in another shell', "        if: github.event_name == 'schedule'\n", "        if: github.event_name == 'schedule'\n        shell: sh\n"],
 ];
 

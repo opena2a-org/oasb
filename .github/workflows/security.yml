@@ -8,9 +8,13 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
+# A pull request's new commits replace its earlier run, so that run is
+# cancelled. A push scans only the commits it added and no later run scans
+# them again, so each push and scheduled run has a group of its own: no later
+# run cancels it or leaves it pending.
 concurrency:
-  group: security-${{ github.ref }}
-  cancel-in-progress: true
+  group: security-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
