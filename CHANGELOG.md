@@ -3771,6 +3771,25 @@ table row or a scenario file's header; or other, which says what it changes.
   there. `scripts/scenario-floor.test.mjs` runs the file with such a slow
   tool first on PATH and fails unless its test passes and the run exits 0
   with no unhandled error; it catches the regression on macOS alone.
+- `npm run check:readme` starts the text of a `<script>` in an HTML block
+  after the `>` that ends its start tag as a browser reads the tag's
+  attributes (#288). It read any `=` as the start of a value, so a quote
+  after it opened a quoted value that ran past that `>`; a browser reads
+  the `=` of `<script =">`, of `<script/=">` and after a quoted value, as
+  in `<script a="x"=">`, as the first character of an attribute's name,
+  and the `=` and the quote of `<script a=b=">` as part of an unquoted
+  value, as it does after a line break in place of the space. With a
+  README that links `docs/AUDIT-2026-06-03.md`, and the line
+  `<div><script =">x</script>As of 2026-06-03. "></div>` after that page's
+  H1 and a blank line, then a blank line and
+  `See the [README](../README.md) for the current figures.`, the check
+  exited 1 with `is a dated page, so above its first H2 it must say "as of
+  2026-06-03"`, and now exits 0, as the `</script>` ends the element before
+  the note; with `<div><script =">`, `<!--<script>">x</script>` and
+  `As of 2026-06-03.</div>` on one line in its place, it exited 0 and now
+  exits 1, as the `<!--` and `<script>` in the element's text keep that
+  `</script>` from ending it. Each of the other start tags above gives the
+  same exits. A `>` inside a quoted value is still part of the value.
 
 ## Behavioral governance draft withdrawn on 2026-09-09
 
