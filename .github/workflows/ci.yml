@@ -32,8 +32,22 @@ jobs:
         with:
           node-version: "20"
 
+      # onnxruntime-node (arp-guard -> hackmyagent) downloads CUDA
+      # binaries in its install script unless told to skip; no test needs them.
       - name: Install dependencies
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
         run: npm install
+
+      # arp-guard is an optional dependency, so npm install succeeds when it
+      # fails to install and the tests that import it fail later. Fail here
+      # instead, naming the package.
+      - name: Check optional dependency arp-guard is installed
+        run: |
+          test -f node_modules/arp-guard/package.json || {
+            echo "::error::optional dependency arp-guard was not installed: node_modules/arp-guard/package.json is missing"
+            exit 1
+          }
 
       - name: Build
         run: npm run build
