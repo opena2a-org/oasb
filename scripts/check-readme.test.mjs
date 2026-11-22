@@ -5428,6 +5428,35 @@ test('a note inside an HTML comment, processing instruction, declaration, CDATA 
   }
 });
 
+test('the text of a <script> starts after the first > that ends its start tag as a browser reads its attributes, where an = may start a name or sit in an unquoted value', () => {
+  // A browser reads the = of <script =">, of <script/="> and after a quoted
+  // value, as in <script a="x"=">, as the start of an attribute's name, and
+  // the = and the quote of <script a=b="> as part of an unquoted value, so
+  // that no quoted value opens there and the first > ends the tag. So does
+  // a line break, which ends the tag's name or an unquoted value as a space
+  // does.
+  // The text after that > is the <script>'s: the note there is hidden where
+  // <!-- and <script put the element in the double escaped state, in which
+  // </script> does not end it, and shown after the </script> that ends it.
+  const see = 'See the [README](../README.md) for the current figures.\n';
+  const starts = ['<script =">', '<script/=">', '<script a=b=">', `<script a="x"=">`, '<script\n=">', '<script a=b\n=">'];
+  for (const start of starts) {
+    const intro = `<div>${start}<!--<script>">x</script>As of 2026-06-03.</div>\n\n${see}`;
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 1, intro);
+    assert.match(r.stderr, DATED, intro);
+  }
+  for (const start of starts) {
+    const intro = `<div>${start}x</script>As of 2026-06-03. "></div>\n\n${see}`;
+    const r = check(DATED_LINK, datedPage(intro));
+    assert.equal(r.status, 0, `${intro}\n${r.stderr}`);
+  }
+  // A > inside a quoted value is part of the value, as before.
+  const quoted = check(DATED_LINK, datedPage(`<div><script a="x>">As of 2026-06-03.</script></div>\n\n${see}`));
+  assert.equal(quoted.status, 1, quoted.stderr);
+  assert.match(quoted.stderr, DATED);
+});
+
 test('a note inside a <textarea> marks a dated page, also inside a comment, processing instruction or <style> there, as none of these starts in escapable raw text', () => {
   // The text of a <textarea> runs to </textarea>, and a <!--, <? or <style
   // in it is text: the note is read there, on the line that opens the

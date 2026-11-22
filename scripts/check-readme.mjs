@@ -4601,35 +4601,44 @@ const END_TAG_STARTS = new Set([HIDDEN_HTML_END[1], HIDDEN_HTML_END[2], TEXTAREA
 const COMMENT_END = HIDDEN_HTML_END[3];
 
 // The states of a tag that tagEnd() reads, as the HTML tokenizer reads a
-// tag: in its name, an attribute name or an unquoted value (IN_TAG), after
-// the = of an attribute and the white space after it (AFTER_EQUALS), or in
-// a value in double or in single quotes, '"' or "'", where a > is part of
-// the value.
+// tag: in its name (IN_TAG), which runs to white space, a / or a >, and an
+// = and a quote in which are part of it, and then in the states in which
+// tagStep() reads the tag's attributes. There an = starts the name of an
+// attribute before a name, as in <script =">, <script/="> and after a
+// quoted value, as in <script a="x"=">, each of which has an attribute
+// named =", and an = and a quote are part of an unquoted value, as in
+// <script a=b=">, so no quoted value opens in any of these and the first >
+// ends the tag: the text after it is that of the element the tag opens.
 const IN_TAG = 'tag';
-const AFTER_EQUALS = '=';
 
 // Where the tag that `text` holds from text[i] on in state `state`, one of
 // the states above, ends: returns the index after its > as `end`, or -1
-// when the text ends first, with the state the tag is in there as `state`.
+// when the text ends first, with the state the tag is in there as `state`,
+// after the line break that ends the line `text` is read from, which ends
+// the tag's name, an attribute's name or an unquoted value as a space does.
 function tagEnd(text, i, state) {
+  const tag = newTag(0, true);
   while (i < text.length) {
     if (state === '"' || state === "'") {
       const close = text.indexOf(state, i);
       if (close === -1) return { end: -1, state };
       i = close + 1;
-      state = IN_TAG;
+      state = BEFORE_NAME;
       continue;
     }
     const c = text[i++];
-    if (c === '>') return { end: i, state: null };
-    if (state === AFTER_EQUALS) {
-      if (c === '"' || c === "'") state = c;
-      else if (!/[\t\n\f\r ]/.test(c)) state = IN_TAG;
-    } else if (c === '=') {
-      state = AFTER_EQUALS;
+    if (state === IN_TAG) {
+      if (c === '>') return { end: i, state: null };
+      if (c === '/' || isHtmlSpace(c)) state = BEFORE_NAME;
+      continue;
     }
+    tag.state = state;
+    if (tagStep(tag, c, text, i - 1)) return { end: i, state: null };
+    state = tag.state;
   }
-  return { end: -1, state };
+  tag.state = state === IN_TAG ? BEFORE_NAME : state;
+  tagStep(tag, '\n', text, i);
+  return { end: -1, state: tag.state };
 }
 
 // The names of the elements that shownElements() follows: <details>,
