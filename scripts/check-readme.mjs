@@ -980,18 +980,44 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null
   let mark = 0; // the index in `marks` of the first one that may end after `read`
   let open = null; // what the raw HTML read outside images leaves open, as rawHtmlHrefs() gives it
   let read = 0; // the index in the joined lines after the raw HTML read last
+  // The [ and ] pairs of the paragraph, as linkSyntax() gives them, made the
+  // first time a [ is met in the text of an open tag.
+  let pairs = null;
+  // Whether a renderer writes a tag, with a " in it, where the [ at text[i]
+  // is, that ends a tag open in the state `state`: an image, whose ![ is
+  // not read further, a link, written as <a href="..." title="...">, or a
+  // reference that the page defines, or one that may be looked up under
+  // another label. A [ that no ] closes, or whose reference the page does
+  // not define, is text. A link ends a value in single quotes only where
+  // its destination or title holds a ' that ends it.
+  const writesTag = (i, state) => {
+    if (text[i - 1] === '!') return true;
+    if (pairs === null) linkSyntax(text, () => true, (pairs = new Map()));
+    const pair = pairs.get(i);
+    if (pair === undefined) return false;
+    if (pair.end === -1) return pair.label === null || defined(pair.label);
+    return state !== "'" || text.slice(pair.close + 1, pair.end).includes("'");
+  };
   // Reads the text from text[read] to text[to], which a renderer writes
   // between two pieces of raw HTML, into the attributes of `open` when that
-  // is a tag, as textAt() reads text, and sets `open` to null where the
-  // renderer may write a tag or a quote of its own that a browser reads in
-  // that tag: at a [, as a link or an image may start there; at an
-  // autolink, but in a value in single quotes when the autolink holds no ';
-  // at a code span, but in a quoted value when the span holds no quote that
-  // ends it; and, outside a quoted value, at a ], a *, a _ or a ~, as a
-  // link, emphasis or a strikethrough may end or start there, and at a hard
-  // line break. The destination and title of an inline link are left out,
-  // as a renderer writes them in the link's tag before its text.
+  // is a tag, as textAt() reads text, and ends `open` where the renderer
+  // may write a tag or a quote of its own that a browser reads in that tag:
+  // at a [ that opens a link or an image; at an autolink, but in a value in
+  // single quotes when the autolink holds no '; at a code span, but in a
+  // quoted value when the span holds no quote that ends it; and, outside a
+  // quoted value, at a ], a *, a _ or a ~, as a link, emphasis or a
+  // strikethrough may end or start there, and at a hard line break. A tag
+  // that ends there, as a browser ends it at the next >, has its href read
+  // when that is complete: x <? > <a href="target" x=" ?> [y](a.md) links
+  // to target. A [ that opens no link, as a [ in text, leaves the tag open,
+  // in a quoted value as outside one. The destination and title of an inline
+  // link are left out, as a renderer writes them in the link's tag before its
+  // text.
   const textTo = (to) => {
+    const forget = () => {
+      if (open.href) note(open.href);
+      open = null;
+    };
     for (let i = read; open !== null && open !== IN_COMMENT && i < to; i++) {
       while (mark < marks.length && marks[mark][1] <= i) mark++;
       const { state } = open;
@@ -999,13 +1025,14 @@ function paragraphCodeSpans(lines, texts = [], defined = () => false, end = null
       if (mark < marks.length && marks[mark][0] === i) {
         const [, end, kind] = marks[mark];
         const holds = state === "'" && text.slice(i, end).includes("'");
-        if (kind === AUTOLINK_TAG ? state !== "'" || holds : kind === CODE_SPAN && (!quoted || holds)) open = null;
+        const ends = kind === AUTOLINK_TAG ? state !== "'" || holds : kind === CODE_SPAN && (!quoted || holds);
+        if (ends) forget();
         i = end - 1;
         continue;
       }
       const c = text[i];
-      if (c === '[' || (!quoted && (c === ']' || c === '*' || c === '_' || c === '~' || (c === '\\' && text[i + 1] === '\n') || (c === '\n' && text[i - 1] === ' ' && text[i - 2] === ' ')))) {
-        open = null;
+      if (c === '[' ? writesTag(i, state) : !quoted && (c === ']' || c === '*' || c === '_' || c === '~' || (c === '\\' && text[i + 1] === '\n') || (c === '\n' && text[i - 1] === ' ' && text[i - 2] === ' '))) {
+        forget();
       } else {
         const [stands, last] = textAt(text, i, to);
         tagStep(open, stands, text, i, last);
@@ -5255,8 +5282,14 @@ function referenceLabel(text, start, close, end, holds) {
 // image is part of that image. Given `keep`, a test of a part, only the
 // parts it passes are returned, in the same way: one inside another that
 // it passes is part of that one, and one inside a part that it does not
-// pass is returned.
-function linkSyntax(text, keep = () => true) {
+// pass is returned. Given `pairs`, a Map, it also gets, for the index of each
+// [ that is not that of an image and that a ] closes outside a link's text,
+// { close, end, labelEnd, label }: the index of that ], the index after the
+// destination and title of an inline link that follows it, or -1, and for
+// no such link the index after the label of a reference that follows it, as
+// referenceLabelEnd() reads it, and the label that a renderer looks up, as
+// referenceLabel() gives it, null where the two may look up different ones.
+function linkSyntax(text, keep = () => true, pairs = null) {
   const parts = [];
   // Each [ that no ] has closed yet, as [where it starts, whether it opens
   // an image, whether a [ opened while it was the last one open, inside it].
@@ -5282,6 +5315,10 @@ function linkSyntax(text, keep = () => true) {
       aroundLink = Math.min(aroundLink, brackets.length);
       if (holdsLink) continue;
       const end = text[i + 1] === '(' ? (inlineLink(text, i + 1)?.end ?? -1) : -1;
+      if (pairs !== null && !image) {
+        const labelEnd = end === -1 ? referenceLabelEnd(text, i + 1) : i + 1;
+        pairs.set(at, { close: i, end, labelEnd, label: end === -1 ? referenceLabel(text, at - 1, i, labelEnd, holds) : null });
+      }
       if (end === -1) {
         if (image) {
           const labelEnd = referenceLabelEnd(text, i + 1);
