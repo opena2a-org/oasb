@@ -1073,7 +1073,7 @@ test("this repository's README has no badge that states a number and shows the C
   const r = spawnSync(process.execPath, [script, '--no-counts', join(repo, 'README.md')], { encoding: 'utf8' });
   assert.doesNotMatch(r.stderr, /states a number typed into its URL/);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(readFileSync(join(repo, 'README.md'), 'utf8'), /\(https:\/\/github\.com\/opena2a-org\/oasb\/actions\/workflows\/ci\.yml\/badge\.svg\)/);
+  assert.match(readFileSync(join(repo, 'README.md'), 'utf8'), /\(https:\/\/github\.com\/opena2a-org\/oasb\/actions\/workflows\/ci\.yml\/badge\.svg\?branch=main\)/);
 });
 
 test('the Quick Start comment and the scoring-engine and pinned counts are each checked', () => {
