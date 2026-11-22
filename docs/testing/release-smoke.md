@@ -351,16 +351,18 @@ README's test counts do not include them.
   it.
 - `scripts/license-check-workflow.test.mjs`: the license-checker that the
   license-check job of `.github/workflows/security.yml` runs. The job runs
-  `npm install` and then `npx license-checker`, and npx runs the
-  license-checker in `node_modules`, so `package.json` pins it as a
-  devDependency at an exact version though no script runs it. Fails when
+  `npm install` and then `npx license-checker@<version>`, and npx runs the
+  license-checker in `node_modules` when its version is the one named, so
+  `package.json` pins it as a devDependency at an exact version though no
+  script runs it. Fails when
   `package.json` gives license-checker a range or does not name it, when
   `package-lock.json` does not lock that version from the npm registry
   with a sha512 integrity hash, when the job runs license-checker before
   it installs the devDependencies, or names it outside a comment other
-  than in an npx call of license-checker with no version or the pinned
-  one, or when `npx license-checker --help`, run offline with an empty npm
-  cache, does not name the pinned version. Its last test makes each of a
+  than in an npx call of license-checker at the pinned version, or when
+  `npx license-checker@<pin> --help`, run offline with an empty npm cache,
+  fails or does not name the pinned version on its first line after any
+  warnings of npm's own. Its last test makes each of a
   list of changes that undo the pin to a copy of the workflow or of the
   package files and fails when none of the first four tests fails on the
   copy. It does not check that the install succeeds: the step ignores a
@@ -513,6 +515,15 @@ README's test counts do not include them.
   JavaScript or TypeScript file in `scripts/` or `bin/`, other than a test
   file and `scripts/is-main.mjs`, names `process.argv[1]`; or when the
   files there that import `isMain` are not those six.
+- `scripts/workflow-action-pins.test.mjs`: the actions
+  `.github/workflows/security.yml` uses. Fails when a `uses:` line outside a
+  comment is not `<owner>/<repo>@<40-digit commit SHA> # v<version>`, so
+  when an action is used at a tag such as `@v4`, at a branch such as
+  `@master`, at a short SHA or at no ref, or when its version comment is
+  missing. Its last test makes each of those changes to a copy of the
+  workflow and fails when the first test passes on the copy. It does not
+  check that a SHA is the commit of the release its comment names: that
+  needs the action's repository, and the test runs offline.
 
 ## The README checks on every pull request
 

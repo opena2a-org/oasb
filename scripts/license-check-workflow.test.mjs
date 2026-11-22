@@ -7,15 +7,16 @@
 // integrity hash, though no script in package.json runs it.
 // The first four tests check the pin, the lock entry, that the job installs
 // the devDependencies before it runs license-checker, and that it runs
-// license-checker through npx at no other version. The next one runs
-// `npx license-checker --help` offline with an empty npm cache and checks
-// that it names the pinned version. The last test makes each change in its
+// license-checker through npx at the pinned version, named on the npx line.
+// The next one runs `npx license-checker@<pin> --help` offline with an empty
+// npm cache and checks that it runs the copy in node_modules and names the
+// pinned version. The last test makes each change in its
 // list to a copy of the workflow or of the package files and checks that
 // one of the first four tests then fails.
 // It does not check that the install succeeds: the step ignores a failed
 // `npm install` (`|| true`), and npx then downloads license-checker from the
-// registry when node_modules holds none. It does not check the versions of
-// the actions the job uses.
+// registry when node_modules holds none.
+// scripts/workflow-action-pins.test.mjs checks the actions the job uses.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -119,14 +120,13 @@ const checks = [
     },
   },
   {
-    name: 'the license-check job runs license-checker through npx at no other version',
+    name: 'the license-check job runs license-checker through npx at the pinned version',
     run({ job, pkg }) {
       for (const { line } of runsOf(job)) {
         const m = NPX_RUN.exec(line);
         assert.ok(m, `the license-check job runs ${NAME} in a way this test does not read: ${line}`);
-        if (m[1] !== undefined) {
-          assert.equal(m[1], pinOf(pkg), `the license-check job runs ${NAME}@${m[1]}, and package.json pins ${pinOf(pkg)}`);
-        }
+        assert.notEqual(m[1], undefined, `the license-check job runs npx ${NAME} with no version: ${line}`);
+        assert.equal(m[1], pinOf(pkg), `the license-check job runs ${NAME}@${m[1]}, and package.json pins ${pinOf(pkg)}`);
       }
     },
   },
@@ -137,25 +137,25 @@ for (const check of checks) {
   test(check.name, () => check.run(state));
 }
 
-test('npx license-checker, offline with an empty npm cache, runs the pinned version', (t) => {
+test('npx license-checker at the pinned version, offline with an empty npm cache, runs the copy in node_modules', (t) => {
   const cache = mkdtempSync(join(tmpdir(), 'oasb-npx-cache-'));
   t.after(() => rmSync(cache, { recursive: true, force: true }));
   // license-checker --help names its version on stderr and exits 0;
   // --version prints it and exits 1.
-  const r = spawnSync('npx', [NAME, '--help'], {
+  const r = spawnSync('npx', [`${NAME}@${pinOf(pkg)}`, '--help'], {
     cwd: repo,
     encoding: 'utf8',
     env: { ...process.env, npm_config_cache: cache, npm_config_offline: 'true' },
   });
-  assert.equal(r.status, 0, `npx ${NAME} --help exited ${r.status} (run npm ci first): ${r.error ?? r.stderr}`);
-  // npm may warn first about the user's own config, such as an .npmrc key
-  // it no longer knows; those lines are npm's, not license-checker's.
-  const lines = r.stderr.split('\n').filter((line) => !line.startsWith('npm warn '));
-  assert.equal(lines[0], `${NAME}@${pinOf(pkg)}`);
+  assert.equal(r.status, 0, `npx ${NAME}@${pinOf(pkg)} --help exited ${r.status} (run npm ci first): ${r.error ?? r.stderr}`);
+  // npm may write warnings of its own to stderr first, such as one for an
+  // unknown setting in the user's .npmrc; license-checker's first line follows.
+  const own = r.stderr.split('\n').filter((line) => !/^npm (?:warn|notice)\b/i.test(line));
+  assert.equal(own[0], `${NAME}@${pinOf(pkg)}`, r.stderr);
 });
 
 const INSTALL = '          npm install --ignore-scripts 2>/dev/null || true\n';
-const RUN = '          npx license-checker ';
+const RUN = `          npx license-checker@${pinOf(pkg)} `;
 
 // Each change undoes the pin, and one of the first four tests must fail on
 // the files it leaves. A change to the workflow is made to the text of the
@@ -169,10 +169,11 @@ const weakenings = [
   ['package-lock.json resolves license-checker from another host', { lock: (l) => (l.packages[LOCK_KEY].resolved = l.packages[LOCK_KEY].resolved.replace('https://registry.npmjs.org/', 'https://mirror.example.invalid/')) }],
   ['package-lock.json holds no integrity hash', { lock: (l) => delete l.packages[LOCK_KEY].integrity }],
   ['the job installs no packages', { workflow: (s) => s.replace(INSTALL, '') }],
-  ['the job runs license-checker before it installs', { workflow: (s) => s.replace(INSTALL, '').replace(/^( {10}npx license-checker .*\n)/m, `$1${INSTALL}`) }],
+  ['the job runs license-checker before it installs', { workflow: (s) => s.replace(INSTALL, '').replace(/^( {10}npx license-checker\S* .*\n)/m, `$1${INSTALL}`) }],
   ['the install leaves out the devDependencies', { workflow: (s) => s.replace('npm install --ignore-scripts', 'npm install --omit=dev --ignore-scripts') }],
   ['the job installs the production dependencies only', { workflow: (s) => s.replace('npm install --ignore-scripts', 'npm ci --production --ignore-scripts') }],
   ['the job sets NODE_ENV to production', { workflow: (s) => s.replace('    name: License Compliance\n', '    name: License Compliance\n    env:\n      NODE_ENV: production\n') }],
+  ['npx runs license-checker at no version', { workflow: (s) => s.replace(RUN, '          npx license-checker ') }],
   ['npx runs the latest license-checker', { workflow: (s) => s.replace(RUN, '          npx license-checker@latest ') }],
   ['npx runs another version', { workflow: (s) => s.replace(RUN, '          npx license-checker@0.0.0 ') }],
   ['the job installs the latest license-checker', { workflow: (s) => s.replace(RUN, `          npm install --no-save ${NAME}@latest\n${RUN}`) }],
