@@ -916,17 +916,22 @@ table row or a scenario file's header; or other, which says what it changes.
   checked against the release's sha256 before it is unpacked; it was the
   latest release, unchecked. The job's token can only read the repository.
   `scripts/secret-scan-workflow.test.mjs` checks these: the workflow's
-  triggers, that the job has no condition of its own and fails when
-  gitleaks reports a leak, the read-only token, the pinned version, the
-  checksum's value and the step that checks it, the download host, the pull
-  request range, the push range and its fallback, and the scheduled run's
-  full history. Its last test weakens a copy of the workflow in each of
-  those ways and fails when no other test fails on the copy; the change to
-  the step that checks the checksum is made only where `sha256sum` is
-  installed, as the test that catches it runs only there. It does not check
-  the workflow's concurrency settings, under which a later run can cancel
-  one before its scan finishes, or which version of the checkout action the
-  job uses.
+  triggers, `pull_request` to `main`, `push` to `main` and `schedule`
+  `0 6 * * 1` (Mondays at 06:00 UTC); that the job has no job-level `if:`,
+  so it runs on each of them, and fails when gitleaks reports a leak; the
+  read-only token, from the job-level `permissions: contents: read` and not
+  the workflow-level `permissions: contents: read, security-events: write`;
+  the pinned gitleaks 8.30.1, the checksum's value, sha256
+  `551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb`, and
+  the step that checks it; the download host; the pull request range, the
+  push range and its fallback; the scheduled run's full history; and that
+  only a pull request's run is cancelled by a later run, each push and
+  scheduled run having a concurrency group of its own. Its last test
+  weakens a copy of the workflow in each of those ways and fails when no
+  other test fails on the copy; the change to the step that checks the
+  checksum is made only where `sha256sum` is installed, as the test that
+  catches it runs only there. It does not check which version of the
+  checkout action the job uses.
 - `scripts/placeholder-credentials.test.mjs` reports an OpenAI-shaped key
   written right after an escape sequence, such as `\n` or `\x3D`, or after a
   percent-encoded byte, such as `%3D`. A key after the letter or digit that

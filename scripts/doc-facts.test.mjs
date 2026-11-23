@@ -12,8 +12,11 @@
 // benchmark-results-v6.json and src/benchmark/hma-pipeline-adapter.ts does
 // not give the server count BENCHMARK-RESULTS.md withdrew, and that a row of
 // docs/updates.md that starts with a version has a date CHANGELOG.md gives
-// that version, and that REPORT.md names the hackmyagent version
-// package-lock.json installs.
+// that version, that REPORT.md names the hackmyagent version
+// package-lock.json installs, and that docs/testing/release-smoke.md and the
+// CHANGELOG.md entry on the secret scan state the triggers, job condition,
+// pinned gitleaks checksum and job-level permissions security.yml gives the
+// secret-scan job and the same limits of its test.
 // Run with: npm run test:scripts (node --test). Kept outside src/ so the
 // vitest totals the README claims stay a count of benchmark tests.
 
@@ -779,5 +782,93 @@ test('REPORT.md names the hackmyagent version package-lock.json installs', () =>
   assert.ok(claims.length > 0, 'REPORT.md does not say which hackmyagent version the lockfile installs; update this test with the wording');
   for (const claimed of claims) {
     assert.equal(claimed, installed, `REPORT.md says the lockfile installs hackmyagent ${claimed}; package-lock.json installs ${installed}`);
+  }
+});
+
+// docs/testing/release-smoke.md and the CHANGELOG.md entry on the secret scan
+// both say what scripts/secret-scan-workflow.test.mjs checks of the
+// secret-scan job in .github/workflows/security.yml. Each must state the
+// workflow's triggers, the job's condition, the pinned gitleaks checksum and
+// the job's own permissions as the workflow has them, and the two must give
+// the same limits of the test.
+const SECRET_SCAN_DOCS = [
+  ['docs/testing/release-smoke.md', '- `scripts/secret-scan-workflow.test.mjs`:'],
+  ['CHANGELOG.md', '- The secret scan in the security workflow'],
+];
+
+/** The list item of a document that starts with `start`, on one line. */
+function bullet(file, start) {
+  const text = read(file);
+  const at = text.indexOf(`\n${start}`);
+  assert.notEqual(at, -1, `${file} has no list item starting ${start}; update this test with the wording`);
+  const end = text.slice(at + 1).search(/\n(?:- |\n|#)/);
+  return text.slice(at + 1, end === -1 ? undefined : at + 1 + end).replace(/\n[ \t]*/g, ' ').replace(/\s+/g, ' ');
+}
+
+/** The facts about the secret-scan job each document must state, read from security.yml. */
+function secretScanFacts() {
+  const lines = read('.github/workflows/security.yml').split('\n');
+  const block = (from, indent) => {
+    const end = lines.findIndex((line, i) => i > from && line.trim() !== '' && line.search(/\S/) <= indent);
+    return lines.slice(from + 1, end === -1 ? undefined : end).filter((line) => line.trim() !== '');
+  };
+  const triggers = [];
+  let event = null;
+  for (const line of block(lines.indexOf('on:'), 0)) {
+    const key = /^ {2}([\w-]+):$/.exec(line);
+    if (key) event = key[1];
+    const branches = /^ {4}branches: \[(.*)\]$/.exec(line);
+    if (branches) triggers.push(`\`${event}\` to ${branches[1].split(',').map((b) => `\`${b.trim()}\``).join(', ')}`);
+    const cron = /^ {4}- cron: "(.*)"$/.exec(line);
+    if (cron) triggers.push(`\`${event}\` \`${cron[1]}\``);
+  }
+  const permissions = (lines) => lines.map((line) => line.trim()).join(', ');
+  const workflowPermissions = permissions(block(lines.indexOf('permissions:'), 0));
+  const start = lines.indexOf('  secret-scan:');
+  assert.notEqual(start, -1, 'security.yml has no secret-scan job');
+  const job = block(start, 2);
+  const condition = job.find((line) => /^ {4}if:/.test(line));
+  const jobPermissionsAt = job.indexOf('    permissions:');
+  assert.notEqual(jobPermissionsAt, -1, 'the secret-scan job has no permissions of its own; update this test');
+  const jobPermissions = permissions(job.slice(jobPermissionsAt + 1).filter((line, i, rest) => rest.slice(0, i + 1).every((l) => /^ {6}\S/.test(l))));
+  const version = job.map((line) => /GITLEAKS_VERSION: (\S+)/.exec(line)?.[1]).find(Boolean);
+  const sha256 = job.map((line) => /GITLEAKS_SHA256: ([0-9a-f]{64})/.exec(line)?.[1]).find(Boolean);
+  assert.ok(version && sha256, 'the secret-scan job pins no gitleaks version or sha256; update this test');
+  const facts = [
+    ...triggers,
+    condition ? `job-level \`${condition.trim()}\`` : 'no job-level `if:`',
+    `gitleaks ${version}`,
+    `sha256 \`${sha256}\``,
+    `job-level \`permissions: ${jobPermissions}\``,
+  ];
+  if (workflowPermissions !== jobPermissions) facts.push(`not the workflow-level \`permissions: ${workflowPermissions}\``);
+  return { facts, triggers, jobPermissions };
+}
+
+test('the secret-scan facts read from security.yml are its triggers, condition, checksum and permissions', () => {
+  const { facts, triggers, jobPermissions } = secretScanFacts();
+  assert.ok(triggers.length >= 3, `security.yml has fewer triggers than pull_request, push and schedule: ${triggers.join('; ')}`);
+  assert.equal(jobPermissions, 'contents: read');
+  assert.ok(facts.some((f) => /^sha256 `[0-9a-f]{64}`$/.test(f)));
+});
+
+for (const [file, start] of SECRET_SCAN_DOCS) {
+  test(`${file} states the secret-scan triggers, condition, checksum and job-level permissions security.yml has`, () => {
+    const passage = bullet(file, start);
+    const missing = secretScanFacts().facts.filter((fact) => !passage.includes(fact));
+    assert.deepEqual(missing, [], `${file} does not state these facts of the secret-scan job as security.yml has them`);
+    assert.doesNotMatch(passage, /job-level `permissions:[^`]*security-events/, `${file} gives the job the workflow's security-events permission`);
+  });
+}
+
+test('docs/testing/release-smoke.md and CHANGELOG.md give the same limits of the secret-scan test', () => {
+  const limits = SECRET_SCAN_DOCS.map(([file, start]) => {
+    const found = /It does not check [^.]*\./.exec(bullet(file, start));
+    assert.ok(found, `${file} does not say what the secret-scan test does not check; update this test with the wording`);
+    return found[0];
+  });
+  assert.equal(limits[0], limits[1]);
+  if (read('scripts/secret-scan-workflow.test.mjs').includes('concurrency(wf.lines)')) {
+    assert.doesNotMatch(limits[0], /concurrency/, 'the secret-scan test checks the concurrency settings the docs say it does not');
   }
 });

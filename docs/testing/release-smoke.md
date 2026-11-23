@@ -257,25 +257,34 @@ README's test counts do not include them.
   `BENCHMARK-RESULTS.md` and `docs/pinned-benchmark.md` that must match the
   corpus and scripts they describe, that `docs/demo.tape` states no test or
   scenario count and writes the vitest JSON report its `npm run report` step
-  reads, and that the tape and `docs/oasb-demo.gif` are the files whose
-  SHA-256 `docs/captures/demo.json` records.
+  reads, that the tape and `docs/oasb-demo.gif` are the files whose
+  SHA-256 `docs/captures/demo.json` records, and that this page and the
+  `CHANGELOG.md` entry on the secret scan state the triggers, the job-level
+  condition, the pinned gitleaks sha256 and the job-level permissions that
+  `.github/workflows/security.yml` gives the secret-scan job, and the same
+  limits of its test.
 - `scripts/placeholder-credentials.test.mjs`: the placeholder marking of
   API-key-shaped values in `src/`; fails when one does not spell FAKE.
 - `scripts/secret-scan-workflow.test.mjs`: the secret-scan job of
   `.github/workflows/security.yml`. It runs the job's install and scan
-  scripts with stub commands and checks that the workflow runs on pull
-  requests and pushes to `main` and every Monday, that the job has no
-  condition of its own and fails when gitleaks reports a leak, that its
-  token can only read the repository, that gitleaks is downloaded from its
-  GitHub release and unpacked only when its archive matches the pinned
-  sha256, that a pull request is read from its base to its head and a push
-  from its previous head to its new head, and that the scheduled run reads
-  the full history. Its last test weakens a copy of the workflow in each of
-  those ways and fails when no other test fails on the copy; the change to
-  the checksum step is made only where `sha256sum` is installed, as the
-  test that catches it runs only there. It does not check the workflow's
-  concurrency settings, under which a later run can cancel one before its
-  scan finishes, or which version of the checkout action the job uses.
+  scripts with stub commands and checks the workflow's triggers,
+  `pull_request` to `main`, `push` to `main` and `schedule` `0 6 * * 1`
+  (Mondays at 06:00 UTC); that the job has no job-level `if:`, so it runs on
+  each of them, and fails when gitleaks reports a leak; that its token can
+  only read the repository, from the job-level `permissions: contents: read`
+  and not the workflow-level `permissions: contents: read, security-events:
+  write`; that gitleaks 8.30.1 is downloaded from its GitHub release and
+  unpacked only when its archive matches the pinned sha256
+  `551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb`; that a
+  pull request is read from its base to its head and a push from its
+  previous head to its new head; that the scheduled run reads the full
+  history; and that only a pull request's run is cancelled by a later run,
+  each push and scheduled run having a concurrency group of its own. Its
+  last test weakens a copy of the workflow in each of those ways and fails
+  when no other test fails on the copy; the change to the checksum step is
+  made only where `sha256sum` is installed, as the test that catches it runs
+  only there. It does not check which version of the checkout action the job
+  uses.
 - `scripts/typecheck-tests.test.mjs`: `npm run typecheck:tests`, which
   type-checks `src/` with its test files; fails on any type error it
   reports, or when `tsconfig.test.json` takes in no test file under
