@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RECORD_SCHEMA, RECORD_SCHEMA_V1, SUMMARY_NOTE, type PinnedRunRecord, type PinnedRunSummary } from './harness.js';
+import { RECORD_SCHEMA_V1, SUMMARY_NOTE, type PinnedRunRecord, type PinnedRunSummary } from './harness.js';
 import { gitEnv, SECOND_CLASSIFIER_FILES } from './inputs.js';
 import { addUse, noUse, type NanomindUse } from './nanomind-use.js';
 
@@ -338,7 +338,11 @@ describe('committed pinned runs', () => {
 
     it('names every pinned input in its record', () => eachRun(runs, (dirName, dir) => {
       const record: PinnedRunRecord = JSON.parse(readFileSync(join(dir, 'record.json'), 'utf-8'));
-      expect([RECORD_SCHEMA_V1, RECORD_SCHEMA]).toContain(record.schema);
+      // The schema is one of the pinned-run schemas: v1, or a later one that
+      // records what scored each sample (nanomindUse). A run of record stays
+      // valid when RECORD_SCHEMA moves on, so this does not compare with it.
+      expect(record.schema).toMatch(/^oasb-pinned-run\/v\d+$/);
+      if (record.schema !== RECORD_SCHEMA_V1) expect(record.nanomindUse).toBeDefined();
       expect(dirName).toBe(`${record.startedAt.slice(0, 10)}-${record.runId}`);
       expect(record.oasb.commit).toMatch(/^([0-9a-f]{40}|[0-9a-f]{64})$/);
       // The scoring code the run used is a commit of this repository's history.
