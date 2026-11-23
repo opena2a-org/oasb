@@ -1524,6 +1524,20 @@ table row or a scenario file's header; or other, which says what it changes.
   `expr-eval` at a version in the range `npm audit` reported. With
   `OASB_ADAPTER=rebuff`, AT-AI-001 and AT-AI-005 fail the 12 tests
   `docs/adapters.md` lists, as before.
+- `overrides` in `package.json` moves the `tinypool` that `vitest@3.2`
+  depends on from 1.1.1 to `^2.1.2` (2.2.0 in the lockfile). Every tinypool
+  before 2.1.2 is inside GHSA-5gmw-xhrv-c9v3 or GHSA-85c8-ppgw-ccpr, and
+  they were the critical advisories `npm ci` reported on 2026-11-23: 14
+  (2 moderate, 10 high, 2 critical) with the lockfile before this change,
+  13 (3 moderate, 10 high, none critical) after it, the vitest advisory
+  that tinypool had raised to critical now reported as moderate. The fix
+  `npm audit` names is `vitest@5.1.1`, a major version; vitest 3.2 runs
+  its test files on tinypool 2.2.0. npm applies `overrides` only in the
+  project that declares them, so `npm install @opena2a/oasb` still
+  installs the tinypool vitest asks for with the optional dependency.
+  `scripts/vitest-overrides.test.mjs` fails when `package.json` has no
+  `overrides.tinypool` or `package-lock.json` resolves a tinypool below
+  2.1.2.
 - The license-check job of the security workflow runs the license-checker
   that `npm install` puts in `node_modules`: 25.0.1, a devDependency
   pinned to that version and locked in `package-lock.json` with its

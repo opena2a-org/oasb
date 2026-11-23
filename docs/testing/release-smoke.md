@@ -358,6 +358,11 @@ README's test counts do not include them.
   `package-lock.json` resolves `langchain`, `langsmith`, `openai`, `axios`,
   `uuid` or `expr-eval` at a version in the range `npm audit` reported for
   it.
+- `scripts/vitest-overrides.test.mjs`: the `overrides` in `package.json`
+  for the `tinypool` that `vitest` depends on. Fails when `package.json`
+  has no `overrides.tinypool` or admits a version below 2.1.2, or when
+  `package-lock.json` resolves `tinypool` below 2.1.2, the range of its
+  two critical advisories.
 - `scripts/license-check-workflow.test.mjs`: the license-checker that the
   license-check job of `.github/workflows/security.yml` runs. The job runs
   `npm install` and then `npx license-checker@<version>`, and npx runs the
