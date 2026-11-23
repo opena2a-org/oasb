@@ -7,10 +7,12 @@
  *   Benchmark line
  * - The product under test and the attack-scenario pass/fail summary, read
  *   from a vitest JSON report
- * - MITRE ATLAS coverage, read from the `// ATLAS:` header of each scenario file
+ * - MITRE ATLAS coverage, read from the `// ATLAS:` header of each scenario
+ *   file
  * - OWASP Agentic Top 10 coverage, read from the `// OWASP Agentic:` header of
  *   each scenario file
- * - Known gaps of the reference adapter (ARP), as docs/known-gaps.md documents them
+ * - Known gaps of the reference adapter (ARP), as docs/known-gaps.md
+ *   documents them
  *
  * Usage:
  *   npx vitest run --reporter=json --outputFile=test-results.json
