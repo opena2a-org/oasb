@@ -2,6 +2,12 @@
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM02 (Sensitive Information Disclosure)
 // OWASP Agentic: ASI02 (Tool Misuse & Exploitation)
+//
+// The network monitor runs, and each test has one of its polls list the
+// connections the test gives instead of the host's, which other processes
+// change. A connection carries no category or severity: the assertions read
+// the classification the monitor gives it. The monitor's own host poll is an
+// hour apart, so it does not run during a test.
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';
@@ -19,9 +25,11 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
 
   beforeEach(async () => {
     arp = createAdapter({
-      monitors: { network: false },
+      monitors: { network: true },
+      networkIntervalMs: 3_600_000,
     });
     await arp.start();
+    expect(arp.observeConnections, 'the adapter declares network-monitoring but has no observeConnections()').toBeTypeOf('function');
   });
 
   afterEach(async () => {
@@ -29,57 +37,22 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
   });
 
   it.each(suspiciousHosts)(
-    'should flag connection to $host as critical threat',
-    async ({ host, description }) => {
-      await arp.injectEvent({
-        source: 'network-monitor',
-        category: 'threat',
-        severity: 'critical',
-        description: `Connection to suspicious host: ${description}`,
-        data: {
-          remoteAddr: host,
-          remotePort: 443,
-          protocol: 'tcp',
-          direction: 'outbound',
-        },
-      });
+    'should classify a connection to $host ($description) as a critical threat',
+    async ({ host }) => {
+      await arp.observeConnections!([{ remoteAddr: host, remotePort: 443 }]);
 
-      const threats = arp.getEventsByCategory('threat');
-      expect(threats.length).toBeGreaterThanOrEqual(1);
-
-      const hostThreat = threats.find((e) => e.data!.remoteAddr === host);
-      expect(hostThreat).toBeDefined();
-      expect(hostThreat!.severity).toBe('critical');
-      expect(hostThreat!.category).toBe('threat');
+      const hostEvents = arp.getEvents().filter((e) => e.source === 'network' && e.data?.remoteAddr === host);
+      expect(hostEvents).toHaveLength(1);
+      expect(hostEvents[0].category).toBe('threat');
+      expect(hostEvents[0].severity).toBe('critical');
     }
   );
 
-  it('should capture all suspicious host connections', async () => {
-    for (const { host, description } of suspiciousHosts) {
-      await arp.injectEvent({
-        source: 'network-monitor',
-        category: 'threat',
-        severity: 'critical',
-        description: `Connection to suspicious host: ${description}`,
-        data: {
-          remoteAddr: host,
-          remotePort: 443,
-          protocol: 'tcp',
-          direction: 'outbound',
-        },
-      });
-    }
+  it('should classify each suspicious host among the connections of one poll as a threat', async () => {
+    await arp.observeConnections!(suspiciousHosts.map(({ host }) => ({ remoteAddr: host, remotePort: 443 })));
 
     const threats = arp.getEventsByCategory('threat');
-    expect(threats.length).toBe(suspiciousHosts.length);
-
-    const criticalEvents = arp.getEvents().filter((e) => e.severity === 'critical');
-    expect(criticalEvents.length).toBe(suspiciousHosts.length);
-
-    for (const { host } of suspiciousHosts) {
-      expect(
-        arp.getEvents().some((e) => e.data!.remoteAddr === host)
-      ).toBe(true);
-    }
+    expect(threats.map((e) => e.data?.remoteAddr).sort()).toEqual(suspiciousHosts.map(({ host }) => host).sort());
+    for (const threat of threats) expect(threat.severity).toBe('critical');
   });
 });

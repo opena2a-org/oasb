@@ -175,6 +175,45 @@ export interface ConnectionBurstDetector {
 }
 
 /**
+ * One established connection, as a network monitor lists it on the host.
+ * It carries no category or severity: the monitor classifies it.
+ */
+export interface ObservedConnection {
+  /** The remote host name or address, such as webhook.site or 93.184.216.34 */
+  remoteAddr: string;
+  remotePort: number;
+  protocol?: 'tcp' | 'udp';
+  pid?: number;
+}
+
+/**
+ * One descendant process of the agent, as a process monitor lists it on the
+ * host. It carries no category or severity: the monitor classifies it.
+ */
+export interface ObservedProcess {
+  pid: number;
+  /** The command line, binary first, such as `curl -s https://example.com` */
+  command: string;
+  /** The user the process runs as */
+  user: string;
+  /** CPU use in percent */
+  cpu: number;
+  /** Memory use in percent */
+  mem?: number;
+}
+
+/**
+ * One change a filesystem monitor's watch reports. It carries no category or
+ * severity: the monitor classifies it.
+ */
+export interface ObservedFileChange {
+  /** 'rename' for a file created, renamed or removed; 'change' for one written */
+  eventType: 'rename' | 'change';
+  /** The absolute path of the file, under one of the adapter's filesystemWatchPaths */
+  path: string;
+}
+
+/**
  * The product's HTTP proxy in front of one upstream service. The events its
  * inspection raises go to the adapter's event engine: the rules apply to
  * them and getEvents() returns them.
@@ -308,6 +347,26 @@ export interface SecurityProductAdapter {
    * 'connection-burst-detection'.
    */
   createConnectionBurstDetector?(): ConnectionBurstDetector;
+  /**
+   * One poll of the running network monitor that lists these connections
+   * instead of the host's, which other processes change. Resolves once the
+   * events the monitor raised have been handled. Required when the adapter
+   * declares 'network-monitoring'; needs monitors.network on.
+   */
+  observeConnections?(connections: ObservedConnection[]): Promise<void>;
+  /**
+   * One poll of the running process monitor that lists these processes as
+   * the agent's descendants instead of the host's. Resolves once the events
+   * the monitor raised have been handled. Required when the adapter declares
+   * 'process-monitoring'; needs monitors.process on.
+   */
+  observeProcesses?(processes: ObservedProcess[]): Promise<void>;
+  /**
+   * The running filesystem monitor's watch reports this change. Resolves
+   * once the events the monitor raised have been handled. Required when the
+   * adapter declares 'filesystem-monitoring'; needs monitors.filesystem on.
+   */
+  observeFileChange?(change: ObservedFileChange): Promise<void>;
   /**
    * An HTTP proxy that forwards every request to upstreamUrl, and its
    * response back, and scans the raw response body, reporting to this
