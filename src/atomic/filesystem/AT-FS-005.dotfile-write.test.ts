@@ -2,156 +2,94 @@
 // ATLAS: AML.T0081 (Modify AI Agent Configuration)
 // OWASP: LLM06 (Excessive Agency)
 // OWASP Agentic: ASI05 (Unexpected Code Execution (RCE))
+//
+// The filesystem monitor runs, watching a fresh temporary directory, and each
+// test has its watch report the changes the test gives instead of waiting for
+// the host's file events. A change carries no category or severity: the
+// assertions read the classification the monitor gives it.
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
-import type { SecurityProductAdapter } from '../../harness/adapter';
+import type { ObservedFileChange, SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
 describeWithCapability('filesystem-monitoring', 'AT-FS-005: Shell Config Dotfile Write Detection', () => {
   let arp: SecurityProductAdapter;
+  let dir: string;
+
+  /** The watch reports `eventType` for the file at `relative` in the watched directory */
+  function observe(relative: string, eventType: ObservedFileChange['eventType'] = 'change'): Promise<void> {
+    return arp.observeFileChange!({ eventType, path: path.join(dir, relative) });
+  }
+
+  function filesystemEvents(): SecurityEvent[] {
+    return arp.getEvents().filter((e) => e.source === 'filesystem');
+  }
 
   beforeEach(async () => {
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'oasb-fs-')));
     arp = createAdapter({
-      monitors: { filesystem: false },
+      monitors: { filesystem: true },
+      filesystemWatchPaths: [dir],
     });
     await arp.start();
+    expect(arp.observeFileChange, 'the adapter declares filesystem-monitoring but has no observeFileChange()').toBeTypeOf('function');
   });
 
   afterEach(async () => {
     await arp.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  const shellConfigFiles = [
-    { file: '.bashrc', path: '/home/user/.bashrc' },
-    { file: '.zshrc', path: '/home/user/.zshrc' },
-    { file: '.bash_profile', path: '/home/user/.bash_profile' },
-    { file: '.profile', path: '/home/user/.profile' },
-    { file: '.gitconfig', path: '/home/user/.gitconfig' },
-  ];
+  const shellConfigFiles = ['.bashrc', '.zshrc', '.bash_profile', '.profile', '.gitconfig'];
 
-  for (const { file, path } of shellConfigFiles) {
-    it(`should detect write to ${file} as a high-severity violation`, async () => {
-      await arp.injectEvent({
-        source: 'filesystem-monitor',
-        category: 'violation',
-        severity: 'high',
-        description: `Shell config dotfile write: ${file}`,
-        data: {
-          path,
-          operation: 'write',
-          sensitive: true,
-          shellConfig: true,
-        },
-      });
+  for (const file of shellConfigFiles) {
+    it(`should classify a write to ${file} as a high-severity violation`, async () => {
+      await observe(file);
 
-      const violations = arp.getEventsByCategory('violation');
-      expect(violations.length).toBe(1);
-      expect(violations[0].severity).toBe('high');
-      expect(violations[0].data!.path).toBe(path);
-      expect(violations[0].data!.operation).toBe('write');
-      expect(violations[0].data!.shellConfig).toBe(true);
+      const events = filesystemEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0].category).toBe('violation');
+      expect(events[0].severity).toBe('high');
+      expect(events[0].data!.path).toBe(file);
+      expect(events[0].data!.eventType).toBe('change');
+      expect(events[0].data!.sensitive).toBe(true);
     });
   }
 
-  it('should capture all shell config dotfile write violations', async () => {
-    for (const { file, path } of shellConfigFiles) {
-      await arp.injectEvent({
-        source: 'filesystem-monitor',
-        category: 'violation',
-        severity: 'high',
-        description: `Shell config dotfile write: ${file}`,
-        data: {
-          path,
-          operation: 'write',
-          sensitive: true,
-          shellConfig: true,
-        },
-      });
-    }
+  it('should classify a write to each shell config dotfile as a violation', async () => {
+    for (const file of shellConfigFiles) await observe(file);
 
     const violations = arp.getEventsByCategory('violation');
-    expect(violations.length).toBe(shellConfigFiles.length);
-
+    expect(violations.map((e) => e.data!.path)).toEqual(shellConfigFiles);
     for (const violation of violations) {
       expect(violation.severity).toBe('high');
-      expect(violation.category).toBe('violation');
-      expect(violation.data!.operation).toBe('write');
-      expect(violation.data!.shellConfig).toBe(true);
+      expect(violation.data!.eventType).toBe('change');
     }
   });
 
-  it('should distinguish read access from write violations on dotfiles', async () => {
-    await arp.injectEvent({
-      source: 'filesystem-monitor',
-      category: 'normal',
-      severity: 'info',
-      description: 'Read access to .bashrc',
-      data: {
-        path: '/home/user/.bashrc',
-        operation: 'read',
-        shellConfig: true,
-      },
-    });
+  it('should flag a dotfile created and one written, and report which each was', async () => {
+    await observe('.bashrc', 'rename');
+    await observe('.bashrc', 'change');
 
-    await arp.injectEvent({
-      source: 'filesystem-monitor',
-      category: 'violation',
-      severity: 'high',
-      description: 'Shell config dotfile write: .bashrc',
-      data: {
-        path: '/home/user/.bashrc',
-        operation: 'write',
-        sensitive: true,
-        shellConfig: true,
-      },
-    });
-
-    const allEvents = arp.getEvents();
-    expect(allEvents.length).toBe(2);
-
-    const violations = arp.getEventsByCategory('violation');
-    expect(violations.length).toBe(1);
-    expect(violations[0].data!.operation).toBe('write');
-
-    const highSeverity = arp.getEvents().filter((e) => e.severity === 'high');
-    expect(highSeverity.length).toBe(1);
-    expect(highSeverity[0].data!.operation).toBe('write');
+    const events = filesystemEvents();
+    expect(events).toHaveLength(2);
+    for (const event of events) {
+      expect(event.category).toBe('violation');
+      expect(event.severity).toBe('high');
+    }
+    expect(events.map((e) => e.data!.eventType).sort()).toEqual(['change', 'rename']);
   });
 
   it('should verify newly-added sensitive paths from ARP fix are covered', async () => {
-    const newlyAddedDotfiles = [
-      { file: '.bash_profile', path: '/home/user/.bash_profile' },
-      { file: '.profile', path: '/home/user/.profile' },
-      { file: '.gitconfig', path: '/home/user/.gitconfig' },
-    ];
+    const newlyAddedDotfiles = ['.bash_profile', '.profile', '.gitconfig'];
 
-    for (const { file, path } of newlyAddedDotfiles) {
-      await arp.injectEvent({
-        source: 'filesystem-monitor',
-        category: 'violation',
-        severity: 'high',
-        description: `Shell config dotfile write: ${file}`,
-        data: {
-          path,
-          operation: 'write',
-          sensitive: true,
-          shellConfig: true,
-        },
-      });
-    }
+    for (const file of newlyAddedDotfiles) await observe(file);
 
     const violations = arp.getEventsByCategory('violation');
-    expect(violations.length).toBe(3);
-
-    expect(
-      arp.getEvents().some((e) => (e.data!.path as string).includes('.bash_profile'))
-    ).toBe(true);
-    expect(
-      arp.getEvents().some((e) => (e.data!.path as string).includes('.profile') && !(e.data!.path as string).includes('.bash_profile'))
-    ).toBe(true);
-    expect(
-      arp.getEvents().some((e) => (e.data!.path as string).includes('.gitconfig'))
-    ).toBe(true);
+    expect(violations.map((e) => e.data!.path)).toEqual(newlyAddedDotfiles);
   });
 });
