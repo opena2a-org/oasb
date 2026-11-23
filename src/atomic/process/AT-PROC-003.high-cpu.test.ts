@@ -3,121 +3,74 @@
 // OWASP: LLM10 (Unbounded Consumption)
 // OWASP Agentic: ASI10 (Rogue Agents)
 //
-// Verifies that ARP flags processes exceeding CPU thresholds as anomalies.
-// The process monitor treats CPU > 90% as an anomaly condition.
+// Verifies that the process monitor classifies a child process above its CPU
+// threshold (90%) as an anomaly. Each test has a poll of the running monitor
+// list the processes the test gives, which carry no category or severity,
+// instead of the host's; the monitor's own host poll is an hour apart. The
+// pids are far above any the host gives.
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
-import type { SecurityProductAdapter } from '../../harness/adapter';
+import type { SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
 describeWithCapability('process-monitoring', 'AT-PROC-003: High CPU Detection', () => {
   let arp: SecurityProductAdapter;
 
+  /** The process events of `category` for the test's processes */
+  function processEvents(category: 'anomaly' | 'normal'): SecurityEvent[] {
+    return arp.getEventsByCategory(category).filter((e) => e.source === 'process' && (e.data?.pid as number) > 4_000_000);
+  }
+
   beforeEach(async () => {
     arp = createAdapter({
-      monitors: { process: false },
+      monitors: { process: true },
+      processIntervalMs: 3_600_000,
     });
     await arp.start();
+    expect(arp.observeProcesses, 'the adapter declares process-monitoring but has no observeProcesses()').toBeTypeOf('function');
   });
 
   afterEach(async () => {
     await arp.stop();
   });
 
-  it('should capture a high CPU anomaly event (cpu > 90%)', async () => {
-    await arp.injectEvent({
-      source: 'process',
-      category: 'anomaly',
-      severity: 'medium',
-      description: 'High CPU usage: PID 30001 at 95% — node crypto-mine.js',
-      data: {
-        pid: 30001,
-        cpu: 95,
-        command: 'node crypto-mine.js',
-      },
-    });
+  it('should classify a child process at 95% CPU as an anomaly (cpu > 90%)', async () => {
+    await arp.observeProcesses!([{ pid: 4_000_201, command: 'node crypto-miner.js', user: 'agent', cpu: 95 }]);
 
-    const anomalies = arp.getEventsByCategory('anomaly');
-    expect(anomalies.length).toBe(1);
+    const anomalies = processEvents('anomaly');
+    expect(anomalies).toHaveLength(1);
     expect(anomalies[0].severity).toBe('medium');
     expect(anomalies[0].data!.cpu).toBe(95);
-    expect(anomalies[0].source).toBe('process');
+    expect(anomalies[0].data!.pid).toBe(4_000_201);
   });
 
-  it('should capture extreme CPU usage at 100%', async () => {
-    await arp.injectEvent({
-      source: 'process',
-      category: 'anomaly',
-      severity: 'medium',
-      description: 'High CPU usage: PID 30002 at 100% — python train.py',
-      data: {
-        pid: 30002,
-        cpu: 100,
-        command: 'python train.py',
-      },
-    });
+  it('should classify a child process at 100% CPU as an anomaly', async () => {
+    await arp.observeProcesses!([{ pid: 4_000_202, command: 'node spin.js', user: 'agent', cpu: 100 }]);
 
-    const anomalies = arp.getEventsByCategory('anomaly');
-    expect(anomalies.length).toBe(1);
+    const anomalies = processEvents('anomaly');
+    expect(anomalies).toHaveLength(1);
     expect(anomalies[0].data!.cpu).toBe(100);
   });
 
-  it('should not flag normal CPU usage as an anomaly', async () => {
-    // Inject a normal process event with CPU well below 90%
-    await arp.injectEvent({
-      source: 'process',
-      category: 'normal',
-      severity: 'info',
-      description: 'New child process: PID 30003 — node server.js',
-      data: {
-        pid: 30003,
-        cpu: 25,
-        command: 'node server.js',
-      },
-    });
+  it('should not classify a child process at 25% CPU as an anomaly', async () => {
+    await arp.observeProcesses!([{ pid: 4_000_203, command: 'node server.js', user: 'agent', cpu: 25 }]);
 
-    const anomalies = arp.getEventsByCategory('anomaly');
-    expect(anomalies.length).toBe(0);
-
-    const normals = arp.getEventsByCategory('normal');
-    expect(normals.length).toBe(1);
+    expect(processEvents('anomaly')).toEqual([]);
+    const normals = processEvents('normal');
+    expect(normals).toHaveLength(1);
     expect(normals[0].data!.cpu).toBe(25);
   });
 
-  it('should distinguish between high and low CPU events', async () => {
-    // Below threshold: normal
-    await arp.injectEvent({
-      source: 'process',
-      category: 'normal',
-      severity: 'info',
-      description: 'Normal process: PID 30004 at 45% CPU',
-      data: { pid: 30004, cpu: 45, command: 'node app.js' },
-    });
+  it('should classify only the high-CPU child among low-CPU ones as an anomaly', async () => {
+    await arp.observeProcesses!([
+      { pid: 4_000_204, command: 'node api.js', user: 'agent', cpu: 10 },
+      { pid: 4_000_205, command: 'node worker.js', user: 'agent', cpu: 30 },
+      { pid: 4_000_206, command: 'node runaway.js', user: 'agent', cpu: 98 },
+    ]);
 
-    // At threshold boundary: normal (90% is the boundary, > 90 triggers)
-    await arp.injectEvent({
-      source: 'process',
-      category: 'normal',
-      severity: 'info',
-      description: 'Process at threshold: PID 30005 at 90% CPU',
-      data: { pid: 30005, cpu: 90, command: 'node build.js' },
-    });
-
-    // Above threshold: anomaly
-    await arp.injectEvent({
-      source: 'process',
-      category: 'anomaly',
-      severity: 'medium',
-      description: 'High CPU usage: PID 30006 at 91%',
-      data: { pid: 30006, cpu: 91, command: 'node stress.js' },
-    });
-
-    const anomalies = arp.getEventsByCategory('anomaly');
-    expect(anomalies.length).toBe(1);
-    expect(anomalies[0].data!.pid).toBe(30006);
-
-    const normals = arp.getEventsByCategory('normal');
-    expect(normals.length).toBe(2);
+    const anomalies = processEvents('anomaly');
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0].data!.pid).toBe(4_000_206);
   });
 });
