@@ -2,20 +2,36 @@
 // ATLAS: AML.T0025 (Exfiltration via Cyber Means)
 // OWASP: LLM06 (Excessive Agency)
 // OWASP Agentic: ASI02 (Tool Misuse & Exploitation)
+//
+// The network monitor runs with api.example.com as its one allowed host, and
+// each test has one of its polls list the connections the test gives instead
+// of the host's, which other processes change. A connection carries no
+// category or severity: the assertions read the classification the monitor
+// gives it. The monitor's own host poll is an hour apart, so it does not run
+// during a test.
 
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
-import type { SecurityProductAdapter } from '../../harness/adapter';
+import type { SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
 describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (subdomain attack)', () => {
   let arp: SecurityProductAdapter;
 
+  /** The network events the monitor raised for a connection to `remoteAddr` */
+  function eventsFor(remoteAddr: string): SecurityEvent[] {
+    return arp.getEvents().filter((e) => e.source === 'network' && e.data?.remoteAddr === remoteAddr);
+  }
+
   beforeEach(async () => {
     arp = createAdapter({
-      monitors: { network: false },
+      monitors: { network: true },
+      networkIntervalMs: 3_600_000,
+      networkAllowedHosts: ['api.example.com'],
+      rules: [{ name: 'outside-allowed-hosts', condition: { source: 'network', category: 'anomaly' }, action: 'alert' }],
     });
     await arp.start();
+    expect(arp.observeConnections, 'the adapter declares network-monitoring but has no observeConnections()').toBeTypeOf('function');
   });
 
   afterEach(async () => {
@@ -25,108 +41,40 @@ describeWithCapability('network-monitoring', 'AT-NET-004: Allowed Host Bypass (s
   it('should flag evil-api.example.com as anomaly (not a subdomain of api.example.com)', async () => {
     // evil-api.example.com ends with "api.example.com" as a string suffix,
     // but it is NOT a proper subdomain. A naive suffix check would miss this.
-    await arp.injectEvent({
-      source: 'network-monitor',
-      category: 'anomaly',
-      severity: 'medium',
-      description: 'Connection to host mimicking allowed host via suffix match',
-      data: {
-        remoteAddr: 'evil-api.example.com',
-        remotePort: 443,
-        protocol: 'tcp',
-        direction: 'outbound',
-        allowedHost: 'api.example.com',
-        matchResult: 'rejected',
-      },
-    });
+    await arp.observeConnections!([{ remoteAddr: 'evil-api.example.com', remotePort: 443 }]);
 
-    const anomalies = arp.getEventsByCategory('anomaly');
-    expect(anomalies.length).toBe(1);
-    expect(anomalies[0].data!.remoteAddr).toBe('evil-api.example.com');
-    expect(anomalies[0].data!.matchResult).toBe('rejected');
+    const events = eventsFor('evil-api.example.com');
+    expect(events).toHaveLength(1);
+    expect(events[0].category).toBe('anomaly');
+    expect(events[0].severity).toBe('medium');
+    expect(events[0].data!.allowed).toBe(false);
 
-    // Verify it was NOT treated as a normal connection
-    const normalConnections = arp.getEventsByCategory('normal');
-    expect(normalConnections.length).toBe(0);
+    const alerts = arp.getEnforcementsByAction('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].event.data!.remoteAddr).toBe('evil-api.example.com');
   });
 
   it('should allow sub.api.example.com as a proper subdomain of api.example.com', async () => {
     // sub.api.example.com IS a proper subdomain of api.example.com
     // (preceded by a dot separator)
-    await arp.injectEvent({
-      source: 'network-monitor',
-      category: 'normal',
-      severity: 'info',
-      description: 'Connection to proper subdomain of allowed host',
-      data: {
-        remoteAddr: 'sub.api.example.com',
-        remotePort: 443,
-        protocol: 'tcp',
-        direction: 'outbound',
-        allowedHost: 'api.example.com',
-        matchResult: 'accepted',
-      },
-    });
+    await arp.observeConnections!([{ remoteAddr: 'sub.api.example.com', remotePort: 443 }]);
 
-    const connections = arp.getEventsByCategory('normal');
-    expect(connections.length).toBe(1);
-    expect(connections[0].data!.remoteAddr).toBe('sub.api.example.com');
-    expect(connections[0].data!.matchResult).toBe('accepted');
-    expect(connections[0].severity).toBe('info');
+    const events = eventsFor('sub.api.example.com');
+    expect(events).toHaveLength(1);
+    expect(events[0].category).toBe('normal');
+    expect(events[0].severity).toBe('info');
+    expect(events[0].data!.allowed).toBe(true);
+    expect(arp.getEnforcementsByAction('alert')).toEqual([]);
   });
 
   it('should correctly differentiate bypass attempts from legitimate subdomains', async () => {
-    // Inject the bypass attempt
-    await arp.injectEvent({
-      source: 'network-monitor',
-      category: 'anomaly',
-      severity: 'medium',
-      description: 'Suffix-match bypass: evil-api.example.com',
-      data: {
-        remoteAddr: 'evil-api.example.com',
-        remotePort: 443,
-        protocol: 'tcp',
-        direction: 'outbound',
-        allowedHost: 'api.example.com',
-        matchResult: 'rejected',
-      },
-    });
+    await arp.observeConnections!([
+      { remoteAddr: 'evil-api.example.com', remotePort: 443 },
+      { remoteAddr: 'sub.api.example.com', remotePort: 443 },
+    ]);
 
-    // Inject the legitimate subdomain
-    await arp.injectEvent({
-      source: 'network-monitor',
-      category: 'normal',
-      severity: 'info',
-      description: 'Proper subdomain: sub.api.example.com',
-      data: {
-        remoteAddr: 'sub.api.example.com',
-        remotePort: 443,
-        protocol: 'tcp',
-        direction: 'outbound',
-        allowedHost: 'api.example.com',
-        matchResult: 'accepted',
-      },
-    });
-
-    const allEvents = arp.getEvents();
-    expect(allEvents.length).toBe(2);
-
-    // The bypass attempt should be an anomaly
-    expect(
-      arp.getEvents().some(
-        (e) =>
-          e.data!.remoteAddr === 'evil-api.example.com' &&
-          e.category === 'anomaly'
-      )
-    ).toBe(true);
-
-    // The legitimate subdomain should be a normal connection
-    expect(
-      arp.getEvents().some(
-        (e) =>
-          e.data!.remoteAddr === 'sub.api.example.com' &&
-          e.category === 'normal'
-      )
-    ).toBe(true);
+    expect(eventsFor('evil-api.example.com').map((e) => e.category)).toEqual(['anomaly']);
+    expect(eventsFor('sub.api.example.com').map((e) => e.category)).toEqual(['normal']);
+    expect(arp.getEnforcementsByAction('alert').map((a) => a.event.data!.remoteAddr)).toEqual(['evil-api.example.com']);
   });
 });
