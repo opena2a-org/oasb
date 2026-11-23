@@ -19,6 +19,7 @@ import {
   readPackage,
   readResults,
   readScenarios,
+  shellQuote,
   techniqueSummary,
   writeAdapterRecord,
   writeReport,
@@ -436,6 +437,18 @@ test('the .gitignore reading decides as git does for a file at the root', () => 
   for (const [text, ignored] of cases) {
     assert.equal(gitignoreIgnores(text, REPORT_FILE), ignored, JSON.stringify(text));
   }
+});
+
+test('the suggested vitest command quotes a results path that holds a space or shell-special character', () => {
+  assert.equal(shellQuote('test-results.json'), 'test-results.json');
+  assert.equal(shellQuote('/tmp/a/res.json'), '/tmp/a/res.json');
+  assert.equal(shellQuote('my results.json'), "'my results.json'");
+  assert.equal(shellQuote('a;b$c.json'), "'a;b$c.json'");
+  assert.equal(shellQuote("it's.json"), "'it'\\''s.json'");
+  assert.throws(
+    () => readResults('my results.json'),
+    (err) => err.message === "my results.json does not exist; write it with npx vitest run --reporter=json --outputFile='my results.json'",
+  );
 });
 
 test('a results file that does not exist, or is not JSON, is refused with its path', () => {
