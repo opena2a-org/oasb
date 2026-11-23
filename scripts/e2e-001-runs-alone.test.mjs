@@ -115,7 +115,8 @@ test("E2E-001 has the suite's timeouts, and each global setup is listed by one p
   assert.ok(live, `vitest resolves no ${E2E_001}`);
   // The readiness wait of each E2E-001 case is cut to what is left of a
   // 10 s hookTimeout (probeWaitMs in src/harness/filesystem-watch.ts), and
-  // each detection case waits 5 s for the product's event inside its test.
+  // each detection case waits 15 s for the product's event inside a test
+  // timeout of its own (DETECTION_CASE_TIMEOUT_MS in the same file).
   assert.equal(live.hookTimeout, 10000, `${E2E_001} has a hookTimeout of ${live.hookTimeout} ms`);
   const others = new Set(specs.filter((s) => s !== live).map((s) => `${s.testTimeout}/${s.hookTimeout}`));
   assert.deepEqual([...others], [`${live.testTimeout}/${live.hookTimeout}`], 'E2E-001 and the other test files have different timeouts (test/hook, ms)');

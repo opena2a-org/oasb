@@ -4,10 +4,12 @@
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SecurityEvent } from './adapter';
 import { EventCollector } from './event-collector';
 import {
+  DETECTION_CASE_TIMEOUT_MS,
+  DETECTION_WAIT_MS,
   WATCH_PROBE_PREFIX,
   awaitDetection,
   detectWrite,
@@ -717,6 +719,41 @@ describe('detectWrite', () => {
       expect(skips, name).toEqual([]);
       expect(ctx.task.meta, name).toEqual({ detected: true });
     }
+  });
+});
+
+describe('DETECTION_WAIT_MS', () => {
+  const controlThatSaw = (observation: ControlObservation | undefined) => ({ seen: () => observation });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('detects an event the product reports 12 s after the write, which the 5000 ms wait of E2E-001 failed as a miss under load', async () => {
+    vi.useFakeTimers();
+    const { ctx, skips } = fakeContext();
+    const collector = new EventCollector();
+    const event = sensitiveEvent('.env');
+    const writtenAt = Date.now();
+    setTimeout(() => collector.eventHandler(event), 12000);
+    const control = controlThatSaw({ path: '.env', at: writtenAt + 12000 });
+
+    const detected = detectWrite(ctx, collector, control, '.env', isSensitiveFileEvent, DETECTION_WAIT_MS);
+    const settled = detected.then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    await vi.advanceTimersByTimeAsync(12000);
+
+    expect(await settled).toEqual({ value: event });
+    expect(skips).toEqual([]);
+    expect(ctx.task.meta).toEqual({ detected: true });
+  });
+
+  it('is at least 15000 ms, and a detection case has 5000 ms more than its wait to finish in, more than the 10000 ms testTimeout of the suite', () => {
+    expect(DETECTION_WAIT_MS).toBeGreaterThanOrEqual(15000);
+    expect(DETECTION_CASE_TIMEOUT_MS).toBe(DETECTION_WAIT_MS + 5000);
+    expect(DETECTION_CASE_TIMEOUT_MS).toBeGreaterThan(10000);
   });
 });
 

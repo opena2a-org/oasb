@@ -388,6 +388,23 @@ export function openControlWatchOrSkip(
 }
 
 /**
+ * How long an E2E-001 detection case waits for the product's event after its
+ * write. A wait of 5000 ms timed out on a host under CPU load (a vitest run
+ * with --maxWorkers=4 beside other work), where fs.watch delivered the event
+ * later. The wait ends as soon as the product reports the event, so a longer
+ * one costs a run time only when the product reports nothing.
+ */
+export const DETECTION_WAIT_MS = 15000;
+
+/**
+ * The vitest timeout of an E2E-001 detection case: its wait for the
+ * product's event, and time for its write and its verdict. It is longer than
+ * the testTimeout vitest.config.ts sets, which a case of this wait would
+ * reach before its verdict.
+ */
+export const DETECTION_CASE_TIMEOUT_MS = DETECTION_WAIT_MS + 5000;
+
+/**
  * The product's event for the write of `name`, awaited for `timeoutMs` from
  * the write (awaitDetection). When the product reports nothing in time, the
  * case fails if the control saw the path in that time (the host delivered

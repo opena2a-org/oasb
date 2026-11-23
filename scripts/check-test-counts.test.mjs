@@ -442,7 +442,7 @@ function detectionCases(text) {
 // isSensitiveFileEvent nor its fileEventFor of the name the case writes.
 function ownPredicates(text) {
   return detectionCases(text).filter(args => {
-    const [, name, predicate] = /^'([^']*)', (.+), \d+$/.exec(args) ?? [];
+    const [, name, predicate] = /^'([^']*)', (.+), DETECTION_WAIT_MS$/.exec(args) ?? [];
     return predicate !== 'isSensitiveFileEvent' && predicate !== `fileEventFor('${name}')`;
   });
 }
@@ -489,6 +489,11 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
   // which has unit tests, and E2E-001 names each predicate only in its import
   // and in the cases that pass it, so it declares no predicate of that name.
   const cases = detectionCases(e2e001);
+  // Each detection case waits the harness's DETECTION_WAIT_MS for the
+  // product's event, and has DETECTION_CASE_TIMEOUT_MS to finish in: a wait
+  // of 5000 ms timed out on a loaded host.
+  assert.deepEqual(cases.filter(args => !args.endsWith(', DETECTION_WAIT_MS')), [], 'an E2E-001 case waits other than DETECTION_WAIT_MS');
+  assert.equal(e2e001.split('\n  }, DETECTION_CASE_TIMEOUT_MS);\n').length - 1, cases.length, 'an E2E-001 detection case has other than DETECTION_CASE_TIMEOUT_MS');
   assert.deepEqual(ownPredicates(e2e001), [], 'E2E-001 passes detect a predicate of its own');
   for (const predicate of ['isSensitiveFileEvent', 'fileEventFor']) {
     const passed = cases.filter(args => args.includes(predicate)).length;
@@ -499,8 +504,8 @@ test('markDetected(ctx) is called once in src/harness/filesystem-watch.ts, by de
   // isSensitiveFileEvent, fileEventFor of another name, and the mark written
   // in the normal-file case.
   const inline = "(e) => e.source === 'filesystem' && (e.data as any).sensitive === true && !isWatchProbeEvent(e)";
-  assert.deepEqual(ownPredicates(e2e001.replace("'.env', isSensitiveFileEvent,", `'.env', ${inline},`)), [`'.env', ${inline}, 5000`]);
-  assert.deepEqual(ownPredicates(e2e001.replace("fileEventFor('.npmrc')", "fileEventFor('.np')")), ["'.npmrc', fileEventFor('.np'), 5000"]);
+  assert.deepEqual(ownPredicates(e2e001.replace("'.env', isSensitiveFileEvent,", `'.env', ${inline},`)), [`'.env', ${inline}, DETECTION_WAIT_MS`]);
+  assert.deepEqual(ownPredicates(e2e001.replace("fileEventFor('.npmrc')", "fileEventFor('.np')")), ["'.npmrc', fileEventFor('.np'), DETECTION_WAIT_MS"]);
   const normal = "it('should allow normal file creation without triggering violations', async () => {\n";
   assert.ok(e2e001.includes(normal), 'E2E-001 has no normal-file case as written');
   const marked = (write) => e2e001.replace(normal, normal.replace('async () =>', 'async (ctx) =>') + `    ${write}\n`);
