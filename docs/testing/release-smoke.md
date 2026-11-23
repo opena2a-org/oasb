@@ -501,10 +501,11 @@ README's test counts do not include them.
   its run check passes. Where the Node in use has no zstd, the reader must
   refuse a zstd page with the Node version it needs.
 - `scripts/is-main.test.mjs`: `isMain` (`scripts/is-main.mjs`), which tells
-  a script whether node was started with it, and the six scripts that ask
+  a script whether node was started with it, and the seven scripts that ask
   it: `scripts/check-vendor.mjs`, `scripts/check-test-counts.mjs`,
   `scripts/check-maturity-page.mjs`, `scripts/check-owasp-mapping.mjs`,
-  `scripts/check-documented-commands.mjs` and `scripts/bait-edition.mjs`.
+  `scripts/check-documented-commands.mjs`, `scripts/bait-edition.mjs` and
+  `scripts/check-readme-library-example.mjs`.
   It starts each with an argument it does not take: by its own path,
   through a symbolic link to the repository, through a link to the script,
   and through the link to the repository under `--preserve-symlinks-main`.
@@ -514,7 +515,20 @@ README's test counts do not include them.
   or to the file, or true for another file, for no path or for `-`; when a
   JavaScript or TypeScript file in `scripts/` or `bin/`, other than a test
   file and `scripts/is-main.mjs`, names `process.argv[1]`; or when the
-  files there that import `isMain` are not those six.
+  files there that import `isMain` are not those seven.
+- `scripts/check-readme-library-example.test.mjs`: the README library
+  example (`scripts/check-readme-library-example.mjs`,
+  `npm run check:readme-example`). It builds and packs the package in a
+  temporary directory, leaving `dist/` as it is, extracts
+  the tarball as `node_modules/@opena2a/oasb` of a new project beside
+  arp-guard and `@types/node` linked from this checkout, type-checks the
+  TypeScript block of "Use as a library" against the tarball's declarations
+  and runs it there. Fails when the example does not type-check, as for a
+  call with fewer arguments than the package's function takes, when it
+  exits other than 0, or when the last line it prints is not the value the
+  comment of its last `console.log()` names. It runs offline; step 3 of
+  `scripts/check-documented-commands.mjs` runs the example after an
+  `npm install` from the registry.
 - `scripts/workflow-action-pins.test.mjs`: the actions
   `.github/workflows/security.yml` uses. Fails when a `uses:` line outside a
   comment is not `<owner>/<repo>@<40-digit commit SHA> # v<version>`, so

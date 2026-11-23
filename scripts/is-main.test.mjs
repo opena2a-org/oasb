@@ -21,6 +21,7 @@ const SCRIPTS = [
   'check-documented-commands.mjs',
   'check-maturity-page.mjs',
   'check-owasp-mapping.mjs',
+  'check-readme-library-example.mjs',
   'check-test-counts.mjs',
   'check-vendor.mjs',
 ];

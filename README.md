@@ -89,7 +89,8 @@ import type { SecurityProductAdapter } from '@opena2a/oasb';
 import { createAdapter, getCapabilityMatrix, benchmark } from '@opena2a/oasb';
 
 // Implement SecurityProductAdapter for your product, or select one via
-// the OASB_ADAPTER env var (see "Evaluating Other Products" above).
+// the OASB_ADAPTER env var (see "Evaluating Other Products" above). Unset,
+// it selects arp-guard's adapter: arp-guard installs with the package.
 const adapter = createAdapter();
 console.log(getCapabilityMatrix());
 
@@ -113,7 +114,7 @@ const entry = benchmark.scoreSubmission(
 console.log(entry.metrics.recall); // 0.5: one of the two malicious samples flagged
 ```
 
-The [test harness](docs/test-harness.md) page lists what the package exports.
+The [test harness](docs/test-harness.md) page lists what the package exports. `npm run check:readme-example` type-checks this example and runs it from a tarball `npm pack` makes.
 
 ## Usage via OpenA2A CLI
 
