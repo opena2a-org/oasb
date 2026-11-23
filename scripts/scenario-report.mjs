@@ -313,6 +313,15 @@ export function generateReport({ scenarios, results = null, adapter = null, benc
 }
 
 /**
+ * `path` as one shell word: unchanged when it holds only characters a shell
+ * does not treat specially, otherwise in single quotes.
+ */
+export function shellQuote(path) {
+  if (/^[A-Za-z0-9_\/.:@%+=,-]+$/.test(path)) return path;
+  return `'${path.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
  * The parsed vitest JSON report at `path`, the file named on the command line
  * or else the default test-results.json. One that does not exist, or cannot
  * be read or parsed, throws an error that names `path`. For one that does not
@@ -325,7 +334,7 @@ export function readResults(path) {
   } catch (err) {
     throw new Error(
       err.code === 'ENOENT'
-        ? `${path} does not exist; write it with npx vitest run --reporter=json --outputFile=${path}`
+        ? `${path} does not exist; write it with npx vitest run --reporter=json --outputFile=${shellQuote(path)}`
         : `${path} cannot be read: ${err.message}`,
     );
   }
@@ -372,7 +381,7 @@ export function writeAdapterRecord(resultsPath, { adapter, product, version, cap
 export function readAdapterRecord(resultsPath) {
   const path = adapterRecordPath(resultsPath);
   const name = basename(path);
-  const rerun = `npx vitest run --reporter=json --outputFile=${resultsPath} writes both`;
+  const rerun = `npx vitest run --reporter=json --outputFile=${shellQuote(resultsPath)} writes both`;
   if (!existsSync(path)) return { unrecorded: `there is no ${name} beside ${basename(resultsPath)}; ${rerun}` };
   let text;
   try {
