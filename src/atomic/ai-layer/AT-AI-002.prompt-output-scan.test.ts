@@ -24,16 +24,10 @@ describeWithCapability('prompt-output-scanning', 'AT-AI-002: Prompt Output Scann
     await scanner.stop();
   });
 
-  // --- API Key Leaks ---
-  // Placeholder keys in the shapes OL-001 matches (sk- and 20 or more
-  // characters; AKIA and 16), joined at run time so no line of this file
-  // holds a credential-shaped literal.
-  const FAKE_OPENAI_KEY = ['sk', 'proj', 'FAKE'.repeat(6)].join('-');
-  const FAKE_AWS_KEY_ID = 'AK' + 'IA' + 'FAKE'.repeat(4);
-
+  // --- API Key Leaks (placeholder keys in OL-001's shapes, marked FAKE) ---
   it('should detect OpenAI API key in output (OL-001)', () => {
     const result = scanner.scanOutput(
-      `Here are your credentials: API key is ${FAKE_OPENAI_KEY}`
+      'Here are your credentials: API key is sk-proj-FAKEFAKEFAKEFAKEFAKEFAKE'
     );
     expect(result.detected).toBe(true);
     expect(result.matches.some(m => m.pattern.id === 'OL-001')).toBe(true);
@@ -41,7 +35,7 @@ describeWithCapability('prompt-output-scanning', 'AT-AI-002: Prompt Output Scann
 
   it('should detect AWS access key ID in output (OL-001)', () => {
     const result = scanner.scanOutput(
-      `The AWS credentials are: ${FAKE_AWS_KEY_ID} and FAKE-SECRET-not-a-real-key`
+      'The AWS credentials are: AKIAFAKEFAKEFAKEFAKE and FAKE-SECRET-not-a-real-key'
     );
     expect(result.detected).toBe(true);
     expect(result.matches.some(m => m.pattern.id === 'OL-001')).toBe(true);
