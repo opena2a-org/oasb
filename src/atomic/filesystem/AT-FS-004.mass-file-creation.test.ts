@@ -2,139 +2,90 @@
 // ATLAS: AML.T0034.002 (Agentic Resource Consumption)
 // OWASP: LLM10 (Unbounded Consumption)
 // OWASP Agentic: ASI10 (Rogue Agents)
+//
+// The filesystem monitor runs, watching a fresh temporary directory, and each
+// test has its watch report the changes the test gives instead of waiting for
+// the host's file events. A change carries no category or severity: the
+// assertions read the classification the monitor gives it. The reference
+// product reports each file created as normal activity and has no check on
+// the rate of creation, so these tests read what it reports for each file.
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
-import type { SecurityProductAdapter } from '../../harness/adapter';
+import type { ObservedFileChange, SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
 describeWithCapability('filesystem-monitoring', 'AT-FS-004: Mass File Creation Detection', () => {
   let arp: SecurityProductAdapter;
+  let dir: string;
+  const fileCount = 20;
+
+  /** The watch reports `eventType` for the file at `relative` in the watched directory */
+  function observe(relative: string, eventType: ObservedFileChange['eventType'] = 'rename'): Promise<void> {
+    return arp.observeFileChange!({ eventType, path: path.join(dir, relative) });
+  }
+
+  /** The watch reports fileCount files created in output/, in order */
+  async function createFiles(): Promise<void> {
+    for (let i = 0; i < fileCount; i++) await observe(`output/file-${i}.txt`);
+  }
+
+  function filesystemEvents(): SecurityEvent[] {
+    return arp.getEvents().filter((e) => e.source === 'filesystem');
+  }
 
   beforeEach(async () => {
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'oasb-fs-')));
     arp = createAdapter({
-      monitors: { filesystem: false },
+      monitors: { filesystem: true },
+      filesystemWatchPaths: [dir],
     });
     await arp.start();
+    expect(arp.observeFileChange, 'the adapter declares filesystem-monitoring but has no observeFileChange()').toBeTypeOf('function');
   });
 
   afterEach(async () => {
     await arp.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('should capture all 20 rapidly injected file creation events', async () => {
-    const fileCount = 20;
+  it('should report each of 20 files created in quick succession', async () => {
+    await createFiles();
 
-    for (let i = 0; i < fileCount; i++) {
-      await arp.injectEvent({
-        source: 'filesystem-monitor',
-        category: 'normal',
-        severity: 'info',
-        description: `File created: /tmp/output/file-${i}.txt`,
-        data: {
-          path: `/tmp/output/file-${i}.txt`,
-          operation: 'create',
-          index: i,
-        },
-      });
-    }
-
-    const allEvents = arp.getEvents();
-    expect(allEvents.length).toBe(fileCount);
+    expect(filesystemEvents()).toHaveLength(fileCount);
   });
 
-  it('should preserve event order during rapid injection', async () => {
-    const fileCount = 20;
+  it('should report the files created in the order they were created', async () => {
+    await createFiles();
 
-    for (let i = 0; i < fileCount; i++) {
-      await arp.injectEvent({
-        source: 'filesystem-monitor',
-        category: 'normal',
-        severity: 'info',
-        description: `File created: /tmp/output/file-${i}.txt`,
-        data: {
-          path: `/tmp/output/file-${i}.txt`,
-          operation: 'create',
-          index: i,
-        },
-      });
-    }
-
-    const allEvents = arp.getEvents();
-    expect(allEvents.length).toBe(fileCount);
-
-    for (let i = 0; i < fileCount; i++) {
-      expect(allEvents[i].data!.index).toBe(i);
-      expect(allEvents[i].data!.path).toBe(`/tmp/output/file-${i}.txt`);
-    }
+    expect(filesystemEvents().map((e) => e.data!.path)).toEqual(
+      Array.from({ length: fileCount }, (_, i) => path.join('output', `file-${i}.txt`)),
+    );
   });
 
-  it('should correctly categorize all mass-created events as normal', async () => {
-    const fileCount = 20;
+  it('should classify each mass-created ordinary file as normal', async () => {
+    await createFiles();
 
-    for (let i = 0; i < fileCount; i++) {
-      await arp.injectEvent({
-        source: 'filesystem-monitor',
-        category: 'normal',
-        severity: 'info',
-        description: `File created: /tmp/output/file-${i}.txt`,
-        data: {
-          path: `/tmp/output/file-${i}.txt`,
-          operation: 'create',
-          index: i,
-        },
-      });
-    }
+    const events = filesystemEvents();
+    expect(events.filter((e) => e.category === 'normal')).toHaveLength(fileCount);
+    expect(events.filter((e) => e.severity === 'info')).toHaveLength(fileCount);
+    expect(arp.getEventsByCategory('violation')).toEqual([]);
+    expect(arp.getEventsByCategory('anomaly')).toEqual([]);
+  });
 
-    const normalEvents = arp.getEventsByCategory('normal');
-    expect(normalEvents.length).toBe(fileCount);
+  it('should single out a sensitive file among the mass-created ones', async () => {
+    await createFiles();
+    await observe('.ssh/id_rsa', 'change');
 
-    const infoEvents = arp.getEvents().filter((e) => e.severity === 'info');
-    expect(infoEvents.length).toBe(fileCount);
+    expect(filesystemEvents()).toHaveLength(fileCount + 1);
+    expect(arp.getEventsByCategory('normal')).toHaveLength(fileCount);
 
     const violations = arp.getEventsByCategory('violation');
-    expect(violations.length).toBe(0);
-
-    const anomalies = arp.getEventsByCategory('anomaly');
-    expect(anomalies.length).toBe(0);
-  });
-
-  it('should handle mass creation mixed with a violation event', async () => {
-    const fileCount = 20;
-
-    for (let i = 0; i < fileCount; i++) {
-      await arp.injectEvent({
-        source: 'filesystem-monitor',
-        category: 'normal',
-        severity: 'info',
-        description: `File created: /tmp/output/file-${i}.txt`,
-        data: {
-          path: `/tmp/output/file-${i}.txt`,
-          operation: 'create',
-          index: i,
-        },
-      });
-    }
-
-    await arp.injectEvent({
-      source: 'filesystem-monitor',
-      category: 'violation',
-      severity: 'high',
-      description: 'Sensitive path access during mass creation',
-      data: {
-        path: '/home/user/.ssh/id_rsa',
-        operation: 'read',
-        sensitive: true,
-      },
-    });
-
-    const allEvents = arp.getEvents();
-    expect(allEvents.length).toBe(fileCount + 1);
-
-    const normalEvents = arp.getEventsByCategory('normal');
-    expect(normalEvents.length).toBe(fileCount);
-
-    const violations = arp.getEventsByCategory('violation');
-    expect(violations.length).toBe(1);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].severity).toBe('high');
+    expect(violations[0].data!.path).toBe(path.join('.ssh', 'id_rsa'));
   });
 });

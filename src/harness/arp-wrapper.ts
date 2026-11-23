@@ -28,6 +28,9 @@ import type {
   AnomalyScorer,
   ConnectionBurstDetector,
   HttpProxy,
+  ObservedConnection,
+  ObservedProcess,
+  ObservedFileChange,
   EventEngine,
   EnforcementEngine as EnforcementEngineInterface,
   ScanResult,
@@ -351,6 +354,74 @@ export class ArpWrapper implements SecurityProductAdapter {
         await settle();
       },
     };
+  }
+
+  async observeConnections(connections: ObservedConnection[]): Promise<void> {
+    const monitor = this.runningMonitor('NetworkMonitor', 'network');
+    const listed = connections.map(c => ({
+      protocol: c.protocol ?? 'tcp',
+      localAddr: '127.0.0.1',
+      localPort: 0,
+      remoteAddr: c.remoteAddr,
+      remotePort: c.remotePort,
+      state: 'ESTABLISHED',
+      pid: c.pid,
+    }));
+    await this.feed(monitor, { getConnections: () => listed }, () => monitor.poll());
+  }
+
+  async observeProcesses(processes: ObservedProcess[]): Promise<void> {
+    const monitor = this.runningMonitor('ProcessMonitor', 'process');
+    const byPid = new Map(processes.map(p => [p.pid, p]));
+    await this.feed(monitor, {
+      getDescendantPids: () => processes.map(p => p.pid),
+      getProcessInfo: (pid: number) => {
+        const p = byPid.get(pid);
+        return p ? { pid, ppid: process.pid, user: p.user, cpu: p.cpu, mem: p.mem ?? 0, command: p.command } : null;
+      },
+    }, () => monitor.poll());
+  }
+
+  async observeFileChange(change: ObservedFileChange): Promise<void> {
+    const monitor = this.runningMonitor('FilesystemMonitor', 'filesystem');
+    // The watch reports a path relative to the watched directory it is under,
+    // which the monitor resolves as start() did.
+    const root = (monitor.watchPaths as string[])
+      .map(p => fs.realpathSync(p))
+      .find(p => !path.relative(p, change.path).startsWith('..'));
+    if (root === undefined) {
+      throw new Error(`${change.path} is under none of the filesystem monitor's watch paths`);
+    }
+    await this.feed(monitor, {}, () => monitor.handleEvent(change.eventType, path.relative(root, change.path), root));
+  }
+
+  /** The started monitor of class `className`, which monitors.`key` turns on */
+  private runningMonitor(className: string, key: string): any {
+    const monitorClass = arp()[className];
+    const monitor = (this.arpInstance.monitors as unknown[] | undefined)?.find(m => m instanceof monitorClass);
+    if (!monitor || !(monitor as { isRunning(): boolean }).isRunning()) {
+      throw new Error(`the ${key} monitor is not running: create the adapter with monitors.${key} on and start it`);
+    }
+    return monitor;
+  }
+
+  /**
+   * Run `observe` on `monitor` with `overrides` in place of its methods that
+   * read the host, and wait until the events it raised have been handled.
+   */
+  private async feed(monitor: any, overrides: Record<string, unknown>, observe: () => void): Promise<void> {
+    const { engine, settle } = this.trackedEngine();
+    const ownEngine = monitor.engine;
+    // The overridden methods are the class's; the instance's own property
+    // shadows each until it is deleted.
+    Object.assign(monitor, overrides, { engine });
+    try {
+      observe();
+    } finally {
+      for (const key of Object.keys(overrides)) delete monitor[key];
+      monitor.engine = ownEngine;
+    }
+    await settle();
   }
 
   createHttpProxy(upstreamUrl: string): HttpProxy {
