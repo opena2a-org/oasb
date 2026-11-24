@@ -94,7 +94,7 @@ const adapter = createAdapter();
 console.log(getCapabilityMatrix());
 
 // Scoring engine: score a scanner's verdicts against labeled samples.
-// F1, precision, FPR and tier on the bundled corpus are withdrawn: docs/pinned-benchmark.md
+// F1, precision, FPR and tier on the bundled corpus read only its unlabelled benign set: docs/pinned-benchmark.md
 const sample = (id: string): benchmark.BenchmarkSample => ({
   id, label: 'malicious', category: 'prompt_injection', source: 'dvaa',
   version: 'example', artifactType: 'skill', content: 'skill text',

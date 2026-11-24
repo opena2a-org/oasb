@@ -3,8 +3,9 @@
 **Date:** 2026-06-05
 **Build under test:** hackmyagent 0.23.8, NanoMind classifier v0.5.0
 **Dataset:** OASB v2 corpus, 4,245 categorized samples (270 malicious, 3,881 benign, 94 edge).
-**3,704 of the 3,881 benign samples were labeled by the scanner under test** — see the withdrawal
-notice in Section 1 before quoting anything from this document.
+**3,704 of the 3,881 benign samples were labeled by the scanner under test**, so precision, F1,
+false-positive rate, flag rate and tier are reported only on the 177 benign samples no scanner
+labeled: see Section 1 before quoting anything from this document.
 **DVAA:** 86 full-repo scenarios (29.1% detected) / 91 corpus config-subset samples (81.3%) - see Section 4
 **Most recent run of record:** the pinned run of 2026-10-10 in `results/2026-10-10-2a89ce5d/`,
 hackmyagent 0.33.2 on the same categorized set: recall 71.1% (192/270) full pipeline, 51.1% (138/270)
@@ -16,48 +17,50 @@ give it beside the 2026-06-05 figures; everything else in this document is the 2
 
 ## 1. HMA Scanner Results (OASB v2 corpus)
 
-> **F1, precision, false-positive rate and flag rate are withdrawn (2026-08-09).** The benign class
-> of this corpus was labeled by the scanner under test.
+> **The benign class of this corpus was labeled by the scanner under test.** The rule that labeled
+> it is at `scripts/export-registry-corpus.mjs:146-164`: `verdict === 'warning' && overall_score >= 70`.
+> (Its docstring at `:9` gives a different rule, `verdict=safe AND score >= 80`, which is not the
+> one that ran: `metadata.scanVerdict` across the registry samples is **warning 3,746 / blocked
+> 205 / passed 23**, and `safe` appears zero times.) **3,704** benign samples carry that scanner
+> verdict, and a further 177 are hand-authored fixtures with no scanner verdict: 107 declare
+> `source: 'registry'` and 70 declare `source: 'enterprise'`. Any artifact the scanner scored
+> below 70 was excluded from the 3,704 by construction, so FPR, precision, F1 and flag rate over
+> the whole benign class are a labeling artifact, not a measurement, and are not given in this
+> document.
 >
-> **Correction, 2026-08-27: this notice previously quoted the wrong rule, and the true one is
-> worse.** It cited the docstring at `scripts/export-registry-corpus.mjs:9`
-> (`verdict=safe AND score >= 80`). The rule the code actually applies is at `:146-164`:
-> `verdict === 'warning' && overall_score >= 70`. The shipped corpus proves which one ran:
-> `metadata.scanVerdict` across the registry samples is **warning 3,746 / blocked 205 / passed 23**,
-> and **`safe` appears zero times**. So the benign class is not "artifacts HackMyAgent called
-> clean". It is **artifacts HackMyAgent emitted a warning on, kept because they scored 70 or
-> above**. The count was also overstated: **3,704** benign samples carry a scanner verdict, and a
-> further 177 are hand-authored fixtures with no scanner verdict: 107 declare `source: 'registry'`
-> and 70 declare `source: 'enterprise'`.
+> **The unlabelled benign set.** No scanner under test labeled the 177 (`BEN-001` to `BEN-177`).
+> Precision, F1, FPR, flag rate and tier are scored on them and the 270 categorized malicious
+> fixtures
+> (`src/benchmark/unlabelled-benign.ts`), from the predictions the pinned run of 2026-10-10
+> recorded in `results/2026-10-10-2a89ce5d/corpus-predictions.jsonl`; nothing was rescanned.
+> `npx tsx scripts/score-unlabelled-benign.ts` prints the table below from those files. Flag rate is
+> the share of the 447 samples flagged malicious, as the development runner defines it; the tier
+> is `determineTier` with the published thresholds, and the full pipeline is the kappa baseline.
 >
-> The conclusion is unchanged and, if anything, stronger. Any artifact the scanner scored below 70
-> was excluded from the benign class by construction, so a near-zero false-positive rate was
-> guaranteed before a single scan ran. Every metric that reads the benign class -- FPR,
-> precision, F1, flag rate -- is a labeling artifact, not a measurement. They are not restated here.
->
-> **Recall is not withdrawn**, and the distinction is not a convenience. Recall reads only the
-> malicious class, and the published run excludes the 225 registry samples labeled malicious by the
-> same rule (`run-benchmark-v2.ts --categorized-only`). What remains is 270 fixtures we authored.
-> Read Section 1a before quoting the number.
+> Read these with their denominator: 177 benign fixtures, all written by us, are a small sample,
+> and one false positive moves FPR by 0.6 points. They are not comparable to another scanner's
+> figures on another corpus.
 
-| Scanner | Recall | F1 | Precision | FPR | Flag rate |
-|---------|--------|----|-----------|-----|-----------|
-| HMA Full Pipeline (AST + 6 analyzers + NanoMind) | **82.6%** (223/270) | withdrawn | withdrawn | withdrawn | withdrawn |
-| HMA Static (regex only) | 51.1% | withdrawn | withdrawn | withdrawn | withdrawn |
-| NanoMind TME v0.5.0 (model-only ablation) | 93.0% | withdrawn | withdrawn | withdrawn | withdrawn |
+| Scanner (pinned run 2026-10-10, hackmyagent 0.33.2) | Recall | Precision | F1 | FPR | Flag rate | Tier |
+|---------|--------|-----------|----|-----|-----------|------|
+| HMA Full Pipeline | **71.1%** (192/270) | 91.0% | 79.8% | 10.7% (19/177) | 47.2% | silver |
+| HMA Static | 51.1% (138/270) | 99.3% | 67.5% | 0.6% (1/177) | 31.1% | silver |
+| NanoMind TME, model only | 93.0% (251/270) | 75.4% | 83.3% | 46.3% (82/177) | 74.5% | listed |
 
-The NanoMind TME row is a **model-only ablation**, not a scanner verdict, and its recall is not a
-detection claim: the classifier uses a whitespace-split vocabulary that goes out-of-vocabulary on code
-and skill text, so it flags most of what it is shown. Its high recall is the arithmetic consequence of
-over-flagging, and the metric that would have exposed that -- its false-positive rate -- is one of the
-withdrawn ones.
+The full pipeline misses gold on both gates: F1 79.8% against 80% and FPR 10.7% against 10%. The
+NanoMind TME row is a **model-only ablation**, not a scanner verdict: the classifier uses a
+whitespace-split vocabulary that goes out-of-vocabulary on code and skill text, so it flags most of
+what it is shown. Its high recall is the arithmetic consequence of over-flagging, and its 46.3%
+false-positive rate on the unlabelled benign set shows it.
 
-The table above is the 2026-06-05 run of hackmyagent 0.23.8. The most recent measurement of record is
-the pinned run in `results/2026-10-10-2a89ce5d/`: hackmyagent 0.33.2, the npm release current on
-2026-10-10, on inputs the run checked and recorded (see
-[docs/pinned-benchmark.md](docs/pinned-benchmark.md#runs-of-record)). The 2026-06-05 run loaded
-unpinned sibling checkouts and did not record its inputs, so it is not a baseline for the pinned run
-and the difference between the two is not traced to a cause.
+**Recall** reads only the malicious class, and the published runs exclude the 225 registry samples
+labeled malicious by the same rule (`run-benchmark-v2.ts --categorized-only`). What remains is 270
+fixtures we authored. Read Section 1a before quoting the number. The 2026-06-05 run of hackmyagent
+0.23.8 loaded unpinned sibling checkouts and did not record its inputs, so it is not a baseline for
+the pinned run and the difference between the two is not traced to a cause; its precision, F1, FPR
+and flag rate were computed on the scanner-labeled benign class and stay withdrawn (Section 5). The
+pinned run's inputs are recorded (see
+[docs/pinned-benchmark.md](docs/pinned-benchmark.md#runs-of-record)).
 
 | Scanner | Recall, pinned run 2026-10-10 (hackmyagent 0.33.2) | Recall, 2026-06-05 (hackmyagent 0.23.8) |
 |---------|----------------------------------------------------|-----------------------------------------|
@@ -160,7 +163,8 @@ alike and so carry no malicious-intent signal:
   > synthesized `mcp_tool` sample, so all **3,101 of 3,101** registry-derived MCP samples contain
   > it and **2,954** of those are labeled benign. The observation that motivated excluding a check
   > class from the verdict was written into the corpus by the corpus builder, which is the same
-  > defect class as the withdrawn metrics in Section 1 and was missed when those were withdrawn.
+  > defect class as the scanner-labeled benign class in Section 1 and was missed when its metrics
+  > were withdrawn (Section 5).
   >
   > The exclusion itself is retained on the argument above, which does not depend on the frequency
   > claim: a wildcard grant is a posture finding whether it appears once or three thousand times.
@@ -241,9 +245,10 @@ recent run of record when characterizing DVAA detection: 19.8% (17/86) in the pi
 
 Note what the first two withdrawals have in common with the third: each replaced a number with a
 better number from the same self-labeled corpus, and each therefore carried the defect forward. The
-third withdrawal is not followed by a replacement figure. There is no comparative accuracy claim in
-this document, and there will not be one until the measurement runs on a corpus we neither own nor
-labeled.
+third is not replaced by a figure from that corpus: Section 1 scores the pinned run of 2026-10-10 on
+the 177 benign samples no scanner labeled, and none of the 3,704 scanner-labeled ones. Those are
+fixtures we authored, so there is no comparative accuracy claim in this document, and there will
+not be one until the measurement runs on a corpus we neither own nor labeled.
 
 ---
 
