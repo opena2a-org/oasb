@@ -13,7 +13,7 @@ The harness wraps a security product via an adapter interface and provides event
 | `adapter.ts` | **Product-agnostic adapter interface** - implement `SecurityProductAdapter` for your product |
 | `create-adapter.ts` | Adapter factory - selects the product under test from the `OASB_ADAPTER` env var |
 | `capabilities.ts` | Capability matrix + `describeWithCapability()` - unsupported surfaces report N/A, not FAIL |
-| `arp-wrapper.ts` | Reference adapter - wraps ARP (`arp-guard`) with event collection, injection helpers |
+| `arp-wrapper.ts` | Reference adapter - wraps ARP (`arp-guard`) with event collection, injection helpers, and feeds raw process, connection and file observations to its running monitors, returning the events they raised with ARP's own category and severity |
 | `llm-guard-wrapper.ts` | Worked example: adapter for `llm-guard` (declares prompt-input + pattern scanning) |
 | `rebuff-wrapper.ts` | Worked example: adapter for `rebuff` (declares prompt-input + pattern scanning) |
 | `event-collector.ts` | Captures events with async `waitForEvent(predicate, timeout)` |

@@ -214,6 +214,16 @@ export interface ObservedFileChange {
 }
 
 /**
+ * The product's own classification of the raw observations it was fed: the
+ * events its monitor raised for them, in the order raised, each with the
+ * category and severity the product gave it. Empty when the product raised
+ * none, which is its verdict that the observations are not worth an event.
+ * The adapter's event engine handled each of them too: the rules apply to
+ * them and getEvents() returns them.
+ */
+export type ObservationClassification = SecurityEvent[];
+
+/**
  * The product's HTTP proxy in front of one upstream service. The events its
  * inspection raises go to the adapter's event engine: the rules apply to
  * them and getEvents() returns them.
@@ -349,24 +359,27 @@ export interface SecurityProductAdapter {
   createConnectionBurstDetector?(): ConnectionBurstDetector;
   /**
    * One poll of the running network monitor that lists these connections
-   * instead of the host's, which other processes change. Resolves once the
-   * events the monitor raised have been handled. Required when the adapter
-   * declares 'network-monitoring'; needs monitors.network on.
+   * instead of the host's, which other processes change. Resolves, once the
+   * events the monitor raised have been handled, to the product's
+   * classification of them. Required when the adapter declares
+   * 'network-monitoring'; needs monitors.network on.
    */
-  observeConnections?(connections: ObservedConnection[]): Promise<void>;
+  observeConnections?(connections: ObservedConnection[]): Promise<ObservationClassification>;
   /**
    * One poll of the running process monitor that lists these processes as
-   * the agent's descendants instead of the host's. Resolves once the events
-   * the monitor raised have been handled. Required when the adapter declares
-   * 'process-monitoring'; needs monitors.process on.
+   * the agent's descendants instead of the host's. Resolves, once the events
+   * the monitor raised have been handled, to the product's classification of
+   * them. Required when the adapter declares 'process-monitoring'; needs
+   * monitors.process on.
    */
-  observeProcesses?(processes: ObservedProcess[]): Promise<void>;
+  observeProcesses?(processes: ObservedProcess[]): Promise<ObservationClassification>;
   /**
-   * The running filesystem monitor's watch reports this change. Resolves
-   * once the events the monitor raised have been handled. Required when the
-   * adapter declares 'filesystem-monitoring'; needs monitors.filesystem on.
+   * The running filesystem monitor's watch reports this change. Resolves,
+   * once the events the monitor raised have been handled, to the product's
+   * classification of it. Required when the adapter declares
+   * 'filesystem-monitoring'; needs monitors.filesystem on.
    */
-  observeFileChange?(change: ObservedFileChange): Promise<void>;
+  observeFileChange?(change: ObservedFileChange): Promise<ObservationClassification>;
   /**
    * An HTTP proxy that forwards every request to upstreamUrl, and its
    * response back, and scans the raw response body, reporting to this

@@ -31,6 +31,7 @@ import type {
   ObservedConnection,
   ObservedProcess,
   ObservedFileChange,
+  ObservationClassification,
   EventEngine,
   EnforcementEngine as EnforcementEngineInterface,
   ScanResult,
@@ -356,7 +357,7 @@ export class ArpWrapper implements SecurityProductAdapter {
     };
   }
 
-  async observeConnections(connections: ObservedConnection[]): Promise<void> {
+  async observeConnections(connections: ObservedConnection[]): Promise<ObservationClassification> {
     const monitor = this.runningMonitor('NetworkMonitor', 'network');
     const listed = connections.map(c => ({
       protocol: c.protocol ?? 'tcp',
@@ -367,13 +368,13 @@ export class ArpWrapper implements SecurityProductAdapter {
       state: 'ESTABLISHED',
       pid: c.pid,
     }));
-    await this.feed(monitor, { getConnections: () => listed }, () => monitor.poll());
+    return this.feed(monitor, { getConnections: () => listed }, () => monitor.poll());
   }
 
-  async observeProcesses(processes: ObservedProcess[]): Promise<void> {
+  async observeProcesses(processes: ObservedProcess[]): Promise<ObservationClassification> {
     const monitor = this.runningMonitor('ProcessMonitor', 'process');
     const byPid = new Map(processes.map(p => [p.pid, p]));
-    await this.feed(monitor, {
+    return this.feed(monitor, {
       getDescendantPids: () => processes.map(p => p.pid),
       getProcessInfo: (pid: number) => {
         const p = byPid.get(pid);
@@ -382,7 +383,7 @@ export class ArpWrapper implements SecurityProductAdapter {
     }, () => monitor.poll());
   }
 
-  async observeFileChange(change: ObservedFileChange): Promise<void> {
+  async observeFileChange(change: ObservedFileChange): Promise<ObservationClassification> {
     const monitor = this.runningMonitor('FilesystemMonitor', 'filesystem');
     // The watch reports a path relative to the watched directory it is under,
     // which the monitor resolves as start() did.
@@ -392,7 +393,7 @@ export class ArpWrapper implements SecurityProductAdapter {
     if (root === undefined) {
       throw new Error(`${change.path} is under none of the filesystem monitor's watch paths`);
     }
-    await this.feed(monitor, {}, () => monitor.handleEvent(change.eventType, path.relative(root, change.path), root));
+    return this.feed(monitor, {}, () => monitor.handleEvent(change.eventType, path.relative(root, change.path), root));
   }
 
   /** The started monitor of class `className`, which monitors.`key` turns on */
@@ -407,9 +408,10 @@ export class ArpWrapper implements SecurityProductAdapter {
 
   /**
    * Run `observe` on `monitor` with `overrides` in place of its methods that
-   * read the host, and wait until the events it raised have been handled.
+   * read the host, and wait until the events it raised have been handled:
+   * those events, as the product classified them.
    */
-  private async feed(monitor: any, overrides: Record<string, unknown>, observe: () => void): Promise<void> {
+  private async feed(monitor: any, overrides: Record<string, unknown>, observe: () => void): Promise<ObservationClassification> {
     const { engine, settle } = this.trackedEngine();
     const ownEngine = monitor.engine;
     // The overridden methods are the class's; the instance's own property
@@ -421,7 +423,7 @@ export class ArpWrapper implements SecurityProductAdapter {
       for (const key of Object.keys(overrides)) delete monitor[key];
       monitor.engine = ownEngine;
     }
-    await settle();
+    return settle();
   }
 
   createHttpProxy(upstreamUrl: string): HttpProxy {
@@ -451,7 +453,9 @@ export class ArpWrapper implements SecurityProductAdapter {
         });
         return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       },
-      settle,
+      settle: async () => {
+        await settle();
+      },
       stop: async () => {
         server.closeAllConnections();
         await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -464,15 +468,18 @@ export class ArpWrapper implements SecurityProductAdapter {
   /**
    * This instance's event engine for a component that emits without
    * awaiting the result: settle() resolves once every event emitted through
-   * it has been handled by the event handlers, the rules and enforcement.
+   * it has been handled by the event handlers, the rules and enforcement,
+   * to those events in the order they were emitted.
    */
-  private trackedEngine(): { engine: { emit(event: unknown): Promise<unknown> }; settle(): Promise<void> } {
+  private trackedEngine(): { engine: { emit(event: unknown): Promise<unknown> }; settle(): Promise<SecurityEvent[]> } {
     const engine = this.getEngine();
+    const all: Promise<SecurityEvent>[] = [];
     let pending: Promise<unknown>[] = [];
     return {
       engine: {
         emit: (event: unknown) => {
           const emitted = engine.emit(event);
+          all.push(emitted);
           pending.push(emitted);
           return emitted;
         },
@@ -483,6 +490,7 @@ export class ArpWrapper implements SecurityProductAdapter {
           pending = [];
           await Promise.all(emitted);
         }
+        return Promise.all(all);
       },
     };
   }
