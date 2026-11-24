@@ -274,8 +274,14 @@ export async function runBenchmark(
   };
 }
 
+export const WITHDRAWN_METRICS_NOTE =
+  'Precision, F1, FPR and flag rate are withdrawn: they read the whole benign class, ' +
+  "most of which the scanner's own verdict labeled.";
+
 /**
- * Format comparison table as a readable string.
+ * Format comparison table as a readable string. It prints recall, which reads
+ * the malicious class only; precision, F1, FPR and flag rate over the whole
+ * benign class are circular, so they are named as withdrawn and not printed.
  */
 export function formatComparisonTable(result: BenchmarkRunResult): string {
   const lines: string[] = [];
@@ -283,14 +289,16 @@ export function formatComparisonTable(result: BenchmarkRunResult): string {
   lines.push(`Dataset: ${result.datasetVersion} (${result.sampleCount} samples)`);
   lines.push(`Date: ${result.runDate}`);
   lines.push('');
-  lines.push('Scanner                          | Tier     | F1   | Prec | Recall | FPR   | Categories');
-  lines.push('-'.repeat(95));
+  const header = `${'Scanner'.padEnd(33)}| ${'Tier'.padEnd(9)}| Recall | Categories`;
+  lines.push(header);
+  lines.push('-'.repeat(header.length));
 
-  for (const row of result.comparisonTable.sort((a, b) => b.f1 - a.f1)) {
-    lines.push(
-      `${row.scanner.padEnd(33)}| ${row.tier.toUpperCase().padEnd(9)}| ${row.f1.toFixed(2).padEnd(5)}| ${row.precision.toFixed(2).padEnd(5)}| ${row.recall.toFixed(2).padEnd(7)}| ${(row.fpr * 100).toFixed(1).padEnd(6)}% | ${row.categories}/9`
-    );
+  for (const row of [...result.comparisonTable].sort((a, b) => b.recall - a.recall)) {
+    const recall = `${(row.recall * 100).toFixed(1)}%`.padStart(6);
+    lines.push(`${row.scanner.padEnd(33)}| ${row.tier.toUpperCase().padEnd(9)}| ${recall} | ${row.categories}/9`);
   }
 
+  lines.push('');
+  lines.push(WITHDRAWN_METRICS_NOTE);
   return lines.join('\n');
 }
