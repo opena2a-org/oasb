@@ -359,13 +359,15 @@ test('the report is written beside the recorded REPORT.md, to a name git ignores
  * repository root, decided as git decides it (gitignore(5)): the last pattern
  * that matches wins, a leading "!" re-includes, a trailing "/" matches only
  * directories, "\" escapes a character, and "*", "?", "[...]" and "**" are
- * globs that do not match "/". POSIX class names such as [[:alpha:]] are not
- * read.
+ * globs that do not match "/". A leading byte order mark is skipped, and a
+ * range written high to low, such as [z-a], matches nothing. It differs from
+ * git in two ways: POSIX class names such as [[:alpha:]] are not read, and
+ * core.ignorecase is not honoured, so patterns always match case-sensitively.
  */
 function gitignoreIgnores(text, name) {
   assert.ok(!name.includes('/'), `${name} is not at the repository root`);
   let ignored = false;
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
     let pattern = line.replace(/(?<!\\) +$/, '');
     if (pattern === '' || pattern.startsWith('#')) continue;
     const negated = pattern.startsWith('!');
@@ -401,7 +403,21 @@ function globRegExp(glob) {
         re += '\\[';
         continue;
       }
-      re += `[${negated ? '^' : ''}${glob.slice(start, end).replace(/[\]\\^]/g, '\\$&')}]`;
+      // A range written high to low, such as "z-a", matches nothing, as in git,
+      // where a regular expression would refuse it.
+      const member = (m) => m.replace(/[\]\\^-]/g, '\\$&');
+      const body = glob.slice(start, end);
+      let members = '';
+      for (let j = 0; j < body.length; j++) {
+        if (body[j + 1] === '-' && j + 2 < body.length) {
+          if (body[j] <= body[j + 2]) members += `${member(body[j])}-${member(body[j + 2])}`;
+          j += 2;
+        } else {
+          members += member(body[j]);
+        }
+      }
+      if (members === '') re += negated ? '[^/]' : '(?!)';
+      else re += `[${negated ? '^' : ''}${members}]`;
       i = end;
     } else {
       re += literal(c);
@@ -410,7 +426,7 @@ function globRegExp(glob) {
   return new RegExp(`^${re}$`);
 }
 
-test('the .gitignore reading decides as git does for a file at the root', () => {
+test('the .gitignore reading decides as git does for a file at the root, but for POSIX classes and core.ignorecase', () => {
   const cases = [
     ['REPORT.generated.md', true],
     ['/REPORT.generated.md', true],
@@ -421,6 +437,14 @@ test('the .gitignore reading decides as git does for a file at the root', () => 
     ['REPORT.[gG]enerated.md', true],
     ['REPORT.[!g]enerated.md', false],
     ['REPORT.generated.[]m]d', true],
+    ['REPORT.[z-a]enerated.md', false],
+    ['REPORT.[z-ag]enerated.md', true],
+    ['REPORT.[!z-a]enerated.md', true],
+    ['REPORT.[f-h]enerated.md', true],
+    ['REPORT.generated.[a-]d', false],
+    ['REPORT.generated.[-m]d', true],
+    ['\uFEFFREPORT.generated.md', true],
+    ['\uFEFF# REPORT.generated.md', false],
     ['*.md', true],
     ['**', true],
     ['REPORT.generated.md\n!*.md', false],
