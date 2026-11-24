@@ -3824,6 +3824,35 @@ table row or a scenario file's header; or other, which says what it changes.
   `</script>` from ending it. Each of the other start tags above gives the
   same exits. A `>` inside a quoted value is still part of the value.
 
+## FPR and tiers on the unlabelled benign set - 2026-11-23
+
+Precision, F1, false-positive rate, flag rate and tier are reported again,
+for every scanner, on the unlabelled benign set: the 177 hand-authored benign
+samples that carry no scanner verdict (`BEN-001` to `BEN-177`, no
+`metadata.scanVerdict`) and the 270 categorized malicious fixtures. No
+scanner under test labeled them. The 3,704 benign samples HackMyAgent's own
+verdict labeled are not scored, and the 2026-06-05 figures withdrawn on
+2026-08-09 stay withdrawn.
+
+The figures come from the predictions the pinned run of 2026-10-10 recorded
+in `results/2026-10-10-2a89ce5d/corpus-predictions.jsonl`; nothing was
+rescanned. `src/benchmark/unlabelled-benign.ts` selects the set and scores it
+with `scoreSubmission`, and `scripts/score-unlabelled-benign.ts` prints:
+
+| Scanner | Precision | F1 | FPR | Flag rate | Tier |
+|---------|-----------|----|-----|-----------|------|
+| HMA Full Pipeline | 91.0% | 79.8% | 10.7% (19/177) | 47.2% | silver |
+| HMA Static | 99.3% | 67.5% | 0.6% (1/177) | 31.1% | silver |
+| NanoMind TME, model only | 75.4% | 83.3% | 46.3% (82/177) | 74.5% | listed |
+
+BENCHMARK-RESULTS.md section 1, docs/pinned-benchmark.md, the README and
+docs/adapters.md give them in place of the withdrawal notice. The development
+runner (`scripts/run-benchmark-v2.ts`) prints them on the unlabelled benign
+samples of its run where it named them as withdrawn, and still prints no
+value over the scanner-labeled ones. `scripts/unlabelled-benign.test.mjs`
+fails when a sample with a scanner verdict enters the set or a published
+figure differs from the computed one.
+
 ## Behavioral governance draft withdrawn on 2026-09-09
 
 `docs/oasb-v2-behavioral-governance.md` (2.0.0-draft, 2026-03-03) is withdrawn

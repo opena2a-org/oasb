@@ -201,7 +201,10 @@ The record schema is `oasb-pinned-run/v2`. A `oasb-pinned-run/v1` run, such as
 The corpus set is the categorized set: malicious samples without an attack
 category are left out. The summary does not compute F1, precision,
 false-positive rate or flag rate: most benign samples were labeled by the
-scanner under test, so any metric that reads the benign class is circular.
+scanner under test, so any metric that reads the whole benign class is
+circular. `npx tsx scripts/score-unlabelled-benign.ts <run directory>` scores
+those metrics and the tier from the run's `corpus-predictions.jsonl` on the
+benign samples no scanner labeled (see [Latest Results](#latest-results-pinned-run-2026-10-10-2026-06-05-run-partially-withdrawn-2026-08-09)).
 
 A pinned run is a first measurement on recorded inputs. Earlier figures came
 from unpinned runs on unrecorded inputs, so they are not a baseline for it,
@@ -279,9 +282,9 @@ A scoring engine for scanners that judge AI agent skills and configurations, in 
 
 - **9 attack categories** (`src/benchmark/types.ts`): `supply_chain`, `prompt_injection`, `credential_exfiltration`, `heartbeat_rce`, `unicode_stego`, `privilege_escalation`, `persistence`, `social_engineering`, `data_exfiltration`.
 - **11 controls** (`src/benchmark/controls.ts`): SS-01 to SS-10 and SEC-021, each assigned to compliance level L1 (Basic), L2 (Standard) or L3 (Advanced).
-- **Tiers** (`TIER_THRESHOLDS` in `src/benchmark/scoring.ts`): platinum, gold, silver or listed, assigned from F1, false-positive rate, category coverage and, for platinum, Cohen's kappa against HackMyAgent. `scoreSubmission(submission, samples)` returns the tier with the metrics, and `determineTier(metrics)` assigns one from the `metrics` of that result. No tier is published for the corpus below, because F1 and false-positive rate on it are withdrawn.
+- **Tiers** (`TIER_THRESHOLDS` in `src/benchmark/scoring.ts`): platinum, gold, silver or listed, assigned from F1, false-positive rate, category coverage and, for platinum, Cohen's kappa against HackMyAgent. `scoreSubmission(submission, samples)` returns the tier with the metrics, and `determineTier(metrics)` assigns one from the `metrics` of that result. The tier published for the corpus below is scored on its unlabelled benign set, the benign samples no scanner labeled (`src/benchmark/unlabelled-benign.ts`).
 
-On the bundled corpus, only recall is a published metric: F1, precision, false-positive rate and tier are withdrawn, because its benign class was labeled by one of the scanners it compares (see [Latest Results](#latest-results-pinned-run-2026-10-10-2026-06-05-run-partially-withdrawn-2026-08-09)). `benchmark.determineTier` and `benchmark.TIER_THRESHOLDS` stay exported; [Skills Security Benchmark](#skills-security-benchmark) describes them.
+On the bundled corpus, recall is published over the whole malicious class, and F1, precision, false-positive rate, flag rate and tier over the unlabelled benign set only: 3,704 of its 3,881 benign samples were labeled by one of the scanners it compares, and those are not scored (see [Latest Results](#latest-results-pinned-run-2026-10-10-2026-06-05-run-partially-withdrawn-2026-08-09)). `benchmark.determineTier` and `benchmark.TIER_THRESHOLDS` are exported; [Skills Security Benchmark](#skills-security-benchmark) describes them.
 
 ### Benchmark Corpus (v2.0)
 
@@ -299,6 +302,7 @@ On the bundled corpus, only recall is a published metric: F1, precision, false-p
 
 ```bash
 npx tsx scripts/run-pinned-benchmark.ts --pins ../pins.json --hma <dir> --dvaa <dir>  # Pinned run: corpus and DVAA, writes results/<date>-<runid>/
+npx tsx scripts/score-unlabelled-benign.ts results/2026-10-10-2a89ce5d                # Score a pinned run's predictions on the unlabelled benign set
 npx tsx scripts/run-benchmark-v2.ts --unpinned --categorized-only --limit=100          # Development run on the sibling hackmyagent checkout
 npx tsx scripts/run-dvaa-benchmark.ts --unpinned                                      # Development run (needs ../damn-vulnerable-ai-agent)
 ```
@@ -315,28 +319,42 @@ are present, so their numbers are not figures of record.
 
 ### Latest Results (pinned run 2026-10-10; 2026-06-05 run partially withdrawn 2026-08-09)
 
-**F1, precision, false-positive rate and flag rate are withdrawn.** The benign class of this corpus
-was labeled by the scanner under test: the labeling rule in `scripts/export-registry-corpus.mjs`
-(`row.verdict === 'warning' && row.overall_score >= 70`, as reported by HackMyAgent itself) assigns
-samples to the benign class, and 3,704 of the 3,881 benign samples came from that rule. Anything
-HackMyAgent would have flagged was excluded from the benign class by construction, so a near-zero
-false-positive rate was guaranteed before a single scan ran. Those figures are not restated here,
-and no replacement figure is offered.
+**The benign class of this corpus was labeled by the scanner under test**: the labeling rule in
+`scripts/export-registry-corpus.mjs` (`row.verdict === 'warning' && row.overall_score >= 70`, as
+reported by HackMyAgent itself) assigns samples to the benign class, and 3,704 of the 3,881 benign
+samples came from that rule. Anything HackMyAgent would have flagged was excluded from them by
+construction, so a false-positive rate over them was near zero before a single scan ran. No figure
+is given over those 3,704.
 
-**Recall is retained**, because it reads only the malicious class, and both runs below exclude the
-225 registry samples labeled malicious by that same rule (`--categorized-only`). The most recent
-measurement of record is the pinned run in `results/2026-10-10-2a89ce5d/`: hackmyagent 0.33.2, the
-npm release current on 2026-10-10, on inputs the run checked and recorded (see
-[Runs of record](#runs-of-record)). The 2026-06-05 run measured hackmyagent
-0.23.8 with the earlier runners, which loaded unpinned sibling checkouts and did not record their
-inputs, so it is not a baseline for the pinned run and the difference between the two is not traced
-to a cause.
+**The unlabelled benign set** is the other 177 benign samples, hand-authored fixtures with no
+scanner verdict (`BEN-001` to `BEN-177`), and the 270 categorized malicious fixtures. No scanner
+under test labeled it. F1, precision, false-positive rate, flag rate and tier below are scored on
+it (`src/benchmark/unlabelled-benign.ts`) from the predictions the pinned run recorded in
+`results/2026-10-10-2a89ce5d/corpus-predictions.jsonl`, without rescanning;
+`npx tsx scripts/score-unlabelled-benign.ts` prints them. Flag rate is the share of the 447
+samples flagged malicious, and the tier is `determineTier` with the full pipeline as kappa
+baseline. 177 fixtures we wrote are a small sample: one false positive moves FPR by 0.6 points.
 
-| Scanner | Recall, pinned run 2026-10-10 (hackmyagent 0.33.2) | Recall, 2026-06-05 (hackmyagent 0.23.8) | F1 / Precision / FPR / Flag rate |
-|---------|----------------------------------------------------|-----------------------------------------|----------------------------------|
-| HMA Full Pipeline | **71.1%** (192/270) | 82.6% (223/270) | withdrawn |
-| HMA Static (regex) | 51.1% (138/270) | 51.1% | withdrawn |
-| NanoMind TME, model only (ablation) | 93.0% (251/270) | 93.0% (classifier v0.5.0) | withdrawn |
+| Scanner, pinned run 2026-10-10 (hackmyagent 0.33.2) | Recall | Precision | F1 | FPR | Flag rate | Tier |
+|---------|--------|-----------|----|-----|-----------|------|
+| HMA Full Pipeline | **71.1%** (192/270) | 91.0% | 79.8% | 10.7% (19/177) | 47.2% | silver |
+| HMA Static (regex) | 51.1% (138/270) | 99.3% | 67.5% | 0.6% (1/177) | 31.1% | silver |
+| NanoMind TME, model only (ablation) | 93.0% (251/270) | 75.4% | 83.3% | 46.3% (82/177) | 74.5% | listed |
+
+**Recall** reads only the malicious class, and both runs below exclude the 225 registry samples
+labeled malicious by that same rule (`--categorized-only`). The most recent measurement of record
+is the pinned run in `results/2026-10-10-2a89ce5d/`: hackmyagent 0.33.2, the npm release current
+on 2026-10-10, on inputs the run checked and recorded (see [Runs of record](#runs-of-record)). The
+2026-06-05 run measured hackmyagent 0.23.8 with the earlier runners, which loaded unpinned sibling
+checkouts and did not record their inputs, so it is not a baseline for the pinned run and the
+difference between the two is not traced to a cause. Its F1, precision, FPR and flag rate were
+computed on the scanner-labeled benign class and stay withdrawn.
+
+| Scanner | Recall, pinned run 2026-10-10 (hackmyagent 0.33.2) | Recall, 2026-06-05 (hackmyagent 0.23.8) |
+|---------|----------------------------------------------------|-----------------------------------------|
+| HMA Full Pipeline | **71.1%** (192/270) | 82.6% (223/270) |
+| HMA Static (regex) | 51.1% (138/270) | 51.1% |
+| NanoMind TME, model only (ablation) | 93.0% (251/270) | 93.0% (classifier v0.5.0) |
 
 Read these figures with their denominator: all 270 attack fixtures are ones we wrote. Excluding
 HackMyAgent's own payloads, the full pipeline detects 70.6% (127/180) in the pinned run and detected

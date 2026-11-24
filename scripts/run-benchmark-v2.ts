@@ -2,9 +2,12 @@
  * OASB Benchmark Runner v2
  *
  * Runs real HMA pipeline adapters against the full v2 corpus.
- * Prints recall, per-category detection, timing and a comparison summary. It
- * names precision, F1, FPR and flag rate as withdrawn instead of printing them
- * (scripts/dev-run-summary.mjs); the --out file keeps their values.
+ * Prints recall, per-category detection, timing and a comparison summary, and
+ * precision, F1, FPR, flag rate and tier on the unlabelled benign set: the
+ * benign samples no scanner labeled (src/benchmark/unlabelled-benign.ts,
+ * printed by scripts/dev-run-summary.mjs). Precision, F1, FPR and flag rate
+ * over the whole benign class, most of which the scanner's own verdict
+ * labeled, are kept in the --out file and not printed.
  *
  * This is the unpinned development runner: it loads the sibling hackmyagent
  * checkout, so its numbers are not figures of record. Figures of record come
@@ -21,6 +24,7 @@ import { join } from 'node:path';
 import { HMATMEOnlyAdapter, HMAPipelineAdapter, HMAPipelineStaticAdapter } from '../src/benchmark/hma-pipeline-adapter.js';
 import { checkUnpinnedRun } from '../src/benchmark/pinned/unpinned-guard.js';
 import { runBenchmark, formatComparisonTable, type ScannerAdapter } from '../src/benchmark/runner.js';
+import { scoreUnlabelledBenign, type UnlabelledBenignScore } from '../src/benchmark/unlabelled-benign.js';
 import type { BenchmarkDataset, BenchmarkSample, AttackCategory, ScannerResult, ATTACK_CATEGORIES } from '../src/benchmark/types.js';
 
 const CATEGORIES: AttackCategory[] = [
@@ -47,6 +51,9 @@ interface DetailedResult {
   f1: number;
   fpr: number;
   avgScanTimeMs: number;
+  // Precision, F1, FPR, flag rate and tier on the unlabelled benign set (the
+  // malicious samples in the run and the benign ones no scanner labeled).
+  unlabelledBenign: UnlabelledBenignScore;
   // Per-category metrics are detection-only: recall = detected / total. We do
   // NOT publish per-category precision/F1 — benign samples carry no attack
   // category, so per-category false positives (and thus precision) are
@@ -170,6 +177,11 @@ function computeDetailedMetrics(
     f1: round(f1),
     fpr: round(fpr),
     avgScanTimeMs: results.length > 0 ? totalTimeMs / results.length : 0,
+    unlabelledBenign: scoreUnlabelledBenign(
+      samples,
+      results.map(r => ({ adapterId: adapter.id, sampleId: r.sampleId, verdict: r.verdict, predictedCategory: r.category })),
+      adapter.id,
+    )[0],
     perCategory,
   };
 }
@@ -338,8 +350,8 @@ async function main() {
     console.log(
       `[--categorized-only] This filter applies to the MALICIOUS class ONLY. The ${benignCount} benign ` +
       `samples are NOT content-derived: most were labeled by the scanner's own verdict ` +
-      `(verdict='warning' AND overall_score >= 70, see scripts/export-registry-corpus.mjs). Any metric that reads ` +
-      `the benign class -- FPR, precision, F1, flag rate -- is circular and must not be published.`
+      `(verdict='warning' AND overall_score >= 70, see scripts/export-registry-corpus.mjs). FPR, precision, F1, ` +
+      `flag rate and tier are printed on the benign samples no scanner labeled only.`
     );
   }
 

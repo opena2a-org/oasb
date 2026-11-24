@@ -240,8 +240,9 @@ README's test counts do not include them.
   (`scripts/scenario-report.mjs`).
 - `scripts/dev-run-summary.test.mjs`: what the unpinned development runner
   (`scripts/run-benchmark-v2.ts`) prints for each adapter and in its
-  comparison summary (`scripts/dev-run-summary.mjs`): recall, and precision,
-  F1, FPR and flag rate named as withdrawn with no value.
+  comparison summary (`scripts/dev-run-summary.mjs`): recall, and
+  precision, F1, FPR, flag rate and tier on the benign samples no scanner
+  labeled, with no value over the benign samples the scanner labeled.
 - `scripts/library-entry.test.mjs`: the package entry point as a library
   install sees it, built where arp-guard cannot be resolved, as after
   `npm install @opena2a/oasb --omit=optional`, the version each
@@ -538,6 +539,15 @@ README's test counts do not include them.
   workflow and fails when the first test passes on the copy. It does not
   check that a SHA is the commit of the release its comment names: that
   needs the action's repository, and the test runs offline.
+- `scripts/unlabelled-benign.test.mjs`: the unlabelled benign set
+  (`src/benchmark/unlabelled-benign.ts`), the 270 categorized malicious
+  fixtures and the 177 benign samples no scanner labeled, and the scores
+  `scripts/score-unlabelled-benign.ts` computes on it from the predictions of
+  the pinned run of record, which it does not rescan. Fails when a benign
+  sample with a scanner verdict enters the set, when a scanner's precision,
+  recall, F1, FPR, flag rate or tier there differs from the figure
+  `BENCHMARK-RESULTS.md` and `docs/pinned-benchmark.md` give, or when either
+  page still names those metrics as withdrawn.
 
 ## The README checks on every pull request
 
