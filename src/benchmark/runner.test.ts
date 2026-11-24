@@ -5,6 +5,7 @@ import {
   HMASimulationAdapter,
   runBenchmark,
   formatComparisonTable,
+  type BenchmarkRunResult,
 } from './runner';
 import type { BenchmarkSample } from './types';
 
@@ -98,7 +99,44 @@ describe('Benchmark Runner', () => {
 
     expect(table).toContain('OASB Skills Security Benchmark');
     expect(table).toContain('HackMyAgent');
-    expect(table).toContain('F1');
+    expect(table).toContain('Recall');
     expect(table).toContain('Tier');
+  });
+
+  it('prints recall, withdraws precision/F1/FPR/flag rate, and aligns the % column', () => {
+    const result: BenchmarkRunResult = {
+      scannerResults: new Map(),
+      runDate: '2026-11-24T00:00:00.000Z',
+      datasetVersion: 'v1.0',
+      sampleCount: 6,
+      comparisonTable: [
+        { scanner: 'Scanner A', tier: 'gold', f1: 0.8123, precision: 0.9345, recall: 0.675, fpr: 0.0311, categories: 7 },
+        { scanner: 'Scanner B', tier: 'silver', f1: 0.5, precision: 0.4567, recall: 1, fpr: 0.1234, categories: 9 },
+        { scanner: 'Scanner C', tier: 'bronze', f1: 0.1, precision: 0.2, recall: 0.05, fpr: 0.5, categories: 2 },
+      ],
+    };
+    const table = formatComparisonTable(result);
+    const lines = table.split('\n');
+    const rows = lines.filter(l => /^Scanner [ABC]/.test(l));
+
+    // Recall is shown, highest first.
+    expect(rows.map(r => r.slice(0, 9))).toEqual(['Scanner B', 'Scanner A', 'Scanner C']);
+    expect(rows[0]).toContain('100.0%');
+    expect(rows[1]).toContain('67.5%');
+    expect(rows[2]).toContain('5.0%');
+
+    // Precision, F1, FPR and flag rate are named as withdrawn, with no values.
+    const header = lines.find(l => l.startsWith('Scanner'))!;
+    expect(header).not.toMatch(/Prec|F1|FPR|Flag/);
+    expect(table).toContain('Precision, F1, FPR and flag rate are withdrawn');
+    for (const value of ['93.4', '0.93', '81.2', '0.81', '45.7', '3.1', '12.3', '50.0', '0.03']) {
+      expect(table).not.toContain(value);
+    }
+
+    // Every % sign sits in the same column, at the end of the Recall header.
+    const percentColumns = rows.map(r => r.indexOf('%'));
+    expect(new Set(percentColumns).size).toBe(1);
+    expect(percentColumns[0]).toBe(header.indexOf('Recall') + 'Recall'.length - 1);
+    for (const row of rows) expect(row).not.toMatch(/ %/);
   });
 });
