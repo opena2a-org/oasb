@@ -16,7 +16,7 @@ import * as path from 'path';
 import { it, expect, beforeEach, afterEach } from 'vitest';
 import { describeWithCapability } from '../../harness/capabilities';
 import { createAdapter } from '../../harness/create-adapter';
-import type { ObservedFileChange, SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
+import type { ObservationClassification, ObservedFileChange, SecurityEvent, SecurityProductAdapter } from '../../harness/adapter';
 
 describeWithCapability('filesystem-monitoring', 'AT-FS-004: Mass File Creation Detection', () => {
   let arp: SecurityProductAdapter;
@@ -24,7 +24,7 @@ describeWithCapability('filesystem-monitoring', 'AT-FS-004: Mass File Creation D
   const fileCount = 20;
 
   /** The watch reports `eventType` for the file at `relative` in the watched directory */
-  function observe(relative: string, eventType: ObservedFileChange['eventType'] = 'rename'): Promise<void> {
+  function observe(relative: string, eventType: ObservedFileChange['eventType'] = 'rename'): Promise<ObservationClassification> {
     return arp.observeFileChange!({ eventType, path: path.join(dir, relative) });
   }
 
