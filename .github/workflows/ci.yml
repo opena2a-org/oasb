@@ -20,14 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # arp-lab depends on file:../arp — clone and build ARP as sibling
-      - name: Clone ARP dependency
-        env:
-          GH_TOKEN: ${{ secrets.ARP_CLONE_TOKEN }}
-        run: |
-          git clone https://x-access-token:${GH_TOKEN}@github.com/opena2a-org/arp.git ../arp
-          cd ../arp && npm install && npm run build
-
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
