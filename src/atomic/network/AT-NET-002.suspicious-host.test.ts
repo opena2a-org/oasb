@@ -18,9 +18,9 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
   let arp: SecurityProductAdapter;
 
   const suspiciousHosts = [
-    { host: 'webhook.site', description: 'webhook exfiltration endpoint' },
-    { host: 'pastebin.com', description: 'public paste service' },
-    { host: 'ngrok.io', description: 'tunnel service' },
+    { host: 'webhook.site', description: 'webhook exfiltration endpoint', benignHost: 'docs.example' },
+    { host: 'pastebin.com', description: 'public paste service', benignHost: 'packages.example' },
+    { host: 'ngrok.io', description: 'tunnel service', benignHost: 'status.example' },
   ];
 
   beforeEach(async () => {
@@ -48,8 +48,16 @@ describeWithCapability('network-monitoring', 'AT-NET-002: Suspicious Host Detect
     }
   );
 
-  it('should classify each suspicious host among the connections of one poll as a threat', async () => {
-    await arp.observeConnections!(suspiciousHosts.map(({ host }) => ({ remoteAddr: host, remotePort: 443 })));
+  it('should distinguish suspicious and benign hosts in the same poll', async () => {
+    const hosts = suspiciousHosts.flatMap(({ host, benignHost }) => [host, benignHost]);
+    const events = await arp.observeConnections!(hosts.map((remoteAddr) => ({ remoteAddr, remotePort: 443 })));
+
+    for (const { benignHost } of suspiciousHosts) {
+      const hostEvents = events.filter((e) => e.source === 'network' && e.data?.remoteAddr === benignHost);
+      expect(hostEvents, `classification for benign host ${benignHost}`).toMatchObject([
+        { category: 'normal', severity: 'info' },
+      ]);
+    }
 
     const threats = arp.getEventsByCategory('threat');
     expect(threats.map((e) => e.data?.remoteAddr).sort()).toEqual(suspiciousHosts.map(({ host }) => host).sort());

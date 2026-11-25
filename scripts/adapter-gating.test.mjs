@@ -44,11 +44,11 @@ function testFiles(dir) {
 }
 
 /** Run the scenario tests with OASB_ADAPTER=adapter and return vitest's JSON report. */
-function runScenarios(adapter) {
+function runScenarios(adapter, paths = SCENARIO_DIRS) {
   const dir = mkdtempSync(join(tmpdir(), 'adapter-gating-'));
   try {
     const out = join(dir, 'report.json');
-    const r = spawnSync(process.execPath, [vitest, 'run', '--reporter=json', `--outputFile=${out}`, ...SCENARIO_DIRS], {
+    const r = spawnSync(process.execPath, [vitest, 'run', '--reporter=json', `--outputFile=${out}`, ...paths], {
       cwd: repo,
       encoding: 'utf8',
       env: { ...process.env, OASB_ADAPTER: adapter },
@@ -78,6 +78,34 @@ function files(report) {
 }
 
 const ran = (t) => t.status !== 'skipped' && t.status !== 'pending';
+
+const hostScenario = join('src', 'atomic', 'network', 'AT-NET-002.suspicious-host.test.ts');
+
+function hostScenarioTests(fixture) {
+  const adapter = join(repo, 'scripts', 'fixtures', fixture);
+  const results = files(runScenarios(adapter, [hostScenario]));
+  assert.deepEqual(results.map((result) => result.file), [hostScenario]);
+  assert.equal(results[0].tests.length, 4, 'expected three single-host cases and one batch');
+  return results[0].tests;
+}
+
+test('AT-NET-002 rejects a network adapter that only echoes supplied labels', () => {
+  const tests = hostScenarioTests('echo-network-adapter.cjs');
+  for (const row of tests) {
+    assert.equal(row.status, 'failed', row.title);
+    // A missing method or a broken hook must not count as a rejected classification.
+    const statement = failedStatement(hostScenario, row.failureMessages.join('\n'));
+    assert.match(statement ?? '', /hostEvents\[0\]\.category|threats\.map/, row.title);
+  }
+});
+
+test('AT-NET-002 rejects a constant alarm on the benign hosts', () => {
+  const tests = hostScenarioTests('constant-alarm-network-adapter.cjs');
+  const failed = tests.filter((row) => row.status === 'failed');
+  assert.equal(tests.filter((row) => row.status === 'passed').length, 3);
+  assert.equal(failed.length, 1);
+  assert.match(failed[0].failureMessages.join('\n'), /classification for benign host/);
+});
 
 let noCapabilityReport;
 function noCapability() {
