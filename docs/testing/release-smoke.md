@@ -585,23 +585,23 @@ The gate paths are those that decide what CI runs and what a release ships:
 Paths are matched without regard to case, and a renamed file counts at its
 old path as well as its new one, so moving a file out of `.github/` is gated
 too. A pull request that touches no gate path passes. One that touches a gate
-path passes only when the owner's latest decisive review (an approval or a
-request for changes; a comment or a dismissed review does not count) is an
-approval of the pull request's current head: a push after the approval needs
-a new one. The owner is matched by the numeric id of their GitHub account,
-not by login.
+path passes only when the lead maintainer's latest decisive review (an
+approval or a request for changes; a comment or a dismissed review does not
+count) is an approval of the pull request's current head: a push after the
+approval needs a new one. The lead maintainer is matched by the numeric id of
+their GitHub account, not by login.
 
 The workflow runs on `pull_request_target`, so it runs as it is on `main`
 and a pull request cannot change the gate that judges it. It has read
 permissions only and checks out no code from the pull request. No such event
-fires when a review is submitted, so the owner re-runs the check after
-approving.
+fires when a review is submitted, so the lead maintainer re-runs the check
+after approving.
 
 GitHub offers a check as a required status check only once it has reported
 on the repository, so "Gate file approval" is added to the required checks
-of `main` after the workflow's first run, by the owner in the branch
-protection settings. Until then it reports on each pull request but does not
-block a merge.
+of `main` after the workflow's first run, by the lead maintainer in the
+branch protection settings. Until then it reports on each pull request but
+does not block a merge.
 
 ## Why these guards exist
 
